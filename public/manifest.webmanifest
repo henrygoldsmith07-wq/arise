@@ -1,0 +1,18 @@
+{
+  "name": "Arise — Training, levelled up",
+  "short_name": "Arise",
+  "description": "Game-like training: scheduled programs, load tracking, and attributes that grow from real history. Offline-first.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fafafa",
+  "theme_color": "#131316",
+  "categories": ["health", "sports"],
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "lang": "en"
+}

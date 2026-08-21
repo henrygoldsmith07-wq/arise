@@ -1,0 +1,13 @@
+@import "tailwindcss";
+@import "./le-studio.css";
+
+/* Arise borrows the Le Studio design system for consistency across the monorepo. */
+html, body, #root { height: 100%; }
+
+/* Progress bar shimmer + card polish */
+@keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
+.shimmer{ position:relative; overflow:hidden }
+.shimmer::after{ content:""; position:absolute; inset:0; background:linear-gradient(90deg,transparent,rgba(255,255,255,.18),transparent); transform:translateX(-100%); animation:shimmer 1.2s ease infinite }
+
+@keyframes pop { 0%{transform:scale(.96); opacity:0} 100%{transform:scale(1); opacity:1} }
+.pop{ animation: pop .22s cubic-bezier(.2,.9,.25,1) }

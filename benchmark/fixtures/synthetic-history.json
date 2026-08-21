@@ -1,0 +1,99 @@
+{
+  "formatVersion": 1,
+  "kind": "synthetic",
+  "metadata": {
+    "name": "progression-calibration-smoke",
+    "synthetic": true,
+    "seed": "arise-backtest-20260820",
+    "purpose": "Exercise point-in-time replay, empirical sample gates, fatigue attribution, plateau outcomes, deload observation and missed-session recovery.",
+    "realTrainingValidation": false
+  },
+  "profile": {
+    "availableEquipment": ["dumbbells", "bench"]
+  },
+  "readinessLog": [
+    { "dateISO": "2026-01-05", "score": 76 },
+    { "dateISO": "2026-01-12", "score": 74 },
+    { "dateISO": "2026-01-19", "score": 72 },
+    { "dateISO": "2026-01-26", "score": 70 },
+    { "dateISO": "2026-01-29", "score": 25 },
+    { "dateISO": "2026-02-02", "score": 22 },
+    { "dateISO": "2026-02-05", "score": 24 },
+    { "dateISO": "2026-02-09", "score": 68 },
+    { "dateISO": "2026-02-12", "score": 72 }
+  ],
+  "schedule": {
+    "programId": "synthetic-backtest",
+    "sessions": [
+      { "id": "plan-01", "dateISO": "2026-01-05", "title": "A" },
+      { "id": "plan-02", "dateISO": "2026-01-08", "title": "B" },
+      { "id": "plan-03", "dateISO": "2026-01-12", "title": "C" },
+      { "id": "plan-04", "dateISO": "2026-01-19", "title": "D" },
+      { "id": "plan-05", "dateISO": "2026-01-26", "title": "E" },
+      { "id": "plan-06", "dateISO": "2026-01-29", "title": "F" },
+      { "id": "plan-07", "dateISO": "2026-02-02", "title": "G" },
+      { "id": "plan-08", "dateISO": "2026-02-05", "title": "H" },
+      { "id": "plan-09", "dateISO": "2026-02-09", "title": "I" },
+      { "id": "plan-10", "dateISO": "2026-02-12", "title": "J" }
+    ]
+  },
+  "history": [
+    {
+      "id": "log-01",
+      "scheduleSessionId": "plan-01",
+      "dateISO": "2026-01-05",
+      "blocks": [{ "exerciseId": "bench-press-dumbbell", "reps": "8–12", "sets": [{ "reps": "8", "weightKg": "20", "rpe": "7" }] }]
+    },
+    {
+      "id": "log-03",
+      "scheduleSessionId": "plan-03",
+      "dateISO": "2026-01-12",
+      "blocks": [{ "exerciseId": "bench-press-dumbbell", "reps": "8–12", "sets": [{ "reps": "10", "weightKg": "20", "rpe": "7" }] }]
+    },
+    {
+      "id": "log-04",
+      "scheduleSessionId": "plan-04",
+      "dateISO": "2026-01-19",
+      "blocks": [{ "exerciseId": "bench-press-dumbbell", "reps": "8–12", "sets": [{ "reps": "9", "weightKg": "22.5", "rpe": "7" }] }]
+    },
+    {
+      "id": "log-05",
+      "scheduleSessionId": "plan-05",
+      "dateISO": "2026-01-26",
+      "blocks": [{ "exerciseId": "bench-press-dumbbell", "reps": "8–12", "sets": [{ "reps": "10", "weightKg": "22.5", "rpe": "7" }] }]
+    },
+    {
+      "id": "log-06",
+      "scheduleSessionId": "plan-06",
+      "dateISO": "2026-01-29",
+      "note": "sore and tired",
+      "blocks": [{ "exerciseId": "bench-press-dumbbell", "reps": "8–12", "sets": [{ "reps": "8", "weightKg": "22.5", "rpe": "10" }] }]
+    },
+    {
+      "id": "log-07",
+      "scheduleSessionId": "plan-07",
+      "dateISO": "2026-02-02",
+      "note": "struggled",
+      "blocks": [{ "exerciseId": "bench-press-dumbbell", "reps": "8–12", "sets": [{ "reps": "8", "weightKg": "22.5", "rpe": "10" }] }]
+    },
+    {
+      "id": "log-08",
+      "scheduleSessionId": "plan-08",
+      "dateISO": "2026-02-05",
+      "note": "fatigue",
+      "blocks": [{ "exerciseId": "bench-press-dumbbell", "reps": "8–12", "sets": [{ "reps": "8", "weightKg": "22.5", "rpe": "10" }] }]
+    },
+    {
+      "id": "log-09",
+      "scheduleSessionId": "plan-09",
+      "dateISO": "2026-02-09",
+      "blocks": [{ "exerciseId": "bench-press-dumbbell", "reps": "8–12", "sets": [{ "reps": "9", "weightKg": "22.5", "rpe": "7" }] }]
+    },
+    {
+      "id": "log-10",
+      "scheduleSessionId": "plan-10",
+      "dateISO": "2026-02-12",
+      "blocks": [{ "exerciseId": "bench-press-dumbbell", "reps": "8–12", "sets": [{ "reps": "8", "weightKg": "25", "rpe": "7" }] }]
+    }
+  ]
+}

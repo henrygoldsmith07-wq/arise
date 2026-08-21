@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)" />
+    <script>
+      try {
+        var raw = localStorage.getItem('arise.store.v1');
+        var prefs = raw ? (JSON.parse(raw).preferences || {}) : {};
+        var t = prefs.theme;
+        // also honour legacy arise.settings if present
+        if (!t) { try { t = JSON.parse(localStorage.getItem('arise.settings') || '{}').theme; } catch(e){} }
+        var dark = t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+        if (dark) document.documentElement.classList.add('dark');
+      } catch(e) {}
+    </script>
+    <title>Arise — Training, levelled up</title>
+    <meta name="description" content="Arise is a game-like training companion: browse exercises, follow scheduled programs, log resistance & volume, and watch attributes grow from real history. Offline-first, no account needed." />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" href="/logo.svg" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <style>
+      #root .boot{min-height:62vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:Inter,system-ui,sans-serif;text-align:center;padding:24px}
+      #root .spin{width:22px;height:22px;border-radius:50%;border:2.5px solid rgba(128,128,128,.25);border-top-color:currentColor;animation:spin .8s linear infinite}
+      @keyframes spin{to{transform:rotate(360deg)}}
+      html.dark body{background:#0b0b0d;color:#f4f4f5} html:not(.dark) body{background:#f4f4f6;color:#131316}
+    </style>
+  </head>
+  <body>
+    <div id="root"><div class="boot" aria-hidden="true"><div style="width:64px;height:64px;border-radius:18px;background:#131316;display:grid;place-items:center;color:white;font-weight:900;font-size:28px">A</div><h1 style="font-size:22px;font-weight:800;letter-spacing:-.02em;margin:0">Arise</h1><p style="opacity:.6;font-size:13px;margin:0">Training, levelled up.</p><div class="spin"></div></div></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

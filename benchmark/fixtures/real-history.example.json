@@ -1,0 +1,20 @@
+{
+  "formatVersion": 1,
+  "kind": "real-history",
+  "metadata": {
+    "source": "consented Arise export",
+    "subjectId": null,
+    "collectedAt": null,
+    "synthetic": false,
+    "validationStatus": "not_run",
+    "realTrainingValidation": false
+  },
+  "profile": {
+    "availableEquipment": []
+  },
+  "readinessLog": [],
+  "schedule": {
+    "sessions": []
+  },
+  "history": []
+}

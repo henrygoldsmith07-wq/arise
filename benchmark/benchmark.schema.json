@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arise.local/benchmark/progression-history-v1.schema.json",
+  "title": "Arise progression benchmark dataset",
+  "type": "object",
+  "required": ["formatVersion", "kind", "history"],
+  "properties": {
+    "formatVersion": { "const": 1 },
+    "kind": { "enum": ["synthetic", "real-history"] },
+    "metadata": { "type": "object" },
+    "profile": {
+      "type": "object",
+      "properties": { "availableEquipment": { "type": "array", "items": { "type": "string" } } }
+    },
+    "profileHistory": {
+      "type": "array",
+      "items": { "type": "object", "required": ["dateISO"], "properties": { "dateISO": { "type": "string" }, "availableEquipment": { "type": "array", "items": { "type": "string" } } } }
+    },
+    "readinessLog": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["dateISO", "score"],
+        "properties": { "dateISO": { "type": "string" }, "score": { "type": "number", "minimum": 0, "maximum": 100 }, "at": { "type": "string" } }
+      }
+    },
+    "schedule": {
+      "type": "object",
+      "properties": {
+        "sessions": {
+          "type": "array",
+          "items": { "type": "object", "required": ["id", "dateISO"], "properties": { "id": { "type": "string" }, "dateISO": { "type": "string" }, "title": { "type": "string" } } }
+        }
+      }
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["dateISO", "blocks"],
+        "properties": {
+          "id": { "type": ["string", "null"] },
+          "scheduleSessionId": { "type": ["string", "null"] },
+          "dateISO": { "type": "string" },
+          "note": { "type": "string" },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["exerciseId", "sets"],
+              "properties": { "exerciseId": { "type": "string" }, "reps": { "type": "string" }, "sets": { "type": "array", "items": { "type": "object" } } }
+            }
+          }
+        }
+      }
+    }
+  }
+}
