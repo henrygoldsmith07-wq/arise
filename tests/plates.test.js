@@ -39,3 +39,19 @@ describe('plate-aware loadability', ()=>{
     assert.match(rounded.reason, /Plate setup rounds/);
   });
 });
+
+import { nearestAchievableLoad } from '../src/lib/plates.js';
+
+describe('equipment profiles from onboarding', ()=>{
+  it('rounds dumbbell targets to pairs the user actually owns', ()=>{
+    const owned = { dumbbellsKg: [5, 10, 15] };
+    const result = nearestAchievableLoad(12.5, { equipment: 'dumbbell', config: owned });
+    assert.equal(result.loadKg, 10); // documented tie-break: nearest, lighter on a tie
+  });
+  it('snaps machine targets to the configured stack increment', ()=>{
+    const result = nearestAchievableLoad(31, { equipment: 'machine', config: { machineIncrementKg: 2.5 } });
+    assert.equal(result.loadKg % 2.5, 0);
+    assert.ok(Math.abs(result.loadKg - 31) <= 1.25);
+  });
+});
+

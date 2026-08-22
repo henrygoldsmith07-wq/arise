@@ -3,12 +3,16 @@
 
 import { runMigrations, STORE_SCHEMA_VERSION } from './store.js';
 import { getEventHistory } from './telemetry.js';
+import { loadEvaluationLedger, mergeEvaluationLedgers } from './longitudinal.js';
 
 export const EXPORT_VERSION = 3;
 
 export function buildExportPayload(store){
   const eventHistory=getEventHistory();
-  const data={ ...store, version: store.version || STORE_SCHEMA_VERSION, eventHistory };
+  // The evaluation ledger travels with the backup: a longitudinal study must
+  // survive reinstalls and move between devices like any other user data.
+  const evaluationLedger=loadEvaluationLedger();
+  const data={ ...store, version: store.version || STORE_SCHEMA_VERSION, eventHistory, evaluationLedger };
   return {
     app: 'arise',
     version: EXPORT_VERSION,
@@ -26,18 +30,24 @@ export function downloadJson(filename, obj){
   setTimeout(()=> URL.revokeObjectURL(url), 2000);
 }
 
+// Only these top-level keys may enter the store from an imported file.
+// Anything else in a hand-edited backup is dropped rather than persisted forever.
+const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','preferences','readinessLog','programHistory','evaluationLedger'];
+
 export function parseImportFile(text){
   let parsed;
   try{ parsed = JSON.parse(text); } catch { throw new Error('Not valid JSON.'); }
   const data = parsed?.data ? parsed.data : parsed;
   if(!data || typeof data !== 'object') throw new Error('Import file is empty or malformed.');
   if(parsed?.app && parsed.app !== 'arise') throw new Error('This backup is not for Arise.');
-  if(!('history' in data) && !('onboarding' in data) && !('activeSchedule' in data) && !('eventHistory' in data)){
+  if(!('history' in data) && !('onboarding' in data) && !('activeSchedule' in data) && !('eventHistory' in data) && !('evaluationLedger' in data)){
     throw new Error('Unrecognised backup shape — missing history/onboarding/schedule/event history.');
   }
   const validation=validateStoreData(data);
   if(!validation.ok) throw new Error(`Backup validation failed: ${validation.errors.join(' ')}`);
-  return runMigrations(typeof structuredClone==='function' ? structuredClone(data) : JSON.parse(JSON.stringify(data)));
+  const clean = {};
+  for(const key of STORE_KEYS) if(key in data) clean[key]=data[key];
+  return runMigrations(typeof structuredClone==='function' ? structuredClone(clean) : JSON.parse(JSON.stringify(clean)));
 }
 
 export function validateStoreData(data){
@@ -49,17 +59,17 @@ export function validateStoreData(data){
   for(const [i,session] of (data.history||[]).entries()){
     if(!session || typeof session!=='object') { errors.push(`History item ${i+1} is not an object.`); continue; }
     if(!session.id) errors.push(`History item ${i+1} is missing an id.`);
+    // dateISO is load-bearing: sorting, week bucketing and training age all key
+    // off it, so an entry without a parseable date would poison analytics.
+    if(typeof session.dateISO !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(session.dateISO) || Number.isNaN(Date.parse(session.dateISO))) errors.push(`History item ${i+1} has an invalid or missing dateISO.`);
     if(session.blocks!=null && !Array.isArray(session.blocks)) errors.push(`History item ${i+1} blocks must be an array.`);
-    for(const block of session.blocks||[]) if(!block.exerciseId || !Array.isArray(block.sets)) errors.push(`History item ${i+1} contains an invalid exercise block.`);
+    for(const block of session.blocks||[]) if(!block?.exerciseId || !Array.isArray(block.sets)) errors.push(`History item ${i+1} contains an invalid exercise block.`);
   }
   if(data.activeSchedule!=null && typeof data.activeSchedule!=='object') errors.push('Active schedule must be an object or null.');
   if(data.eventHistory!=null && !Array.isArray(data.eventHistory)) errors.push('Event history must be an array.');
+  if(data.evaluationLedger!=null && !Array.isArray(data.evaluationLedger)) errors.push('Evaluation ledger must be an array.');
   if(data.healthSummary!=null && typeof data.healthSummary!=='object') errors.push('Health summary must be an object or null.');
   return { ok: errors.length===0, errors };
-}
-
-export function mergeStrategyLabel(strategy){
-  return strategy === 'replace' ? 'Replace (overwrite this device)' : 'Merge (keep both, de-dupe by session id)';
 }
 
 export function mergeStores(current, imported, strategy='merge'){
@@ -77,25 +87,31 @@ export function mergeStores(current, imported, strategy='merge'){
     onboarding: currentStore.onboarding || importedStore.onboarding || null,
     activeSchedule: currentStore.activeSchedule || importedStore.activeSchedule || null,
     activeWorkout: currentStore.activeWorkout || importedStore.activeWorkout || null,
-    history: [...byId.values()].sort((a,b)=> a.dateISO.localeCompare(b.dateISO)),
+    // Guarded comparator: an entry missing dateISO must not crash the whole import.
+    history: [...byId.values()].sort((a,b)=> String(a?.dateISO||'').localeCompare(String(b?.dateISO||''))),
     eventHistory: [...eventById.values()].sort((a,b)=> String(a.at||'').localeCompare(String(b.at||''))),
     healthSummary: currentStore.healthSummary || importedStore.healthSummary || null,
     preferences: { ...(importedStore.preferences||{}), ...(currentStore.preferences||{}) },
     readinessLog: [...(currentStore.readinessLog||[]), ...(importedStore.readinessLog||[])].filter((v,i,a)=> a.findIndex(x=> x.dateISO===v.dateISO && x.at===v.at)===i),
+    evaluationLedger: mergeEvaluationLedgers(currentStore.evaluationLedger, importedStore.evaluationLedger),
     programHistory: [...(currentStore.programHistory||[]), ...(importedStore.programHistory||[])].filter((v,i,a)=> a.findIndex(x=> x.programId===v.programId && x.version===v.version)===i),
   };
 }
 
-// Data portability: full export in portable JSON + selective export
-export function portableJson(store){
-  return JSON.stringify(buildExportPayload(store), null, 2);
-}
 export function portableCsv(history){
   const rows = [['dateISO','exerciseId','reps','weightKg','rpe','side','rom','assistedKg','failed','skipped','durationMinutes','programVersion','equipmentSnapshot']];
   for(const h of history||[]) for(const b of h.blocks||[]) for(const s of b.sets||[]){
     rows.push([h.dateISO, b.exerciseId, s.reps||'', s.weightKg||'', s.rpe||'', s.side||'', s.rom||'', s.assistedKg||'', s.failed?'1':'', s.skipped?'1':'', h.durationMinutes||'', h.programVersion||'', Array.isArray(h.equipmentSnapshot)? h.equipmentSnapshot.join('|') : '']);
   }
-  return rows.map(r=> r.map(v=> `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  return rows.map(r=> r.map(csvCell).join(',')).join('\n');
+}
+
+// Neutralise spreadsheet formula injection: user-controlled strings starting
+// with =, +, - or @ would execute as formulas when the CSV opens in Excel.
+function csvCell(value){
+  let text = String(value).replace(/"/g,'""').replace(/[\r\n]+/g,' ');
+  if(/^[=+\-@\t]/.test(text)) text = `'${text}`;
+  return `"${text}"`;
 }
 
 // Deletion: remove all personal data but keep app shell

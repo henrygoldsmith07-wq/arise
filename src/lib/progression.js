@@ -27,7 +27,9 @@ export function strategyForExercise(exerciseId, { config = null } = {}){
 // Returns { weeklyLoadPct, weeklyRepGain, n, spanDays } or null if insufficient data.
 export function personalisedRate(history, exerciseId, { config = null } = {}){
   const cfg = resolveArisePriors(config).progression.personalisedRate;
-  const logs = logsFor(history, exerciseId);
+  // Per-session best e1RM: judging progress off individual sets lets one
+  // drop-set or a varying set count fake a trend.
+  const logs = sessionBestSummaries(history, exerciseId);
   if(logs.length < cfg.minSessions) return null;
   const pts = logs.map(l=> ({ t: Date.parse(l.dateISO || '2026-01-01'), y: e1rm(l.weightKg||0,l.reps)||l.reps }));
   pts.sort((a,b)=> a.t - b.t);
@@ -47,7 +49,10 @@ export function personalisedRate(history, exerciseId, { config = null } = {}){
 // shifts from adaptation to recovery/technique).
 export function trainingAgeMonths(history, { asOfDateISO = null, config = null } = {}){
   if(!history || !history.length) return 0;
-  const end = asOfDateISO ? Date.parse(`${asOfDateISO}T00:00:00`) : Date.now();
+  // Both boundaries parse as UTC calendar days: history dateISO values are UTC
+  // midnights, so a local-midnight as-of date would exclude same-day sessions
+  // in UTC+ timezones and include them in UTC− ones.
+  const end = asOfDateISO ? Date.parse(`${asOfDateISO}T00:00:00Z`) : Date.now();
   if(!Number.isFinite(end)) return 0;
   const dates = history.map(h=> Date.parse(h.dateISO)).filter(value=> Number.isFinite(value) && value <= end).sort((a,b)=> a-b);
   if(!dates.length) return 0;
@@ -119,12 +124,23 @@ export function validateProgression(history, { config = null } = {}){
       // need at least 1 prior session for this exercise
       if(!historySlice.some(h=> (h.blocks||[]).some(b=> b.exerciseId===exId))) continue;
       const rec = recommendNext({ exerciseId: exId, history: historySlice, asOfDateISO: sessions[i].dateISO, config: cfg });
-      const actual = sessions[i].sets[0];
+      // Score against the session's best set, not its first: the recommendation
+      // describes what to achieve next exposure, and first-set ordering (warm-up
+      // effects) is noise, not prediction error.
+      const actualBest = sessions[i].sets
+        .map(s=> ({ ...s, e1rm: e1rm(s.w, s.r) || s.r }))
+        .sort((a,b)=> b.e1rm - a.e1rm)[0];
+      if(!actualBest) continue;
+      const actual = actualBest;
       if(rec.load!=null && actual.w) errsKg.push(Math.abs((rec.load||actual.w) - actual.w));
       if(rec.reps!=null && actual.r) errsReps.push(Math.abs(rec.reps - actual.r));
       total++;
-      // hit if within 1 rep or 5% load
-      const loadOk = rec.load==null || rec.load===0 || Math.abs((rec.load||actual.w)-actual.w)/Math.max(1,actual.w) < cfg.progression.validation.loadTolerancePct;
+      // hit if within 1 rep or 5% load. A bodyweight/null-load recommendation
+      // only counts as a hit when the logged set was actually unweighted —
+      // crediting it against weighted work inflates the hit rate.
+      const loadOk = rec.load>0
+        ? Math.abs((rec.load||actual.w)-actual.w)/Math.max(1,actual.w) < cfg.progression.validation.loadTolerancePct
+        : !(actual.w > 0);
       const repOk = Math.abs((rec.reps||actual.r)-actual.r) <= cfg.progression.validation.repTolerance;
       if(loadOk && repOk) hits++;
     }
@@ -172,11 +188,13 @@ export function recommendNext({ exerciseId, history, targetReps = null, conserva
       priorsVersion: cfg.version,
     }, plateConfig, exerciseId);
   }
-  // Plateau v2 check (real vs noise) — if true, hold
-  const plat = isPlateauV2(logs, { config: cfg });
+  // Plateau v2 check (real vs noise) — if true, hold. Fed session-level best
+  // sets: set-level logs mistake two sets of one workout for two exposures.
+  const sessions = sessionBestSummaries(history, exerciseId).slice(-cfg.progression.historyWindow);
+  const plat = isPlateauV2(sessions, { config: cfg });
   if(plat.isPlateau) return plateAware({ load, reps, reason: plat.reason, plateau: plat, strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version }, plateConfig, exerciseId);
   // also keep original 3-session plateau as conservative fallback
-  if(!plat.isPlateau && isPlateau(logs, { config: cfg })) return plateAware({ load, reps, reason: "Plateau — hold load, consider deload.", plateau: plat, strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version }, plateConfig, exerciseId);
+  if(!plat.isPlateau && isPlateau(sessions, { config: cfg })) return plateAware({ load, reps, reason: "Plateau — hold load, consider deload.", plateau: plat, strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version }, plateConfig, exerciseId);
   // Noisy session conservatism: a flagged last session (short, painful, missed
   // sets, unusual drop, kit/order change) holds the prescription. Holding is
   // deliberately the mildest response — heavier changes (deload, programme
@@ -208,11 +226,6 @@ export function recommendNext({ exerciseId, history, targetReps = null, conserva
       : clamp(sCfg.incPct * trainingAge.multiplier, cfg.progression.coldLoadPctFloor, cfg.progression.personalisedRate.appliedLoadPctMax);
 
   // Strategy-aware
-  if(sCfg.prefer === 'load' && load>0){
-    if(rir <= 1 && reps < hi) {
-      // strength prefers load even with reps left when near failure — but be conservative
-    }
-  }
   if(sCfg.prefer === 'reps'){
     if(reps < hi) return plateAware({ load, reps: Math.min(hi, reps+1), reason: `Endurance — add a rep (${reps}→${Math.min(hi, reps+1)}).`, strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version }, plateConfig, exerciseId);
   }
@@ -302,29 +315,8 @@ export function isPlateauV2(logs, { config = null } = {}){
   return { isPlateau: false, reason: 'Still progressing.', gain: Math.round(gain*1000)/1000, trend: Math.round(trend*100)/100 };
 }
 
-// Deload: conservative 2-of-3 + readiness EMA as 4th signal
-export function shouldDeload({ logs, recentRpes, weeklyVolumeTrend, readinessHistory, config = null }){
-  const cfg = resolveArisePriors(config);
-  const recovery = cfg.recovery;
-  let flags=0; const signals=[];
-  if((recentRpes||[]).filter(r=> Number(r)>=recovery.highRpe).length >= recovery.highRpeCount){ flags++; signals.push(`high RPE ≥${recovery.highRpe} twice`); }
-  const plat = isPlateauV2(logs||[], { config: cfg });
-  if(plat.isPlateau || isPlateau(logs||[], { config: cfg })){ flags++; signals.push('plateau'); }
-  if((weeklyVolumeTrend||[]).slice(-recovery.signalWindow).some(v=> v > recovery.volumeSpikeRatio)){ flags++; signals.push(`volume +${Math.round((recovery.volumeSpikeRatio-1)*100)}% spike`); }
-  if(readinessHistory && readinessHistory.length>=recovery.readinessHistoryMin){
-    const ema = readinessEMA(readinessHistory, { config: cfg });
-    if(ema.value < recovery.readinessLowEma && ema.confidence !== 'low'){ flags++; signals.push(`readiness EMA ${ema.value} (low)`); }
-  }
-  if(flags >= recovery.minimumFlags) return { yes: true, cut: recovery.deloadVolumeCut, reason: `Multiple fatigue signals (${signals.join(', ')}) — cut volume ~${Math.round((1-recovery.deloadVolumeCut)*100)}% next week, keep loads moderate.`, signals };
-  return { yes: false, signals };
-}
-
-// Adapt program blocks for next week based on performance: explain why
-export function explainAdaptation({ original, recommended }){
-  if(recommended.load == null && original.loadHint) return `Holding prescription (${original.reps}, ${original.loadHint}) — no load change advised.`;
-  if(recommended.load != null) return `${recommended.reason}`;
-  return recommended.reason || "No change.";
-}
+// Deload decisions live in deloadReadinessAssessment (programming.js) — the
+// single implementation, validated by backtesting.deloadOutcomes.
 
 // Strength trend (linear slope over e1RM series)
 export function strengthTrend(logs, { config = null } = {}){
@@ -404,16 +396,6 @@ export function readinessEMA(scores, { config = null } = {}){
   }
   return { value: v, confidence };
 }
-export function readinessWithUncertainty(args, history, { config = null } = {}){
-  const cfg = resolveArisePriors(config).recovery;
-  const now = readinessScore({ ...args, config });
-  if(!history || history.length<cfg.readinessMinimumForUncertainty) return { score: now, ema: { value: now, confidence: 'low' }, uncertainty: 'insufficient data — treat as estimate' };
-  const all = [...history, now];
-  const ema = readinessEMA(all, { config });
-  const uncertainty = ema.confidence==='low' ? 'high — recent readiness is volatile' : ema.confidence==='medium' ? 'moderate — trend is forming' : 'low — stable trend';
-  return { score: now, ema, uncertainty };
-}
-
 // Unilateral helpers: per-side tracking
 export function isUnilateralExercise(exerciseId){ return /lunge|split|single|bulgarian|pistol|unilateral/i.test(exerciseId||''); }
 export function sideImbalance(sets){
@@ -438,6 +420,28 @@ function logsFor(history, exerciseId){
   for(const h of history||[]) for(const b of h.blocks||[]) if(b.exerciseId===exerciseId) for(const s of b.sets||[]){
     const reps = Number(String(s.reps).match(/\d+/)?.[0] || s.reps)||0; const w = Number(s.weightKg)||0; const rpe = s.rpe ?? null;
     if(reps) out.push({ reps, weightKg: w, rpe, dateISO: h.dateISO, side: s.side||null, rom: s.rom||null, assistedKg: s.assistedKg ?? null });
+  }
+  return out;
+}
+
+// One row per session: the best-e1RM set for this exercise. Plateau, trend and
+// learned-rate logic need exposures (sessions), not raw sets — a single workout
+// with 4 sets would otherwise count as 4 data points.
+function sessionBestSummaries(history, exerciseId){
+  const out=[];
+  for(const session of orderedHistory(history)){
+    let best=null;
+    for(const block of (session.blocks||[])){
+      if(block.exerciseId!==exerciseId) continue;
+      for(const set of (block.sets||[])){
+        const reps = Number(String(set.reps).match(/\d+/)?.[0] || set.reps)||0;
+        const weightKg = Number(set.weightKg)||0;
+        if(!reps && !weightKg) continue;
+        const value = e1rm(weightKg, reps)||reps;
+        if(!best || value>best.value) best = { reps, weightKg, rpe: set.rpe ?? null, dateISO: session.dateISO, value };
+      }
+    }
+    if(best) out.push(best);
   }
   return out;
 }
@@ -482,7 +486,8 @@ function noisyFlagsForLastSession(history, exerciseId, config = null){
   }
   if(last.equipmentSnapshot && history.length >= 2){
     const prevEquip = history[history.length - 2]?.equipmentSnapshot;
-    if(Array.isArray(prevEquip) && Array.isArray(last.equipmentSnapshot) && prevEquip.sort().join('|') !== [...last.equipmentSnapshot].sort().join('|')) flags.push('equipmentChange');
+    // Copy before sorting: prevEquip may be a live reference into persisted history.
+    if(Array.isArray(prevEquip) && Array.isArray(last.equipmentSnapshot) && [...prevEquip].sort().join('|') !== [...last.equipmentSnapshot].sort().join('|')) flags.push('equipmentChange');
   }
   // unusual performance: compare last e1rm to prior best
   if(exerciseId){
@@ -512,7 +517,9 @@ function equipmentForExercise(exerciseId){
   if(eq.includes('dumbbell') || eq.includes('dumbbells')) return 'dumbbell';
   if(eq.includes('machine') || eq.includes('cable')) return 'machine';
   if(eq.includes('barbell')) return 'barbell';
-  return ex.progression === 'load' ? 'barbell' : 'dumbbell';
+  // Unknown-kit weighted movements (e.g. a bench-only hip thrust): round to
+  // generic machine increments rather than assuming a barbell's bar weight.
+  return ex.progression === 'load' ? 'machine' : 'dumbbell';
 }
 
 function plateAware(result, plateConfig, exerciseId = null){

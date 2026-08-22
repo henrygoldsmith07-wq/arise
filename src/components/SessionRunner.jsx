@@ -65,8 +65,10 @@ function suggestedTarget(rec, block){
 
 function getRecommendation(block, history, asOfDateISO, plateConfig = null){
   try{
-    const isBarbell = EXERCISE_BY_ID[block.exerciseId]?.equipment?.includes('barbell');
-    return recommendNext({ exerciseId:block.exerciseId, history, targetReps:block.reps || '8–12', asOfDateISO, plateConfig: isBarbell ? plateConfig : null });
+    // plateConfig is safe for every equipment type: the engine dispatches
+    // barbells through plates and dumbbells/machines through their own
+    // achievable increments.
+    return recommendNext({ exerciseId:block.exerciseId, history, targetReps:block.reps || '8–12', asOfDateISO, plateConfig });
   }catch{ return null; }
 }
 
@@ -78,7 +80,7 @@ function hasUnfinishedSet(blocks, bi, si){
   return false;
 }
 
-export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, onDraftChange, onSave, onCancel }){
+export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, onDraftChange, onSave, onCancel }){
   const [blocks,setBlocks]=useState(()=> session.blocks.map((b,i)=> normaliseBlock(b, history, draft?.blocks?.[i])));
   const [note,setNote]=useState(()=> draft?.note || '');
   const [noteTags,setNoteTags]=useState(()=> draft?.noteTags || []);
@@ -86,17 +88,54 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   const [restLabel,setRestLabel]=useState(()=> draft?.restLabel || '');
   const [clock,setClock]=useState(()=> Date.now());
   const [swapOpen,setSwapOpen]=useState(null);
+  const [discardConfirmOpen,setDiscardConfirmOpen]=useState(false);
+  const [restAnnouncement,setRestAnnouncement]=useState('');
   const draftRef=useRef(null);
+  const rootRef=useRef(null);
+  const closeRef=useRef(null);
+  const keepEditingRef=useRef(null);
   const startedAtRef=useRef(draft?.startedAt || new Date().toISOString());
   const lastSetAtRef=useRef(draft?.lastSetAt || startedAtRef.current);
   const shownRecommendationRef=useRef(new Set());
   const dismissedRecommendationRef=useRef(new Set());
 
+  // Escape dismisses only the topmost layer — a stray Esc must never silently
+  // destroy a workout with logged sets (a11y baseline: dialogs confirm before
+  // destructive action).
   useEffect(()=>{
-    const onKey = (e)=>{ if(e.key==='Escape') onCancel(); };
+    const onKey = (e)=>{
+      if(e.key!=='Escape') return;
+      if(swapOpen!==null){ setSwapOpen(null); return; }
+      if(discardConfirmOpen){ setDiscardConfirmOpen(false); return; }
+      const progressed = blocks.some(b=> b.sets.some(s=> s.completed || String(s.reps).trim()!==''));
+      if(progressed){ setDiscardConfirmOpen(true); return; }
+      onCancel();
+    };
     window.addEventListener('keydown', onKey);
     return ()=> window.removeEventListener('keydown', onKey);
-  }, [onCancel]);
+  }, [onCancel, swapOpen, discardConfirmOpen, blocks]);
+
+  // Dialog semantics: move focus in on mount, restore it on unmount.
+  useEffect(()=>{
+    const previous=document.activeElement;
+    closeRef.current?.focus();
+    return ()=> { try{ previous?.focus?.(); }catch{} };
+  },[]);
+
+  // Focus trap: aria-modal promises AT that background content is unreachable;
+  // Tab cycling keeps that promise true for keyboard users too.
+  const trapTab=(e)=>{
+    if(e.key!=='Tab' || !rootRef.current) return;
+    const focusables=[...rootRef.current.querySelectorAll('button, input, select, textarea, a[href], [tabindex]:not([tabindex="-1"])')].filter(el=> !el.disabled && el.offsetParent!==null);
+    if(!focusables.length) return;
+    const first=focusables[0], last=focusables[focusables.length-1];
+    if(e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
+  };
+
+  useEffect(()=>{
+    if(discardConfirmOpen) keepEditingRef.current?.focus();
+  },[discardConfirmOpen]);
 
   // Derive remaining time from a wall-clock expiry rather than decrementing a
   // counter. That keeps the timer correct after a refresh, sleep or tab switch.
@@ -110,6 +149,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   useEffect(()=>{
     if(restEndsAt && restEndsAt <= Date.now()){
       setRestEndsAt(null);
+      setRestAnnouncement('Rest complete — next set.');
       try{ navigator.vibrate?.(180); }catch{}
     }
   }, [restEndsAt, clock]);
@@ -155,6 +195,8 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           recommendation,
           history,
           dueDateISO: session.dateISO,
+          programId: session.programId || null,
+          programVersion: session.programVersion ?? null,
           preferences: measurementConsent === true ? { telemetryEnabled: true } : null,
         });
       }catch{}
@@ -167,7 +209,22 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     setRestLabel(label);
     setRestEndsAt(Date.now() + sec*1000);
     setClock(Date.now());
+    // Announce once, politely — the ticking countdown itself must not flood
+    // screen readers (a11y baseline: live regions announce without flooding).
+    setRestAnnouncement(`Rest started for ${label}: ${fmtRest(sec)}.`);
   };
+
+  // Recommendations and previous-performance lookups scan the full history;
+  // compute them once per change instead of once per block per keystroke.
+  const blockMeta = useMemo(()=>{
+    const recs=new Map(), prevs=new Map();
+    for(const b of blocks){
+      if(recs.has(b.exerciseId)) continue;
+      recs.set(b.exerciseId, getRecommendation(b,history,session.dateISO,plateConfig));
+      prevs.set(b.exerciseId, lastExerciseSets(history,b.exerciseId));
+    }
+    return { recs, prevs };
+  },[blocks,history,session.dateISO,plateConfig]);
 
   const volume = useMemo(()=>{
     let total=0;
@@ -203,10 +260,12 @@ export default function SessionRunner({ session, history = [], availableEquipmen
         sessionElapsedMs:Math.max(0,now-Date.parse(startedAtRef.current)),
       });
       lastSetAtRef.current=new Date(now).toISOString();
-      if(hasUnfinishedSet(blocks,bi,si)) startRest(block.restSec, EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId);
+      // Auto-start the rest countdown unless the user turned it off
+      // (preferences.autoRest, default on). Manual Start rest stays as override.
+      if(preferences?.autoRest !== false && hasUnfinishedSet(blocks,bi,si)) startRest(block.restSec, EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId);
     }
   };
-  const addSet = (bi)=> setBlocks(prev=> prev.map((b,i)=> i!==bi? b : { ...b, sets: [...b.sets, newSet('', b.unilateral)] }));
+  const addSet = (bi)=> setBlocks(prev=> prev.map((b,i)=> i!==bi? b : { ...b, sets: [...b.sets, newSet('', b.unilateral, b.sets[b.sets.length-1])] }));
   const duplicateUnilateral = (bi)=> setBlocks(prev=> prev.map((b,i)=>{
     if(i!==bi || !b.unilateral) return b;
     const last=b.sets[b.sets.length-1]; if(!last) return b;
@@ -316,9 +375,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   };
 
   return (
-    <div className="fixed inset-0 z-40 bg-bg flex flex-col" role="dialog" aria-modal="true" aria-label={`Session — ${session.title}`}>
+    <div ref={rootRef} onKeyDown={trapTab} className="fixed inset-0 z-40 bg-bg flex flex-col" role="dialog" aria-modal="true" aria-label={`Session — ${session.title}`}>
+      <span className="sr-only" role="status" aria-live="polite">{restAnnouncement || `${completedSets} of ${totalSets} sets completed`}</span>
       <div className="sticky top-0 flex items-center gap-3 px-4 py-3 border-b border-line bg-surface">
-        <button onClick={onCancel} className="w-9 h-9 grid place-items-center rounded-full border border-line bg-surface2" aria-label="Close session">✕</button>
+        <button ref={closeRef} onClick={onCancel} className="w-11 h-11 grid place-items-center rounded-full border border-line bg-surface2" aria-label="Close session">✕</button>
         <div className="min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">{session.mode === 'short' ? 'Short session' : 'Session'}</p>
           <p className="font-bold truncate">{session.title} • {session.dateISO}</p>
@@ -334,12 +394,20 @@ export default function SessionRunner({ session, history = [], availableEquipmen
 
         {blocks.map((b,bi)=>{
           const ex=EXERCISE_BY_ID[b.exerciseId];
-          const prev=lastExerciseSets(history,b.exerciseId);
+          const prev=blockMeta.prevs.get(b.exerciseId) || null;
           const supportsWeighted=ex?.supportsWeighted;
           const supportsAssisted=ex?.supportsAssisted;
-          const recommendation=getRecommendation(b,history,session.dateISO,plateConfig);
+          const recommendation=blockMeta.recs.get(b.exerciseId) || null;
           const target=suggestedTarget(recommendation,b);
-          const options=swapOpen===bi ? substitutionOptions(b.exerciseId,{ availableEquipment, history, limit:5 }) : [];
+          // Swap sheet honours the user's liked/disliked movements, and never
+          // offers a swap back to the original lift — A→B→A loops would erase
+          // the substitution audit trail.
+          const swapOrigin = b.substitutionFrom || null;
+          const options = swapOpen===bi ? substitutionOptions(b.exerciseId,{
+            availableEquipment, history, limit:5,
+            preferredExerciseIds: preferences?.preferredExerciseIds || [],
+            dislikedExerciseIds: preferences?.dislikedExerciseIds || [],
+          }).filter(o=> o.id && o.id!==swapOrigin) : [];
           return (
             <div key={`${b.exerciseId}-${bi}`} className="rounded-2xl border border-line bg-surface p-3 space-y-3">
               <div className="flex items-start justify-between gap-3">
@@ -359,10 +427,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                   <p className="text-[11px] text-ink3 italic">{b.substitutionReason ? `Swap rationale: ${b.substitutionReason}` : `Why: ${b.why || recommendation?.reason || 'Follow the prescribed range and stop with good form.'}`}</p>
                 </div>
                 <div className="flex gap-1.5 shrink-0 flex-wrap justify-end max-w-[190px]">
-                  {b.restSec ? <button onClick={()=> startRest(b.restSec, ex?.name || b.exerciseId)} className="text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2">Start rest</button> : null}
-                  <button onClick={()=> setSwapOpen(swapOpen===bi ? null : bi)} className="text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2">Swap</button>
-                  <button onClick={()=> addSet(bi)} className="text-xs font-bold px-3 py-1.5 rounded-full bg-ink text-bg">+ Set</button>
-                  {b.unilateral ? <button onClick={()=> duplicateUnilateral(bi)} className="text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2">+ other side</button> : null}
+                  {b.restSec ? <button onClick={()=> startRest(b.restSec, ex?.name || b.exerciseId)} className="relative text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">Start rest</button> : null}
+                  <button onClick={()=> setSwapOpen(swapOpen===bi ? null : bi)} aria-expanded={swapOpen===bi} className="relative text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">Swap</button>
+                  <button onClick={()=> addSet(bi)} className="relative min-h-[32px] text-xs font-bold px-3 py-1.5 rounded-full bg-ink text-bg before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">+ Set</button>
+                  {b.unilateral ? <button onClick={()=> duplicateUnilateral(bi)} className="relative text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">+ other side</button> : null}
                 </div>
               </div>
 
@@ -395,14 +463,14 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     {b.unilateral ? (
                       <select value={s.side||'L'} onChange={e=> updateSet(bi,si,{side:e.target.value})} aria-label={`Side set ${si+1}`} className="min-w-0 rounded-xl border border-line bg-surface2 px-1 py-2.5 text-xs font-bold"><option value="L">L</option><option value="R">R</option></select>
                     ) : <span />}
-                    <button onClick={()=> completeSet(bi,si)} aria-pressed={s.completed} className={`min-h-9 px-2 rounded-xl border text-[11px] font-bold whitespace-nowrap ${s.completed?'bg-success text-white border-success':'bg-surface2 border-line'}`}>Done</button>
-                    <button onClick={()=> removeSet(bi,si)} aria-label={`Remove set ${si+1}`} className="w-7 h-7 grid place-items-center rounded-full border border-line text-ink3">×</button>
+                    <button onClick={()=> completeSet(bi,si)} aria-pressed={s.completed} className={`min-h-11 px-2 rounded-xl border text-[11px] font-bold whitespace-nowrap ${s.completed?'bg-success text-white border-success':'bg-surface2 border-line'}`}>Done</button>
+                    <button onClick={()=> removeSet(bi,si)} aria-label={`Remove set ${si+1}`} className="relative w-9 h-9 grid place-items-center rounded-full border border-line text-ink3 before:absolute before:-inset-1.5 before:rounded-full before:content-['']">×</button>
                   </div>
                 ))}
                 {(supportsAssisted || b.unilateral) && b.sets.length>0 && (
                   <div className="grid grid-cols-2 gap-2">
-                    {supportsAssisted && <label className="text-[11px]">Assisted (kg off) <input value={b.sets[0]?.assistedKg||''} onChange={e=> { const v=e.target.value; setBlocks(prev=> prev.map((blk,idx)=> idx!==bi?blk:{...blk, sets: blk.sets.map(x=> ({...x, assistedKg:v}))})); }} placeholder="e.g. 10" className="ml-1 rounded-lg border border-line bg-surface2 px-2 py-1 text-xs w-20" /></label>}
-                    <label className="text-[11px]">ROM <input value={b.sets[0]?.rom||''} onChange={e=> { const v=e.target.value; setBlocks(prev=> prev.map((blk,idx)=> idx!==bi?blk:{...blk, sets: blk.sets.map(x=> ({...x, rom:v}))})); }} placeholder="full / partial" className="ml-1 rounded-lg border border-line bg-surface2 px-2 py-1 text-xs w-24" /></label>
+                    {supportsAssisted && <label className="text-[11px]">Assisted kg off (all sets) <input value={b.sets[0]?.assistedKg||''} onChange={e=> { const v=e.target.value; setBlocks(prev=> prev.map((blk,idx)=> idx!==bi?blk:{...blk, sets: blk.sets.map(x=> ({...x, assistedKg:v}))})); }} placeholder="e.g. 10" className="ml-1 rounded-lg border border-line bg-surface2 px-2 py-1 text-xs w-20" /></label>}
+                    <label className="text-[11px]">ROM (all sets) <input value={b.sets[0]?.rom||''} onChange={e=> { const v=e.target.value; setBlocks(prev=> prev.map((blk,idx)=> idx!==bi?blk:{...blk, sets: blk.sets.map(x=> ({...x, rom:v}))})); }} placeholder="full / partial" className="ml-1 rounded-lg border border-line bg-surface2 px-2 py-1 text-xs w-24" /></label>
                   </div>
                 )}
                 {!b.sets.length && <p className="text-xs text-ink3">No sets — add one.</p>}
@@ -423,10 +491,14 @@ export default function SessionRunner({ session, history = [], availableEquipmen
         </section>
 
         {restLeft!==null && (
-          <div className="sticky bottom-4 z-10 rounded-2xl border border-line bg-ink text-bg px-4 py-3 flex items-center gap-3" role="status" aria-live="polite">
-            <span className="text-xs font-bold uppercase tracking-widest opacity-80">Rest · {restLabel}</span>
-            <span className="ml-auto text-lg font-black tabular-nums">{fmtRest(restLeft)}</span>
-            <button onClick={()=> setRestEndsAt(null)} className="text-xs font-bold px-3 py-1.5 rounded-full bg-white text-ink">Skip</button>
+          <div className="sticky bottom-4 z-10 rounded-2xl border border-line bg-ink text-bg px-4 py-3 flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-widest opacity-80 shrink-0">Rest · {restLabel}</span>
+            <div className="ml-auto flex items-center gap-1.5">
+              <button onClick={()=> setRestEndsAt(v=> Math.max(Date.now()+5000, (v||Date.now())-15000))} aria-label="Rest 15 seconds less" className="min-h-11 min-w-11 px-2 rounded-full bg-white/15 text-xs font-bold tabular-nums relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">−15s</button>
+              <span aria-hidden className="text-lg font-black tabular-nums w-14 text-center">{fmtRest(restLeft)}</span>
+              <button onClick={()=> setRestEndsAt(v=> (v||Date.now())+30000)} aria-label="Rest 30 seconds more" className="min-h-11 min-w-11 px-2 rounded-full bg-white/15 text-xs font-bold tabular-nums relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">+30s</button>
+              <button onClick={()=> setRestEndsAt(null)} aria-label="Skip rest" className="min-h-11 px-3 rounded-full bg-white text-ink text-xs font-bold relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">Skip</button>
+            </div>
           </div>
         )}
 
@@ -434,8 +506,32 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           <button onClick={onCancel} className="btn btn-secondary flex-1 min-h-11 rounded-xl">Cancel</button>
           <button onClick={save} disabled={!canSave} className="btn btn-primary flex-1 min-h-11 rounded-xl disabled:opacity-40">Save session</button>
         </div>
-        {!canSave && <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">{pendingSets ? `Tap Done for ${pendingSets} remaining set${pendingSets===1?'':'s'}.` : 'Add at least one set to each exercise.'}</p>}
+        {!canSave && (()=> {
+          // Name the real blocker: reps missing, sets not marked done, or no
+          // sets at all — the old copy always blamed "Done".
+          const missingReps = blocks.reduce((n,b)=> n + b.sets.filter(s=> String(s.reps).trim()==='').length, 0);
+          return (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+              {missingReps ? `Enter reps for ${missingReps} remaining set${missingReps===1?'':'s'}.` :
+               pendingSets ? `Tap Done for ${pendingSets} set${pendingSets===1?'':'s'} you completed — Save logs unfinished sets as skipped.` :
+               'Add at least one set to each exercise.'}
+            </p>
+          );
+        })()}
       </div>
+
+      {discardConfirmOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="alertdialog" aria-modal="true" aria-labelledby="discard-title" aria-describedby="discard-desc">
+          <div className="w-full max-w-sm rounded-3xl bg-surface border border-line p-4 space-y-3">
+            <p id="discard-title" className="text-base font-bold">Discard this workout?</p>
+            <p id="discard-desc" className="text-xs text-ink3">{completedSets}/{totalSets} sets logged. Discarding cannot be undone.</p>
+            <div className="flex gap-2">
+              <button ref={keepEditingRef} onClick={()=> setDiscardConfirmOpen(false)} className="btn btn-primary flex-1 min-h-11 rounded-xl">Keep editing</button>
+              <button onClick={onCancel} className="btn btn-secondary flex-1 min-h-11 rounded-xl text-danger">Discard</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

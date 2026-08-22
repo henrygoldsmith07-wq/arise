@@ -1,7 +1,9 @@
-// Minimal offline shell: cache the app shell on install, serve cache-first for navigations.
+// Minimal offline shell: cache the app shell on install, offline-first for assets.
+// Navigations are network-first so a deploy reaches users immediately; the cache
+// copy keeps the app usable offline (falling back to ./index.html).
 // PWA lifecycle: versioned cache, skipWaiting + controllerchange, offline-first preserved.
 
-const CACHE = 'arise-v3';
+const CACHE = 'arise-v4';
 const SHELL = ['./', './index.html', './manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
@@ -20,12 +22,14 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
   if (req.mode === 'navigate') {
+    // Network-first: fresh HTML when online, cached shell when offline.
+    // (Cache-first navigations pinned stale HTML after every deploy.)
     e.respondWith(
-      caches.match(req).then((hit) => hit || fetch(req).then((res) => {
+      fetch(req).then((res) => {
         const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(req, copy));
+        caches.open(CACHE).then((c) => c.put(req, copy)).catch(()=>{});
         return res;
-      }).catch(()=> caches.match('./index.html')))
+      }).catch(async ()=> (await caches.match(req)) || (await caches.match('./index.html')) || Response.error())
     );
     return;
   }
@@ -34,7 +38,7 @@ self.addEventListener('fetch', (e) => {
       const fetchPromise = fetch(req).then((res) => {
         if (res.ok) {
           const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy));
+          caches.open(CACHE).then((c) => c.put(req, copy)).catch(()=>{});
         }
         return res;
       }).catch(()=> hit);

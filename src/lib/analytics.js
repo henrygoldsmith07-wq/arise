@@ -2,13 +2,16 @@
 // Pure helpers used by ProgressView visualizations.
 
 import { recommendNext } from "./progression.js";
+import { EXERCISE_BY_ID } from "./data.js";
 
 export function weeklyVolume(history){
   const byWeek = {};
   for(const h of history||[]){
     const d = new Date(h.dateISO + "T00:00:00");
     const key = weekKey(d);
-    let vol=0; for(const b of h.blocks||[]) for(const s of b.sets||[]) vol += (Number(s.reps)||0)*(Number(s.weightKg)||0);
+    // Assistance subtracts from effective load (matching exerciseHistory and
+    // backtesting) so assisted work cannot inflate deload/spike signals.
+    let vol=0; for(const b of h.blocks||[]) for(const s of b.sets||[]) vol += (Number(s.reps)||0)*Math.max(0, (Number(s.weightKg)||0) - (Number(s.assistedKg)||0));
     byWeek[key] = (byWeek[key]||0) + vol;
   }
   return Object.entries(byWeek).sort(([a],[b])=> a.localeCompare(b)).map(([week, vol])=> ({ week, vol: Math.round(vol) }));
@@ -17,16 +20,6 @@ export function weeklyVolume(history){
 // split a Monday-start week across two keys (e.g. Mon 5 Jan → W01 but Wed 7 Jan → W02),
 // which diluted volume-based signals like deload detection. offset = days since Monday.
 function weekKey(d){ const jan1=new Date(d.getFullYear(),0,1); const days=Math.floor((d-jan1)/86400000); const offset=(d.getDay()+6)%7; const wk=Math.floor((days-offset+7)/7); return `${d.getFullYear()}-W${String(wk).padStart(2,"0")}`; }
-
-export function frequencyByMuscle(history){
-  const counts={};
-  for(const h of history||[]) for(const b of h.blocks||[]){
-    const m = (awaitImportMuscle(b.exerciseId));
-    if(m) counts[m]=(counts[m]||0)+1;
-  }
-  return counts;
-}
-let _byId=null; function awaitImportMuscle(id){ try{ if(!_byId){ _byId = require("./data.js").EXERCISE_BY_ID; } }catch{ return null; } return _byId?.[id]?.muscle || null; }
 
 export function frequencyByMuscleSync(history, byId){
   const counts={};
@@ -45,12 +38,14 @@ export function strengthSeries(history, exerciseId){
 }
 
 // Muscle-volume landmarks — cautious presentation (weekly sets per muscle vs rough ranges)
-export function volumeLandmarks(history, byId){
-  // Count weekly sets per muscle (last 4 weeks)
+export function volumeLandmarks(history, byId, { weeks: windowWeeks = 4 } = {}){
+  // Count weekly sets per muscle over the most recent N weeks of logged data.
   const byMuscleWeek = {};
+  const weekSet = new Set();
   for(const h of history||[]){
     const d = new Date(h.dateISO + "T00:00:00");
     const key = weekKey(d);
+    weekSet.add(key);
     for(const b of h.blocks||[]){
       const m = byId?.[b.exerciseId]?.muscle || 'Other';
       if(m==='Cardio') continue;
@@ -58,22 +53,30 @@ export function volumeLandmarks(history, byId){
       byMuscleWeek[k] = (byMuscleWeek[k]||0) + (b.sets||[]).length;
     }
   }
-  // Average weekly sets per muscle over available weeks
+  // Honour the documented window: average over the last N weeks that contain
+  // any training, not the whole history (a heavy first month would otherwise
+  // dominate the average forever).
+  const window = [...weekSet].sort().slice(-windowWeeks);
+  // Average weekly sets per muscle within the window
   const byMuscle = {};
   for(const [k, sets] of Object.entries(byMuscleWeek)){
-    const [muscle] = k.split('|');
+    const idx = k.lastIndexOf('|');
+    const muscle = k.slice(0, idx), week = k.slice(idx+1);
+    if(!window.includes(week)) continue;
     if(!byMuscle[muscle]) byMuscle[muscle] = [];
     byMuscle[muscle].push(sets);
   }
   const out = {};
   for(const [muscle, weekly] of Object.entries(byMuscle)){
-    const avg = weekly.reduce((a,b)=>a+b,0)/weekly.length;
+    // Missing weeks in the window count as zero-volume weeks so a muscle
+    // trained once in four weeks does not look "moderate".
+    const avg = weekly.reduce((a,b)=>a+b,0)/window.length;
     // Cautious landmarks: these are rough, not prescriptions
     let band = 'low';
     if(avg >= 10) band = 'high';
     else if(avg >= 6) band = 'moderate';
     else if(avg >= 3) band = 'maintenance';
-    out[muscle] = { avgWeeklySets: Math.round(avg*10)/10, band, weeks: weekly.length, note: 'Rough landmark — individual needs vary. Use as context, not a target.' };
+    out[muscle] = { avgWeeklySets: Math.round(avg*10)/10, band, weeks: window.length, note: 'Rough landmark — individual needs vary. Use as context, not a target.' };
   }
   return out;
 }
@@ -193,17 +196,6 @@ export function extractNoteRecommendations(history){
     if(hints.length) out.push({ dateISO: h.dateISO, note, hints });
   }
   return out;
-}
-
-export function actionAdvice({ weeklyVolume: wv, freq }){
-  if(!wv.length) return "Log a couple sessions — then trends appear.";
-  const last = wv[wv.length-1]?.vol||0, prev = wv[wv.length-2]?.vol||0;
-  if(last > prev*1.2) return `Volume up ${Math.round((last/prev-1)*100)}% vs last week — hold steady or deload if RPE was high.`;
-  if(last < prev*0.8 && prev>0) return "Volume dipped — good if planned deload, otherwise add a session.";
-  const entries=Object.entries(freq||{}).sort((a,b)=> b[1]-a[1]);
-  const top=entries[0], bot=entries[entries.length-1];
-  if(entries.length>=3 && top && bot && top[1] > bot[1]*3) return `${top[0]} is ${top[1]}× more frequent than ${bot[0]} — add a ${bot[0]} day for balance.`;
-  return "Trends look steady — keep progressing load or reps where RIR ≥2.";
 }
 
 // Planned vs completed helper is in data.js; re-export a thin wrapper for analytics consumers

@@ -69,6 +69,20 @@ export function clearEvaluationLedger(storage = defaultStorage()){
   try{ storage?.removeItem?.(EVALUATION_KEY); }catch{}
 }
 
+// Union two ledgers by record id. A resolved record (outcome attached) beats
+// an unresolved duplicate; otherwise the current copy wins. Deterministic:
+// current-side records keep their order.
+export function mergeEvaluationLedgers(current = [], incoming = []){
+  const byId = new Map();
+  for(const record of [...(current || []), ...(incoming || [])]){
+    if(!record?.id) continue;
+    const existing = byId.get(record.id);
+    if(!existing){ byId.set(record.id, record); continue; }
+    if(!existing.outcome && record.outcome) byId.set(record.id, record);
+  }
+  return [...byId.values()];
+}
+
 // ── Segmentation helpers ────────────────────────────────────────────────
 
 // Free weights / machines / cables / bodyweight — from the exercise's declared kit.
@@ -146,7 +160,7 @@ function makeRecordId(now = Date.now()){
 // Snapshot a recommendation before the workout it targets. Only prior history
 // may be passed in; the basis records how much was visible so audits can
 // confirm no future rows were involved.
-export function recordRecommendation({ exerciseId, recommendation, history = [], dueDateISO = null, preferences = null, config = null, nowISO = null, storage = defaultStorage() } = {}){
+export function recordRecommendation({ exerciseId, recommendation, history = [], dueDateISO = null, preferences = null, config = null, nowISO = null, programId = null, programVersion = null, storage = defaultStorage() } = {}){
   if(!hasConsent(preferences)) return null;
   if(!exerciseId || !recommendation) return null;
   const phase = trainingAgePhase(history, dueDateISO, config);
@@ -159,6 +173,10 @@ export function recordRecommendation({ exerciseId, recommendation, history = [],
     exerciseId,
     movementPattern: movementPatternFor(exerciseId) || 'unknown',
     equipmentClass: equipmentClassFor(exerciseId),
+    // Programme identity lets effectiveness roll up per programme/version so
+    // "did this programme work" is answerable from real outcomes.
+    programId: programId || null,
+    programVersion: programVersion ?? null,
     recommendation: {
       load: recommendation.load ?? null,
       reps: recommendation.reps ?? null,
@@ -318,6 +336,7 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
     byExercise: dimension(row=> row.exerciseId),
     byMovementPattern: dimension(row=> row.movementPattern),
     byEquipmentClass: dimension(row=> row.equipmentClass),
+    byProgramme: dimension(row=> row.programId ? `${row.programId}@v${row.programVersion == null ? '?' : row.programVersion}` : null),
     note: records.length
       ? `Segments with fewer than ${minimum} resolved recommendation→outcome pairs withhold their rates (conclusive:false). Evaluation data is stored separately from training history and never calibrates recommendations from future sessions.`
       : 'No consented recommendation→outcome pairs recorded yet.',
@@ -327,4 +346,63 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
 export function longitudinalSummary({ preferences = null, config = null, storage = defaultStorage() } = {}){
   if(!hasConsent(preferences)) return { consented: false, evaluation: null };
   return { consented: true, evaluation: evaluateLongitudinal(loadEvaluationLedger(storage), { config }) };
+}
+
+// ── Substitution quality validation ─────────────────────────────────────
+// For every engine-recorded swap (block.substitutionFrom): was the swapped-in
+// lift actually performed with real sets, and did its performance hold on the
+// next exposure? Reads only saved history — no recommendations involved.
+export function validateSubstitutions(history, { retentionRatio = 0.95 } = {}){
+  const ordered = [...(history || [])].sort((a, b)=> String(a?.dateISO || '').localeCompare(String(b?.dateISO || '')));
+  const rows = [];
+  for(const session of ordered){
+    for(const block of session.blocks || []){
+      if(!block?.substitutionFrom) continue;
+      const best = bestSetOfBlock(block);
+      rows.push({
+        sessionId: session.id || null,
+        dateISO: session.dateISO || null,
+        from: block.substitutionFrom,
+        to: block.exerciseId,
+        reason: block.substitutionReason || '',
+        performed: !!(best && best.reps > 0),
+        e1rm: best ? round(best.score, 2) : null,
+        nextE1rm: null,
+        nextDateISO: null,
+        retained: null,
+      });
+    }
+  }
+  const nextExposureAfter = (exerciseId, dateISO, sessionId)=>{
+    for(const session of ordered){
+      if(sessionId && session.id === sessionId) continue;
+      if(String(session.dateISO || '') <= String(dateISO || '')) continue;
+      for(const block of session.blocks || []){
+        if(block.exerciseId !== exerciseId) continue;
+        const best = bestSetOfBlock(block);
+        if(best && best.reps > 0) return { score: best.score, dateISO: session.dateISO };
+      }
+    }
+    return null;
+  };
+  for(const row of rows){
+    if(!row.performed || !row.e1rm) continue;
+    const next = nextExposureAfter(row.to, row.dateISO, row.sessionId);
+    if(next){
+      row.nextE1rm = round(next.score, 2);
+      row.nextDateISO = next.dateISO;
+      row.retained = round(next.score / Math.max(1e-9, row.e1rm), 3) >= retentionRatio;
+    }
+  }
+  const performedRows = rows.filter(row=> row.performed);
+  const followUps = performedRows.filter(row=> row.retained != null);
+  const pct = (part, whole)=> whole ? Math.round(part / whole * 100) / 100 : null;
+  return {
+    substitutions: rows.length,
+    performed: performedRows.length,
+    performedRate: pct(performedRows.length, rows.length),
+    followedUp: followUps.length,
+    retainedRate: pct(followUps.filter(row=> row.retained).length, followUps.length),
+    rows,
+  };
 }

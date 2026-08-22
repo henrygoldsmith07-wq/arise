@@ -69,7 +69,8 @@ function streakBonus(history){
   const dates=[...new Set(history.map(h=>h.dateISO))].sort();
   let cur=1, best=1;
   for(let i=1;i<dates.length;i++){
-    const d = (new Date(dates[i]+'T00:00:00') - new Date(dates[i-1]+'T00:00:00'))/86400000;
+    // UTC calendar dates — local parsing miscounts day diffs across DST changes.
+    const d = (new Date(dates[i]+'T00:00:00Z') - new Date(dates[i-1]+'T00:00:00Z'))/86400000;
     if(d===1) cur++; else cur=1;
     best=Math.max(best,cur);
   }

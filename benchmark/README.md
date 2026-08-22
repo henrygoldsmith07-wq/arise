@@ -62,39 +62,3 @@ the export has actually been evaluated.
 `benchmark/fixtures/synthetic-history.json` is a labelled deterministic smoke
 fixture. It is useful for regression tests only and is never evidence about real
 training outcomes.
-
-## Real-world validation
-
-`benchmark/real-world.js` (`npm run benchmark:realworld`) runs the full
-real-world battery from `src/lib/realWorldValidation.js`:
-
-- **Collecting histories** — a portable app export is converted to a benchmark
-  dataset with `datasetFromPortableExport()`. Consent is explicit: without
-  `--consent` the metadata records no consent and the run is structural only.
-- **Prediction vs performance** — every comparison row gets exactly one outcome
-  class: success (progressed and met the prescription), failure (progressed but
-  missed it), stagnation (flat vs previous exposure), regression (below it).
-  First exposures stay unknown rather than guessed.
-- **Noisy-session detection** — the fatigue forecast is graded with
-  precision/recall/specificity plus Brier, so a detector that never fires
-  cannot hide behind accuracy alone.
-- **Substitution quality** — two views: engine-proposed substitute pairs are
-  audited for muscle/pattern preservation and progression alignment against
-  co-logged history; with a schedule, observed swap events are matched against
-  the displaced planned work directly.
-- **Load rounding** — recommendations are checked against the versioned
-  rounding-grid bands in priors, against plate stacks via
-  `nearestLoadToPlates` (barbell profiles only), and against the load the
-  lifter actually used next session.
-- **Longitudinal effectiveness** — ~28-day cycle comparison, per-exercise
-  first-to-last e1RM trend, weekly adherence vs plan, and a deliberately
-  coarse verdict (`insufficient-history` until exercises can be classified).
-
-```bash
-npm run benchmark:realworld                                # empty example fixture
-node benchmark/real-world.js export.json --consent --write # consented real export
-```
-
-A run may be described as validated only when the input was a consented real
-export (`metadata.consent: true`) with replay status `calibrated`. Synthetic
-or unconsented runs are smoke tests regardless of how good the numbers look.

@@ -1,6 +1,3 @@
-import { useEffect, useState } from 'react';
-import { loadStore, saveStore } from '../lib/store.js';
-
 const TABS = [
   ['today','Today','🏠'],
   ['train','Train','🏋️'],
@@ -10,13 +7,7 @@ const TABS = [
 ];
 
 export default function AppShell({ children, tab, setTab, storeVersion }){
-  const [storeTick, setStoreTick] = useState(0);
-  useEffect(()=>{
-    const onStorage = (e)=> { if(e.key==='arise.store.v1') setStoreTick(x=>x+1); };
-    window.addEventListener('storage', onStorage);
-    return ()=> window.removeEventListener('storage', onStorage);
-  },[]);
-  void storeTick; void storeVersion;
+  void storeVersion;
   return (
     <div className="min-h-dvh flex flex-col bg-bg text-ink">
       <a href="#main" className="skip-link">Skip to content</a>

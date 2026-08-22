@@ -1,7 +1,7 @@
 // Local, consent-gated event history for product measurements.
 // Nothing leaves the device here; Pulse and health sharing have separate consent.
 
-import { STORE_SCHEMA_VERSION } from './store.js';
+import { STORE_SCHEMA_VERSION, KEY as STORE_KEY } from './store.js';
 
 const KEY = 'arise.telemetry.v2';
 const LEGACY_KEY = 'arise.telemetry.v1';
@@ -37,7 +37,7 @@ function saveEvents(events){
 function hasConsent(essential=false){
   if(essential) return true;
   try{
-    const raw=localStorage.getItem('arise.store.v1');
+    const raw=localStorage.getItem(STORE_KEY);
     const store=raw ? JSON.parse(raw) : null;
     return store?.preferences?.telemetryEnabled === true;
   }catch{ return false; }
@@ -45,19 +45,20 @@ function hasConsent(essential=false){
 
 export function recordEvent(type, payload={}, { essential=false }={}){
   if(!hasConsent(essential)) return null;
+  // Identity fields are pinned after the payload spread so a stray
+  // { id, type, at } in the payload can't corrupt dedup or time ordering.
   const event={
+    ...payload,
     id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
     schemaVersion: STORE_SCHEMA_VERSION,
     type,
     at: new Date().toISOString(),
-    ...payload,
   };
   saveEvents([...loadEvents(), event]);
   return event;
 }
 
 export function getEventHistory(){ return loadEvents(); }
-export function getTelemetry(){ return { version: 2, events: loadEvents() }; }
 
 export function replaceEventHistory(events){
   saveEvents(normaliseEvents(events));

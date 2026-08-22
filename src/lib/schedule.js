@@ -1,4 +1,5 @@
 import { scheduleProgram, PROGRAM_BY_ID } from './data.js';
+import { upsertHistory } from './store.js';
 
 export function todayISO(){
   const d = new Date();
@@ -47,7 +48,9 @@ export function markSessionDone(store, session){
   if(activeSchedule){
     activeSchedule = { ...activeSchedule, sessions: activeSchedule.sessions.map(s=> s.id===session.id ? { ...s, status:'done' } : s) };
   }
-  return { ...store, activeSchedule, history: [...(store.history||[]), entry] };
+  // Upsert by id: completing the same session twice must replace the row,
+  // not create a duplicate that inflates adherence and progression evidence.
+  return { ...store, activeSchedule, history: upsertHistory(store.history || [], entry) };
 }
 
 function parseReps(reps){
