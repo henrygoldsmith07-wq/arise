@@ -100,6 +100,34 @@ export function trainingBreakInfo(history, { asOfDateISO = null, config = null }
   };
 }
 
+// Short-break detection (5–41 days since THIS lift's last exposure). The
+// multipliers live in cfg.progression.shortBreakPolicy, which the progression
+// model only supplies after its evidence gates open — without that policy the
+// engine treats short gaps exactly like any other gap.
+export function shortBreakInfo(history, exerciseId, { asOfDateISO = null, config = null } = {}){
+  const all = resolveArisePriors(config);
+  const policy = all.progression.shortBreakPolicy || {};
+  const longDays = all.progression.trainingAge.longBreakDays;
+  if(!asOfDateISO) return { hasShortBreak: false, daysSince: null, multiplier: 1 };
+  // Without an opened policy there is no easing at all — detection stays
+  // available for analysis, but application requires evidence.
+  if(!policy.enabled) return { hasShortBreak: false, daysSince: null, multiplier: 1 };
+  const end = Date.parse(`${asOfDateISO}T00:00:00Z`);
+  if(!Number.isFinite(end)) return { hasShortBreak: false, daysSince: null, multiplier: 1 };
+  const dates = orderedHistory(history)
+    .filter(session=> (session.blocks||[]).some(b=> b.exerciseId===exerciseId))
+    .map(session=> Date.parse(`${session?.dateISO || ''}T00:00:00Z`))
+    .filter(value=> Number.isFinite(value) && value <= end)
+    .sort((a, b)=> a - b);
+  if(!dates.length) return { hasShortBreak: false, daysSince: null, multiplier: 1 };
+  const daysSince = Math.max(0, Math.floor((end - dates[dates.length - 1]) / 86400000));
+  const minDays = policy.minDays ?? 5;
+  const moderateDays = policy.moderateDays ?? 14;
+  if(daysSince >= longDays || daysSince < minDays) return { hasShortBreak: false, daysSince, multiplier: 1 };
+  const multiplier = daysSince >= moderateDays ? (policy.moderateLoadMultiplier ?? 0.9) : (policy.lightLoadMultiplier ?? 0.95);
+  return { hasShortBreak: true, daysSince, multiplier };
+}
+
 // Longitudinal validation: how well would recommendNext have predicted the next logged set?
 // Returns { n, meanAbsErrorKg, meanAbsErrorReps, hitRate }
 export function validateProgression(history, { config = null } = {}){
@@ -187,6 +215,26 @@ export function recommendNext({ exerciseId, history, targetReps = null, conserva
       trainingAge,
       priorsVersion: cfg.version,
     }, plateConfig, exerciseId);
+  }
+  // Evidence-gated short-break easing: inert unless the progression model
+  // opened cfg.progression.shortBreakPolicy after proving that multi-day gaps
+  // don't actually hurt performance and that arise is over-conservative.
+  if(cfg.progression.shortBreakPolicy?.enabled && load > 0){
+    const sb = shortBreakInfo(history, exerciseId, { asOfDateISO, config: cfg });
+    if(sb.hasShortBreak){
+      const returnLoad = snapLoad(load * sb.multiplier, cfg);
+      const underPct = Math.round((1 - sb.multiplier) * 100);
+      return plateAware({
+        load: returnLoad,
+        reps: lo,
+        reason: `${sb.daysSince} days since this lift's last session — ease back to ${returnLoad}kg (~${underPct}% under last time) for one clean exposure, then rebuild.`,
+        shortBreak: sb,
+        strategy: strat,
+        personalised: prate,
+        trainingAge,
+        priorsVersion: cfg.version,
+      }, plateConfig, exerciseId);
+    }
   }
   // Plateau v2 check (real vs noise) — if true, hold. Fed session-level best
   // sets: set-level logs mistake two sets of one workout for two exposures.

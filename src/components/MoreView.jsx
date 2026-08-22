@@ -5,6 +5,7 @@ import { clearTelemetry, telemetrySummary, getEventHistory, mergeEventHistory, r
 import { mergeHealthSummary, pullHealthSummary } from '../lib/health.js';
 import { LOCATIONS, GOALS } from '../lib/data.js';
 import { loadEvaluationLedger } from '../lib/longitudinal.js';
+import { deriveProgressionModel } from '../lib/progressionModel.js';
 import { STUDY_ARMS, studyCoverage, runComparativeStudy, collectDeloadDecisions, validateDeloadDecisions } from '../lib/study.js';
 
 export default function MoreView({ store, setStore, setTab, onboardingOpen, setOnboardingOpen }){
@@ -26,11 +27,12 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
       let comparative = null;
       try{ comparative = runComparativeStudy(store.history || []); }catch{}
       const deloads = validateDeloadDecisions(collectDeloadDecisions([store.activeSchedule]), store.history || []);
+      const model = deriveProgressionModel({ history: store.history || [], study: comparative });
       const pair = comparative?.pairedVsArise?.['double-progression'];
       if(pair?.pairs){
         pairedLine = `Paired vs double progression on ${pair.pairs} shared sessions: Arise met target where it didn't ${pair.ariseWins}×; baseline won ${pair.baselineWins}× (both met ${pair.bothMetTarget}, neither ${pair.neitherMetTarget}).`;
       }
-      evidenceData = { coverage, comparative, deloads };
+      evidenceData = { coverage, comparative, deloads, model };
     }catch{ evidenceSummary = 'unavailable'; }
   }
 
@@ -248,6 +250,24 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
                     })}
                   </div>
                   {pairedLine && <p className="text-[11px] text-ink3 mt-1">{pairedLine}</p>}
+                </div>
+                <div>
+                  <p className="text-xs font-bold">Progression model capabilities</p>
+                  <div className="mt-1 flex flex-wrap gap-1" role="list" aria-label="Progression model capabilities">
+                    {(evidenceData.model?.capabilities || []).map(cap=> (
+                      <span key={cap.id} role="listitem" title={cap.detail}
+                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${cap.status==='active'||cap.status==='ready' ? 'border-success text-success' : cap.status==='existing' ? 'border-line text-ink3' : 'border-amber-300 text-amber-700 bg-amber-50'}`}>
+                        {cap.label}: {cap.status}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-ink3 mt-1">
+                    {evidenceData.model?.activeOverrideCount > 0
+                      ? `${evidenceData.model.activeOverrideCount} exercise-specific override${evidenceData.model.activeOverrideCount===1?'':'s'} currently shaping recommendations.`
+                      : 'No overrides active — capabilities stay inert until sample gates AND a proven baseline weakness open them.'}
+                    {evidenceData.model?.autoregulationApplied ? ' Autoregulation band shifted.' : ''}
+                    {evidenceData.model?.shortBreakEasing ? ' Short-break easing enabled.' : ''}
+                  </p>
                 </div>
                 <p className="text-[11px] text-ink3">
                   Deloads: {evidenceData.deloads.decisions} decision{evidenceData.deloads.decisions === 1 ? '' : 's'} recorded
