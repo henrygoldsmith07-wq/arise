@@ -261,6 +261,22 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
     maxOpenRecordsPerExercise: 3,
     retentionLimit: 500,
   },
+  // Evidence gates for the progression model. Every capability is inert until
+  // its own sample threshold AND a demonstrated weakness (arise losing to a
+  // baseline comparator in that stratum) opens it.
+  progressionModel: {
+    version: 1,
+    minExposuresPerExercise: 6,
+    minExposuresPerMovement: 12,
+    minExposuresPerRepRange: 10,
+    minSessionsForResponseShift: 8,
+    minPairsFatigue: 3,
+    minPerBucketFrequency: 3,
+    volumeMinWeeks: 6,
+    equivalenceMinPairs: 3,
+    maxIncPctDelta: 0.02,        // tuned incPct stays within ±2pp of strategy default
+    autoregulationShiftMax: 0.01,
+  },
   backtest: {
     minimumComparisons: 5,
     minimumStratumSamples: 8,

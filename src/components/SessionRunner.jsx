@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { lastExerciseSets } from '../lib/store.js';
 import { recommendNext } from '../lib/progression.js';
+import { runComparativeStudy } from '../lib/study.js';
+import { recommendNextWithModel } from '../lib/progressionModel.js';
 import { formatPlateStack } from '../lib/plates.js';
 import { substitutionOptions } from '../lib/substitutions.js';
 import { recordEvent } from '../lib/telemetry.js';
@@ -63,8 +65,16 @@ function suggestedTarget(rec, block){
   return `${reps} reps`;
 }
 
-function getRecommendation(block, history, asOfDateISO, plateConfig = null){
+function getRecommendation(block, history, asOfDateISO, plateConfig = null, study = null){
   try{
+    // Evidence-gated model: recommendNextWithModel derives the progression
+    // model from history + study; capabilities stay inert unless their sample
+    // gates AND a proven baseline weakness open them. Falls back to the plain
+    // engine on any error.
+    if(study){
+      const modelled = recommendNextWithModel({ exerciseId:block.exerciseId, history, targetReps:block.reps || '8–12', asOfDateISO, plateConfig, study });
+      if(modelled) return modelled;
+    }
     // plateConfig is safe for every equipment type: the engine dispatches
     // barbells through plates and dumbbells/machines through their own
     // achievable increments.
@@ -181,10 +191,16 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     return ()=> window.removeEventListener('pagehide', persistOnPageHide);
   }, [onDraftChange]);
 
+  // The comparative study runs once per history — it feeds the evidence
+  // gates that decide whether any progression-model capability may apply.
+  const study = useMemo(()=>{
+    try{ return runComparativeStudy(history); }catch{ return null; }
+  }, [history]);
+
   useEffect(()=>{
     for(const block of blocks){
       if(shownRecommendationRef.current.has(block.exerciseId)) continue;
-      const recommendation=getRecommendation(block,history,session.dateISO,plateConfig);
+      const recommendation=getRecommendation(block,history,session.dateISO,plateConfig,study);
       shownRecommendationRef.current.add(block.exerciseId);
       recordEvent('recommendation:shown', { sessionId:session.id, exerciseId:block.exerciseId, target:suggestedTarget(recommendation,block) });
       // Prospective evaluation record: snapshot the recommendation BEFORE the
@@ -201,7 +217,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
         });
       }catch{}
     }
-  }, [blocks, history, session.id, session.dateISO, plateConfig, measurementConsent]);
+  }, [blocks, history, session.id, session.dateISO, plateConfig, measurementConsent, study]);
 
   const startRest=(seconds,label)=>{
     const sec=Number(seconds)||0;
@@ -220,7 +236,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     const recs=new Map(), prevs=new Map();
     for(const b of blocks){
       if(recs.has(b.exerciseId)) continue;
-      recs.set(b.exerciseId, getRecommendation(b,history,session.dateISO,plateConfig));
+      recs.set(b.exerciseId, getRecommendation(b,history,session.dateISO,plateConfig,study));
       prevs.set(b.exerciseId, lastExerciseSets(history,b.exerciseId));
     }
     return { recs, prevs };
