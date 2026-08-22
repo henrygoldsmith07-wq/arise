@@ -1,18 +1,21 @@
 import { useMemo, useState } from 'react';
-import { MUSCLES, LEVELS, EQUIPMENT, searchExercises, EXERCISE_BY_ID } from '../lib/data.js';
+import { MUSCLES, LEVELS, EQUIPMENT, EXERCISE_TAGS, searchExercises, EXERCISE_BY_ID } from '../lib/data.js';
 
 export default function ExerciseBrowser({ availableEquipment }){
   const [q,setQ]=useState('');
   const [muscle,setMuscle]=useState('');
   const [level,setLevel]=useState('');
   const [equip,setEquip]=useState('');
+  const [tags,setTags]=useState([]);
   const [onlyAvailable,setOnlyAvailable]=useState(!!availableEquipment?.length);
   const [openId,setOpenId]=useState(null);
 
+  const toggleTag = (id)=> setTags(prev=> prev.includes(id) ? prev.filter(t=> t!==id) : [...prev, id]);
+
   const results = useMemo(()=> searchExercises({
-    q, muscle, level, equipment: equip || undefined,
+    q, muscle, level, tag: tags, equipment: equip || undefined,
     availableEquipment: onlyAvailable ? availableEquipment : null
-  }), [q,muscle,level,equip,onlyAvailable,availableEquipment]);
+  }), [q,muscle,level,tags,equip,onlyAvailable,availableEquipment]);
 
   return (
     <div className="px-4 py-5 space-y-4">
@@ -46,6 +49,21 @@ export default function ExerciseBrowser({ availableEquipment }){
             <option value="">Any</option>{EQUIPMENT.map(e=> <option key={e.id} value={e.id}>{e.label}</option>)}
           </select>
         </label>
+        <div>
+          <span className="text-[11px] font-semibold text-ink3">Tags</span>
+          <div className="mt-1 flex flex-wrap gap-1.5" role="group" aria-label="Filter by tag">
+            {EXERCISE_TAGS.map(t=> {
+              const active = tags.includes(t.id);
+              return (
+                <button key={t.id} onClick={()=> toggleTag(t.id)} aria-pressed={active} aria-label={`Filter tag ${t.label}`}
+                  className={`rounded-full border px-2.5 py-1 text-[11px] font-bold min-h-8 ${active ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink3 hover:border-ink3'}`}>
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+          {!!tags.length && <button onClick={()=> setTags([])} className="text-[11px] text-ink3 underline underline-offset-2 mt-1.5">Clear tags</button>}
+        </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={onlyAvailable} onChange={e=> setOnlyAvailable(e.target.checked)} />
           <span className="font-semibold">Only my kit</span>
@@ -63,6 +81,11 @@ export default function ExerciseBrowser({ availableEquipment }){
               <span className="min-w-0">
                 <span className="block text-sm font-bold truncate">{ex.name}</span>
                 <span className="block text-[11px] text-ink3">{ex.muscle} • {ex.level} • {ex.equipment.join(', ')}</span>
+                {!!ex.tags?.length && (
+                  <span className="flex flex-wrap gap-1 mt-1">
+                    {ex.tags.map(t=> <span key={t} className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-line text-ink3 bg-surface2">{EXERCISE_TAGS.find(x=> x.id===t)?.label || t}</span>)}
+                  </span>
+                )}
               </span>
               <span className="ml-auto text-ink3" aria-hidden>{openId===ex.id ? '−' : '+'}</span>
             </button>
