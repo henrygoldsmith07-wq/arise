@@ -93,8 +93,10 @@ function exerciseLogs(history, exerciseId){
 // A machine-readable explanation for every next-load decision. The UI can
 // show this without exposing implementation details or inventing a reason.
 export function transparentProgressionDecision({ exerciseId, history = [], targetReps = '8–12', recommendation = null, config = null, asOfDateISO = null, calibration = null, plateConfig = null } = {}){
-  const isBarbell = EXERCISE_BY_ID[exerciseId]?.equipment?.includes('barbell');
-  const rec = recommendation || recommendNext({ exerciseId, history, targetReps, config, asOfDateISO, calibration, plateConfig: isBarbell ? plateConfig : null });
+  // plateConfig is safe to pass for every equipment type: the engine's plate
+  // dispatcher rounds barbells via plates and dumbbells/machines via their own
+  // achievable increments, so non-barbell users get loadable targets too.
+  const rec = recommendation || recommendNext({ exerciseId, history, targetReps, config, asOfDateISO, calibration, plateConfig });
   const logs = exerciseLogs(history, exerciseId);
   const last = logs[logs.length - 1] || null;
   const ex = EXERCISE_BY_ID[exerciseId];

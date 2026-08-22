@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AppShell from './components/AppShell.jsx';
 import TodayView from './components/TodayView.jsx';
 import TrainView from './components/TrainView.jsx';
@@ -22,14 +22,18 @@ export default function App(){
   const [consentOpen,setConsentOpen]=useState(()=> loadStore().preferences?.telemetryEnabled == null);
   const [onboardingOpen,setOnboardingOpen]=useState(()=> !loadStore().onboarding);
   const [updateReady,setUpdateReady]=useState(false);
+  const [persistFailed,setPersistFailed]=useState(false);
+  const applyReloadRef=useRef(false);
 
-  const setStore = (next)=>{
-    setStoreState(next);
-    saveStore(next);
-  };
+  // State-setting wrapper kept for all call sites and child views. Persistence
+  // happens once, in the [store] effect below — never inside the setter.
+  const setStore = setStoreState;
 
+  // Single persistence point: state updates flow through setStoreState and this
+  // effect writes once. (Saving inside updaters or wrappers double-wrote on
+  // every keystroke under StrictMode.)
   useEffect(()=>{
-    saveStore(store);
+    if(!saveStore(store)) setPersistFailed(true);
   },[store]);
 
   useEffect(()=>{
@@ -44,9 +48,11 @@ export default function App(){
   // PWA lifecycle: listen for SW update
   useEffect(()=>{
     if(!('serviceWorker' in navigator)) return;
-    let reg;
-    navigator.serviceWorker.getRegistration().then(r=> { reg=r; });
-    const onControllerChange = ()=> window.location.reload();
+    const onControllerChange = ()=>{
+      // Only reload when WE activated a waiting worker (applyUpdate). The very
+      // first claim after install would otherwise loop-reload first-time visits.
+      if(window.__ariseSwActivating) window.location.reload();
+    };
     navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
     // Check for waiting SW on load
     navigator.serviceWorker.getRegistration().then(r=>{
@@ -58,6 +64,18 @@ export default function App(){
     });
     return ()=> navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
   },[]);
+
+  // Keep state fresh when another tab writes the store. Skipped mid-session so
+  // a foreign write can't clobber the runner draft.
+  useEffect(()=>{
+    if(!('storage' in window)) return;
+    const onStorage = (e)=>{
+      if(e.key !== 'arise.store.v1' || activeSession) return;
+      setStoreState(loadStore());
+    };
+    window.addEventListener('storage', onStorage);
+    return ()=> window.removeEventListener('storage', onStorage);
+  },[activeSession]);
 
   // Global error telemetry (privacy-gated, local only)
   useEffect(()=>{
@@ -96,11 +114,9 @@ export default function App(){
   };
 
   const handleDraftChange = useCallback((draft)=>{
-    setStoreState(prev=>{
-      const next={ ...prev, activeWorkout: draft };
-      saveStore(next);
-      return next;
-    });
+    // Pure updater — the [store] effect below owns persistence. Writing
+    // localStorage inside an updater double-fires under StrictMode.
+    setStoreState(prev=> ({ ...prev, activeWorkout: draft }));
   },[]);
 
   const handleSaveSession = (payload)=>{
@@ -148,8 +164,14 @@ export default function App(){
     } catch {}
   };
   const handleCancelSession = ()=>{
+    const draft=store.activeWorkout;
+    if(activeSession && draft){
+      const completedSets=draft.blocks?.reduce((n,b)=> n+(b.sets||[]).filter(s=> s.completed).length,0) || 0;
+      // The draft is crash-insurance for logged sets — discarding it needs a
+      // deliberate confirmation once real work is on the line.
+      if(completedSets>0 && !window.confirm(`Discard this workout? ${completedSets} completed set${completedSets===1?'':'s'} will be lost.`)) return;
+    }
     if(activeSession) try {
-      const draft=store.activeWorkout;
       const totalSets=draft?.blocks?.reduce((n,b)=> n+(b.sets||[]).length,0) || 0;
       const completedSets=draft?.blocks?.reduce((n,b)=> n+(b.sets||[]).filter(s=> s.completed).length,0) || 0;
       const startedAt=draft?.startedAt ? Date.parse(draft.startedAt) : null;
@@ -183,8 +205,13 @@ export default function App(){
   const applyUpdate = ()=>{
     if('serviceWorker' in navigator){
       navigator.serviceWorker.getRegistration().then(r=>{
-        if(r?.waiting) r.waiting.postMessage('SKIP_WAITING');
-        else window.location.reload();
+        if(r?.waiting){
+          window.__ariseSwActivating = true;
+          r.waiting.postMessage('SKIP_WAITING');
+        } else {
+          window.__ariseSwActivating = true;
+          window.location.reload();
+        }
       });
     }
   };
@@ -266,6 +293,7 @@ export default function App(){
           history={store.history || []}
           availableEquipment={store.onboarding?.equipment || []}
           plateConfig={store.onboarding?.plateConfig || null}
+          preferences={store.onboarding || null}
           draft={store.activeWorkout?.session?.id===activeSession.id ? store.activeWorkout : null}
           measurementConsent={store.preferences?.telemetryEnabled === true}
           onDraftChange={handleDraftChange}

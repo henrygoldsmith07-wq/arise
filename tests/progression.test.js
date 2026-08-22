@@ -1,10 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { recommendNext, isPlateau, isPlateauV2, isMeaningfulPR, classifyPR, rirFromRpe, readinessScore, readinessEMA, readinessWithUncertainty, personalisedRate, validateProgression, strengthTrendWithConfidence, sideImbalance, strategyForExercise } from "../src/lib/progression.js";
+import { recommendNext, isPlateau, isPlateauV2, isMeaningfulPR, classifyPR, rirFromRpe, readinessScore, readinessEMA, personalisedRate, validateProgression, strengthTrendWithConfidence, sideImbalance, strategyForExercise } from "../src/lib/progression.js";
 import { scoreSubstitution, rankedSubstitutions, substitutionByPerformance, substitutionOptions } from "../src/lib/substitutions.js";
 import { weeklyVolume, frequencyByMuscleSync, strengthSeries, volumeLandmarks, volumeDistribution, extractNoteRecommendations } from "../src/lib/analytics.js";
 import { generateSession } from "../src/lib/sessionGenerator.js";
-import { runMigrations, prsHitBySession } from "../src/lib/store.js";
+import { runMigrations, prsHitBySession, STORE_SCHEMA_VERSION } from "../src/lib/store.js";
 import { syncUp, syncDown, mergeStoresWithConflicts } from "../src/lib/sync.js";
 import { warmupSets, recommendedRest, predictSessionDuration, supersetScore } from "../src/lib/warmup.js";
 import { EXERCISE_BY_ID } from "../src/lib/data.js";
@@ -133,7 +133,7 @@ describe("analytics + generator + sync + migrations", ()=>{
     assert.ok(dur>=5);
     assert.ok(supersetScore('push-up','band-row', EXERCISE_BY_ID) > 0.5);
   });
-  it("runMigrations adds syncEnabled, activeWorkout and bumps to v4", ()=>{ const m=runMigrations({ version:1, onboarding:null, history:[], preferences:{ units:"kg", theme:null }}); assert.equal(m.version,5); assert.equal(m.preferences.syncEnabled,false); assert.equal(m.activeWorkout,null); assert.deepEqual(m.eventHistory,[]); assert.equal(m.preferences.healthSummaryEnabled,false); });
+  it("runMigrations adds syncEnabled, activeWorkout and bumps to current schema", ()=>{ const m=runMigrations({ version:1, onboarding:null, history:[], preferences:{ units:"kg", theme:null }}); assert.equal(m.version,STORE_SCHEMA_VERSION); assert.equal(m.preferences.syncEnabled,false); assert.equal(m.activeWorkout,null); assert.deepEqual(m.eventHistory,[]); assert.equal(m.preferences.healthSummaryEnabled,false); });
   it("prsHitBySession respects ROM guard", ()=>{
     const prior=[{dateISO:'2026-01-01', note:'', blocks:[{exerciseId:'bench-press-dumbbell', sets:[{reps:'8',weightKg:'20'}]}]}];
     const sess={dateISO:'2026-01-02', note:'partial ROM, not full depth', blocks:[{exerciseId:'bench-press-dumbbell', sets:[{reps:'8',weightKg:'30'}]}]};

@@ -1,5 +1,6 @@
 const KEY = 'arise.store.v1';
-export const STORE_SCHEMA_VERSION = 5;
+const CORRUPT_KEY = 'arise.store.v1.corrupt';
+export const STORE_SCHEMA_VERSION = 6;
 
 const DEFAULT = {
   version: STORE_SCHEMA_VERSION,
@@ -9,7 +10,7 @@ const DEFAULT = {
   eventHistory: [], // imported/exported event snapshot; live telemetry remains append-only in its own local key
   healthSummary: null, // optional user-approved health-platform summary
   history: [], // completed sessions: see normaliseHistoryEntry for full shape
-  preferences: { units: 'kg', theme: null, syncEnabled: false, telemetryEnabled: null, pulseEnabled: false, healthSummaryEnabled: false }, // theme null follows OS; telemetry null = prompt
+  preferences: { units: 'kg', theme: null, syncEnabled: false, telemetryEnabled: null, pulseEnabled: false, healthSummaryEnabled: false, autoRest: true }, // theme null follows OS; telemetry null = prompt
   readinessLog: [], // [{ dateISO, score, sleep, soreness, motivation }]
   programHistory: [], // [{ programId, version, startDateISO, endDateISO }]
 };
@@ -28,11 +29,21 @@ export function loadStore(){
     if(j.healthSummary === undefined) j.healthSummary=null;
     j.history = normaliseHistory(j.history);
     return { ...structuredClone(DEFAULT), ...j };
-  }catch{ return structuredClone(DEFAULT); }
+  }catch{
+    // Never silently destroy unreadable data: quarantine the raw payload so a
+    // truncated write or failed migration stays recoverable instead of being
+    // overwritten by the next saveStore(DEFAULT).
+    try{
+      const raw = localStorage.getItem(KEY);
+      if(raw) localStorage.setItem(CORRUPT_KEY, raw);
+    }catch{}
+    return structuredClone(DEFAULT);
+  }
 }
 
 export function saveStore(s){
-  try{ localStorage.setItem(KEY, JSON.stringify(s)); }catch{}
+  try{ localStorage.setItem(KEY, JSON.stringify(s)); return true; }
+  catch{ return false; }
 }
 
 function historyTimestamp(entry){
@@ -92,14 +103,21 @@ export function normaliseHistoryEntry(entry){
   if(out.mode == null) out.mode = 'standard';
   if(out.noteTags == null) out.noteTags = [];
   if(out.painDiscomfort == null) out.painDiscomfort = Array.isArray(out.noteTags) ? out.noteTags.includes('pain-discomfort') : false;
-  if(out.substitutions == null) out.substitutions = out.blocks.filter(b=> b.substitutionFrom).map(b=> ({ from: b.substitutionFrom, to: b.exerciseId, reason: b.substitutionReason }));
+  if(out.substitutions == null) out.substitutions = out.blocks.filter(b=> b?.substitutionFrom).map(b=> ({ from: b.substitutionFrom, to: b.exerciseId, reason: b.substitutionReason }));
   if(out.skippedSetsCount == null) out.skippedSetsCount = out.blocks.reduce((n,b)=> n + (b.sets||[]).filter(s=> s.skipped || s.failed).length, 0);
   if(out.exerciseOrder == null) out.exerciseOrder = out.blocks.map(b=> b.exerciseId);
   return out;
 }
 
 export function normaliseHistory(history = []){
-  const normalised = (history || []).map(normaliseHistoryEntry);
+  // Per-entry resilience: one malformed row (e.g. a null block from an edited
+  // backup) must cost that row only — not the whole history. The raw payload is
+  // quarantined by the caller before normalisation ever runs.
+  const normalised = [];
+  for(const entry of history || []){
+    try{ normalised.push(normaliseHistoryEntry(entry)); }
+    catch{ /* drop the unreadable entry, keep the rest */ }
+  }
   const byId = new Map();
   const loose = [];
   for(const entry of normalised || []){
@@ -160,6 +178,12 @@ export function runMigrations(raw){
     }
     j.version = STORE_SCHEMA_VERSION;
   }
+  if(j.version === 5){
+    // v5 -> v6: auto rest timer preference (default on — matches prior behaviour).
+    if(!j.preferences) j.preferences={};
+    if(j.preferences.autoRest==null) j.preferences.autoRest=true;
+    j.version = STORE_SCHEMA_VERSION;
+  }
   if(j.activeWorkout === undefined) j.activeWorkout = null;
   if(j.eventHistory === undefined) j.eventHistory=[];
   if(j.healthSummary === undefined) j.healthSummary=null;
@@ -168,17 +192,13 @@ export function runMigrations(raw){
   if(j.preferences.telemetryEnabled==null) j.preferences.telemetryEnabled=null;
   if(j.preferences.pulseEnabled==null) j.preferences.pulseEnabled=false;
   if(j.preferences.healthSummaryEnabled==null) j.preferences.healthSummaryEnabled=false;
+  if(j.preferences.autoRest==null) j.preferences.autoRest=true;
   j.history = normaliseHistory(j.history || []);
   return j;
 }
 
-// Track readiness over time (EMA-aware)
-export function logReadiness(store, { sleep, soreness, motivation }){
-  const score = Math.round(Math.max(0, Math.min(100, (((Number(sleep)-1)/4)*0.4 + ((5-Number(soreness))/4)*0.3 + ((Number(motivation)-1)/4)*0.3)*100)));
-  const entry = { dateISO: new Date().toISOString().slice(0,10), score, sleep, soreness, motivation, at: new Date().toISOString() };
-  const log = [...(store.readinessLog||[]), entry].slice(-60);
-  return { ...store, readinessLog: log };
-}
+// Track readiness over time — the engine consumes `readinessLog`; the logger
+// itself is exposed through the readiness UI, not this module.
 
 // Previous-session lookup
 export function lastExerciseSets(history, exerciseId){
@@ -240,23 +260,13 @@ export function streakDays(history){
   const dates = [...new Set(history.map(h=>h.dateISO))].sort();
   let streak=1;
   for(let i=dates.length-1;i>0;i--){
-    const a=new Date(dates[i]+'T00:00:00'), b=new Date(dates[i-1]+'T00:00:00');
+    // Parse as UTC calendar dates: local parsing breaks day diffs across DST
+    // transitions (23h/25h days), silently snapping or breaking streaks.
+    const a=new Date(dates[i]+'T00:00:00Z'), b=new Date(dates[i-1]+'T00:00:00Z');
     const diff = (a-b)/86400000;
     if(diff===1) streak++; else if(diff>1) break;
   }
   return streak;
 }
 
-// Per-side volume (unilateral)
-export function volumeBySide(history){
-  let left=0, right=0, bilateral=0;
-  for(const h of history||[]) for(const b of h.blocks||[]) for(const s of b.sets||[]){
-    const vol = (Number(s.reps)||0)*(Number(s.weightKg)||0);
-    if(s.side==='L') left+=vol;
-    else if(s.side==='R') right+=vol;
-    else bilateral+=vol;
-  }
-  return { left: Math.round(left), right: Math.round(right), bilateral: Math.round(bilateral) };
-}
-
-export { KEY, DEFAULT };
+export { KEY, CORRUPT_KEY, DEFAULT };

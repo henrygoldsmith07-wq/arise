@@ -5,6 +5,7 @@
 
 import { buildExportPayload, parseImportFile, mergeStores } from "./export.js";
 import { STORE_SCHEMA_VERSION } from "./store.js";
+import { mergeEvaluationLedgers } from "./longitudinal.js";
 
 export function makeSyncAdapter({ pull, push }){ return { pull, push }; }
 
@@ -53,14 +54,17 @@ export function mergeStoresWithConflicts(current, imported){
   }
   return {
     version: Math.max(STORE_SCHEMA_VERSION, current.version||1, imported.version||1),
+    ...current,
     onboarding,
     activeSchedule,
     activeWorkout: current.activeWorkout || imported.activeWorkout || null,
-    history: [...byId.values()].sort((a,b)=> a.dateISO.localeCompare(b.dateISO)),
+    // Guarded comparator: an entry missing dateISO must not crash the sync.
+    history: [...byId.values()].sort((a,b)=> String(a?.dateISO||'').localeCompare(String(b?.dateISO||''))),
     preferences,
     eventHistory: [...eventById.values()].sort((a,b)=> String(a.at||'').localeCompare(String(b.at||''))),
     healthSummary: current.healthSummary || imported.healthSummary || null,
-    readinessLog: [...rByKey.values()].sort((a,b)=> a.dateISO.localeCompare(b.dateISO)),
+    readinessLog: [...rByKey.values()].sort((a,b)=> String(a?.dateISO||'').localeCompare(String(b?.dateISO||''))),
+    evaluationLedger: mergeEvaluationLedgers(current.evaluationLedger, imported.evaluationLedger),
     programHistory: [...(current.programHistory||[]), ...(imported.programHistory||[])].filter((v,i,a)=> a.findIndex(x=> x.programId===v.programId && x.version===v.version)===i),
   };
 }

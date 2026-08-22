@@ -171,7 +171,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
                 <span className="text-xs font-mono tabular-nums text-ink3 w-24 shrink-0">{session.dateISO}</span>
                 <span className="font-medium truncate">{session.title}</span>
                 <span className={`ml-auto text-[11px] font-bold px-2 py-1 rounded-full border ${completed ? 'bg-success text-white border-success' : 'bg-surface border-line text-ink3'}`}>{completed?'done':'planned'}</span>
-                {completed && delta && <span className="text-[11px] text-ink3">{delta.sets>=0?'+':''}{delta.sets} sets • {delta.volumeKg>=0?'+':''}{delta.volumeKg}kg</span>}
+                {completed && delta && <span className="text-[11px] text-ink3">{delta.sets>=0?'+':''}{delta.sets} sets{delta.volumeKg!=null ? ` • ${delta.volumeKg>=0?'+':''}${delta.volumeKg}kg vs plan` : ''}</span>}
                 {!completed && <button onClick={()=> onStartSession(session)} className="text-xs font-bold text-ink underline">Start</button>}
               </li>
             ))}

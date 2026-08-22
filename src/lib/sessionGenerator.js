@@ -1,7 +1,7 @@
 // sessionGenerator.js — build a session from goal + availableEquipment + recent history.
 // Explains why each block was chosen.
 import { EXERCISES, EXERCISE_BY_ID } from "./data.js";
-import { recommendNext, personalisedRate } from "./progression.js";
+import { recommendNext, personalisedRate, strategyForExercise } from "./progression.js";
 import { rankedSubstitutions } from "./substitutions.js";
 import { warmupSets, recommendedRest, predictSessionDuration, bestSupersets, fatigueAwareOrder, weakPointMuscles } from "./warmup.js";
 
@@ -28,7 +28,7 @@ export function generateSession({ goal="general", availableEquipment=[], history
   for(const ex of pool){ if(picked.length>=length) break; if(!picked.some(p=> p.id===ex.id)) picked.push(ex); }
   let blocks = picked.map(ex=>{
     const rec = recommendNext({ exerciseId: ex.id, history, targetReps: "8–12" });
-    const sets = setsForProgression(ex.progression || 'hypertrophy', rec);
+    const sets = setsForProgression(strategyForExercise(ex.id), rec);
     const reps = rec.reps || "8";
     const loadHint = rec.load != null && rec.load>0 ? `${rec.load}kg` : rec.assistKg != null && rec.assistKg>0 ? `${rec.assistKg}kg assist` : (rec.load===null? "bodyweight": "as prescribed");
     const isUnilateral = ex.unilateral || /lunge|split|single|bulgarian/i.test(ex.id);
@@ -59,18 +59,10 @@ export function generateSession({ goal="general", availableEquipment=[], history
   return { blocks, supersets, estimatedDurationMin };
 }
 
-function setsForProgression(progression, rec){
-  if(progression==='strength') return 4;
-  if(progression==='time') return 3;
+// Set count follows the exercise's progression STRATEGY (strength → 4 sets),
+// not the `progression: 'load'|'time'` data field — that field describes how
+// load is logged, so keying off it meant the strength branch never fired.
+function setsForProgression(strategy, rec){
+  if(strategy==='strength') return 4;
   return 3;
-}
-
-// Generate next mesocycle week: periodised progression (volume/intensity trade-off)
-export function nextMesocycleWeek({ programId, currentWeek, history }){
-  // Simple linear periodisation: week 1 base, week 2 +volume, week 3 peak, week 4 deload
-  const weekInCycle = ((currentWeek - 1) % 4) + 1;
-  if(weekInCycle===4) return { type: 'deload', volumeCut: 0.6, note: 'Deload week — cut volume ~40%, keep loads moderate.' };
-  if(weekInCycle===3) return { type: 'peak', note: 'Peak week — push for small PRs where form holds.' };
-  if(weekInCycle===2) return { type: 'build', note: 'Build week — add a set or reps where RIR ≥2.' };
-  return { type: 'base', note: 'Base week — establish working loads.' };
 }

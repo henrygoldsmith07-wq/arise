@@ -4,6 +4,8 @@ import { clearStore } from '../lib/store.js';
 import { clearTelemetry, telemetrySummary, getEventHistory, mergeEventHistory, replaceEventHistory, recordEvent } from '../lib/telemetry.js';
 import { mergeHealthSummary, pullHealthSummary } from '../lib/health.js';
 import { LOCATIONS, GOALS } from '../lib/data.js';
+import { loadEvaluationLedger } from '../lib/longitudinal.js';
+import { STUDY_ARMS, studyCoverage, runComparativeStudy, collectDeloadDecisions, validateDeloadDecisions } from '../lib/study.js';
 
 export default function MoreView({ store, setStore, setTab, onboardingOpen, setOnboardingOpen }){
   const [importStrategy,setImportStrategy]=useState('merge');
@@ -11,6 +13,26 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   const fileRef = useRef(null);
   const [showTelemetry,setShowTelemetry]=useState(false);
   const [healthMsg,setHealthMsg]=useState(null);
+  const [evidenceOpen,setEvidenceOpen]=useState(false);
+
+  // Computed lazily — only while the study details panel is open.
+  let evidenceData = null;
+  let evidenceSummary = '';
+  let pairedLine = '';
+  if(evidenceOpen && store.preferences?.telemetryEnabled === true){
+    try{
+      const coverage = studyCoverage(loadEvaluationLedger());
+      evidenceSummary = `${coverage.totalResolved} pairs · ${coverage.exercisesTracked} exercises`;
+      let comparative = null;
+      try{ comparative = runComparativeStudy(store.history || []); }catch{}
+      const deloads = validateDeloadDecisions(collectDeloadDecisions([store.activeSchedule]), store.history || []);
+      const pair = comparative?.pairedVsArise?.['double-progression'];
+      if(pair?.pairs){
+        pairedLine = `Paired vs double progression on ${pair.pairs} shared sessions: Arise met target where it didn't ${pair.ariseWins}×; baseline won ${pair.baselineWins}× (both met ${pair.bothMetTarget}, neither ${pair.neitherMetTarget}).`;
+      }
+      evidenceData = { coverage, comparative, deloads };
+    }catch{ evidenceSummary = 'unavailable'; }
+  }
 
   const healthAdapter = typeof window !== 'undefined' ? window.__ARISE_HEALTH_ADAPTER__ : null;
 
@@ -186,6 +208,56 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
           <button onClick={reset} className="text-xs font-semibold text-ink3 underline underline-offset-2">Clear local data</button>
           <button onClick={deleteAccount} className="ml-auto text-xs font-bold text-danger underline underline-offset-2">Delete all data</button>
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+        <h3 className="text-sm font-bold">Progression evidence</h3>
+        <p className="text-xs text-ink3">Arise records each recommendation before the workout (with your measurement consent) and scores it against what you actually did next — compared against simple double progression, linear progression and a flat baseline on the same sessions.</p>
+        {store.preferences?.telemetryEnabled !== true ? (
+          <p className="text-xs text-ink3">Enable local measurements above to start collecting recommendation→outcome pairs. Pairs stay on this device and are included in your backup file.</p>
+        ) : (
+          <details className="rounded-xl border border-line bg-surface2 px-3 py-2" onToggle={(e)=> setEvidenceOpen(e.target.open)}>
+            <summary className="text-sm font-semibold cursor-pointer">Study status{evidenceSummary ? ` — ${evidenceSummary}` : ''}</summary>
+            {evidenceData && (
+              <div className="mt-3 space-y-3">
+                <div>
+                  <p className="text-xs font-bold">Coverage</p>
+                  <p className="text-[11px] text-ink3 mt-1">{evidenceData.coverage.totalResolved} resolved pairs · {evidenceData.coverage.openRecords} awaiting their workout · {evidenceData.coverage.exercisesTracked} exercises tracked. Segments need {evidenceData.coverage.minimumSamples}+ pairs to conclude.</p>
+                  {!!evidenceData.coverage.gaps.length && (
+                    <ul className="text-[11px] text-ink3 list-disc pl-4 mt-1">
+                      {evidenceData.coverage.gaps.slice(0, 3).map(gap=> (
+                        <li key={`${gap.dimension}-${gap.key}`}>{gap.dimension === 'exercise' ? gap.key : `${gap.key} experience`}: needs {gap.deficit} more</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs font-bold">Replay comparison ({evidenceData.comparative.transitions} transitions)</p>
+                  <div className="mt-1 space-y-1" role="table" aria-label="Progression arm comparison">
+                    {STUDY_ARMS.map(arm=> {
+                      const row = evidenceData.comparative.overall[arm];
+                      if(!row) return null;
+                      const pct = v=> v == null ? '—' : `${Math.round(v * 100)}%`;
+                      return (
+                        <div key={arm} role="row" className="flex items-center gap-2 text-[11px]">
+                          <span className="font-semibold w-36 truncate" role="cell">{arm}</span>
+                          <span role="cell" className="text-ink3">met {pct(row.targetAchievementRate)} · success {pct(row.progressionSuccessRate)} · over-conservative {pct(row.unnecessaryConservatismRate)}</span>
+                          <span className={`ml-auto px-1.5 py-0.5 rounded-full border ${row.conclusive ? 'border-success text-success' : 'border-line text-ink3'}`} role="cell">{row.conclusive ? `n=${row.n}` : `n=${row.n} · inconclusive`}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {pairedLine && <p className="text-[11px] text-ink3 mt-1">{pairedLine}</p>}
+                </div>
+                <p className="text-[11px] text-ink3">
+                  Deloads: {evidenceData.deloads.decisions} decision{evidenceData.deloads.decisions === 1 ? '' : 's'} recorded
+                  {evidenceData.deloads.cutsObservedRate != null ? ` · volume actually cut in ${Math.round(evidenceData.deloads.cutsObservedRate * 100)}% of cases` : ''}.
+                  {' '}Every arm sees only prior sessions; nothing here feeds back into recommendations.
+                </p>
+              </div>
+            )}
+          </details>
+        )}
       </section>
 
       <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">

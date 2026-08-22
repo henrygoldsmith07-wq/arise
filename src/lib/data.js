@@ -37,27 +37,27 @@ export const GOALS = [
 // unilateral, supportsWeighted/Assisted, progression, rom flag help the engine pick the right strategy.
 export const EXERCISES = [
   // Chest
-  { id: 'push-up', name: 'Push-up', muscle: 'Chest', equipment: ['bodyweight'], level: 'Beginner', cues: ['Hands under shoulders','Body in a straight line','Chest to floor'], substitution: ['bench-press-dumbbell','chest-press-machine'], unilateral: false, supportsWeighted: true, supportsAssisted: false, progression: 'reps', rom: true },
+  { id: 'push-up', name: 'Push-up', muscle: 'Chest', equipment: ['bodyweight'], level: 'Beginner', cues: ['Hands under shoulders','Body in a straight line','Chest to floor'], substitution: ['bench-press-dumbbell','chest-press-machine','bench-press-barbell','incline-push-up','overhead-press-dumbbell','tricep-dip-bench','incline-dumbbell-press'], unilateral: false, supportsWeighted: true, supportsAssisted: false, progression: 'reps', rom: true },
   { id: 'bench-press-barbell', name: 'Barbell Bench Press', muscle: 'Chest', equipment: ['barbell','bench'], level: 'Intermediate', cues: ['Feet planted','Retract shoulder blades','Bar to chest, press to lockout'], substitution: ['push-up','bench-press-dumbbell'], unilateral: false, progression: 'load', rom: true },
-  { id: 'bench-press-dumbbell', name: 'Dumbbell Bench Press', muscle: 'Chest', equipment: ['dumbbells','bench'], level: 'Beginner', cues: ['Neutral wrists','Control the descent'], substitution: ['push-up','bench-press-barbell'], unilateral: false, progression: 'load', rom: true },
+  { id: 'bench-press-dumbbell', name: 'Dumbbell Bench Press', muscle: 'Chest', equipment: ['dumbbells','bench'], level: 'Beginner', cues: ['Neutral wrists','Control the descent'], substitution: ['push-up','bench-press-barbell','incline-dumbbell-press'], unilateral: false, progression: 'load', rom: true },
   { id: 'incline-push-up', name: 'Incline Push-up', muscle: 'Chest', equipment: ['bodyweight','bench'], level: 'Beginner', cues: ['Hands elevated','Easier than floor push-ups'], substitution: ['push-up'], unilateral: false, supportsWeighted: true, progression: 'reps' },
   { id: 'chest-press-machine', name: 'Chest Press (Machine)', muscle: 'Chest', equipment: ['machine'], level: 'Beginner', cues: ['Seat height so handles at chest'], substitution: ['push-up'], progression: 'load' },
 
   // Back
-  { id: 'pull-up', name: 'Pull-up', muscle: 'Back', equipment: ['pullup-bar'], level: 'Intermediate', cues: ['Dead hang start','Chest to bar','No swinging'], substitution: ['band-row','dumbbell-row'], supportsWeighted: true, supportsAssisted: true, progression: 'reps', rom: true },
-  { id: 'band-row', name: 'Banded Row', muscle: 'Back', equipment: ['bands'], level: 'Beginner', cues: ['Hinge slightly','Pull elbows past torso'], substitution: ['dumbbell-row','pull-up'], progression: 'reps' },
-  { id: 'dumbbell-row', name: 'Single-Arm Dumbbell Row', muscle: 'Back', equipment: ['dumbbells','bench'], level: 'Beginner', cues: ['Flat back','Pull to hip'], substitution: ['band-row'], unilateral: true, progression: 'load', rom: true },
+  { id: 'pull-up', name: 'Pull-up', muscle: 'Back', equipment: ['pullup-bar'], level: 'Intermediate', cues: ['Dead hang start','Chest to bar','No swinging'], substitution: ['band-row','dumbbell-row','lat-pulldown'], supportsWeighted: true, supportsAssisted: true, progression: 'reps', rom: true },
+  { id: 'band-row', name: 'Banded Row', muscle: 'Back', equipment: ['bands'], level: 'Beginner', cues: ['Hinge slightly','Pull elbows past torso'], substitution: ['dumbbell-row','pull-up','lat-pulldown','face-pull','cable-row'], progression: 'reps' },
+  { id: 'dumbbell-row', name: 'Single-Arm Dumbbell Row', muscle: 'Back', equipment: ['dumbbells','bench'], level: 'Beginner', cues: ['Flat back','Pull to hip'], substitution: ['band-row','pull-up','face-pull','cable-row'], unilateral: true, progression: 'load', rom: true },
   { id: 'lat-pulldown', name: 'Lat Pulldown', muscle: 'Back', equipment: ['cable'], level: 'Beginner', cues: ['Lean slightly back','Pull to upper chest'], substitution: ['pull-up','band-row'], progression: 'load' },
 
   // Legs / Glutes
-  { id: 'bodyweight-squat', name: 'Bodyweight Squat', muscle: 'Legs', equipment: ['bodyweight'], level: 'Beginner', cues: ['Knees track toes','Depth to hip below knee if comfortable'], substitution: ['goblet-squat','barbell-squat'], supportsWeighted: true, progression: 'reps', rom: true },
-  { id: 'goblet-squat', name: 'Goblet Squat', muscle: 'Legs', equipment: ['dumbbells','kettlebell'], level: 'Beginner', cues: ['Elbows inside knees','Chest tall'], substitution: ['bodyweight-squat','barbell-squat'], progression: 'load', rom: true },
+  { id: 'bodyweight-squat', name: 'Bodyweight Squat', muscle: 'Legs', equipment: ['bodyweight'], level: 'Beginner', cues: ['Knees track toes','Depth to hip below knee if comfortable'], substitution: ['goblet-squat','barbell-squat','split-squat','burpee'], supportsWeighted: true, progression: 'reps', rom: true },
+  { id: 'goblet-squat', name: 'Goblet Squat', muscle: 'Legs', equipment: ['dumbbells','kettlebell'], level: 'Beginner', cues: ['Elbows inside knees','Chest tall'], substitution: ['bodyweight-squat','barbell-squat','bulgarian-split-squat'], progression: 'load', rom: true },
   { id: 'barbell-squat', name: 'Barbell Back Squat', muscle: 'Legs', equipment: ['barbell'], level: 'Advanced', cues: ['Brace hard','Hip hinge then knee bend'], substitution: ['goblet-squat','bodyweight-squat'], progression: 'load', rom: true },
-  { id: 'romanian-deadlift', name: 'Romanian Deadlift', muscle: 'Glutes', equipment: ['dumbbells','barbell'], level: 'Intermediate', cues: ['Soft knee','Hinge, hamstrings stretch','Neutral spine'], substitution: ['hip-hinge-band','kettlebell-swing'], progression: 'load', rom: true },
+  { id: 'romanian-deadlift', name: 'Romanian Deadlift', muscle: 'Glutes', equipment: ['dumbbells','barbell'], level: 'Intermediate', cues: ['Soft knee','Hinge, hamstrings stretch','Neutral spine'], substitution: ['glute-bridge','kettlebell-swing'], progression: 'load', rom: true },
   { id: 'hip-thrust', name: 'Hip Thrust', muscle: 'Glutes', equipment: ['bench'], level: 'Beginner', cues: ['Shoulders on bench','Squeeze glutes at top'], substitution: ['glute-bridge'], progression: 'load', rom: true },
-  { id: 'glute-bridge', name: 'Glute Bridge', muscle: 'Glutes', equipment: ['bodyweight'], level: 'Beginner', cues: ['Feet flat','Drive hips up'], substitution: ['hip-thrust'], supportsWeighted: true, progression: 'reps', rom: true },
-  { id: 'lunge', name: 'Forward Lunge', muscle: 'Legs', equipment: ['bodyweight','dumbbells'], level: 'Beginner', cues: ['Front knee over ankle','Torso upright'], substitution: ['split-squat'], unilateral: true, supportsWeighted: true, progression: 'reps', rom: true },
-  { id: 'split-squat', name: 'Bulgarian Split Squat', muscle: 'Legs', equipment: ['bench','dumbbells'], level: 'Intermediate', cues: ['Rear foot elevated','Front knee stable'], substitution: ['lunge','bodyweight-squat'], unilateral: true, supportsWeighted: true, progression: 'load', rom: true },
+  { id: 'glute-bridge', name: 'Glute Bridge', muscle: 'Glutes', equipment: ['bodyweight'], level: 'Beginner', cues: ['Feet flat','Drive hips up'], substitution: ['hip-thrust','romanian-deadlift'], supportsWeighted: true, progression: 'reps', rom: true },
+  { id: 'lunge', name: 'Forward Lunge', muscle: 'Legs', equipment: ['bodyweight','dumbbells'], level: 'Beginner', cues: ['Front knee over ankle','Torso upright'], substitution: ['split-squat','bulgarian-split-squat'], unilateral: true, supportsWeighted: true, progression: 'reps', rom: true },
+  { id: 'split-squat', name: 'Split Squat', muscle: 'Legs', equipment: ['bench','dumbbells'], level: 'Intermediate', cues: ['Torso upright','Back knee lowers toward floor'], substitution: ['lunge','bodyweight-squat'], unilateral: true, supportsWeighted: true, progression: 'load', rom: true },
 
   // Shoulders / Arms
   { id: 'overhead-press-dumbbell', name: 'Dumbbell Overhead Press', muscle: 'Shoulders', equipment: ['dumbbells'], level: 'Beginner', cues: ['Ribs down','Press overhead without arching'], substitution: ['push-up','pike-push-up'], progression: 'load', rom: true },
@@ -67,15 +67,15 @@ export const EXERCISES = [
   { id: 'bicep-curl', name: 'Dumbbell Bicep Curl', muscle: 'Arms', equipment: ['dumbbells'], level: 'Beginner', cues: ['Elbows pinned','No swinging'], substitution: ['band-curl'], unilateral: true, progression: 'load' },
   { id: 'band-curl', name: 'Banded Bicep Curl', muscle: 'Arms', equipment: ['bands'], level: 'Beginner', cues: ['Step on band','Control up and down'], substitution: ['bicep-curl'], progression: 'reps' },
   { id: 'tricep-dip-bench', name: 'Bench Dip', muscle: 'Arms', equipment: ['bench'], level: 'Beginner', cues: ['Shoulders down','Elbows back'], substitution: ['push-up'], supportsWeighted: true, progression: 'reps', rom: true },
-  { id: 'plank', name: 'Plank', muscle: 'Core', equipment: ['bodyweight'], level: 'Beginner', cues: ['Forearms & toes','Hips level'], substitution: ['dead-bug'], progression: 'time' },
-  { id: 'dead-bug', name: 'Dead Bug', muscle: 'Core', equipment: ['bodyweight'], level: 'Beginner', cues: ['Lower back pressed to floor','Opposite arm/leg'], substitution: ['plank'], progression: 'reps' },
-  { id: 'hanging-knee-raise', name: 'Hanging Knee Raise', muscle: 'Core', equipment: ['pullup-bar'], level: 'Intermediate', cues: ['No swinging','Knees to chest'], substitution: ['plank','dead-bug'], progression: 'reps', rom: true },
+  { id: 'plank', name: 'Plank', muscle: 'Core', equipment: ['bodyweight'], level: 'Beginner', cues: ['Forearms & toes','Hips level'], substitution: ['dead-bug','hanging-knee-raise','leg-raise','farmer-carry'], progression: 'time' },
+  { id: 'dead-bug', name: 'Dead Bug', muscle: 'Core', equipment: ['bodyweight'], level: 'Beginner', cues: ['Lower back pressed to floor','Opposite arm/leg'], substitution: ['plank','hanging-knee-raise'], progression: 'reps' },
+  { id: 'hanging-knee-raise', name: 'Hanging Knee Raise', muscle: 'Core', equipment: ['pullup-bar'], level: 'Intermediate', cues: ['No swinging','Knees to chest'], substitution: ['plank','dead-bug','leg-raise'], progression: 'reps', rom: true },
 
   // Conditioning
-  { id: 'run-easy', name: 'Easy Run', muscle: 'Cardio', equipment: ['bodyweight'], level: 'Beginner', cues: ['Conversational pace','Nasal breathing'], substitution: ['brisk-walk'], progression: 'time' },
-  { id: 'brisk-walk', name: 'Brisk Walk', muscle: 'Cardio', equipment: ['bodyweight'], level: 'Beginner', cues: ['Arms pumping','Uphill if available'], substitution: ['run-easy'], progression: 'time' },
+  { id: 'run-easy', name: 'Easy Run', muscle: 'Cardio', equipment: ['bodyweight'], level: 'Beginner', cues: ['Conversational pace','Nasal breathing'], substitution: ['brisk-walk','cycle'], progression: 'time' },
+  { id: 'brisk-walk', name: 'Brisk Walk', muscle: 'Cardio', equipment: ['bodyweight'], level: 'Beginner', cues: ['Arms pumping','Uphill if available'], substitution: ['run-easy','jump-rope'], progression: 'time' },
   { id: 'cycle', name: 'Cycle', muscle: 'Cardio', equipment: ['bodyweight'], level: 'Beginner', cues: ['Steady cadence'], substitution: ['run-easy'], progression: 'time' },
-  { id: 'kettlebell-swing', name: 'Kettlebell Swing', muscle: 'Full body', equipment: ['kettlebell'], level: 'Intermediate', cues: ['Hip hinge power','Arms guide, hips drive'], substitution: ['romanian-deadlift'], progression: 'reps' },
+  { id: 'kettlebell-swing', name: 'Kettlebell Swing', muscle: 'Full body', equipment: ['kettlebell'], level: 'Intermediate', cues: ['Hip hinge power','Arms guide, hips drive'], substitution: ['romanian-deadlift','farmer-carry'], progression: 'reps' },
   { id: 'burpee', name: 'Burpee', muscle: 'Full body', equipment: ['bodyweight'], level: 'Intermediate', cues: ['Chest to floor','Jump or step up'], substitution: ['bodyweight-squat'], progression: 'reps' },
   { id: 'jump-rope', name: 'Jump Rope', muscle: 'Cardio', equipment: ['bodyweight'], level: 'Beginner', cues: ['Light on toes','Elbows tucked'], substitution: ['brisk-walk'], progression: 'time' },
 
@@ -403,9 +403,16 @@ export function plannedVsCompleted(schedule, history){
     if(!actual) return { session: s, status: s.status, completed: false, delta: null };
     const plannedSets = s.blocks.reduce((a,b)=> a + (Number(b.sets)||0), 0);
     const actualSets = (actual.blocks||[]).reduce((a,b)=> a + (b.sets||[]).length, 0);
-    const plannedVol = s.blocks.reduce((a,b)=> a + (Number(String(b.reps).match(/\d+/)?.[0]||8)||0)*(Number(b.loadHint?.match(/\d+/)?.[0])||0), 0);
+    // Planned volume is only computable when the hint states an explicit load
+    // ("20kg"). Parsing any digit out of prose ("leave 2 in tank") produced noise.
+    const plannedVol = s.blocks.reduce((a,b)=>{
+      const kg = Number(String(b.loadHint||'').match(/(\d+(?:\.\d+)?)\s*kg/i)?.[1]);
+      const reps = Number(String(b.reps).match(/\d+/)?.[0]||0)||0;
+      return a + (Number.isFinite(kg) ? reps*kg : 0);
+    }, 0);
+    const hasPlannedLoad = s.blocks.some(b=> /(\d+(?:\.\d+)?)\s*kg/i.test(String(b.loadHint||'')));
     const actualVol = (actual.blocks||[]).reduce((a,b)=> a + b.sets.reduce((x,s)=> x + (Number(s.reps)||0)*(Number(s.weightKg)||0),0),0);
-    return { session: s, status: 'done', completed: true, actual, delta: { sets: actualSets - plannedSets, volumeKg: Math.round(actualVol - plannedVol) } };
+    return { session: s, status: 'done', completed: true, actual, delta: { sets: actualSets - plannedSets, volumeKg: hasPlannedLoad ? Math.round(actualVol - plannedVol) : null } };
   });
 }
 
@@ -420,15 +427,31 @@ function toISO(d){
 export function validateContent(){
   const errors=[];
   const ids = new Set();
+  const names = new Map();
   for(const e of EXERCISES){
     if(ids.has(e.id)) errors.push(`Duplicate exercise id ${e.id}`);
     ids.add(e.id);
+    // Display names must be unique: the browser, swap UI and history views all
+    // identify exercises by name, and duplicate names fragment PR history.
+    if(names.has(e.name)) errors.push(`Duplicate exercise name "${e.name}" (${e.id} and ${names.get(e.name)})`);
+    names.set(e.name, e.id);
     if(!MUSCLES.includes(e.muscle)) errors.push(`Exercise ${e.id} has unknown muscle ${e.muscle}`);
     if(!LEVELS.includes(e.level)) errors.push(`Exercise ${e.id} has unknown level ${e.level}`);
     for(const eq of e.equipment){
       if(!EQUIPMENT.some(x=>x.id===eq)) errors.push(`Exercise ${e.id} has unknown equipment ${eq}`);
     }
     if(e.videoUrl && !/^https:\/\//.test(e.videoUrl)) errors.push(`Exercise ${e.id} has non-https videoUrl`);
+    if(!Array.isArray(e.substitution) || e.substitution.length===0) errors.push(`Exercise ${e.id} declares no substitutions — every exercise needs an alternative chain`);
+  }
+  // Substitution graph integrity: every target must exist, and the relation is
+  // reciprocal (A lists B ⇒ B lists A). A dangling or one-way edge silently
+  // degrades the swap UI and generated-programme fallbacks.
+  for(const e of EXERCISES){
+    for(const targetId of e.substitution||[]){
+      const target = EXERCISE_BY_ID[targetId];
+      if(!target){ errors.push(`Exercise ${e.id} substitutes unknown exercise ${targetId}`); continue; }
+      if(!(target.substitution||[]).includes(e.id)) errors.push(`Substitution not reciprocal: ${e.id} → ${targetId}, but ${targetId} does not list ${e.id}`);
+    }
   }
   for(const p of PROGRAMS){
     for(const w of p.weeks) for(const wk of w.workouts) for(const b of wk.blocks){
