@@ -12,6 +12,7 @@ import { recommendExercises } from './lib/data.js';
 import { recordEvent } from './lib/telemetry.js';
 import { pushToPulse } from './lib/pulse.js';
 import { adaptActiveSchedule } from './lib/programming.js';
+import { reviewCompletedWeek, applyWeeklyReview } from './lib/mesocycle.js';
 import { attachOutcome } from './lib/longitudinal.js';
 
 export default function App(){
@@ -143,6 +144,22 @@ export default function App(){
       availableEquipment: next.onboarding?.equipment || [],
     }) : null;
     if(adaptation?.changed) activeSchedule = adaptation.schedule;
+    // Week-level roll-up: when this save closed out the training week (no
+    // unfinished sessions left in its ISO week), review the week and direct
+    // the next one. Runs after per-session adaptation so both layers compose.
+    let weeklyReview = null;
+    try{
+      const review = reviewCompletedWeek({
+        schedule: activeSchedule,
+        history: hist,
+        readinessLog: next.readinessLog || [],
+        availableEquipment: next.onboarding?.equipment || [],
+      });
+      if(review.ready && review.directives.some(d => d.kind !== 'hold')){
+        const applied = applyWeeklyReview(activeSchedule, review);
+        if(applied.changed){ activeSchedule = applied.schedule; weeklyReview = applied; }
+      }
+    }catch{}
     next = { ...next, history: hist, activeSchedule, activeWorkout: null };
     setStore(next);
     setActiveSession(null);
@@ -151,6 +168,9 @@ export default function App(){
     try { recordEvent('session:complete', { sessionId: payload.id, blocks: payload.blocks.length }); } catch {}
     if(adaptation?.changed){
       try { recordEvent('programme:adapt', { sessionId: payload.id, changes: adaptation.changes, decision: adaptation.decision }); } catch {}
+    }
+    if(weeklyReview?.changed){
+      try { recordEvent('programme:weekly-review', { basisWeek: weeklyReview.entry.basisKey, changes: weeklyReview.changes }); } catch {}
     }
     // Pulse push if enabled and adapter present (adapter injected via window.__PULSE_ADAPTER__ for now)
     try {
