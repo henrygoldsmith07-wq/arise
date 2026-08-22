@@ -323,6 +323,20 @@ function losesToDoubleProgression(segment, minimum){
   return a != null && d != null && a < d;
 }
 
+// Short-break easing opens only when BOTH hold:
+//   1. ≥7-day gap transitions show no measurable performance detriment
+//      (mean change above -1.5%), so easing back is provably unnecessary
+//      conservatism rather than recovery prudence, and
+//   2. arise stagnates more than double-progression overall (the engine's
+//      default gap handling is demonstrably too timid).
+function shortBreakOpen(estimates, study){
+  const bucket = estimates.frequency?.buckets?.['≥7d'];
+  if(!bucket || bucket.meanChange < -0.015) return false;
+  const o = study?.overall;
+  if(!o?.arise?.conclusive || !o?.['double-progression']?.conclusive) return false;
+  return (o.arise.stagnationRate ?? 0) > (o['double-progression'].stagnationRate ?? 0);
+}
+
 export function assessCapabilities({ history, study = null, estimates, config = null }){
   const cfg = resolveArisePriors(config);
   const minimum = Math.max(1, cfg.longitudinal.minimumSegmentSamples);
@@ -409,6 +423,12 @@ export function assessCapabilities({ history, study = null, estimates, config = 
   push('plateau-detection', 'Plateau detection', 'existing', 'isPlateauV2 distinguishes real plateaus from noisy sessions.');
   push('deload-timing', 'Deload timing', 'existing', 'deloadReadinessAssessment fires on sustained multi-signal fatigue.');
   push('deload-recovery-validation', 'Deload recovery validation', 'existing', 'study.validateDeloadDecisions audits observed cuts and rebound.');
+  const sbOpen = shortBreakOpen(estimates, study);
+  push('short-break-return', 'Short-break return easing',
+    sbOpen ? 'active' : study ? 'dormant' : 'awaiting-study',
+    sbOpen
+      ? 'Gaps of 5–14 days show no measurable performance loss and arise stagnates more than double-progression — one eased exposure on return.'
+      : 'Opens when ≥7-day-gap transitions show no detriment AND arise stagnates more than double-progression overall.');
   push('missed-week-recovery', 'Missed-week recovery', 'existing', 'programming.replanSchedule shifts pending sessions; adherence tracked.');
   push('return-from-break', 'Return-from-break logic', 'existing', 'trainingBreakInfo reduces return loads after long breaks.');
 
@@ -469,6 +489,16 @@ export function deriveProgressionModel({ history, study = null, config = null } 
     };
   }
 
+  if(shortBreakOpen(estimates, study)){
+    overlay.progression.shortBreakPolicy = {
+      enabled: true,
+      minDays: 5,
+      moderateDays: 14,
+      lightLoadMultiplier: 0.95,
+      moderateLoadMultiplier: 0.9,
+    };
+  }
+
   return {
     modelVersion: pmCfg.version,
     generatedAtISO: new Date().toISOString(),
@@ -477,6 +507,7 @@ export function deriveProgressionModel({ history, study = null, config = null } 
     overlayConfig: overlay,
     activeOverrideCount: Object.keys(overlay.progression.strategies).length,
     autoregulationApplied: !!overlay.progression.personalisedRate,
+    shortBreakEasing: !!overlay.progression.shortBreakPolicy,
   };
 }
 
@@ -490,7 +521,10 @@ export function recommendNextWithModel({ exerciseId, history, study = null, conf
   if(model.overlayConfig.progression.personalisedRate){
     merged.progression.personalisedRate = { ...merged.progression.personalisedRate, ...model.overlayConfig.progression.personalisedRate };
   }
+  if(model.overlayConfig.progression.shortBreakPolicy){
+    merged.progression.shortBreakPolicy = model.overlayConfig.progression.shortBreakPolicy;
+  }
   const recommendation = recommendNext({ exerciseId, history, config: merged, ...rest });
-  if(recommendation) recommendation.__progressionModel = { version: model.modelVersion, applied: model.activeOverrideCount > 0 || model.autoregulationApplied, activeOverrideCount: model.activeOverrideCount };
+  if(recommendation) recommendation.__progressionModel = { version: model.modelVersion, applied: model.activeOverrideCount > 0 || model.autoregulationApplied || model.shortBreakEasing, activeOverrideCount: model.activeOverrideCount };
   return recommendation;
 }

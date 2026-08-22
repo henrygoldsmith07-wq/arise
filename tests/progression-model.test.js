@@ -215,3 +215,77 @@ describe('capability gating + overlay', ()=>{
     assert.ok(warm.reps != null || warm.load != null);
   });
 });
+
+import { shortBreakInfo } from '../src/lib/progression.js';
+import { recommendNext } from '../src/lib/progression.js';
+
+describe('short-break return easing (evidence-gated)', ()=>{
+  // 4 exposures, then a 10-day gap, then judge the next recommendation.
+  function gappedHistory(){
+    const days = ['2026-08-03','2026-08-06','2026-08-10','2026-08-13'];
+    const weights = [20,20,21,21];
+    const history = days.map((d, i)=> sess(d, [block('bench-press-dumbbell', [set(8, weights[i], 7)])]));
+    return history;
+  }
+
+  it('stays fully inert without the policy � engine treats gaps like any other gap', ()=>{
+    const rec = recommendNext({ exerciseId:'bench-press-dumbbell', history: gappedHistory(), asOfDateISO: '2026-08-23' });
+    assert.ok(!rec.shortBreak, 'policy absent but easing fired');
+    const info = shortBreakInfo(gappedHistory(), 'bench-press-dumbbell', { asOfDateISO: '2026-08-23' });
+    // Detection is inert without an opened policy — no easing, no multiplier.
+    assert.equal(info.hasShortBreak, false);
+    assert.equal(info.multiplier, 1);
+    const eased = recommendNext({
+      exerciseId:'bench-press-dumbbell', history: gappedHistory(), asOfDateISO: '2026-08-23',
+      config: { progression: { shortBreakPolicy: { enabled:true, minDays:5, moderateDays:14, lightLoadMultiplier:0.95, moderateLoadMultiplier:0.9 } } },
+    });
+    assert.equal(eased.load, 20); // 21 * 0.95 = 19.95 ? snapped to 20
+    assert.match(eased.reason, /ease back/);
+  });
+
+  it('model capability stays dormant until BOTH gates hold', ()=>{
+    const history = risingBench();
+    const model = deriveProgressionModel({ history, study: weakStudyGlobal(), config: LOOSE });
+    const cap = model.capabilities.find(c=> c.id === 'short-break-return');
+    // No frequency data in this fixture ? cannot open.
+    assert.notEqual(cap.status, 'active');
+    assert.equal(model.overlayConfig.progression?.shortBreakPolicy?.enabled, undefined);
+  });
+
+  it('opens when =7d gaps show no detriment AND arise stagnates vs double-progression', ()=>{
+    // Frequency fixture: =7d transitions RISING (no detriment).
+    const dates = ['2026-04-01','2026-04-10','2026-04-19','2026-04-28'];
+    const weights = [20,22,24,26];
+    const gapRising = dates.map((d,i)=> sess(d, [block('bench-press-dumbbell', [set(8, weights[i], '')])]));
+    const study = {
+      overall: {
+        arise: { conclusive: true, stagnationRate: 0.5 },
+        'double-progression': { conclusive: true, stagnationRate: 0.1 },
+      },
+      byExercise: {},
+    };
+    const estimates = deriveProgressionModel({ history: gapRising, study, config: LOOSE }).estimates;
+    const model = deriveProgressionModel({ history: gapRising, study, config: LOOSE });
+    const cap = model.capabilities.find(c=> c.id === 'short-break-return');
+    assert.equal(cap.status, 'active');
+    assert.equal(model.overlayConfig.progression.shortBreakPolicy.enabled, true);
+
+    // And the engine honours the opened policy across a real 10-day gap.
+    const withGap = [...gapRising.slice(0, 3), sess('2026-05-08', [block('bench-press-dumbbell', [set(8, 24, 7)])])];
+    const rec = recommendNextWithModel({ exerciseId:'bench-press-dumbbell', history: withGap, asOfDateISO: '2026-05-18', study });
+    assert.match(rec.reason, /ease back/);
+  });
+
+  it('refuses to open when =7d gaps actually hurt', ()=>{
+    const dates = ['2026-04-01','2026-04-10','2026-04-19','2026-04-28'];
+    const weights = [26,22,24,20]; // long gaps lose performance
+    const gapFalling = dates.map((d,i)=> sess(d, [block('bench-press-dumbbell', [set(8, weights[i], '')])]));
+    const study = { overall: { arise:{conclusive:true,stagnationRate:.5}, 'double-progression':{conclusive:true,stagnationRate:.1} }, byExercise:{} };
+    const model = deriveProgressionModel({ history: gapFalling, study, config: LOOSE });
+    const cap = model.capabilities.find(c=> c.id === 'short-break-return');
+    assert.notEqual(cap.status, 'active');
+    assert.equal(model.overlayConfig.progression?.shortBreakPolicy?.enabled, undefined);
+  });
+});
+
+function weakStudyGlobal(){ return { overall: {}, byExercise: {} }; }
