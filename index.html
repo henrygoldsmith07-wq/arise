@@ -14,6 +14,12 @@
         if (!t) { try { t = JSON.parse(localStorage.getItem('arise.settings') || '{}').theme; } catch(e){} }
         var dark = t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
         if (dark) document.documentElement.classList.add('dark');
+        // Accessibility preferences too, so larger text / high contrast are in
+        // place on the first paint rather than snapping in once React mounts.
+        var a11y = prefs.accessibility || {};
+        if (a11y.largeText) document.documentElement.classList.add('large-text');
+        if (a11y.highContrast) document.documentElement.classList.add('high-contrast');
+        if (a11y.reduceMotion) document.documentElement.classList.add('reduce-motion');
       } catch(e) {}
     </script>
     <title>Arise — Training, levelled up</title>

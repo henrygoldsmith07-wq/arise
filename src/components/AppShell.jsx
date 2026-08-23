@@ -6,8 +6,12 @@ const TABS = [
   ['more','More','⋯'],
 ];
 
-export default function AppShell({ children, tab, setTab, storeVersion }){
+const THEME_LABEL = { light: 'Light', dark: 'Dark' };
+const THEME_ICON = { light: '☀️', dark: '🌙' };
+
+export default function AppShell({ children, tab, setTab, storeVersion, theme = null, onCycleTheme }){
   void storeVersion;
+  const themeName = THEME_LABEL[theme] || 'System';
   return (
     <div className="min-h-dvh flex flex-col bg-bg text-ink">
       <a href="#main" className="skip-link">Skip to content</a>
@@ -15,7 +19,17 @@ export default function AppShell({ children, tab, setTab, storeVersion }){
         <img src="/logo.svg" alt="" width={28} height={28} className="rounded-lg" aria-hidden="true" />
         <span className="font-extrabold tracking-tight">Arise</span>
         <span className="text-xs text-ink3 hidden sm:inline">Training, levelled up.</span>
-        <span className="ml-auto text-[11px] px-2 py-1 rounded-full bg-surface2 border border-line text-ink3">Offline-ready • No account</span>
+        <span className="ml-auto text-[11px] px-2 py-1 rounded-full bg-surface2 border border-line text-ink3 hidden sm:inline">Offline-ready • No account</span>
+        {onCycleTheme && (
+          <button
+            onClick={onCycleTheme}
+            title={`Theme: ${themeName} — tap to change`}
+            aria-label={`Theme: ${themeName}. Change theme`}
+            className="shrink-0 min-h-9 min-w-9 px-2 grid place-items-center rounded-full border border-line bg-surface2 text-ink3 hover:text-ink hover:border-ink3"
+          >
+            <span aria-hidden className="text-sm leading-none">{THEME_ICON[theme] || '🌗'}</span>
+          </button>
+        )}
       </header>
       <main id="main" className="flex-1 min-w-0 flex flex-col max-w-3xl w-full mx-auto">
         {children}

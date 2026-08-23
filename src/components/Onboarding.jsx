@@ -143,7 +143,7 @@ export default function Onboarding({ open, onClose, onComplete, initial }){
               </label>
             ))}
           </div>
-          {!equipment.length && <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">Pick at least one — bodyweight is always an option.</p>}
+          {!equipment.length && <p className="text-xs text-review bg-reviewsoft border border-review/30 rounded-xl px-3 py-2">Pick at least one — bodyweight is always an option.</p>}
           {equipment.includes('barbell') && (
             <div className="rounded-xl border border-line bg-surface2 p-3 space-y-2">
               <div>
@@ -215,7 +215,7 @@ export default function Onboarding({ open, onClose, onComplete, initial }){
             <p className="font-bold">How this affects recommendations</p>
             <ul className="list-disc pl-5 mt-1 text-ink3 space-y-1">
               <li>Exercises needing kit you don’t have are hidden when “Only my kit” is on.</li>
-              <li>Programs that need missing kit show an amber “Needs…” badge and sit lower in the list.</li>
+              <li>Programs that need missing kit show a highlighted “Needs…” badge and sit lower in the list.</li>
               <li>Location biases conditioning picks (outdoor → runs/walks, small space → bodyweight circuits).</li>
             </ul>
           </div>
@@ -229,7 +229,7 @@ export default function Onboarding({ open, onClose, onComplete, initial }){
           <p className="text-xs text-ink3">Tell us which movements you like or want to avoid. These choices only influence generated programmes; they never erase logged history.</p>
           <div className="flex gap-2 text-[11px] text-ink3">
             <span className="rounded-full border border-success/40 bg-success/10 px-2 py-1">Like = prefer when substituting</span>
-            <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-1">Avoid = do not prescribe</span>
+            <span className="rounded-full border border-review/40 bg-reviewsoft px-2 py-1">Avoid = do not prescribe</span>
           </div>
           <div className="max-h-72 overflow-auto space-y-1.5 pr-1">
             {preferenceExercises.map(ex=> {
@@ -241,8 +241,8 @@ export default function Onboarding({ open, onClose, onComplete, initial }){
                     <span className="block text-sm font-semibold truncate">{ex.name}</span>
                     <span className="block text-[11px] text-ink3">{ex.muscle} • {ex.equipment.join(', ')}</span>
                   </span>
-                  <button onClick={()=> togglePreference(ex.id, 'preferred')} aria-pressed={liked} className={`rounded-lg border px-2 py-1 text-[11px] font-bold ${liked ? 'bg-success text-white border-success' : 'bg-surface border-line text-ink3'}`}>Like</button>
-                  <button onClick={()=> togglePreference(ex.id, 'disliked')} aria-pressed={avoided} className={`rounded-lg border px-2 py-1 text-[11px] font-bold ${avoided ? 'bg-amber-200 text-amber-900 border-amber-300' : 'bg-surface border-line text-ink3'}`}>Avoid</button>
+                  <button onClick={()=> togglePreference(ex.id, 'preferred')} aria-pressed={liked} className={`rounded-lg border px-2 py-1 text-[11px] font-bold ${liked ? 'bg-success text-bg border-success' : 'bg-surface border-line text-ink3'}`}>Like</button>
+                  <button onClick={()=> togglePreference(ex.id, 'disliked')} aria-pressed={avoided} className={`rounded-lg border px-2 py-1 text-[11px] font-bold ${avoided ? 'bg-review text-bg border-review' : 'bg-surface border-line text-ink3'}`}>Avoid</button>
                 </div>
               );
             })}
