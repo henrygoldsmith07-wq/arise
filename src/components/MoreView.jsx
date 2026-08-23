@@ -36,6 +36,11 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
     }catch{ evidenceSummary = 'unavailable'; }
   }
 
+  const prefs = store.preferences || {};
+  const a11y = prefs.accessibility || {};
+  const setPreference = (patch)=> setStore({ ...store, preferences: { ...prefs, ...patch } });
+  const setAccessibility = (patch)=> setStore({ ...store, preferences: { ...prefs, accessibility: { ...a11y, ...patch } } });
+
   const healthAdapter = typeof window !== 'undefined' ? window.__ARISE_HEALTH_ADAPTER__ : null;
 
   const exportNow = ()=>{
@@ -153,6 +158,41 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
       </section>
 
       <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+        <h3 className="text-sm font-bold">Appearance & accessibility</h3>
+        <p className="text-xs text-ink3">Applies to every screen on this device, including the session runner. Stored with your other preferences and included in a backup.</p>
+
+        <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
+          <p className="text-xs font-bold">Theme</p>
+          <div className="flex gap-1.5" role="group" aria-label="Theme">
+            {THEME_OPTIONS.map(option=> {
+              const active = (prefs.theme ?? null) === option.id;
+              return (
+                <button key={option.label} onClick={()=> setPreference({ theme: option.id })} aria-pressed={active}
+                  className={`flex-1 min-h-10 rounded-xl border text-xs font-bold ${active ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink2 hover:border-ink3'}`}>
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[11px] text-ink3">System follows your device setting and keeps following it while the app is open.</p>
+        </div>
+
+        <ToggleRow
+          label="Automatic rest timer"
+          hint="Starts the countdown as soon as you mark a set done. The per-exercise “Start rest” button stays available either way."
+          checked={prefs.autoRest !== false}
+          onChange={value=> setPreference({ autoRest: value })}
+        />
+
+        <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2.5">
+          <p className="text-xs font-bold">Accessibility</p>
+          <ToggleRow bare label="Larger text" hint="Scales the whole interface up by roughly 12%." checked={a11y.largeText === true} onChange={value=> setAccessibility({ largeText: value })} />
+          <ToggleRow bare label="High contrast" hint="Pushes text and borders to maximum contrast against the background." checked={a11y.highContrast === true} onChange={value=> setAccessibility({ highContrast: value })} />
+          <ToggleRow bare label="Reduce motion" hint="Removes transitions and animations, regardless of your OS setting." checked={a11y.reduceMotion === true} onChange={value=> setAccessibility({ reduceMotion: value })} />
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
         <h3 className="text-sm font-bold">Personalise</h3>
           <p className="text-xs text-ink3">Onboarding gates recommendations honestly — kit, time, level and movement preferences shape generated programmes.</p>
         <div className="rounded-xl border border-line bg-surface2 px-3 py-2 text-sm">
@@ -256,7 +296,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
                   <div className="mt-1 flex flex-wrap gap-1" role="list" aria-label="Progression model capabilities">
                     {(evidenceData.model?.capabilities || []).map(cap=> (
                       <span key={cap.id} role="listitem" title={cap.detail}
-                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${cap.status==='active'||cap.status==='ready' ? 'border-success text-success' : cap.status==='existing' ? 'border-line text-ink3' : 'border-amber-300 text-amber-700 bg-amber-50'}`}>
+                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${cap.status==='active'||cap.status==='ready' ? 'border-success text-success' : cap.status==='existing' ? 'border-line text-ink3' : 'border-review/40 text-review bg-reviewsoft'}`}>
                         {cap.label}: {cap.status}
                       </span>
                     ))}
@@ -300,5 +340,26 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
         </details>
       </section>
     </div>
+  );
+}
+
+const THEME_OPTIONS = [
+  { id: null, label: 'System' },
+  { id: 'light', label: 'Light' },
+  { id: 'dark', label: 'Dark' },
+];
+
+// A labelled switch built on a real checkbox, so it is reachable by keyboard and
+// announced with its state without any ARIA bookkeeping.
+function ToggleRow({ label, hint, checked, onChange, bare = false }){
+  return (
+    <label className={`flex items-start gap-3 cursor-pointer ${bare ? '' : 'rounded-xl border border-line bg-surface2 px-3 py-2.5'}`}>
+      <input type="checkbox" checked={checked} onChange={e=> onChange(e.target.checked)} className="mt-0.5 w-4 h-4 shrink-0 accent-[var(--accent)]" />
+      <span className="min-w-0">
+        <span className="block text-xs font-bold">{label}</span>
+        <span className="block text-[11px] text-ink3 mt-0.5">{hint}</span>
+      </span>
+      <span className="ml-auto shrink-0 text-[11px] font-semibold text-ink3">{checked ? 'on' : 'off'}</span>
+    </label>
   );
 }

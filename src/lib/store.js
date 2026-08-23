@@ -10,7 +10,10 @@ const DEFAULT = {
   eventHistory: [], // imported/exported event snapshot; live telemetry remains append-only in its own local key
   healthSummary: null, // optional user-approved health-platform summary
   history: [], // completed sessions: see normaliseHistoryEntry for full shape
-  preferences: { units: 'kg', theme: null, syncEnabled: false, telemetryEnabled: null, pulseEnabled: false, healthSummaryEnabled: false, autoRest: true }, // theme null follows OS; telemetry null = prompt
+  // theme null follows OS; telemetry null = prompt. `accessibility` drives the
+  // opt-in root classes le-studio.css already defines (large-text, high-contrast,
+  // reduce-motion) — independent of the OS-level media queries.
+  preferences: { units: 'kg', theme: null, syncEnabled: false, telemetryEnabled: null, pulseEnabled: false, healthSummaryEnabled: false, autoRest: true, accessibility: { largeText: false, highContrast: false, reduceMotion: false } },
   readinessLog: [], // [{ dateISO, score, sleep, soreness, motivation }]
   programHistory: [], // [{ programId, version, startDateISO, endDateISO }]
 };
@@ -193,6 +196,13 @@ export function runMigrations(raw){
   if(j.preferences.pulseEnabled==null) j.preferences.pulseEnabled=false;
   if(j.preferences.healthSummaryEnabled==null) j.preferences.healthSummaryEnabled=false;
   if(j.preferences.autoRest==null) j.preferences.autoRest=true;
+  if(!j.preferences.accessibility || typeof j.preferences.accessibility !== 'object'){
+    j.preferences.accessibility = { largeText:false, highContrast:false, reduceMotion:false };
+  } else {
+    for(const key of ['largeText','highContrast','reduceMotion']){
+      j.preferences.accessibility[key] = j.preferences.accessibility[key] === true;
+    }
+  }
   j.history = normaliseHistory(j.history || []);
   return j;
 }

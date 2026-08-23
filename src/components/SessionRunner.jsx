@@ -332,6 +332,15 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   const toggleNoteTag=(id)=> setNoteTags(prev=> prev.includes(id) ? prev.filter(x=>x!==id) : [...prev,id]);
   const canSave = blocks.length>0 && blocks.every(b=> b.sets.length>0 && b.sets.every(s=> String(s.reps).trim()!=='')) && completedSets > 0;
   const pendingSets = totalSets-completedSets;
+  // Name the real blocker: reps missing, sets not marked done, or no sets at
+  // all — the old copy always blamed "Done".
+  const saveBlocker = (()=>{
+    if(canSave) return null;
+    const missingReps = blocks.reduce((n,b)=> n + b.sets.filter(s=> String(s.reps).trim()==='').length, 0);
+    if(missingReps) return `Enter reps for ${missingReps} remaining set${missingReps===1?'':'s'}.`;
+    if(pendingSets) return `Tap Done for ${pendingSets} set${pendingSets===1?'':'s'} you completed — Save logs unfinished sets as skipped.`;
+    return 'Add at least one set to each exercise.';
+  })();
 
   const save = ()=>{
     if(!canSave) return;
@@ -393,16 +402,19 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   return (
     <div ref={rootRef} onKeyDown={trapTab} className="fixed inset-0 z-40 bg-bg flex flex-col" role="dialog" aria-modal="true" aria-label={`Session — ${session.title}`}>
       <span className="sr-only" role="status" aria-live="polite">{restAnnouncement || `${completedSets} of ${totalSets} sets completed`}</span>
-      <div className="sticky top-0 flex items-center gap-3 px-4 py-3 border-b border-line bg-surface">
+      <div className="relative shrink-0 flex items-center gap-3 px-4 py-3 border-b border-line bg-surface">
         <button ref={closeRef} onClick={onCancel} className="w-11 h-11 grid place-items-center rounded-full border border-line bg-surface2" aria-label="Close session">✕</button>
         <div className="min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">{session.mode === 'short' ? 'Short session' : 'Session'}</p>
           <p className="font-bold truncate">{session.title} • {session.dateISO}</p>
         </div>
         <span className="ml-auto text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums">{completedSets}/{totalSets} sets • {volume} kg</span>
+        <div aria-hidden className="absolute inset-x-0 bottom-0 h-1 bg-surface2">
+          <div className="h-full bg-success bar-anim" style={{ width: `${totalSets ? Math.round(completedSets/totalSets*100) : 0}%` }} />
+        </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-4 py-5 space-y-4 max-w-3xl w-full mx-auto">
+      <div className="flex-1 overflow-auto px-4 pt-5 pb-6 space-y-4 max-w-3xl w-full mx-auto">
         <div className="rounded-2xl border border-line bg-surface2 px-3 py-2.5 text-xs flex items-center gap-2">
           <span className="text-base" aria-hidden>⚡</span>
           <span><strong>Fast logging:</strong> previous reps and load are prefilled. Edit them directly, then tap <strong>Done</strong> once the set is complete.</span>
@@ -472,14 +484,14 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                 </div>
                 {b.sets.map((s,si)=> (
                   <div key={si} className="grid grid-cols-[28px_minmax(0,1fr)_minmax(0,1fr)_48px_42px_auto_28px] gap-1.5 items-center">
-                    <span className={`w-7 h-7 grid place-items-center rounded-full border text-xs font-bold tabular-nums ${s.completed?'bg-success text-white border-success':'bg-surface2 border-line'}`}>{si+1}</span>
+                    <span className={`w-7 h-7 grid place-items-center rounded-full border text-xs font-bold tabular-nums ${s.completed?'bg-success text-bg border-success':'bg-surface2 border-line'}`}>{si+1}</span>
                     <input type="number" min="0" step="1" inputMode="numeric" value={s.reps} onChange={e=> updateSet(bi,si,{reps:e.target.value})} placeholder="8" aria-label={`Reps set ${si+1}`} className="min-w-0 rounded-xl border border-line bg-surface2 px-2 py-2.5 text-sm tabular-nums" />
                     <input type="number" min="0" step="0.5" inputMode="decimal" value={s.weightKg} onChange={e=> updateSet(bi,si,{weightKg:e.target.value})} placeholder={supportsWeighted?'kg':'bodyweight'} aria-label={`Load set ${si+1}`} className="min-w-0 rounded-xl border border-line bg-surface2 px-2 py-2.5 text-sm tabular-nums" />
                     <input type="number" min="1" max="10" step="0.5" inputMode="decimal" value={s.rpe} onChange={e=> updateSet(bi,si,{rpe:e.target.value})} placeholder="—" aria-label={`RPE set ${si+1}`} className="min-w-0 rounded-xl border border-line bg-surface2 px-2 py-2.5 text-sm tabular-nums" />
                     {b.unilateral ? (
                       <select value={s.side||'L'} onChange={e=> updateSet(bi,si,{side:e.target.value})} aria-label={`Side set ${si+1}`} className="min-w-0 rounded-xl border border-line bg-surface2 px-1 py-2.5 text-xs font-bold"><option value="L">L</option><option value="R">R</option></select>
                     ) : <span />}
-                    <button onClick={()=> completeSet(bi,si)} aria-pressed={s.completed} className={`min-h-11 px-2 rounded-xl border text-[11px] font-bold whitespace-nowrap ${s.completed?'bg-success text-white border-success':'bg-surface2 border-line'}`}>Done</button>
+                    <button onClick={()=> completeSet(bi,si)} aria-pressed={s.completed} className={`min-h-11 px-2 rounded-xl border text-[11px] font-bold whitespace-nowrap ${s.completed?'bg-success text-bg border-success':'bg-surface2 border-line'}`}>Done</button>
                     <button onClick={()=> removeSet(bi,si)} aria-label={`Remove set ${si+1}`} className="relative w-9 h-9 grid place-items-center rounded-full border border-line text-ink3 before:absolute before:-inset-1.5 before:rounded-full before:content-['']">×</button>
                   </div>
                 ))}
@@ -506,34 +518,30 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           <textarea value={note} onChange={e=> setNote(e.target.value)} rows={2} placeholder="What should change next time? Mention sleep, pain, technique, ROM, time or load." className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm" />
         </section>
 
-        {restLeft!==null && (
-          <div className="sticky bottom-4 z-10 rounded-2xl border border-line bg-ink text-bg px-4 py-3 flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-widest opacity-80 shrink-0">Rest · {restLabel}</span>
-            <div className="ml-auto flex items-center gap-1.5">
-              <button onClick={()=> setRestEndsAt(v=> Math.max(Date.now()+5000, (v||Date.now())-15000))} aria-label="Rest 15 seconds less" className="min-h-11 min-w-11 px-2 rounded-full bg-white/15 text-xs font-bold tabular-nums relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">−15s</button>
-              <span aria-hidden className="text-lg font-black tabular-nums w-14 text-center">{fmtRest(restLeft)}</span>
-              <button onClick={()=> setRestEndsAt(v=> (v||Date.now())+30000)} aria-label="Rest 30 seconds more" className="min-h-11 min-w-11 px-2 rounded-full bg-white/15 text-xs font-bold tabular-nums relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">+30s</button>
-              <button onClick={()=> setRestEndsAt(null)} aria-label="Skip rest" className="min-h-11 px-3 rounded-full bg-white text-ink text-xs font-bold relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">Skip</button>
-            </div>
-          </div>
-        )}
+      </div>
 
-        <div className="flex gap-2 pb-6">
-          <button onClick={onCancel} className="btn btn-secondary flex-1 min-h-11 rounded-xl">Cancel</button>
-          <button onClick={save} disabled={!canSave} className="btn btn-primary flex-1 min-h-11 rounded-xl disabled:opacity-40">Save session</button>
+      {/* Rest countdown and the save action live outside the scroll area: in a
+          long session both used to sit below the fold, so finishing a workout
+          meant scrolling past every block to find Save. */}
+      <div className="shrink-0 border-t border-line bg-surface px-4 pt-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] space-y-2">
+        <div className="max-w-3xl w-full mx-auto space-y-2">
+          {restLeft!==null && (
+            <div className="rounded-2xl bg-ink text-bg px-3 py-2.5 flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-widest opacity-80 min-w-0 truncate">Rest · {restLabel}</span>
+              <div className="ml-auto flex items-center gap-1.5 shrink-0">
+                <button onClick={()=> setRestEndsAt(v=> Math.max(Date.now()+5000, (v||Date.now())-15000))} aria-label="Rest 15 seconds less" className="min-h-11 min-w-11 px-2 rounded-full bg-bg/15 text-xs font-bold tabular-nums">−15s</button>
+                <span aria-hidden className="text-lg font-black tabular-nums w-14 text-center">{fmtRest(restLeft)}</span>
+                <button onClick={()=> setRestEndsAt(v=> (v||Date.now())+30000)} aria-label="Rest 30 seconds more" className="min-h-11 min-w-11 px-2 rounded-full bg-bg/15 text-xs font-bold tabular-nums">+30s</button>
+                <button onClick={()=> setRestEndsAt(null)} aria-label="Skip rest" className="min-h-11 px-3 rounded-full bg-bg text-ink text-xs font-bold">Skip</button>
+              </div>
+            </div>
+          )}
+          {saveBlocker && <p className="text-xs text-review bg-reviewsoft border border-review/30 rounded-xl px-3 py-2">{saveBlocker}</p>}
+          <div className="flex gap-2">
+            <button onClick={onCancel} className="btn btn-secondary min-h-11 rounded-xl px-4">Cancel</button>
+            <button onClick={save} disabled={!canSave} className="btn btn-primary flex-1 min-h-11 rounded-xl disabled:opacity-40">Save session</button>
+          </div>
         </div>
-        {!canSave && (()=> {
-          // Name the real blocker: reps missing, sets not marked done, or no
-          // sets at all — the old copy always blamed "Done".
-          const missingReps = blocks.reduce((n,b)=> n + b.sets.filter(s=> String(s.reps).trim()==='').length, 0);
-          return (
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-              {missingReps ? `Enter reps for ${missingReps} remaining set${missingReps===1?'':'s'}.` :
-               pendingSets ? `Tap Done for ${pendingSets} set${pendingSets===1?'':'s'} you completed — Save logs unfinished sets as skipped.` :
-               'Add at least one set to each exercise.'}
-            </p>
-          );
-        })()}
       </div>
 
       {discardConfirmOpen && (

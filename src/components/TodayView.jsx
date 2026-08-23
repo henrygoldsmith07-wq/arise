@@ -96,9 +96,9 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
         ) : null}
 
         {recovery.needed && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 space-y-2">
-            <p className="text-xs font-bold text-amber-900">Missed-workout recovery</p>
-            <p className="text-xs text-amber-900">{recovery.recommendation}</p>
+          <div className="rounded-xl border border-review/30 bg-reviewsoft px-3 py-3 space-y-2">
+            <p className="text-xs font-bold text-review">Missed-workout recovery</p>
+            <p className="text-xs text-ink2">{recovery.recommendation}</p>
             <button onClick={applyReplan} className="btn btn-primary min-h-10 rounded-xl px-3 text-xs">Re-plan schedule</button>
           </div>
         )}

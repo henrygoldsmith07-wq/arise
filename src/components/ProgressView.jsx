@@ -80,7 +80,7 @@ export default function ProgressView({ store }){
             <span className="text-xs font-black tabular-nums">{programmeAdherence.toDateRate == null ? '—' : `${Math.round(programmeAdherence.toDateRate * 100)}%`}</span>
           </div>
           <p className="text-xs text-ink3">{programmeAdherence.completed} completed • {programmeAdherence.missed} missed • {programmeAdherence.upcoming} upcoming. Future sessions do not lower the rate yet.</p>
-          {programmeAdherence.missed > 0 && <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">Missed sessions are recoverable in order. Open Today to re-plan the schedule rather than doubling the next workout.</p>}
+          {programmeAdherence.missed > 0 && <p className="text-xs text-ink2 bg-reviewsoft border border-review/30 rounded-xl px-3 py-2">Missed sessions are recoverable in order. Open Today to re-plan the schedule rather than doubling the next workout.</p>}
         </section>
       )}
 
@@ -174,7 +174,7 @@ export default function ProgressView({ store }){
                   <span className="font-bold truncate">{EXERCISE_BY_ID[r.exerciseId]?.name || r.exerciseId}</span>
                   <span className="ml-auto tabular-nums font-black">{Math.round(r.e1rm)} kg</span>
                   <span className="text-xs text-ink3 tabular-nums">{r.weight}×{r.reps} on {r.dateISO}</span>
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${conf.confidence==='high'?'bg-emerald-50 border-emerald-200 text-emerald-800':conf.confidence==='medium'?'bg-amber-50 border-amber-200 text-amber-800':'bg-surface border-line text-ink3'}`}>{conf.confidence} trend</span>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${conf.confidence==='high'?'bg-successsoft border-success/30 text-success':conf.confidence==='medium'?'bg-reviewsoft border-review/30 text-review':'bg-surface border-line text-ink3'}`}>{conf.confidence} trend</span>
                 </li>
               );
             })}
@@ -199,7 +199,7 @@ export default function ProgressView({ store }){
               <span><strong className="text-ink">{exerciseSummary.sessions}</strong> exposures</span>
               <span><strong className="text-ink">{exerciseSummary.best?.e1rm ? `${exerciseSummary.best.e1rm}kg` : '—'}</strong> best e1RM</span>
               <span><strong className="text-ink">{exerciseSummary.trend.confidence}</strong> trend confidence</span>
-              <span className={plateau?.detected ? 'font-bold text-amber-800' : ''}>{plateau?.detected ? 'Plateau detected' : plateau?.status === 'fatigue' ? 'Fatigue signal' : 'No plateau'}</span>
+              <span className={plateau?.detected ? 'font-bold text-review' : ''}>{plateau?.detected ? 'Plateau detected' : plateau?.status === 'fatigue' ? 'Fatigue signal' : 'No plateau'}</span>
             </div>
             <p className="text-xs text-ink3">{plateau?.reason || 'Keep logging consistent sets before judging a plateau.'}</p>
             <div className="rounded-xl border border-line bg-surface2 px-3 py-2">
@@ -242,7 +242,7 @@ export default function ProgressView({ store }){
       <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-bold">Deload logic check</h3>
-          <span className={`text-[11px] font-bold px-2 py-1 rounded-full border ${deloadValidation.decision.yes ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-surface2 border-line text-ink3'}`}>{deloadValidation.decision.yes ? 'consider deload' : 'hold'} </span>
+          <span className={`text-[11px] font-bold px-2 py-1 rounded-full border ${deloadValidation.decision.yes ? 'bg-reviewsoft border-review/30 text-review' : 'bg-surface2 border-line text-ink3'}`}>{deloadValidation.decision.yes ? 'consider deload' : 'hold'} </span>
         </div>
         <p className="text-xs text-ink3">{deloadValidation.decision.reason}</p>
         <p className="text-[11px] text-ink3">Signals: {deloadValidation.decision.signals.length ? deloadValidation.decision.signals.join(' • ') : 'none'} • {deloadValidation.note}</p>

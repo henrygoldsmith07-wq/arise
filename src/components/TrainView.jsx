@@ -66,8 +66,8 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
               className={`text-left rounded-2xl border p-4 ${programId===p.id ? 'bg-ink text-bg border-ink' : 'bg-surface border-line hover:border-ink3'} ${!ok ? 'opacity-90' : ''}`}>
               <span className="flex items-center gap-2">
                 <span className={`text-xs font-bold px-2 py-1 rounded-full border ${programId===p.id ? 'bg-bg/15 border-bg/20 text-bg' : 'bg-surface2 border-line text-ink3'}`}>{p.level} • {p.daysPerWeek}×/week</span>
-                {isActive && <span className="text-xs font-bold px-2 py-1 rounded-full bg-success text-white">Active</span>}
-                {!ok && <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-1">Needs: {p.equipment.join(', ')}</span>}
+                {isActive && <span className="text-xs font-bold px-2 py-1 rounded-full bg-success text-bg">Active</span>}
+                {!ok && <span className="text-[11px] font-semibold text-review bg-reviewsoft border border-review/30 rounded-full px-2 py-1">Needs: {p.equipment.join(', ')}</span>}
                 {p.mesocycle && <span className="text-[11px] text-ink3">• {p.mesocycle.weeks}w • {p.mesocycle.progression}</span>}
               </span>
               <span className={`block mt-2 font-bold ${programId===p.id?'text-bg':'text-ink'}`}>{p.name} <span className="text-xs font-semibold">v{p.version||1}</span></span>
@@ -78,14 +78,14 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
       </div>
 
       {!availIds.has(programId) && (
-        <p className="text-xs bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-3 py-2">This program needs kit you didn’t select in onboarding. You can still start it — exercises show substitutions — but recommendations in Today will bias toward what you actually have. Update kit in More → Onboarding.</p>
+        <p className="text-xs bg-reviewsoft border border-review/30 text-ink2 rounded-xl px-3 py-2">This program needs kit you didn’t select in onboarding. You can still start it — exercises show substitutions — but recommendations in Today will bias toward what you actually have. Update kit in More → Onboarding.</p>
       )}
 
       {active && adaptation?.changed && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 space-y-2">
-          <p className="text-xs font-bold text-amber-900">Equipment change detected</p>
-          <p className="text-xs text-amber-900">{adaptation.reason} Your completed history stays attached to the original exercise IDs.</p>
-          <ul className="text-[11px] text-amber-900 space-y-1">
+        <div className="rounded-xl border border-review/30 bg-reviewsoft px-3 py-3 space-y-2">
+          <p className="text-xs font-bold text-review">Equipment change detected</p>
+          <p className="text-xs text-ink2">{adaptation.reason} Your completed history stays attached to the original exercise IDs.</p>
+          <ul className="text-[11px] text-ink2 space-y-1">
             {adaptation.substitutions.slice(0, 4).map((swap, i)=> <li key={`${swap.sessionId}-${i}`}>{swap.from} → {swap.to}</li>)}
           </ul>
           <button onClick={applyEquipmentChanges} className="btn btn-primary min-h-10 rounded-xl px-3 text-xs">Apply kit changes to schedule</button>
@@ -110,8 +110,8 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
             </div>
           )}
           {!!active.generationWarnings?.length && (
-            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-900">
-              <p className="font-bold">Needs review</p>
+            <div className="mt-3 rounded-lg border border-review/30 bg-reviewsoft px-2.5 py-2 text-[11px] text-ink2">
+              <p className="font-bold text-review">Needs review</p>
               <ul className="mt-1 list-disc pl-4 space-y-1">{active.generationWarnings.map((warning, index)=> <li key={`${warning.sessionId}-${index}`}>{warning.reason}</li>)}</ul>
             </div>
           )}
@@ -170,7 +170,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
               <li key={session.id} className="flex items-center gap-2 text-sm border border-line rounded-xl px-3 py-2 bg-surface2">
                 <span className="text-xs font-mono tabular-nums text-ink3 w-24 shrink-0">{session.dateISO}</span>
                 <span className="font-medium truncate">{session.title}</span>
-                <span className={`ml-auto text-[11px] font-bold px-2 py-1 rounded-full border ${completed ? 'bg-success text-white border-success' : 'bg-surface border-line text-ink3'}`}>{completed?'done':'planned'}</span>
+                <span className={`ml-auto text-[11px] font-bold px-2 py-1 rounded-full border ${completed ? 'bg-success text-bg border-success' : 'bg-surface border-line text-ink3'}`}>{completed?'done':'planned'}</span>
                 {completed && delta && <span className="text-[11px] text-ink3">{delta.sets>=0?'+':''}{delta.sets} sets{delta.volumeKg!=null ? ` • ${delta.volumeKg>=0?'+':''}${delta.volumeKg}kg vs plan` : ''}</span>}
                 {!completed && <button onClick={()=> onStartSession(session)} className="text-xs font-bold text-ink underline">Start</button>}
               </li>
