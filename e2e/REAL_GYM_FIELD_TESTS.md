@@ -46,3 +46,29 @@ names, raw health records or exported files outside the test owner’s storage.
 | Pulse E2E | pass / fail / not configured |
 | Health summary consent/revoke | pass / fail / not configured |
 | Issues and follow-up | |
+
+## Flagship benchmark: real-world longitudinal study
+
+Simulated corpora only validate harness mechanics. The evidence that matters
+comes from consented participants running the app for 8-16 weeks.
+
+Protocol:
+1. Participant enables local measurements (More -> Privacy & data).
+2. After each week (or at study end) they export a backup (More -> Export)
+   and share the JSON under an anonymous filename.
+3. Collect packages in `benchmark/field/` (git-ignored directory).
+4. Run `npm run benchmark:field -- --min-participants=N --min-transitions=M`.
+
+The runner validates every package through the import layer, resolves ledger
+outcomes, replays arise vs double/linear/flat baselines point-in-time per
+participant, pools transitions, and writes `benchmark/results.field.md`.
+
+Measurements collected: recommendation acceptance, target achievement,
+progression success/regression/stagnation, adherence + missed sessions,
+workout completion, deload outcomes (cut applied / normalised), plateau
+false-positive rate, load & rep recommendation error, logging time, and
+programme changes overridden by users.
+
+The headline sentence is printed ONLY when participant and transition gates
+pass; below them the report says so plainly. Exit code 2 signals insufficient
+evidence so CI cannot mistake absence of data for success.
