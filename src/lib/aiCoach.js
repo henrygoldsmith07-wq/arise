@@ -1,18 +1,35 @@
 // aiCoach.js — optional AI coaching layer backed by NVIDIA-hosted models.
 //
+// Architecture (fixed contract):
+//   Arise deterministic engine -> evidence + proposed decisions -> AI ->
+//   explanation / summarisation / questions.
+// The LLM NEVER invents prescriptions. It receives the engine's own findings
+// (weekly-review directives, deload signals, model capability state) plus
+// aggregated numbers, and explains them.
+//
 // Hard rules:
 //   1. BYOK: the API key lives ONLY in this device's localStorage. It is never
 //      exported, synced, logged, or included in backups. Nothing is hardcoded.
 //   2. Consent: requests fire only when the user enabled the feature AND a key
 //      is present.
-//   3. Minimal payloads: only aggregated training numbers leave the device —
-//      no identifiers, no raw notes, no keys.
-//   4. Fail soft: every network path resolves to { ok:false, error }; the app
-//      works identically without this module ever succeeding.
+//   3. Minimal payloads: only aggregated numbers and engine outputs leave the
+//      device — no identifiers, no raw notes, no keys.
+//   4. Fail soft: every network path resolves to { ok:false, error }.
+
+import { EXERCISE_BY_ID } from './data.js';
+import { resolveArisePriors } from './priors.js';
+import { reviewCompletedWeek } from './mesocycle.js';
 
 const SETTINGS_KEY = 'arise.ai.settings.v1';
 export const NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
 export const DEFAULT_MODEL = 'meta/llama-3.1-8b-instruct';
+
+const SYSTEM_PROMPT =
+  'You are the explanation layer for Arise, a deterministic strength-training engine. ' +
+  'You receive ENGINE FINDINGS (decisions the engine already made, with reasons) and aggregated weekly numbers. ' +
+  'Summarise what the engine decided and why in plain language, and surface at most two useful questions the user should answer next. ' +
+  'NEVER invent, modify or suggest prescriptions, loads, sets or programme changes — the engine is authoritative. ' +
+  'If findings are empty, say the engine has not made decisions yet. Maximum 150 words.';
 
 function storage(){
   try{ return typeof localStorage !== 'undefined' ? localStorage : null; }catch{ return null; }
@@ -51,9 +68,9 @@ export function clearAiSettings(){
   try{ s?.removeItem(SETTINGS_KEY); }catch{}
 }
 
-// ── Context builder: aggregated training numbers only ───────────────────
+// ── Context builder: engine findings + aggregated numbers only ─────────
 
-export function buildTrainingContext({ history = [], schedule = null, readinessLog = [], customTemplates = [] } = {}){
+export function buildTrainingContext({ history = [], schedule = null, readinessLog = [], customTemplates = [], config = null } = {}){
   const byWeek = new Map(); // monday -> {sessions, sets, volumeKg}
   for(const h of history || []){
     const d = new Date(`${h?.dateISO || ''}T00:00:00Z`);
@@ -72,59 +89,57 @@ export function buildTrainingContext({ history = [], schedule = null, readinessL
   }
   const weeks = [...byWeek.values()].sort((a, b)=> a.weekStart.localeCompare(b.weekStart)).slice(-6);
 
+  // True muscle balance via the exercise database — never id prefixes.
+  const muscleSets = {};
   const exerciseSets = new Map();
   let totalSets = 0;
   for(const h of history || []) for(const b of h.blocks || []){
     const n = (b.sets || []).length;
     totalSets += n;
     exerciseSets.set(b.exerciseId, (exerciseSets.get(b.exerciseId) || 0) + n);
+    const muscle = EXERCISE_BY_ID[b.exerciseId]?.muscle || 'Other';
+    muscleSets[muscle] = (muscleSets[muscle] || 0) + n;
   }
   const topExercises = [...exerciseSets.entries()]
     .sort((a, b)=> b[1] - a[1]).slice(0, 8)
     .map(([exerciseId, sets]) => ({ exerciseId, sets }));
 
-  const doneCount = (history || []).length;
-  const plannedCount = schedule?.sessions?.length || 0;
-  const doneInSchedule = plannedCount
-    ? schedule.sessions.filter(s => doneIds(schedule, history).has(s.id)).length
-    : 0;
+  // Engine findings: the deterministic layer's own latest decisions.
+  const engineFindings = { weeklyReviewReady: false, directives: [], deloadSignals: [], mesoDeloadDue: false };
+  try{
+    const review = reviewCompletedWeek({ schedule, history, config });
+    if(review?.ready){
+      engineFindings.weeklyReviewReady = true;
+      engineFindings.directives = (review.directives || []).map(d => ({
+        exerciseId: d.exerciseId,
+        kind: d.kind,
+        ...(d.toExerciseId ? { toExerciseId: d.toExerciseId } : {}),
+        reason: d.reason,
+      }));
+      engineFindings.deloadSignals = review.deloadDecision?.signals || [];
+      engineFindings.mesoDeloadDue = !!review.mesoDeloadDue;
+    }
+  }catch{}
 
   const readinessScores = (readinessLog || []).map(r => Number(r.score)).filter(Number.isFinite);
+  const recentReadiness = readinessScores.slice(-8);
+  void resolveArisePriors; // priors flow through reviewCompletedWeek; kept for future gates
 
   return {
-    appVersion: 1,
+    contextVersion: 2,
     totals: {
-      sessionsLogged: doneCount,
+      sessionsLogged: (history || []).length,
       totalSets,
-      programmeSessionsTotal: plannedCount,
-      programmeSessionsDone: doneInSchedule,
-      customTemplates: customTemplates.length,
+      customTemplates: (customTemplates || []).length,
     },
     recentWeeks: weeks,
     topExercisesBySets: topExercises,
-    muscleBalanceHint: muscleSpread(history),
-    averageReadiness: readinessScores.length
-      ? Math.round(readinessScores.slice(-8).reduce((a, b)=> a + b, 0) / readinessScores.length)
+    muscleBalance: muscleSets,
+    averageReadiness: recentReadiness.length
+      ? Math.round(recentReadiness.reduce((a, b)=> a + b, 0) / recentReadiness.length)
       : null,
+    engineFindings,
   };
-}
-function doneIds(schedule, history){
-  const histIds = new Set((history || []).map(h => h.id));
-  const out = new Set();
-  for(const s of schedule?.sessions || []){
-    if(histIds.has(s.id) || s.status === 'done') out.add(s.id);
-  }
-  return out;
-}
-function muscleSpread(history){
-  // Uses declared ids only — names are unnecessary for the payload.
-  const counts = {};
-  for(const h of history || []) for(const b of h.blocks || []){
-    const id = b.exerciseId || '';
-    const family = id.split('-')[0];
-    counts[family] = (counts[family] || 0) + (b.sets || []).length;
-  }
-  return counts;
 }
 
 // ── Request ─────────────────────────────────────────────────────────────
@@ -146,11 +161,11 @@ export async function requestCoachInsight({ context, apiKey, model = DEFAULT_MOD
       },
       body: JSON.stringify({
         model,
-        temperature: 0.4,
-        max_tokens: 400,
+        temperature: 0.3,
+        max_tokens: 350,
         messages: [
-          { role:'system', content: 'You are a concise, evidence-based strength coach. You receive aggregated training numbers (never personal data). Reply with at most 180 words: one short paragraph on what is going well, then up to three concrete adjustments as "- " bullets. No medical claims. If data is too sparse, say so plainly.' },
-          { role:'user', content: `Training summary JSON:\n${JSON.stringify(context)}` },
+          { role:'system', content: SYSTEM_PROMPT },
+          { role:'user', content: `Engine findings and training numbers:\n${JSON.stringify(context)}` },
         ],
       }),
       signal: controller?.signal,

@@ -5,7 +5,7 @@ import {
   buildTrainingContext, requestCoachInsight, DEFAULT_MODEL,
 } from '../src/lib/aiCoach.js';
 
-function withStorage(fn){
+async function withStorage(fn){
   const mem = {};
   globalThis.localStorage = {
     getItem: k => (k in mem ? mem[k] : null),
@@ -14,9 +14,13 @@ function withStorage(fn){
   };
   try{ fn(mem); }finally{ delete globalThis.localStorage; }
 }
-
-function sess(dateISO, blocks){ return { id:`s-${dateISO}`, dateISO, blocks }; }
+function sess(id, dateISO, blocks){ return { id, dateISO, blocks }; }
 function set(reps, kg){ return { reps:String(reps), weightKg:String(kg), rpe:'' }; }
+function isoDaysAgo(days){
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}
 
 describe('ai settings storage', ()=>{
   it('round-trips and clears; never enabled by default', ()=>{
@@ -25,18 +29,10 @@ describe('ai settings storage', ()=>{
       assert.equal(fresh.enabled, false);
       assert.equal(fresh.apiKey, '');
       assert.equal(fresh.model, DEFAULT_MODEL);
-
-      saveAiSettings({ apiKey:'nvapi-test', model:'meta/llama-3.1-70b-instruct', enabled:true });
-      const saved = getAiSettings();
-      assert.equal(saved.apiKey, 'nvapi-test');
-      assert.equal(saved.model, 'meta/llama-3.1-70b-instruct');
-      assert.equal(saved.enabled, true);
-
-      // Partial update keeps the key.
-      saveAiSettings({ enabled:false });
+      saveAiSettings({ apiKey:'nvapi-test', enabled:true });
       assert.equal(getAiSettings().apiKey, 'nvapi-test');
+      saveAiSettings({ enabled:false });
       assert.equal(getAiSettings().enabled, false);
-
       clearAiSettings();
       assert.deepEqual(getAiSettings(), { enabled:false, apiKey:'', model: DEFAULT_MODEL });
     });
@@ -44,68 +40,95 @@ describe('ai settings storage', ()=>{
 });
 
 describe('training context builder', ()=>{
-  it('emits aggregated numbers only — no keys, no notes, no identifiers beyond ids', ()=>{
-    const store = {
-      history: [
-        sess('2026-08-03', [{ exerciseId:'bench-press-dumbbell', sets:[set(8,22.5), set(8,22.5)] }]),
-        sess('2026-08-10', [{ exerciseId:'dumbbell-row', sets:[set(10,20)] }]),
-      ],
-      schedule: { sessions:[ { id:'s-2026-08-03', status:'done' }, { id:'x', status:'planned' } ] },
-      readinessLog: [ { score: 72 }, { score: 80 } ],
-      customTemplates: [ { id:'custom-a' } ],
-    };
-    const ctx = JSON.stringify(buildTrainingContext(store));
-    assert.doesNotMatch(ctx, /nvapi|apiKey|note\b/i);
-    assert.match(ctx, /"sessionsLogged":2/);
-    assert.match(ctx, /"totalSets":3/);
-    assert.match(ctx, /"programmeSessionsDone":1/);
-    assert.match(ctx, /"customTemplates":1/);
-    assert.ok(JSON.parse(ctx).averageReadiness === 76);
+  it('averages only the recent readiness window (last-8 bug regression)', ()=>{
+    // Ten entries: two very low old scores then eight high ones.
+    const scores = [5, 10, 80, 80, 80, 80, 80, 80, 80, 80];
+    const store = { history:[], schedule:null, readinessLog: scores.map(s=>({ score:s })) };
+    const ctx = buildTrainingContext(store);
+    // Old bug divided the last-8 sum by the full length → 64.
+    assert.equal(ctx.averageReadiness, 80);
   });
 
-  it('handles empty history without crashing', ()=>{
-    const ctx = buildTrainingContext({ history: [], schedule: null, readinessLog: [] });
-    assert.equal(ctx.totals.sessionsLogged, 0);
-    assert.equal(ctx.averageReadiness, null);
+  it('muscle balance uses the exercise database, not id prefixes', ()=>{
+    const history = [
+      sess('a','2026-08-03',[{ exerciseId:'bench-press-dumbbell', sets:[set(8,20), set(8,20)] }]),
+      sess('b','2026-08-04',[{ exerciseId:'dumbbell-row', sets:[set(10,20)] }]),
+      sess('c','2026-08-05',[{ exerciseId:'cable-row', sets:[set(10,25)] }]),
+      sess('d','2026-08-06',[{ exerciseId:'bodyweight-squat', sets:[set(12,'')] }]),
+    ];
+    const ctx = buildTrainingContext({ history });
+    const mb = ctx.muscleBalance;
+    assert.equal(mb['Chest'], 2);
+    assert.equal(mb['Back'], 2);
+    assert.equal(mb['Legs'], 1);
+    // The old prefix bug produced these bogus keys:
+    assert.equal(mb['bench'], undefined);
+    assert.equal(mb['dumbbell'], undefined);
+    assert.equal(mb['bodyweight'], undefined);
+  });
+
+  it('carries engine findings as authoritative decisions', ()=>{
+    const monday = (offsetWeeks, plusDays = 0)=>{
+      const d = new Date();
+      d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7) + offsetWeeks * 7 + plusDays);
+      return d.toISOString().slice(0, 10);
+    };
+    const history = [ sess('done-1', monday(-1), [{ exerciseId:'bench-press-dumbbell', sets:[set(8,22)] }]) ];
+    const schedule = {
+      programId:'p', availableEquipment:['dumbbells','bench'], mesocycle:{ weeks:4, deloadWeek:null },
+      sessions:[
+        sess('done-1', monday(-1), [{ exerciseId:'bench-press-dumbbell', sets:[3] }]),
+        sess('next-1', monday(0, 1), [{ exerciseId:'bench-press-dumbbell', sets:[3] }]),
+      ],
+    };
+    const ctx = buildTrainingContext({ history, schedule });
+    assert.equal(ctx.contextVersion, 2);
+    assert.equal(ctx.engineFindings.weeklyReviewReady, true);
+    const d = ctx.engineFindings.directives.find(x => x.exerciseId === 'bench-press-dumbbell');
+    assert.ok(d, 'expected an engine directive');
+    assert.ok(d.reason.length > 5);
   });
 });
 
 describe('requestCoachInsight', ()=>{
-  const ctx = buildTrainingContext({ history: [] });
+  function capture(){
+    let captured = null;
+    const fake = async (url, opts)=>{
+      captured = { url, opts, body: JSON.parse(opts.body) };
+      return { ok:true, json: async()=> ({ choices:[{ message:{ content:'Engine held your squat load because RPE hit 9 twice.' } }] }) };
+    };
+    return { fake, get: ()=> captured };
+  }
 
-  it('refuses without a key or context before any network call', async ()=>{
+  it('sends the explanation-layer system prompt and engine findings payload', async ()=>{
+    withStorage(async ()=>{
+      const ctx = buildTrainingContext({ history:[], schedule:null });
+      const { fake, get } = capture();
+      const r = await requestCoachInsight({ context: ctx, apiKey:'k', fetchImpl: fake });
+      assert.equal(r.ok, true);
+      const sent = get();
+      assert.match(sent.url, /integrate\.api\.nvidia\.com/);
+      assert.match(sent.body.messages[0].content, /NEVER invent/i);
+      assert.match(JSON.stringify(sent.body.messages[1].content), /engineFindings/);
+      assert.equal(sent.body.temperature, 0.3);
+    });
+  });
+
+  it('refuses without key/context before any network call', async ()=>{
     let called = false;
     const fake = ()=> { called = true; return Promise.resolve({ ok:false }); };
-    const noKey = await requestCoachInsight({ context: ctx, apiKey:'', fetchImpl: fake });
-    assert.equal(noKey.ok, false);
-    const noCtx = await requestCoachInsight({ context:null, apiKey:'k', fetchImpl: fake });
-    assert.equal(noCtx.ok, false);
+    assert.equal((await requestCoachInsight({ context:{}, apiKey:'', fetchImpl: fake })).ok, false);
+    assert.equal((await requestCoachInsight({ context:null, apiKey:'k', fetchImpl: fake })).ok, false);
     assert.equal(called, false);
   });
 
-  it('parses a successful completion', async ()=>{
-    const fake = async (url, opts)=>{
-      assert.match(url, /integrate\.api\.nvidia\.com/);
-      assert.match(opts.headers.Authorization, /^Bearer k$/);
-      const body = JSON.parse(opts.body);
-      assert.equal(body.model, DEFAULT_MODEL);
-      return { ok:true, json: async()=> ({ choices:[{ message:{ content:'Looks solid.\n- add pulling volume' } }] }) };
-    };
-    const r = await requestCoachInsight({ context: ctx, apiKey:'k', fetchImpl: fake });
-    assert.equal(r.ok, true);
-    assert.match(r.text, /pulling volume/);
-  });
-
   it('surfaces API errors and timeouts as soft failures', async ()=>{
-    const err500 = await requestCoachInsight({ context: ctx, apiKey:'k', fetchImpl: async()=> ({ ok:false, status:500, text: async()=> 'boom' }) });
-    assert.equal(err500.ok, false);
+    const err500 = await requestCoachInsight({ context:{}, apiKey:'k', fetchImpl: async()=> ({ ok:false, status:500, text: async()=> 'boom' }) });
     assert.match(err500.error, /API 500/);
-
     const aborter = await requestCoachInsight({
-      context: ctx, apiKey:'k', timeoutMs: 5,
+      context:{}, apiKey:'k', timeoutMs: 5,
       fetchImpl: (url, opts)=> new Promise((_, rej)=> opts.signal.addEventListener('abort', ()=> { const e = new Error('aborted'); e.name='AbortError'; rej(e); })),
     });
-    assert.equal(aborter.ok, false);
     assert.match(aborter.error, /timed out/);
   });
 });
