@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { hydrateStorage } from './lib/storage.js';
 import './index.css';
 
 class ErrorBoundary extends React.Component {
@@ -18,9 +19,13 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode><ErrorBoundary><App /></ErrorBoundary></React.StrictMode>
-);
+// Hydrate the IndexedDB-backed store before first render so every existing
+// synchronous consumer starts from fully composed state.
+hydrateStorage().finally(()=>{
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode><ErrorBoundary><App /></ErrorBoundary></React.StrictMode>
+  );
+});
 
 if('serviceWorker' in navigator && import.meta.env.PROD){
   window.addEventListener('load', ()=> navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(()=>{}));

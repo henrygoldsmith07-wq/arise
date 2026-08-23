@@ -1,4 +1,6 @@
-﻿const KEY = 'arise.store.v1';
+﻿import { getCachedStore, setCachedStore } from './storage.js';
+
+const KEY = 'arise.store.v1';
 const CORRUPT_KEY = 'arise.store.v1.corrupt';
 export const STORE_SCHEMA_VERSION = 6;
 
@@ -20,6 +22,21 @@ const DEFAULT = {
 };
 
 export function loadStore(){
+  // Hydrated IndexedDB cache is authoritative once present; migrations and
+  // default-filling still run so callers see the identical shape.
+  const cached = getCachedStore();
+  if(cached){
+    let j = { ...cached };
+    j = runMigrations(j);
+    if(!j.history) j.history=[];
+    if(!j.readinessLog) j.readinessLog=[];
+    if(!j.programHistory) j.programHistory=[];
+    if(j.activeWorkout === undefined) j.activeWorkout = null;
+    if(j.eventHistory === undefined) j.eventHistory=[];
+    if(j.healthSummary === undefined) j.healthSummary=null;
+    j.history = normaliseHistory(j.history);
+    return { ...structuredClone(DEFAULT), ...j };
+  }
   try{
     const raw = localStorage.getItem(KEY);
     if(!raw) return structuredClone(DEFAULT);
@@ -46,6 +63,11 @@ export function loadStore(){
 }
 
 export function saveStore(s){
+  // Once hydrated, IndexedDB is canonical: cache + async persist. The legacy
+  // localStorage copy is demoted to a pointer + paint-critical preferences.
+  if(getCachedStore()){
+    try{ setCachedStore(s); return true; }catch{ return false; }
+  }
   try{ localStorage.setItem(KEY, JSON.stringify(s)); return true; }
   catch{ return false; }
 }
