@@ -12,7 +12,7 @@
     "benchmark:write": "node benchmark/validate.js --write",
     "benchmark:backtest": "node benchmark/backtest.js",
     "benchmark:realworld": "node benchmark/real-world.js",
-    "benchmark:study": "node benchmark/study.js",
+    "benchmark:study": "node benchmark/study.js",`n    "benchmark:field": "node benchmark/field-study.js --min-participants=10 --min-transitions=1000",
     "benchmark:logging": "node benchmark/logging-time.js",
     "lint:content": "node scripts/lint-content.mjs",
     "check": "npm run lint:content && npm test",
