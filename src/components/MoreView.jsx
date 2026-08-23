@@ -342,6 +342,31 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
                   </div>
                   {pairedLine && <p className="text-[11px] text-ink3 mt-1">{pairedLine}</p>}
                 </div>
+                {(() => {
+                  const segs = evidenceData.comparative?.segments || {};
+                  const conclusiveRows = [];
+                  for(const [dim, groups] of Object.entries(segs)){
+                    for(const [key, arms] of Object.entries(groups)){
+                      const a = arms.arise, dp = arms['double-progression'];
+                      if(a?.conclusive && dp) conclusiveRows.push({ dim, key, aMet: a.targetAchievementRate, dpMet: dp.targetAchievementRate, n: a.n });
+                    }
+                  }
+                  if(!conclusiveRows.length) return null;
+                  return (
+                    <div>
+                      <p className="text-xs font-bold">Segmented comparison (conclusive only)</p>
+                      <div className="mt-1 space-y-0.5">
+                        {conclusiveRows.slice(0, 8).map(r => (
+                          <div key={`${r.dim}-${r.key}`} className="flex items-center gap-2 text-[11px]">
+                            <span className="font-semibold w-28 truncate">{r.key}</span>
+                            <span className="text-ink3">{r.dim} · n={r.n}</span>
+                            <span className="ml-auto tabular-nums">arise {Math.round(r.aMet*100)}% vs DP {Math.round(r.dpMet*100)}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div>
                   <p className="text-xs font-bold">Progression model capabilities</p>
                   <div className="mt-1 flex flex-wrap gap-1" role="list" aria-label="Progression model capabilities">

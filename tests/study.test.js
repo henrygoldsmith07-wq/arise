@@ -276,3 +276,40 @@ describe('substitution validation', ()=>{
     assert.equal(result.rows[0].retained, true);
   });
 });
+
+describe("segmented comparisons", ()=>{
+  const RISING2 = [
+    sess("2026-01-01","bench-press-dumbbell",[set(8,20)]),
+    sess("2026-01-04","lateral-raise",[set(12,5)]),
+    sess("2026-01-08","bench-press-dumbbell",[set(9,20)]),
+    sess("2026-01-11","lateral-raise",[set(13,5)]),
+    sess("2026-01-15","bench-press-dumbbell",[set(10,20)]),
+    sess("2026-01-18","lateral-raise",[set(14,5)]),
+  ];
+  const readinessLog = [{ dateISO:"2026-01-08", score:80 }, { dateISO:"2026-01-15", score:25 }];
+  const s2 = runComparativeStudy(RISING2, { readinessLog });
+
+  it("segments every requested dimension with gated arms", ()=>{
+    for(const dim of ["byStructure","byEquipmentClass","byStrategy","byRepRange","byFrequency","byReadiness","byExperienceLevel"]){
+      assert.ok(s2.segments?.[dim], `missing ${dim}`);
+      for(const key of Object.keys(s2.segments[dim])){
+        for(const arm of STUDY_ARMS){
+          const seg = s2.segments[dim][key][arm];
+          assert.ok(seg, `${dim}/${key}/${arm} missing`);
+          assert.equal(typeof seg.conclusive, "boolean");
+        }
+      }
+    }
+  });
+
+  it("classifies structure and equipment from the exercise database", ()=>{
+    assert.ok(s2.segments.byStructure.compound.arise.n > 0);
+    assert.ok(s2.segments.byStructure.isolation.arise.n > 0);
+    assert.ok(s2.segments.byEquipmentClass["free-weights"].arise.n > 0);
+  });
+
+  it("buckets readiness high vs low using nearby logs", ()=>{
+    assert.ok(s2.segments.byReadiness.high.arise.n > 0);
+    assert.ok(s2.segments.byReadiness.low.arise.n > 0);
+  });
+});
