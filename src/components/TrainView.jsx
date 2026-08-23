@@ -1,13 +1,58 @@
 import { useMemo, useState } from 'react';
-import { PROGRAMS, PROGRAM_BY_ID, PROGRAM_TEMPLATES, programHistory as programVersionHistory, availablePrograms, EXERCISE_BY_ID, plannedVsCompleted } from '../lib/data.js';
+import { PROGRAMS, PROGRAM_BY_ID, PROGRAM_TEMPLATES, programHistory as programVersionHistory, availablePrograms, EXERCISE_BY_ID, EXERCISES, plannedVsCompleted, GOALS, LEVELS, scheduleProgram } from '../lib/data.js';
 import { startProgram } from '../lib/schedule.js';
 import { adaptScheduleForEquipment, programAdherence, recordProgramStart, userProgramHistory } from '../lib/programming.js';
 import { generateProgramme } from '../lib/programmeGenerator.js';
 
+const EMPTY_DAY = { title: '', exercises: [{ exerciseId: '', sets: 3, reps: '8–12' }] };
+
+function makeId(){ return `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`; }
+
+function buildCustomTemplate({ name, description, level, goal, days }, existing = null){
+  const id = existing?.id || makeId();
+  const usedEquipment = new Set(['bodyweight']);
+  const workouts = days.map((day, i)=> ({
+    day: i + 1,
+    title: day.title?.trim() || `Day ${i + 1}`,
+    blocks: day.exercises
+      .filter(e => e.exerciseId)
+      .map(e => {
+        for(const eq of (EXERCISE_BY_ID[e.exerciseId]?.equipment || [])) usedEquipment.add(eq);
+        return { exerciseId: e.exerciseId, sets: Math.max(1, Number(e.sets) || 3), reps: e.reps?.trim() || '8–12', restSec: 90, loadHint: '' };
+      }),
+  }));
+  const nowISO = new Date().toISOString();
+  const base = existing ? { ...existing, version: (existing.version || 1) + 1 } : { id, isCustom: true, version: 1, createdAtISO: nowISO };
+  return {
+    ...base,
+    name: name.trim(),
+    description: description.trim() || 'Your own template.',
+    level, goal, daysPerWeek: days.length,
+    updatedAtISO: nowISO,
+    program: {
+      id, name: name.trim(), tagline: description.trim() || 'Your own template.',
+      level, daysPerWeek: days.length,
+      mesocycle: { weeks: 4, deloadWeek: null, progression: 'double-progression' },
+      version: base.version,
+      equipment: [...usedEquipment],
+      weeks: [{ week: 1, workouts }],
+    },
+  };
+}
+
 export default function TrainView({ store, setStore, onStartSession, availableEquipment }){
   const [programId,setProgramId]=useState(store.activeSchedule?.programId || PROGRAMS[0].id);
+  const [builderOpen,setBuilderOpen]=useState(false);
+  const [editingId,setEditingId]=useState(null);
+  const [form,setForm]=useState({ name:'', description:'', level:'Beginner', goal:'general', days:[{ ...EMPTY_DAY }] });
+  const customTemplates = store.customTemplates || [];
+  const allPrograms = useMemo(()=> [
+    ...PROGRAMS,
+    ...customTemplates.map(t => ({ ...t.program, id: t.id, isCustom: true })),
+  ], [customTemplates]);
+  const programMeta = (pid)=> allPrograms.find(p => p.id === pid) || null;
   const availIds = useMemo(()=> new Set(availablePrograms(availableEquipment).map(p=>p.id)), [availableEquipment]);
-  const program = PROGRAM_BY_ID[programId];
+  const program = programMeta(programId) || PROGRAMS[0];
   const active = store.activeSchedule;
   const pvc = useMemo(()=> active ? plannedVsCompleted(active, store.history||[]) : [], [active, store.history]);
   const adaptation = useMemo(()=> active ? adaptScheduleForEquipment(active, availableEquipment, store.history || []) : null, [active, availableEquipment, store.history]);
@@ -15,12 +60,64 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
   const userHistory = useMemo(()=> userProgramHistory(store.programHistory || [], active, store.history || []), [store.programHistory, active, store.history]);
 
   const start = ()=>{
-    const next = startProgram(store, programId);
-    const prog = PROGRAM_BY_ID[programId];
+    const custom = customTemplates.find(t => t.id === programId);
+    const startDateISO = new Date().toISOString().slice(0, 10);
+    const next = custom
+      ? { ...store, activeSchedule: scheduleProgram({ programId, startDateISO, program: custom.program }) }
+      : startProgram(store, programId);
+    const prog = custom ? custom.program : PROGRAM_BY_ID[programId];
+    if(!prog) return;
     const entry = { programId, version: prog.version||1, startDateISO: next.activeSchedule.startDateISO, endDateISO: null };
     const adapted = adaptScheduleForEquipment(next.activeSchedule, availableEquipment, store.history || []);
     const hist = recordProgramStart(store.programHistory || [], entry);
     setStore({ ...next, activeSchedule: adapted.schedule, programHistory: hist });
+  };
+
+  // ── Custom template builder helpers ──────────────────────────────────
+  const openBuilder = (tplToEdit = null)=>{
+    if(tplToEdit){
+      const p = tplToEdit.program;
+      setForm({
+        name: tplToEdit.name, description: tplToEdit.description || '',
+        level: tplToEdit.level || 'Beginner', goal: tplToEdit.goal || 'general',
+        days: (p.weeks?.[0]?.workouts || [EMPTY_DAY]).map(w => ({
+          title: w.title,
+          exercises: (w.blocks || []).map(b => ({ exerciseId: b.exerciseId, sets: b.sets, reps: b.reps })),
+        })),
+      });
+      setEditingId(tplToEdit.id);
+    }else{
+      setForm({ name:'', description:'', level:'Beginner', goal:'general', days:[{ ...EMPTY_DAY }] });
+      setEditingId(null);
+    }
+    setBuilderOpen(true);
+  };
+  const setDay = (di, patch)=> setForm(f => ({ ...f, days: f.days.map((d,i)=> i===di ? { ...d, ...patch } : d) }));
+  const addDay = ()=> setForm(f => ({ ...f, days: [...f.days, { ...EMPTY_DAY }] }));
+  const removeDay = (di)=> setForm(f => ({ ...f, days: f.days.length > 1 ? f.days.filter((_,i)=> i!==di) : f.days }));
+  const setExercise = (di, ei, patch)=> setForm(f => ({ ...f, days: f.days.map((d,i)=> i!==di ? d : {
+    ...d, exercises: d.exercises.map((e,j)=> j===ei ? { ...e, ...patch } : e),
+  })}));
+  const addExerciseRow = (di)=> setForm(f => ({ ...f, days: f.days.map((d,i)=> i!==di ? d : { ...d, exercises: [...d.exercises, { exerciseId:'', sets:3, reps:'8–12' }] }) }));
+  const removeExerciseRow = (di, ei)=> setForm(f => ({ ...f, days: f.days.map((d,i)=> i!==di ? d : { ...d, exercises: d.exercises.filter((_,j)=> j!==ei) }) }));
+
+  const saveBuilder = ()=>{
+    if(!form.name.trim() || form.days.some(d => !d.exercises.some(e => e.exerciseId))){
+      alert('Give the template a name and at least one exercise per day.');
+      return;
+    }
+    const tpl = buildCustomTemplate(form, editingId ? customTemplates.find(t => t.id === editingId) : null);
+    const nextList = editingId
+      ? customTemplates.map(t => t.id === editingId ? tpl : t)
+      : [...customTemplates, tpl];
+    setStore({ ...store, customTemplates: nextList });
+    setBuilderOpen(false);
+    setProgramId(tpl.id);
+  };
+  const deleteCustom = (id)=>{
+    if(!confirm('Delete this template? Schedules already started from it are not affected.')) return;
+    setStore({ ...store, customTemplates: customTemplates.filter(t => t.id !== id) });
+    if(programId === id) setProgramId(PROGRAMS[0].id);
   };
 
   const applyEquipmentChanges = ()=>{
@@ -48,18 +145,28 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
       </div>
 
       <div className="rounded-xl border border-line bg-surface2 px-3 py-2">
-        <p className="text-xs font-bold">Templates</p>
+        <div className="flex items-center gap-2">
+          <p className="text-xs font-bold">Templates</p>
+          <button onClick={()=> openBuilder()} className="ml-auto text-[11px] font-bold px-2.5 py-1 rounded-full bg-ink text-bg min-h-8">+ New template</button>
+        </div>
         <div className="flex flex-wrap gap-1.5 mt-1.5">
           {PROGRAM_TEMPLATES.map(t=> (
             <button key={t.id} onClick={()=> setProgramId(t.programId)} className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${programId===t.programId?'bg-ink text-bg border-ink':'bg-surface border-line'}`}>{t.name}</button>
           ))}
+          {customTemplates.map(t => (
+            <span key={t.id} className="inline-flex items-center gap-1">
+              <button onClick={()=> setProgramId(t.id)} className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${programId===t.id?'bg-ink text-bg border-ink':'bg-surface border-line'}`}>{t.name} ★</button>
+              <button onClick={()=> openBuilder(t)} aria-label={`Edit ${t.name}`} className="text-[10px] text-ink3 underline">edit</button>
+              <button onClick={()=> deleteCustom(t.id)} aria-label={`Delete ${t.name}`} className="text-[10px] text-danger underline">del</button>
+            </span>
+          ))}
         </div>
-        <p className="text-[11px] text-ink3 mt-1">{PROGRAM_TEMPLATES.find(t=> t.programId===programId)?.description||''}</p>
+        <p className="text-[11px] text-ink3 mt-1">{PROGRAM_TEMPLATES.find(t=> t.programId===programId)?.description || customTemplates.find(t=> t.id===programId)?.description || ''}</p>
       </div>
 
       <div className="grid gap-2">
-        {PROGRAMS.map(p=>{
-          const ok = availIds.has(p.id);
+        {allPrograms.map(p=>{
+          const ok = p.isCustom ? true : availIds.has(p.id);
           const isActive = active?.programId===p.id;
           return (
             <button key={p.id} onClick={()=> setProgramId(p.id)}
@@ -127,6 +234,64 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
         <button onClick={start} className="btn btn-primary flex-1 min-h-11 rounded-xl">{active?.programId===programId ? 'Restart schedule from today' : 'Schedule this program'}</button>
         {active && <button onClick={()=> setStore({...store, activeSchedule:null})} className="btn btn-secondary min-h-11 rounded-xl px-4">Clear schedule</button>}
       </div>
+
+      {builderOpen && (
+        <div className="fixed inset-0 z-40 bg-black/40 p-4 overflow-auto" role="dialog" aria-modal="true" aria-label="Template builder">
+          <div className="max-w-xl mx-auto my-6 rounded-3xl bg-surface border border-line p-4 space-y-4">
+            <div className="flex items-center gap-2">
+              <p className="text-base font-bold">{editingId ? 'Edit template' : 'New template'}</p>
+              <button onClick={()=> setBuilderOpen(false)} aria-label="Close builder" className="ml-auto w-9 h-9 grid place-items-center rounded-full border border-line">✕</button>
+            </div>
+            <label className="block">
+              <span className="text-[11px] font-bold uppercase tracking-widest text-ink3">Name</span>
+              <input value={form.name} onChange={e=> setForm(f=> ({...f, name:e.target.value}))} className="mt-1 w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm" placeholder="My push-pull split" />
+            </label>
+            <label className="block">
+              <span className="text-[11px] font-bold uppercase tracking-widest text-ink3">Description (optional)</span>
+              <input value={form.description} onChange={e=> setForm(f=> ({...f, description:e.target.value}))} className="mt-1 w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm" placeholder="What is this plan for?" />
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className="text-[11px] font-semibold text-ink3">Level</span>
+                <select value={form.level} onChange={e=> setForm(f=> ({...f, level:e.target.value}))} className="mt-1 w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm">
+                  {LEVELS.map(l=> <option key={l}>{l}</option>)}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-semibold text-ink3">Goal</span>
+                <select value={form.goal} onChange={e=> setForm(f=> ({...f, goal:e.target.value}))} className="mt-1 w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm">
+                  {GOALS.map(g=> <option key={g.id} value={g.id}>{g.label}</option>)}
+                </select>
+              </label>
+            </div>
+            {form.days.map((day, di)=> (
+              <div key={di} className="rounded-2xl border border-line bg-surface2 p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <input value={day.title} onChange={e=> setDay(di, { title: e.target.value })} placeholder={`Day ${di+1} title`} aria-label={`Day ${di+1} title`} className="flex-1 min-w-0 rounded-lg border border-line bg-surface px-2.5 py-2 text-xs font-bold" />
+                  {form.days.length > 1 && <button onClick={()=> removeDay(di)} aria-label={`Remove day ${di+1}`} className="w-9 h-9 grid place-items-center rounded-full border border-line text-ink3">×</button>}
+                </div>
+                {day.exercises.map((exRow, ei)=> (
+                  <div key={ei} className="grid grid-cols-[minmax(0,1fr)_56px_minmax(64px,88px)_36px] gap-1.5 items-center">
+                    <select value={exRow.exerciseId} onChange={e=> setExercise(di, ei, { exerciseId: e.target.value })} aria-label={`Day ${di+1} exercise ${ei+1}`} className="min-w-0 rounded-lg border border-line bg-surface px-2 py-2 text-xs">
+                      <option value="">Pick an exercise…</option>
+                      {EXERCISES.map(ex=> <option key={ex.id} value={ex.id}>{ex.name}</option>)}
+                    </select>
+                    <input type="number" min="1" max="10" inputMode="numeric" value={exRow.sets} onChange={e=> setExercise(di, ei, { sets: e.target.value })} aria-label={`Day ${di+1} exercise ${ei+1} sets`} className="rounded-lg border border-line bg-surface px-2 py-2 text-xs tabular-nums" />
+                    <input value={exRow.reps} onChange={e=> setExercise(di, ei, { reps: e.target.value })} aria-label={`Day ${di+1} exercise ${ei+1} reps`} placeholder="8–12" className="min-w-0 rounded-lg border border-line bg-surface px-2 py-2 text-xs" />
+                    <button onClick={()=> removeExerciseRow(di, ei)} aria-label={`Remove exercise ${ei+1} of day ${di+1}`} className="w-8 h-8 grid place-items-center rounded-full border border-line text-ink3">×</button>
+                  </div>
+                ))}
+                <button onClick={()=> addExerciseRow(di)} className="text-[11px] font-bold underline underline-offset-2">+ exercise</button>
+              </div>
+            ))}
+            <div className="flex gap-2">
+              <button onClick={addDay} disabled={form.days.length >= 6} className="btn btn-secondary flex-1 min-h-10 rounded-xl disabled:opacity-40">+ Add day</button>
+              <button onClick={saveBuilder} className="btn btn-primary flex-1 min-h-10 rounded-xl">{editingId ? 'Save changes' : 'Create template'}</button>
+            </div>
+            <p className="text-[11px] text-ink3">One-week blueprint — scheduling repeats it weekly with a 4-week mesocycle and honest kit swaps. Templates live on this device and ride along in backups.</p>
+          </div>
+        </div>
+      )}
 
       {program && (
         <div className="space-y-3">

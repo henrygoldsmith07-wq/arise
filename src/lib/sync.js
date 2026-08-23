@@ -1,10 +1,10 @@
-// sync.js — optional cross-device sync layer (offline-first preserved).
+﻿// sync.js â€” optional cross-device sync layer (offline-first preserved).
 // Default: localStorage only. When sync is enabled, this mirrors export/import over a sync provider.
 // Provider is a pluggable { pull, push } pair so tests stay pure.
 // Conflict resolution: per-session last-write-wins via savedAt; onboarding last-write-wins via exportedAt.
 
 import { buildExportPayload, parseImportFile, mergeStores } from "./export.js";
-import { STORE_SCHEMA_VERSION } from "./store.js";
+import { STORE_SCHEMA_VERSION, mergeCustomTemplates } from "./store.js";
 import { mergeEvaluationLedgers } from "./longitudinal.js";
 
 export function makeSyncAdapter({ pull, push }){ return { pull, push }; }
@@ -65,6 +65,7 @@ export function mergeStoresWithConflicts(current, imported){
     healthSummary: current.healthSummary || imported.healthSummary || null,
     readinessLog: [...rByKey.values()].sort((a,b)=> String(a?.dateISO||'').localeCompare(String(b?.dateISO||''))),
     evaluationLedger: mergeEvaluationLedgers(current.evaluationLedger, imported.evaluationLedger),
+    customTemplates: mergeCustomTemplates(current.customTemplates, imported.customTemplates),
     programHistory: [...(current.programHistory||[]), ...(imported.programHistory||[])].filter((v,i,a)=> a.findIndex(x=> x.programId===v.programId && x.version===v.version)===i),
   };
 }

@@ -91,7 +91,7 @@ test.describe('Arise — new user journey', () => {
     const why = page.getByText(/Why this programme was generated/i);
     if (await why.isVisible()) {
       await why.click();
-      await expect(page.getByText(/Resampled|Capped each session/)).toBeVisible();
+      await expect(page.getByText(/Resampled|Capped each session/).first()).toBeVisible();
     }
   });
 

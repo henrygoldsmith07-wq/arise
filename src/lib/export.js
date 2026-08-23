@@ -1,7 +1,7 @@
-// Export / restore / import — versioned JSON backup for local-first data.
+﻿// Export / restore / import â€” versioned JSON backup for local-first data.
 // No cloud sync; the user owns the file.
 
-import { runMigrations, STORE_SCHEMA_VERSION } from './store.js';
+import { runMigrations, STORE_SCHEMA_VERSION, mergeCustomTemplates } from './store.js';
 import { getEventHistory } from './telemetry.js';
 import { loadEvaluationLedger, mergeEvaluationLedgers } from './longitudinal.js';
 
@@ -32,7 +32,7 @@ export function downloadJson(filename, obj){
 
 // Only these top-level keys may enter the store from an imported file.
 // Anything else in a hand-edited backup is dropped rather than persisted forever.
-const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','preferences','readinessLog','programHistory','evaluationLedger'];
+const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','preferences','readinessLog','programHistory','evaluationLedger','customTemplates'];
 
 export function parseImportFile(text){
   let parsed;
@@ -41,7 +41,7 @@ export function parseImportFile(text){
   if(!data || typeof data !== 'object') throw new Error('Import file is empty or malformed.');
   if(parsed?.app && parsed.app !== 'arise') throw new Error('This backup is not for Arise.');
   if(!('history' in data) && !('onboarding' in data) && !('activeSchedule' in data) && !('eventHistory' in data) && !('evaluationLedger' in data)){
-    throw new Error('Unrecognised backup shape — missing history/onboarding/schedule/event history.');
+    throw new Error('Unrecognised backup shape â€” missing history/onboarding/schedule/event history.');
   }
   const validation=validateStoreData(data);
   if(!validation.ok) throw new Error(`Backup validation failed: ${validation.errors.join(' ')}`);
@@ -94,6 +94,7 @@ export function mergeStores(current, imported, strategy='merge'){
     preferences: { ...(importedStore.preferences||{}), ...(currentStore.preferences||{}) },
     readinessLog: [...(currentStore.readinessLog||[]), ...(importedStore.readinessLog||[])].filter((v,i,a)=> a.findIndex(x=> x.dateISO===v.dateISO && x.at===v.at)===i),
     evaluationLedger: mergeEvaluationLedgers(currentStore.evaluationLedger, importedStore.evaluationLedger),
+    customTemplates: mergeCustomTemplates(currentStore.customTemplates, importedStore.customTemplates),
     programHistory: [...(currentStore.programHistory||[]), ...(importedStore.programHistory||[])].filter((v,i,a)=> a.findIndex(x=> x.programId===v.programId && x.version===v.version)===i),
   };
 }
