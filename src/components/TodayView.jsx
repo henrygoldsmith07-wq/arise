@@ -1,3 +1,4 @@
+import WeeklyReviewCard from './WeeklyReviewCard.jsx';
 import { useMemo, useState } from 'react';
 import { PROGRAM_BY_ID } from '../lib/data.js';
 import { deriveAttributes, levelFromAttributes } from '../lib/attributes.js';
@@ -36,6 +37,8 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
   };
 
   return (
+    <>
+    <WeeklyReviewCard store={store} setStore={setStore} />
     <div className="px-4 py-5 space-y-4">
       <section className="rounded-2xl border border-line bg-surface p-4 flex items-center gap-4">
         <div className="w-14 h-14 rounded-2xl bg-ink text-bg grid place-items-center font-black text-lg">{lvl.level}</div>
@@ -149,5 +152,6 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
         )}
       </section>
     </div>
+    </>
   );
 }
