@@ -1,4 +1,4 @@
-const KEY = 'arise.store.v1';
+﻿const KEY = 'arise.store.v1';
 const CORRUPT_KEY = 'arise.store.v1.corrupt';
 export const STORE_SCHEMA_VERSION = 6;
 
@@ -16,6 +16,7 @@ const DEFAULT = {
   preferences: { units: 'kg', theme: null, syncEnabled: false, telemetryEnabled: null, pulseEnabled: false, healthSummaryEnabled: false, autoRest: true, accessibility: { largeText: false, highContrast: false, reduceMotion: false } },
   readinessLog: [], // [{ dateISO, score, sleep, soreness, motivation }]
   programHistory: [], // [{ programId, version, startDateISO, endDateISO }]
+  customTemplates: [], // user-created templates: { id, isCustom:true, version, program:{...}, ... }
 };
 
 export function loadStore(){
@@ -67,6 +68,18 @@ export function upsertHistory(history = [], entry = null){
   return [...without, winner].sort((a, b)=> String(a?.dateISO || '').localeCompare(String(b?.dateISO || '')) || historyTimestamp(a) - historyTimestamp(b));
 }
 
+// Union of user-created templates by id; the newer updatedAtISO wins. Used by
+// export merge and sync so a template edited anywhere survives everywhere.
+export function mergeCustomTemplates(a = [], b = []){
+  const byId = new Map();
+  const tsOf = t => Date.parse(t?.updatedAtISO || '') || 0;
+  for(const t of [...(a || []), ...(b || [])]){
+    if(!t?.id) continue;
+    const existing = byId.get(t.id);
+    if(!existing || tsOf(t) >= tsOf(existing)) byId.set(t.id, t);
+  }
+  return [...byId.values()];
+}
 export function normaliseHistoryEntry(entry){
   if(!entry || typeof entry !== 'object') return entry;
   const out = { ...entry };
@@ -114,7 +127,7 @@ export function normaliseHistoryEntry(entry){
 
 export function normaliseHistory(history = []){
   // Per-entry resilience: one malformed row (e.g. a null block from an edited
-  // backup) must cost that row only — not the whole history. The raw payload is
+  // backup) must cost that row only â€” not the whole history. The raw payload is
   // quarantined by the caller before normalisation ever runs.
   const normalised = [];
   for(const entry of history || []){
@@ -182,7 +195,7 @@ export function runMigrations(raw){
     j.version = STORE_SCHEMA_VERSION;
   }
   if(j.version === 5){
-    // v5 -> v6: auto rest timer preference (default on — matches prior behaviour).
+    // v5 -> v6: auto rest timer preference (default on â€” matches prior behaviour).
     if(!j.preferences) j.preferences={};
     if(j.preferences.autoRest==null) j.preferences.autoRest=true;
     j.version = STORE_SCHEMA_VERSION;
@@ -203,11 +216,12 @@ export function runMigrations(raw){
       j.preferences.accessibility[key] = j.preferences.accessibility[key] === true;
     }
   }
+  if(!Array.isArray(j.customTemplates)) j.customTemplates=[];
   j.history = normaliseHistory(j.history || []);
   return j;
 }
 
-// Track readiness over time — the engine consumes `readinessLog`; the logger
+// Track readiness over time â€” the engine consumes `readinessLog`; the logger
 // itself is exposed through the readiness UI, not this module.
 
 // Previous-session lookup
@@ -220,7 +234,7 @@ export function lastExerciseSets(history, exerciseId){
   return null;
 }
 
-// PRs — with technique/ROM guard (notes that mention rom/depth/assisted invalidate)
+// PRs â€” with technique/ROM guard (notes that mention rom/depth/assisted invalidate)
 export function prsHitBySession(session, priorHistory){
   const priorBest = new Map(); // exerciseId -> { e1rm, note }
   for(const h of priorHistory) for(const b of h.blocks || []) for(const s of b.sets || []){

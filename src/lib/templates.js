@@ -8,22 +8,33 @@
 import { PROGRAM_TEMPLATES, PROGRAM_BY_ID, programHistory, templateHistory, exerciseAvailable, scheduleProgram, EXERCISE_BY_ID } from "./data.js";
 import { rankedSubstitutions } from "./substitutions.js";
 
-export function listTemplates(){
-  return PROGRAM_TEMPLATES.map(t=> ({
-    ...t,
-    program: PROGRAM_BY_ID[t.programId] ? {
-      name: PROGRAM_BY_ID[t.programId].name,
-      level: PROGRAM_BY_ID[t.programId].level,
-      daysPerWeek: PROGRAM_BY_ID[t.programId].daysPerWeek,
-      version: PROGRAM_BY_ID[t.programId].version || 1,
-      weeks: (PROGRAM_BY_ID[t.programId].weeks || []).length,
-      mesocycle: PROGRAM_BY_ID[t.programId].mesocycle || null,
-    } : null,
+// Custom (user-created) templates carry their embedded programme inline and
+// flow through every engine path below via extraTemplates.
+export function listTemplates(extraTemplates = []){
+  const summarize = p => p ? {
+    name: p.name,
+    level: p.level,
+    daysPerWeek: p.daysPerWeek,
+    version: p.version || 1,
+    weeks: (p.weeks || []).length,
+    mesocycle: p.mesocycle || null,
+  } : null;
+  const builtin = PROGRAM_TEMPLATES.map(t=> ({
+    ...t, isCustom: false,
+    program: summarize(PROGRAM_BY_ID[t.programId]),
   }));
+  const custom = (Array.isArray(extraTemplates) ? extraTemplates : [])
+    .filter(t => t?.isCustom && t?.program)
+    .map(t => ({ ...t, program: summarize(t.program) }));
+  return [...builtin, ...custom];
 }
 
-export function templateById(templateId){
-  return listTemplates().find(t=> t.id===templateId) || null;
+function resolveTemplateProgram(t){
+  return t?.isCustom ? t.program : PROGRAM_BY_ID[t?.programId];
+}
+
+export function templateById(templateId, extraTemplates = []){
+  return listTemplates(extraTemplates).find(t=> t.id===templateId) || null;
 }
 
 // Bodyweight moves are always doable (matching availablePrograms' grace) — a
@@ -58,20 +69,24 @@ export function applyEquipmentSubstitutions(sessions, availableEquipment=null, h
 // Instantiate a template into a dated schedule for the user's kit. Every block
 // the kit can't support gets an honest substitution; versioning is carried
 // through (block.version = program version, templateVersion from the template).
-export function instantiateTemplate({ templateId, startDateISO, availableEquipment=null, history=null }){
-  const tpl = PROGRAM_TEMPLATES.find(t=> t.id===templateId);
+export function instantiateTemplate({ templateId, startDateISO, availableEquipment=null, history=null, extraTemplates=null }){
+  const tpl = PROGRAM_TEMPLATES.find(t=> t.id===templateId)
+    || (Array.isArray(extraTemplates) ? extraTemplates.find(t=> t.id===templateId) : null);
   if(!tpl) throw new Error(`Unknown template ${templateId}`);
-  const program = PROGRAM_BY_ID[tpl.programId];
-  if(!program) throw new Error(`Template ${templateId} references unknown program ${tpl.programId}`);
-  const base = scheduleProgram({ programId: tpl.programId, startDateISO });
+  const program = resolveTemplateProgram(tpl);
+  if(!program) throw new Error(`Template ${templateId} references unknown program ${tpl.programId || templateId}`);
+  const base = tpl.isCustom
+    ? scheduleProgram({ programId: templateId, startDateISO, program })
+    : scheduleProgram({ programId: tpl.programId, startDateISO });
   const { sessions, substitutions } = applyEquipmentSubstitutions(base.sessions, availableEquipment, history);
   return {
     templateId,
-    programId: tpl.programId,
+    programId: tpl.isCustom ? templateId : tpl.programId,
     name: tpl.name,
     startDateISO,
     sessions,
     substitutions,
+    isCustom: !!tpl.isCustom,
     templateVersion: tpl.version || 1,
     programVersion: base.programVersion || program.version || 1,
   };
@@ -79,9 +94,21 @@ export function instantiateTemplate({ templateId, startDateISO, availableEquipme
 
 // Version report: template changelog + linked program changelog, so a user can
 // see exactly what changed when a plan's numbers shift between updates.
-export function templateVersionInfo(templateId){
-  const tpl = templateById(templateId);
+// Custom templates report their own version without changelog history.
+export function templateVersionInfo(templateId, extraTemplates = []){
+  const tpl = templateById(templateId, extraTemplates);
   if(!tpl) return null;
+  if(tpl.isCustom){
+    return {
+      templateId,
+      name: tpl.name,
+      templateVersion: tpl.version || 1,
+      templateChanges: [],
+      programVersion: tpl.program?.version || null,
+      programChanges: [],
+      isCustom: true,
+    };
+  }
   return {
     templateId,
     name: tpl.name,
@@ -120,19 +147,26 @@ function equipmentCoverage(program, availableEquipment){
   return ok/blocks.length;
 }
 
-export function recommendTemplate({ goal='general', level='Beginner', availableEquipment=[], daysPerWeek=null }={}){
+export function recommendTemplate({ goal='general', level='Beginner', availableEquipment=[], daysPerWeek=null, extraTemplates=[] }={}){
   const kit = kitWithBodyweight(availableEquipment);
-  const ranked = listTemplates().map(t=>{
+  // Rank against RAW programme objects: scoring needs full weeks/blocks, which
+  // the summarized listing collapses.
+  const raws = [
+    ...PROGRAM_TEMPLATES.map(t => ({ t, isCustom: false })),
+    ...(Array.isArray(extraTemplates) ? extraTemplates : []).filter(t => t?.isCustom && t?.program).map(t => ({ t, isCustom: true })),
+  ];
+  const ranked = raws.map(({ t })=>{
+    const prog = resolveTemplateProgram(t);
     const reasons = [];
     let score = 0;
-    if(!t.program){ return { ...t, score: -100, reasons: ['unknown program'] }; }
-    const coverage = equipmentCoverage(PROGRAM_BY_ID[t.programId], availableEquipment);
+    if(!prog){ return { ...t, score: -100, reasons: ['unknown program'] }; }
+    const coverage = equipmentCoverage(prog, availableEquipment);
     score += coverage * 8;
     if(coverage >= 1) reasons.push('full equipment fit — no swaps needed');
     else if(coverage >= 0.75) reasons.push('mostly doable — a few honest swaps');
     else reasons.push('several exercises will need swapping');
 
-    const declared = PROGRAM_BY_ID[t.programId].equipment || [];
+    const declared = prog.equipment || [];
     const fit = declared.filter(eq=> kit.has(eq)).length;
     const missing = declared.length - fit;
     score += fit * 3;
