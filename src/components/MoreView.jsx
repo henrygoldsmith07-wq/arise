@@ -6,6 +6,7 @@ import { mergeHealthSummary, pullHealthSummary } from '../lib/health.js';
 import { LOCATIONS, GOALS } from '../lib/data.js';
 import { loadEvaluationLedger } from '../lib/longitudinal.js';
 import { deriveProgressionModel } from '../lib/progressionModel.js';
+import { getAiSettings, saveAiSettings, clearAiSettings, buildTrainingContext, requestCoachInsight, DEFAULT_MODEL } from '../lib/aiCoach.js';
 import { STUDY_ARMS, studyCoverage, runComparativeStudy, collectDeloadDecisions, validateDeloadDecisions } from '../lib/study.js';
 
 export default function MoreView({ store, setStore, setTab, onboardingOpen, setOnboardingOpen }){
@@ -15,6 +16,12 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   const [showTelemetry,setShowTelemetry]=useState(false);
   const [healthMsg,setHealthMsg]=useState(null);
   const [evidenceOpen,setEvidenceOpen]=useState(false);
+  const ai = getAiSettings();
+  const [aiKeyInput,setAiKeyInput]=useState('');
+  const [aiModelInput,setAiModelInput]=useState(ai.model || DEFAULT_MODEL);
+  const [aiEnabled,setAiEnabled]=useState(ai.enabled);
+  const [aiBusy,setAiBusy]=useState(false);
+  const [aiResult,setAiResult]=useState(null);
 
   // Computed lazily — only while the study details panel is open.
   let evidenceData = null;
@@ -253,6 +260,31 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
       </section>
 
       <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+        <h3 className="text-sm font-bold">AI coach (optional)</h3>
+        <p className="text-xs text-ink3">Optional: an NVIDIA-hosted model reads <span className="font-semibold text-ink">aggregated numbers only</span> (weekly sets/volume, adherence, readiness average) and returns short coaching notes. Your key is stored on this device only — never exported, synced, or included in backups.</p>
+        <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
+          <label className="block">
+            <span className="text-[11px] font-bold">NVIDIA API key</span>
+            <input type="password" value={aiKeyInput} onChange={e=> setAiKeyInput(e.target.value)} placeholder={ai.apiKey ? '•••• saved — paste to replace' : 'nvapi-…'} autoComplete="off" className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm" />
+          </label>
+          <label className="block">
+            <span className="text-[11px] font-semibold text-ink3">Model</span>
+            <input value={aiModelInput} onChange={e=> setAiModelInput(e.target.value)} placeholder={DEFAULT_MODEL} className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-xs" />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={generateInsight} disabled={aiBusy} className="btn btn-primary min-h-9 rounded-xl px-3 text-xs disabled:opacity-40">{aiBusy ? 'Thinking…' : 'Generate insight'}</button>
+            {ai.apiKey && <button onClick={()=> { clearAiSettings(); setAiEnabled(false); setAiResult(null); setAiKeyInput(''); }} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Clear key</button>}
+            <span className="ml-auto text-[11px] text-ink3 self-center">{ai.apiKey ? 'key saved on this device' : 'no key stored'} · {ai.enabled || aiBusy ? 'enabled' : 'disabled'}</span>
+          </div>
+          {aiResult && (
+            <div role="status" aria-live="polite" className={`rounded-xl border px-3 py-2 text-xs whitespace-pre-wrap ${aiResult.ok ? 'border-line bg-surface' : 'border-amber-300 bg-amber-50 text-amber-900'}`}>
+              {aiResult.ok ? `${aiResult.text}\n\n— ${aiResult.model}` : `AI request failed: ${aiResult.error}`}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
         <h3 className="text-sm font-bold">Progression evidence</h3>
         <p className="text-xs text-ink3">Arise records each recommendation before the workout (with your measurement consent) and scores it against what you actually did next — compared against simple double progression, linear progression and a flat baseline on the same sessions.</p>
         {store.preferences?.telemetryEnabled !== true ? (
@@ -280,7 +312,26 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
                       const row = evidenceData.comparative.overall[arm];
                       if(!row) return null;
                       const pct = v=> v == null ? '—' : `${Math.round(v * 100)}%`;
-                      return (
+  const generateInsight = async ()=>{
+    if(aiBusy) return;
+    const key = aiKeyInput.trim() || ai.apiKey;
+    if(!key){ setAiResult({ ok:false, error:'Paste your NVIDIA API key first.' }); return; }
+    setAiBusy(true);
+    setAiResult(null);
+    try{
+      saveAiSettings({ apiKey: key, model: aiModelInput, enabled: true });
+      setAiEnabled(true);
+      const context = buildTrainingContext({ history: store.history || [], schedule: store.activeSchedule, readinessLog: store.readinessLog || [], customTemplates: store.customTemplates || [] });
+      const result = await requestCoachInsight({ context, apiKey: key, model: aiModelInput });
+      setAiResult(result);
+    }catch(err){
+      setAiResult({ ok:false, error:String(err?.message || err).slice(0, 140) });
+    }finally{
+      setAiBusy(false);
+    }
+  };
+
+  return (
                         <div key={arm} role="row" className="flex items-center gap-2 text-[11px]">
                           <span className="font-semibold w-36 truncate" role="cell">{arm}</span>
                           <span role="cell" className="text-ink3">met {pct(row.targetAchievementRate)} · success {pct(row.progressionSuccessRate)} · over-conservative {pct(row.unnecessaryConservatismRate)}</span>
