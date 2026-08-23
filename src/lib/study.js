@@ -20,8 +20,10 @@
 //   - Sample gates: segment rates stay null below minimumSamples.
 //   - No algorithm changes live here. This file measures; it does not tune.
 
-import { recommendNext, e1rm, trainingAgeInfo } from './progression.js';
+import { recommendNext, e1rm, trainingAgeInfo, strategyForExercise } from './progression.js';
 import { resolveArisePriors } from './priors.js';
+import { EXERCISE_BY_ID } from './data.js';
+import { equipmentClassFor } from './longitudinal.js';
 
 export const STUDY_ARMS = ['arise', 'double-progression', 'linear-progression', 'flat'];
 
@@ -197,7 +199,8 @@ function summariseArm(scores, key){
 
 // Replay every exercise's history point-in-time and score each arm against the
 // real next-exposure outcome. Deterministic, offline, prior-only by design.
-export function runComparativeStudy(history, { config = null, targetRepsFor = null, minimumSamples = null } = {}){
+export function runComparativeStudy(history, { config = null, targetRepsFor = null, minimumSamples = null, readinessLog = [] } = {}){
+  const readinessLogArg = readinessLog;
   const cfg = resolveArisePriors(config);
   const minSamples = Math.max(2, minimumSamples ?? cfg.longitudinal.minimumSegmentSamples);
   const minExposures = Math.max(2, cfg.progression.validation.minimumSessions);
@@ -209,7 +212,19 @@ export function runComparativeStudy(history, { config = null, targetRepsFor = nu
   for(const session of ordered) for(const b of session.blocks || []) if(b?.exerciseId) exerciseIds.add(b.exerciseId);
 
   const byExerciseRows = new Map(); // exerciseId -> arm -> scores[]
+  const segmentRows = new Map();    // `${dimension}|${key}` -> arm -> scores[]
   const rows = []; // { exerciseId, dateISO, phase, arm, score }
+  const readinessByDate = new Map((readinessLogArg || []).map(r => [r.dateISO, Number(r.score)]));
+  const nearestReadiness = (asOfDateISO)=>{
+    let best = null, bestDist = Infinity;
+    for(const [dateISO, score] of readinessByDate){
+      if(!Number.isFinite(score)) continue;
+      const dist = Math.abs(Date.parse(`${dateISO}T00:00:00Z`) - Date.parse(`${asOfDateISO}T00:00:00Z`));
+      if(dist <= 3 * 86400000 && dist < bestDist){ best = score; bestDist = dist; }
+    }
+    return best;
+  };
+
   for(const exerciseId of [...exerciseIds].sort()){
     const exposures = exposuresFor(ordered, exerciseId);
     if(exposures.length < minExposures) continue;
@@ -221,14 +236,33 @@ export function runComparativeStudy(history, { config = null, targetRepsFor = nu
       if(!prefix.some(s=> (s.blocks || []).some(b=> b.exerciseId === exerciseId))) continue;
       const previousBest = exposures[i - 1].best;
       const phase = trainingAgeInfo(prefix, { asOfDateISO: exposures[i].session.dateISO, config }).phase || 'unknown';
+      const exMeta = EXERCISE_BY_ID[exerciseId] || {};
+      const structure = (exMeta.tags || []).includes('compound') ? 'compound'
+        : (exMeta.tags || []).includes('isolation') ? 'isolation' : 'unknown';
+      const equipClass = equipmentClassFor(exerciseId);
+      const strategyName = strategyForExercise(exerciseId, { config });
+      const medianReps = [...exposures.slice(0, i + 1).map(e => e.best.reps)].sort((a,b)=>a-b)[Math.floor(i / 2)];
+      const repRange = medianReps <= 5 ? 'low(≤5)' : medianReps <= 8 ? 'mid(6–8)' : 'high(≥9)';
+      const gapDays = Math.round((Date.parse(`${exposures[i].session.dateISO}T00:00:00Z`) - Date.parse(`${exposures[i-1].session.dateISO}T00:00:00Z`)) / 86400000);
+      const freqBucket = gapDays <= 2 ? '≤2d' : gapDays <= 3 ? '3d' : gapDays <= 6 ? '4–6d' : '≥7d';
+      const rScore = nearestReadiness(exposures[i].session.dateISO);
+      const readinessBucket = rScore == null ? 'unknown' : rScore >= cfg.recovery.readinessLowLatest ? 'high' : 'low';
+
+      const attrs = { phase, structure, equipClass, strategyName, repRange, freqBucket, readinessBucket };
       const arms = computeArms({ exerciseId, history: prefix, targetReps, asOfDateISO: exposures[i].session.dateISO, config });
       for(const [name, rec] of Object.entries(arms)){
         if(!rec) continue;
         const score = scoreArm(name, rec, exposures[i], previousBest, { config });
-        rows.push({ exerciseId, dateISO: exposures[i].session.dateISO, phase, arm: name, score });
+        rows.push({ exerciseId, dateISO: exposures[i].session.dateISO, ...attrs, arm: name, score });
         if(!byExerciseRows.has(exerciseId)) byExerciseRows.set(exerciseId, {});
         if(!byExerciseRows.get(exerciseId)[name]) byExerciseRows.get(exerciseId)[name] = [];
         byExerciseRows.get(exerciseId)[name].push(score);
+        for(const key of [attrs.phase, attrs.structure, attrs.equipClass, attrs.strategyName, attrs.repRange, attrs.freqBucket, attrs.readinessBucket]){
+          const dimKey = `${key}`;
+          if(!segmentRows.has(dimKey)) segmentRows.set(dimKey, {});
+          if(!segmentRows.get(dimKey)[name]) segmentRows.get(dimKey)[name] = [];
+          segmentRows.get(dimKey)[name].push(score);
+        }
       }
     }
   }
@@ -263,6 +297,25 @@ export function runComparativeStudy(history, { config = null, targetRepsFor = nu
       const seg = byExperienceLevel[phase][name] || [];
       byExperienceLevel[phase][name] = summariseArm(seg, name);
       byExperienceLevel[phase][name].conclusive = seg.length >= minSamples;
+    }
+  }
+
+  const DIMENSIONS = [['byStructure','structure'],['byEquipmentClass','equipClass'],['byStrategy','strategyName'],['byRepRange','repRange'],['byFrequency','freqBucket'],['byReadiness','readinessBucket']];
+  const segments = {};
+  for(const [outName, attr] of DIMENSIONS){
+    segments[outName] = {};
+    for(const row of rows){
+      const key = row[attr];
+      if(!segments[outName][key]) segments[outName][key] = {};
+      if(!segments[outName][key][row.arm]) segments[outName][key][row.arm] = [];
+      segments[outName][key][row.arm].push(row.score);
+    }
+    for(const key of Object.keys(segments[outName])){
+      for(const name of STUDY_ARMS){
+        const seg = segments[outName][key][name] || [];
+        segments[outName][key][name] = summariseArm(seg, name);
+        segments[outName][key][name].conclusive = seg.length >= minSamples;
+      }
     }
   }
 
@@ -302,6 +355,8 @@ export function runComparativeStudy(history, { config = null, targetRepsFor = nu
     };
   }
 
+  segments.byExperienceLevel = byExperienceLevel;
+
   return {
     generatedAtISO: new Date().toISOString(),
     priorsVersion: cfg.version,
@@ -310,6 +365,7 @@ export function runComparativeStudy(history, { config = null, targetRepsFor = nu
     overall,
     byExercise: byExerciseOutput,
     byExperienceLevel,
+    segments,
     pairedVsArise,
     note: `Every arm receives the identical prior-only history at each transition and is scored against the same real outcome. Segments below ${minSamples} transitions are labelled inconclusive.`,
   };

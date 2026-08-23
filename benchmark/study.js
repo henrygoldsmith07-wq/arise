@@ -24,6 +24,13 @@ for(const [arm, pair] of Object.entries(study.pairedVsArise)){
   console.log(`  paired vs arise [${arm}] arise wins ${pair.ariseWins} · baseline wins ${pair.baselineWins} · both ${pair.bothMetTarget} · neither ${pair.neitherMetTarget}`);
 }
 
+const DIMS=['byStructure','byEquipmentClass','byStrategy','byRepRange','byFrequency','byReadiness'];
+for(const dim of DIMS){
+  for(const [key,arms] of Object.entries(study.segments?.[dim]||{})){
+    const a=arms.arise,d=arms['double-progression'];
+    if(a?.conclusive&&d) console.log(  segment = n=+a.n+' arise met '+Math.round((a.targetAchievementRate||0)*100)+'% vs DP '+Math.round((d.targetAchievementRate||0)*100)+'%');
+  }
+}
 console.log('Deload decisions observed:');
 if(deloads.decisions){
   console.log(`  cuts actually applied: ${pct(deloads.cutsObservedRate)} · volume normalised ≤2wks: ${pct(deloads.normalisedWithinTwoWeeksRate)}`);
