@@ -215,12 +215,18 @@ export function runComparativeStudy(history, { config = null, targetRepsFor = nu
   const segmentRows = new Map();    // `${dimension}|${key}` -> arm -> scores[]
   const rows = []; // { exerciseId, dateISO, phase, arm, score }
   const readinessByDate = new Map((readinessLogArg || []).map(r => [r.dateISO, Number(r.score)]));
-  const nearestReadiness = (asOfDateISO)=>{
-    let best = null, bestDist = Infinity;
+  // Prior-only readiness: a score may classify a session only if it was logged
+  // at or before that session's date, and the LATEST such entry wins. Nearest
+  // on both sides would let a score logged two days AFTER a workout classify
+  // it — future information. Same 3-day freshness bound as before, one-sided.
+  const readinessAtOrBefore = (asOfDateISO)=>{
+    let best = null, bestTime = -Infinity;
+    const end = Date.parse(`${asOfDateISO}T00:00:00Z`);
     for(const [dateISO, score] of readinessByDate){
       if(!Number.isFinite(score)) continue;
-      const dist = Math.abs(Date.parse(`${dateISO}T00:00:00Z`) - Date.parse(`${asOfDateISO}T00:00:00Z`));
-      if(dist <= 3 * 86400000 && dist < bestDist){ best = score; bestDist = dist; }
+      const time = Date.parse(`${dateISO}T00:00:00Z`);
+      if(time > end || end - time > 3 * 86400000) continue;
+      if(time >= bestTime){ best = score; bestTime = time; }
     }
     return best;
   };
@@ -241,11 +247,14 @@ export function runComparativeStudy(history, { config = null, targetRepsFor = nu
         : (exMeta.tags || []).includes('isolation') ? 'isolation' : 'unknown';
       const equipClass = equipmentClassFor(exerciseId);
       const strategyName = strategyForExercise(exerciseId, { config });
-      const medianReps = [...exposures.slice(0, i + 1).map(e => e.best.reps)].sort((a,b)=>a-b)[Math.floor(i / 2)];
+      // Prior-defined segment: the median uses exposures STRICTLY BEFORE the
+      // one being evaluated. Including exposure i would let the outcome's own
+      // achieved reps decide which segment that outcome is scored in.
+      const medianReps = [...exposures.slice(0, i).map(e => e.best.reps)].sort((a,b)=>a-b)[Math.floor(i / 2)];
       const repRange = medianReps <= 5 ? 'low(≤5)' : medianReps <= 8 ? 'mid(6–8)' : 'high(≥9)';
       const gapDays = Math.round((Date.parse(`${exposures[i].session.dateISO}T00:00:00Z`) - Date.parse(`${exposures[i-1].session.dateISO}T00:00:00Z`)) / 86400000);
       const freqBucket = gapDays <= 2 ? '≤2d' : gapDays <= 3 ? '3d' : gapDays <= 6 ? '4–6d' : '≥7d';
-      const rScore = nearestReadiness(exposures[i].session.dateISO);
+      const rScore = readinessAtOrBefore(exposures[i].session.dateISO);
       const readinessBucket = rScore == null ? 'unknown' : rScore >= cfg.recovery.readinessLowLatest ? 'high' : 'low';
 
       const attrs = { phase, structure, equipClass, strategyName, repRange, freqBucket, readinessBucket };

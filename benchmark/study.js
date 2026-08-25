@@ -10,7 +10,7 @@ const dataset = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
 // Retrospective bootstrap of the comparative study on the synthetic corpus.
 // This validates the harness mechanics (prior-only replay, pairing, gates) —
 // it is NOT external evidence; real conclusions need the prospective ledger.
-const study = runComparativeStudy(dataset.history || []);
+const study = runComparativeStudy(dataset.history || [], { readinessLog: dataset.readinessLog || [] });
 const deloads = validateDeloadDecisions(dataset.deloadDecisions || [], dataset.history || []);
 
 const pct = v => v == null ? '—' : `${Math.round(v * 100)}%`;
@@ -28,7 +28,13 @@ const DIMS=['byStructure','byEquipmentClass','byStrategy','byRepRange','byFreque
 for(const dim of DIMS){
   for(const [key,arms] of Object.entries(study.segments?.[dim]||{})){
     const a=arms.arise,d=arms['double-progression'];
-    if(a?.conclusive&&d) console.log(  segment = n=+a.n+' arise met '+Math.round((a.targetAchievementRate||0)*100)+'% vs DP '+Math.round((d.targetAchievementRate||0)*100)+'%');
+    if(a?.conclusive&&d){
+      console.log(
+        `segment ${dim}/${key} n=${a.n} ` +
+        `arise met ${Math.round(a.targetAchievementRate * 100)}% ` +
+        `vs DP ${Math.round(d.targetAchievementRate * 100)}%`
+      );
+    }
   }
 }
 console.log('Deload decisions observed:');

@@ -312,4 +312,50 @@ describe("segmented comparisons", ()=>{
     assert.ok(s2.segments.byReadiness.high.arise.n > 0);
     assert.ok(s2.segments.byReadiness.low.arise.n > 0);
   });
+
+  it("never classifies a transition with a readiness score logged AFTER it", ()=>{
+    // One entry, dated two days after the last workout. Under nearest-match
+    // semantics it would have classified the final transition — future info.
+    const s = runComparativeStudy(RISING, { readinessLog: [{ dateISO: "2026-01-21", score: 80 }] });
+    assert.equal(s.segments.byReadiness.high?.arise.n ?? 0, 0);
+    assert.equal(s.overall.arise.n, s.segments.byReadiness.unknown.arise.n);
+  });
+
+  it("readiness classification uses only prior-or-same-day scores", ()=>{
+    // Strictly prior/same-day logs: Jan 7 covers Jan 4+8, Jan 12 covers itself
+    // and Jan 15 (same-day allowed, <=); nothing reaches Jan 19 or back to Jan 1.
+    const s = runComparativeStudy(RISING, { readinessLog: [
+      { dateISO: "2026-01-07", score: 80 },
+      { dateISO: "2026-01-12", score: 25 },
+    ]});
+    const segs = s.segments.byReadiness;
+    const total = ["high","low","unknown"].reduce((a,k)=> a + (segs[k]?.arise.n ?? 0), 0);
+    assert.equal(total, s.overall.arise.n);
+    assert.ok(segs.high.arise.n > 0, "prior high score should classify earlier transitions");
+    assert.ok(segs.low.arise.n > 0, "same-day score should classify its own day");
+    assert.ok(segs.unknown.arise.n > 0, "transitions without prior data stay unknown");
+    // A later, higher score may never rescue an earlier low-readiness day:
+    // Jan 12 scored 25 on the day — it cannot land in 'high' via Jan 15+ data.
+    void segs;
+  });
+
+  it("rep-range segments are defined by PRIOR exposures only", ()=>{
+    // Reps [4, 9, 9, then an outcome of 3]. The 3-rep outcome must be scored
+    // against the rep-range its PRIOR median implies (9 -> high), never its
+    // own achieved reps pulling the median down into mid.
+    const history = [
+      sess("2026-01-01","bench-press-dumbbell",[set(4,20)]),
+      sess("2026-01-05","bench-press-dumbbell",[set(9,20)]),
+      sess("2026-01-09","bench-press-dumbbell",[set(9,20)]),
+      sess("2026-01-13","bench-press-dumbbell",[set(3,20)]),
+    ];
+    const s = runComparativeStudy(history);
+    assert.equal(s.overall.arise.n, 3);
+    // Fixed: transitions 2 and 3 carry prior median 9 -> high; transition 1
+    // carries prior median 4 -> low. (The leaked version scored transition 3
+    // as low too, because its own 3-rep outcome dragged the median down.)
+    assert.equal(s.segments.byRepRange["high(≥9)"].arise.n, 2, "transitions 2 and 3 have prior median 9");
+    assert.equal(s.segments.byRepRange["low(≤5)"].arise.n, 1, "only transition 1 has prior median 4");
+    assert.equal(s.segments.byRepRange["mid(6–8)"]?.arise.n ?? 0, 0);
+  });
 });
