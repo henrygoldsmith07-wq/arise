@@ -60,10 +60,30 @@ function normaliseBlock(block, history, draftBlock){
 
 function suggestedTarget(rec, block){
   const reps = rec?.reps || firstInt(block.reps) || 'working reps';
-  if(rec?.assistKg != null) return `${reps} reps · ${rec.assistKg}kg assist`;
-  if(rec?.load != null && rec.load > 0) return `${reps} reps · ${rec.load}kg`;
-  if(block.loadHint) return `${reps} reps · ${block.loadHint}`;
+  if(rec?.assistKg != null) return `${reps} reps @ ${rec.assistKg}kg assist`;
+  if(rec?.load != null && rec.load > 0) return `${reps} reps @ ${rec.load}kg`;
+  if(block.loadHint) return `${reps} reps @ ${block.loadHint}`;
   return `${reps} reps`;
+}
+
+// The ONE clear target shown big on the block: load × reps for this session.
+function clearTargetParts(rec, block){
+  const reps = rec?.reps != null && String(rec.reps).trim() !== '' ? rec.reps : (firstInt(block.reps) || null);
+  if(rec?.assistKg != null) return { text: `${reps ?? '—'} reps @ ${rec.assistKg} kg assist` };
+  let load = null;
+  if(rec?.load != null && Number(rec.load) > 0) load = `${rec.load} kg`;
+  else if(block.loadHint && /\d/.test(String(block.loadHint))) load = block.loadHint;
+  const text = [load, reps ? `× ${reps}` : null].filter(Boolean).join(' ');
+  return { text: text || 'working set' };
+}
+
+// Previous performance, summarised: "22 kg × 10, 9, 8" + total reps for the goal.
+function previousSummary(prev){
+  if(!prev?.sets?.length) return null;
+  const firstW = prev.sets.find(s => s.weightKg != null && String(s.weightKg).trim() !== '')?.weightKg || null;
+  const detail = prev.sets.map(s=> `${s.reps}${s.side?` ${s.side}`:''}${s.assistedKg?` (-${s.assistedKg})`:''}`).join(', ');
+  const totalReps = prev.sets.reduce((n, s)=> n + parseNum(s.reps), 0);
+  return { summary: firstW ? `${firstW} kg × ${detail}` : detail, totalReps, dateISO: prev.dateISO };
 }
 
 function getRecommendation(block, history, asOfDateISO, plateConfig = null, study = null){
@@ -427,7 +447,9 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           const supportsWeighted=ex?.supportsWeighted;
           const supportsAssisted=ex?.supportsAssisted;
           const recommendation=blockMeta.recs.get(b.exerciseId) || null;
-          const target=suggestedTarget(recommendation,b);
+          const clearTarget = clearTargetParts(recommendation, b);
+          const prevSummary = prev ? previousSummary(prev) : null;
+          const goalText = prevSummary && prevSummary.totalReps > 0 ? `beat ${prevSummary.totalReps} total reps` : 'set your baseline';
           // Swap sheet honours the user's liked/disliked movements, and never
           // offers a swap back to the original lift — A→B→A loops would erase
           // the substitution audit trail.
@@ -443,18 +465,28 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                 <ExerciseIllustration exerciseId={b.exerciseId} size="md" />
                 <div className="min-w-0">
                   <p className="text-sm font-bold">{ex?.name || b.exerciseId} {b.unilateral ? <span className="text-xs font-semibold text-ink3">(per side — L/R)</span> : null}</p>
-                  <p className="text-xs text-ink3">{ex?.muscle} • {ex?.level} • {ex?.equipment?.join(', ')} {ex?.progression ? `• ${ex.progression}` : ''}</p>
-                  {ex?.cues?.[0] && <p className="text-xs text-ink3 mt-1">Cue: {ex.cues[0]}</p>}
-                  {prev ? (
-                    <p className="text-[11px] text-ink3 mt-1"><span className="font-bold text-ink">Previous performance</span> · {prev.dateISO} · {prev.sets.map(s=> `${s.reps}${s.weightKg?` @${s.weightKg}kg`:''}${s.side?` ${s.side}`:''}${s.assistedKg?` (-${s.assistedKg})`:''}`).join(', ')}</p>
-                  ) : (
-                    <p className="text-[11px] text-ink3 mt-1"><span className="font-bold text-ink">Previous performance</span> · No prior log — start light and record a baseline.</p>
-                  )}
-                  {b.warmups?.length ? <p className="text-[11px] text-ink3 mt-1">Warm-ups: {b.warmups.map(w=> `${w.reps}×${w.weightKg||'bw'}${w.note?` (${w.note})`:''}`).join(' • ')}</p> : null}
-                  {b.restSec ? <p className="text-[11px] text-ink3">Rest {fmtRest(b.restSec)} · load hint: {b.loadHint || '—'}</p> : null}
-                  <div className="flex items-center gap-2 mt-1"><p className="text-[11px]"><span className="font-bold">Suggested target</span> · {target}</p>{recommendation && <button onClick={()=> applyRecommendation(bi,recommendation)} className="text-[10px] font-bold underline underline-offset-2 shrink-0">Use target</button>}</div>
-                  {recommendation?.plateLoad && <p className="text-[11px] text-ink3">Plate check · {recommendation.plateLoad.exact ? `${recommendation.plateLoad.loadKg}kg exact` : `${recommendation.plateLoad.targetKg}kg → ${recommendation.plateLoad.loadKg}kg ${recommendation.plateLoad.direction}`} · per side: {formatPlateStack(recommendation.plateLoad.platesPerSide)}</p>}
-                  <p className="text-[11px] text-ink3 italic">{b.substitutionReason ? `Swap rationale: ${b.substitutionReason}` : `Why: ${b.why || recommendation?.reason || 'Follow the prescribed range and stop with good form.'}`}</p>
+
+                  {/* One clear target */}
+                  <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                    <span className="text-xl font-black tabular-nums leading-none">{clearTarget.text}</span>
+                    {recommendation && <button onClick={()=> applyRecommendation(bi,recommendation)} className="relative text-[10px] font-bold underline underline-offset-2 shrink-0 before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']">Use</button>}
+                  </div>
+                  <p className="text-[11px] text-ink3 mt-1.5">
+                    Previous: {prevSummary ? `${prevSummary.summary}` : 'none logged'}
+                    {prevSummary ? <span> · {prev.dateISO}</span> : ' — start light and record a baseline'}
+                  </p>
+                  <p className="text-[11px]"><span className="font-bold text-ink">Goal:</span> {goalText}</p>
+
+                  <details className="mt-1.5">
+                    <summary className="text-[11px] text-ink3 cursor-pointer select-none">Details & rationale</summary>
+                    <div className="mt-1 space-y-0.5 text-[11px] text-ink3">
+                      {ex?.cues?.[0] && <p>Cue: {ex.cues[0]}</p>}
+                      {b.warmups?.length ? <p>Warm-ups: {b.warmups.map(w=> `${w.reps}×${w.weightKg||'bw'}${w.note?` (${w.note})`:''}`).join(' • ')}</p> : null}
+                      {b.restSec ? <p>Rest {fmtRest(b.restSec)} · load hint: {b.loadHint || '—'}</p> : null}
+                      {recommendation?.plateLoad && <p>Plate check · {recommendation.plateLoad.exact ? `${recommendation.plateLoad.loadKg}kg exact` : `${recommendation.plateLoad.targetKg}kg → ${recommendation.plateLoad.loadKg}kg ${recommendation.plateLoad.direction}`} · per side: {formatPlateStack(recommendation.plateLoad.platesPerSide)}</p>}
+                      <p className="italic">{b.substitutionReason ? `Swap rationale: ${b.substitutionReason}` : `Why: ${b.why || recommendation?.reason || 'Follow the prescribed range and stop with good form.'}`}</p>
+                    </div>
+                  </details>
                 </div>
                 <div className="flex gap-1.5 shrink-0 flex-wrap justify-end max-w-[190px]">
                   {b.restSec ? <button onClick={()=> startRest(b.restSec, ex?.name || b.exerciseId)} className="relative text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">Start rest</button> : null}
