@@ -224,6 +224,40 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
     validationHighOutcomes: 3,
     validationMediumOutcomes: 1,
   },
+  // Graduated readiness classifier (readinessClassifier.js). Combines today's
+  // readiness, short/long EMAs, recent RPE, performance trend, session
+  // completion, soreness, previous adaptation response, and the legacy
+  // deloadReadinessAssessment into one of four graduated recommendations.
+  // Points are additive and capped by the thresholds below; escalation beyond a
+  // band additionally requires the stated number of DISTINCT contributing
+  // factors so no single input can force a big call alone.
+  readinessClassifier: {
+    version: 1,
+    emaShortEntries: 3,   // "3-day EMA" window (entries ≈ training days)
+    emaLongEntries: 7,    // "7-day EMA" window
+    sorenessWindow: 3,
+    sorenessHigh: 4,             // mean soreness at/above this counts (1–5 scale)
+    completionLookbackDays: 21,
+    completionPlannedMinimum: 3,
+    completionLowThreshold: 0.6, // completed/planned below this scores
+    trendWindowSessions: 6,
+    trendDeclineSlope: 0.3,      // e1RM points/session slope read as declining
+    repeatGuardDays: 21,         // fresh successful deload dampens re-escalation
+    normalisedReboundRatio: 0.8, // matches validateDeloadDecisions' normalised bar
+    weights: {
+      lowToday: 18,             // proportional below recovery.oneDayDip
+      shortEmaLow: 16,          // proportional below recovery.readinessLowEma
+      longEmaLow: 14,
+      highRpeCluster: 14,       // ≥ recovery.highRpeCount near-failure sets
+      negativeTrend: 10,
+      poorCompletion: 8,        // planned-but-not-done sessions in lookback
+      highSoreness: 10,         // mean soreness ≥ sorenessHigh (1–5 scale)
+      failedAdaptation: 12,     // prior cut applied but volume never rebounded
+      deloadAssessmentYes: 22,  // scaled by the assessment's own confidence
+    },
+    thresholds: { smallAdjustment: 15, recoverySession: 32, genuineDeload: 50 },
+    minimumDistinctFactors: { smallAdjustment: 1, recoverySession: 2, genuineDeload: 3 },
+  },
   programming: {
     defaultSpacingDays: 2,
     adaptation: {
@@ -276,6 +310,13 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
     equivalenceMinPairs: 3,
     maxIncPctDelta: 0.02,        // tuned incPct stays within ±2pp of strategy default
     autoregulationShiftMax: 0.01,
+    // Graduated readiness graduation gate + overlay bound. The classifier only
+    // becomes a model capability once enough sessions AND enough of its inputs
+    // have data; when active it shifts the personalisedRate band by at most
+    // readinessShiftMax (the same knobs autoregulation uses).
+    readinessMinSessions: 6,
+    readinessMinInputs: 3,
+    readinessShiftMax: 0.008,
   },
   backtest: {
     minimumComparisons: 5,

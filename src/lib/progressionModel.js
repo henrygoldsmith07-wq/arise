@@ -14,6 +14,7 @@
 import { resolveArisePriors, clamp } from './priors.js';
 import { personalisedRate, e1rm, strategyForExercise, recommendNext } from './progression.js';
 import { movementPatternFor } from './substitutions.js';
+import { classifyReadiness, READINESS_RECOMMENDATIONS } from './readinessClassifier.js';
 
 // ── Small shared helpers ────────────────────────────────────────────────
 
@@ -313,6 +314,29 @@ export function autoregulationShiftEstimate(history, { config = null } = {}){
   return { ready: true, setsCounted: counted, roomyFraction: round(roomy / counted), grindFraction: round(grinding / counted), shift: round(shift, 4) };
 }
 
+// Graduated readiness: the longitudinal classifier becomes a model capability
+// only once its own sample gate opens (enough sessions AND enough of its nine
+// inputs actually carry data). Until then it stays inert — the deterministic
+// engine's deload logic is untouched.
+export function readinessGraduationEstimate(history, { readinessLog = [], config = null } = {}){
+  const cfg = resolveArisePriors(config);
+  const result = classifyReadiness({ history, readinessLog, config });
+  const sessions = orderedSessions(history).length;
+  const ready = sessions >= cfg.progressionModel.readinessMinSessions &&
+    result.coverage.observed >= cfg.progressionModel.readinessMinInputs;
+  return {
+    ready,
+    recommendation: result.recommendation,
+    score: result.score,
+    confidence: result.confidence,
+    distinctFactors: result.distinctFactors,
+    observedInputs: result.coverage.observed,
+    totalInputs: result.coverage.total,
+    sessions,
+    factors: result.factors.filter(f => f.points >= 1).map(f => f.label),
+  };
+}
+
 // ── Capability assessment ───────────────────────────────────────────────
 
 // Weakness test against the double-progression arm inside a study segment.
@@ -398,6 +422,12 @@ export function assessCapabilities({ history, study = null, estimates, config = 
     estimates.volumeTolerance?.ready
       ? `${estimates.volumeTolerance.pairedWeeks} paired weeks · tolerable ≈ ${estimates.volumeTolerance.estimatedTolerableWeeklySets} sets/wk (${Math.round((estimates.volumeTolerance.positiveFraction ?? 0) * 100)}% weeks positive).`
       : 'Not enough paired weeks.');
+  const rg = estimates.readinessGraduation;
+  push('graduated-readiness', 'Longitudinal readiness graduation',
+    rg?.ready ? (rg.recommendation === 'as-planned' ? 'ready' : 'active') : 'insufficient-data',
+    rg?.ready
+      ? `Classifier: ${rg.recommendation} (${rg.score} pts, ${rg.confidence} confidence, ${rg.observedInputs}/${rg.totalInputs} inputs) over ${rg.sessions} sessions${rg.factors.length ? ` — ${rg.factors.join(', ')}` : ''}.`
+      : `Opens at ${cfg.progressionModel.readinessMinSessions}+ sessions with ${cfg.progressionModel.readinessMinInputs}+ classifier inputs observed${rg ? ` (${rg.sessions} sessions, ${rg.observedInputs ?? 0} inputs so far)` : ''}.`);
   push('fatigue-carryover', 'Fatigue carryover',
     estimates.fatigueCarryover?.ready ? 'ready' : 'insufficient-data',
     estimates.fatigueCarryover?.ready
@@ -437,7 +467,7 @@ export function assessCapabilities({ history, study = null, estimates, config = 
 
 // ── Overlay construction (the only place the model touches the engine) ──
 
-export function deriveProgressionModel({ history, study = null, config = null } = {}){
+export function deriveProgressionModel({ history, study = null, readinessLog = [], config = null } = {}){
   const cfg = resolveArisePriors(config);
   const estimates = {};
   const safe = fn => { try{ return fn(); }catch{ return null; } };
@@ -450,6 +480,7 @@ export function deriveProgressionModel({ history, study = null, config = null } 
   estimates.orderEffects = safe(() => orderEffectEstimate(history, { config }));
   estimates.equivalence = safe(() => substitutionEquivalenceEstimate(history, { config }));
   estimates.autoregulation = safe(() => autoregulationShiftEstimate(history, { config }));
+  estimates.readinessGraduation = safe(() => readinessGraduationEstimate(history, { readinessLog, config }));
 
   const capabilities = assessCapabilities({ history, study, estimates, config });
 
@@ -489,6 +520,27 @@ export function deriveProgressionModel({ history, study = null, config = null } 
     };
   }
 
+  // Graduated readiness overlay: when the classifier's own gate is open and it
+  // advises anything below as-planned, the personalised progression band
+  // shifts DOWN by at most readinessShiftMax (full for recovery-session /
+  // genuine-deload, half for small-adjustment). Same knobs autoregulation
+  // uses; never a new decision tree.
+  let readinessApplied = false;
+  const autoregulationApplied = !!(estimates.autoregulation?.ready && Math.abs(estimates.autoregulation.shift) > 0.0005);
+  const rgEstimate = estimates.readinessGraduation;
+  if(rgEstimate?.ready && rgEstimate.recommendation !== 'as-planned'){
+    const shift = rgEstimate.recommendation === 'small-adjustment'
+      ? pmCfg.readinessShiftMax / 2
+      : pmCfg.readinessShiftMax;
+    const base = cfg.progression.personalisedRate;
+    const current = overlay.progression.personalisedRate || { appliedLoadPctMin: base.appliedLoadPctMin, appliedLoadPctMax: base.appliedLoadPctMax };
+    overlay.progression.personalisedRate = {
+      appliedLoadPctMin: round(clamp(current.appliedLoadPctMin - shift, 0.005, base.appliedLoadPctMin + pmCfg.autoregulationShiftMax), 4),
+      appliedLoadPctMax: round(clamp(current.appliedLoadPctMax - shift, base.appliedLoadPctMax - pmCfg.autoregulationShiftMax, 0.09), 4),
+    };
+    readinessApplied = true;
+  }
+
   if(shortBreakOpen(estimates, study)){
     overlay.progression.shortBreakPolicy = {
       enabled: true,
@@ -506,15 +558,16 @@ export function deriveProgressionModel({ history, study = null, config = null } 
     estimates,
     overlayConfig: overlay,
     activeOverrideCount: Object.keys(overlay.progression.strategies).length,
-    autoregulationApplied: !!overlay.progression.personalisedRate,
+    autoregulationApplied,
+    readinessApplied,
     shortBreakEasing: !!overlay.progression.shortBreakPolicy,
   };
 }
 
 // Convenience wrapper used by callers that want recommendations shaped by the
 // model when — and only when — evidence opened a capability.
-export function recommendNextWithModel({ exerciseId, history, study = null, config = null, ...rest } = {}){
-  const model = deriveProgressionModel({ history, study, config });
+export function recommendNextWithModel({ exerciseId, history, study = null, readinessLog = [], config = null, ...rest } = {}){
+  const model = deriveProgressionModel({ history, study, readinessLog, config });
   const merged = resolveArisePriors(config);
   merged.progression.strategies = { ...merged.progression.strategies, ...(model.overlayConfig.progression.strategies || {}) };
   merged.progression.strategyByExercise = { ...(merged.progression.strategyByExercise || {}), ...(model.overlayConfig.progression.strategyByExercise || {}) };
@@ -525,6 +578,6 @@ export function recommendNextWithModel({ exerciseId, history, study = null, conf
     merged.progression.shortBreakPolicy = model.overlayConfig.progression.shortBreakPolicy;
   }
   const recommendation = recommendNext({ exerciseId, history, config: merged, ...rest });
-  if(recommendation) recommendation.__progressionModel = { version: model.modelVersion, applied: model.activeOverrideCount > 0 || model.autoregulationApplied || model.shortBreakEasing, activeOverrideCount: model.activeOverrideCount };
+  if(recommendation) recommendation.__progressionModel = { version: model.modelVersion, applied: model.activeOverrideCount > 0 || model.autoregulationApplied || model.readinessApplied || model.shortBreakEasing, activeOverrideCount: model.activeOverrideCount };
   return recommendation;
 }

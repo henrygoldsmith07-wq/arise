@@ -8,11 +8,17 @@
 // full provenance and idempotency.
 //
 // Directive priority (highest first):
-//   1. fatigue deload      — deloadReadinessAssessment fires on the week
-//   2. mesocycle deload    — the programme's own deload week has arrived
-//   3. genuine plateau     — rotate to a kit-compatible variation
-//   4. repeated difficulty — reduce sets one step
-//   5. earned progress     — add a set / carry the engine's load-rep advice
+//   1. fatigue deload        — graduated classifier says genuine-deload, or the
+//                              legacy deloadReadinessAssessment fires (it is one
+//                              input to the classifier and keeps veto power)
+//   1b. recovery session     — classifier says recovery-session (one set down,
+//                              no volume added)
+//   2. mesocycle deload      — the programme's own deload week has arrived
+//   3. genuine plateau       — rotate to a kit-compatible variation
+//   4. repeated difficulty   — reduce sets one step
+//   5. earned progress       — add a set / carry the engine's load-rep advice
+//                              (suppressed while the classifier advises any
+//                              adjustment below as-planned)
 //
 // Every directive carries its reason and evidence; nothing silently changes.
 
@@ -21,6 +27,7 @@ import { PROGRAM_BY_ID, EXERCISE_BY_ID, exerciseAvailable } from './data.js';
 import { recommendNext, recommendSets } from './progression.js';
 import { rankedSubstitutions } from './substitutions.js';
 import { deloadReadinessAssessment } from './sessionQuality.js';
+import { classifyReadiness } from './readinessClassifier.js';
 
 function mondayKey(dateISO){
   const d = new Date(`${dateISO}T00:00:00Z`);
@@ -99,7 +106,17 @@ export function reviewCompletedWeek({ schedule, history = [], readinessLog = [],
   const weeklyVolumeTrend = prevVol > 0 ? [thisVol / Math.max(1, prevVol)] : [];
 
   const recentRpes = logs.map(l => l.rpe).filter(r => r != null && String(r).trim() !== '').slice(-cfg.recovery.recentSetWindow);
+  // The legacy fatigue verdict stays scoped to the reviewed week, exactly as
+  // before — it is now ONE input to the graduated readiness classifier, which
+  // adds the longitudinal context (today vs 3-/7-day EMAs, recent RPE,
+  // performance trend, session completion, soreness, prior adaptation
+  // response) and picks as-planned / small-adjustment / recovery-session /
+  // genuine-deload.
   const deload = deloadReadinessAssessment({ logs, recentRpes, weeklyVolumeTrend, readinessHistory: readinessLog, history: weekHistory, config: cfg });
+  const readiness = classifyReadiness({
+    history, readinessLog, logs, recentRpes, weeklyVolumeTrend,
+    schedule, todayISO: todayStr, deloadAssessment: deload, config: cfg,
+  });
 
   // Signal 2: the programme's own mesocycle deload week. A schedule may carry
   // its own mesocycle (adapted/generated plans); otherwise fall back to the
@@ -122,17 +139,38 @@ export function reviewCompletedWeek({ schedule, history = [], readinessLog = [],
       if(seenExercises.has(exerciseId)) continue; // first occurrence per exercise per review
       seenExercises.add(exerciseId);
 
-      if(deload.yes || mesoDeloadDue){
+      // Tier 1: genuine deload — classifier graduation or the legacy verdict.
+      if(readiness.recommendation === 'genuine-deload' || deload.yes || mesoDeloadDue){
         const originalSets = Math.max(1, Number(block.sets) || 1);
         const nextSets = Math.max(1, Math.round(originalSets * cfg.recovery.deloadVolumeCut));
         if(nextSets < originalSets){
           directives.push({
             exerciseId, kind: 'deload',
             sets: nextSets,
-            reason: deload.yes
-              ? `Fatigue signals (${deload.signals.join('; ')}) — volume cut ~${Math.round((1 - cfg.recovery.deloadVolumeCut) * 100)}%.`
-              : `Programmed deload week ${upcomingWeekNumber} — planned volume reduction.`,
-            evidence: deload.yes ? deload.signals : [`mesocycle deloadWeek ${meso.deloadWeek}`],
+            reason: readiness.recommendation === 'genuine-deload' && !deload.yes
+              ? `Graduated readiness (${readiness.score} pts, ${readiness.confidence} confidence): ${readiness.reason}`
+              : deload.yes
+                ? `Fatigue signals (${deload.signals.join('; ')}) — volume cut ~${Math.round((1 - cfg.recovery.deloadVolumeCut) * 100)}%.`
+                : `Programmed deload week ${upcomingWeekNumber} — planned volume reduction.`,
+            evidence: readiness.recommendation === 'genuine-deload' && !deload.yes
+              ? readiness.factors.filter(f => f.points >= 1).map(f => f.label)
+              : deload.yes ? deload.signals : [`mesocycle deloadWeek ${meso.deloadWeek}`],
+          });
+        }
+        continue;
+      }
+
+      // Tier 1b: recovery session — graduated middle band. One set down, and
+      // no volume is added anywhere this week.
+      if(readiness.recommendation === 'recovery-session'){
+        const originalSets = Math.max(1, Number(block.sets) || 1);
+        const nextSets = Math.max(1, Math.round(originalSets * (readiness.volumeScale || 0.75)));
+        if(nextSets < originalSets){
+          directives.push({
+            exerciseId, kind: 'recovery-session',
+            sets: nextSets,
+            reason: `Recovery session advised (readiness ${readiness.score} pts, ${readiness.confidence} confidence): ${readiness.reason}`,
+            evidence: readiness.factors.filter(f => f.points >= 1).map(f => f.label),
           });
         }
         continue;
@@ -167,9 +205,10 @@ export function reviewCompletedWeek({ schedule, history = [], readinessLog = [],
         continue;
       }
 
-      // Earned progress: add a set when the evidence supports it.
+      // Earned progress: add a set when the evidence supports it — but never
+      // while the graduated classifier advises holding volume back.
       const setDecision = recommendSets(prefix, exerciseId, { targetReps: block.reps || '8–12', maxSets: cfg.progression.sets.defaultMaxSets, config: cfg });
-      if(setDecision.add && setDecision.sets > originalSets){
+      if(setDecision.add && setDecision.sets > originalSets && readiness.recommendation === 'as-planned'){
         directives.push({
           exerciseId, kind: 'add-sets', sets: setDecision.sets,
           reason: setDecision.reason, evidence: [rec.reason],
@@ -198,6 +237,14 @@ export function reviewCompletedWeek({ schedule, history = [], readinessLog = [],
       ? directives.map(d => `${EXERCISE_BY_ID[d.exerciseId]?.name || d.exerciseId}: ${d.kind}`).join(' · ')
       : 'No changes needed for next week.',
     deloadDecision: { yes: deload.yes, signals: deload.signals },
+    readinessDecision: {
+      recommendation: readiness.recommendation,
+      score: readiness.score,
+      confidence: readiness.confidence,
+      factors: readiness.factors.filter(f => f.points >= 1).map(f => f.label),
+      guards: readiness.guards,
+      action: readiness.action,
+    },
     mesoDeloadDue,
   };
 }
@@ -233,7 +280,7 @@ export function applyWeeklyReview(schedule, review, { config = null } = {}){
           substitutionFrom: block.substitutionFrom || block.exerciseId,
           substitutionReason: directive.reason,
         };
-      }else if(directive.kind === 'deload' || directive.kind === 'reduce-sets' || directive.kind === 'add-sets'){
+      }else if(directive.kind === 'deload' || directive.kind === 'reduce-sets' || directive.kind === 'add-sets' || directive.kind === 'recovery-session'){
         nextBlock = { ...block, sets: directive.sets };
       }else{
         continue;
