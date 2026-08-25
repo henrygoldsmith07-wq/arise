@@ -7,7 +7,7 @@ import { recommendNextWithModel } from '../lib/progressionModel.js';
 import { formatPlateStack } from '../lib/plates.js';
 import { substitutionOptions } from '../lib/substitutions.js';
 import { recordEvent } from '../lib/telemetry.js';
-import { recordRecommendation } from '../lib/longitudinal.js';
+import { recordRecommendation, markRecommendationOverride } from '../lib/longitudinal.js';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
 
 const NOTE_PROMPTS = [
@@ -303,6 +303,11 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     if((patch.reps!==undefined || patch.weightKg!==undefined) && !dismissedRecommendationRef.current.has(bi)){
       dismissedRecommendationRef.current.add(bi);
       recordEvent('recommendation:dismissed', { sessionId:session.id, exerciseId:blocks[bi]?.exerciseId, reason:'manual set edit' });
+      // Policy versioning: the ledger must know this transition was USER-decided,
+      // not engine-decided, so studies can separate the two.
+      try{
+        markRecommendationOverride({ exerciseId: blocks[bi]?.exerciseId, dueDateISO: session.dateISO });
+      }catch{}
     }
     setBlocks(prev=> prev.map((b,i)=> i!==bi? b : { ...b, sets: b.sets.map((s,j)=> j!==si? s : { ...s, ...patch }) }));
   };

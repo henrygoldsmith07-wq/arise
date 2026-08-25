@@ -48,7 +48,36 @@ export default function WeeklyReviewCard({ store, setStore }){
         if(!seen.has(b.exerciseId)&&v>0&&v>(bestBefore.get(b.exerciseId)||0)){ prs++; seen.add(b.exerciseId); }
       }
       void weekSet;
-      return { review, ackKey, strength, volume, readiness, prs,
+      // Narrative answers, not a metric wall: what improved, where it stalled,
+      // which targets were repeatedly too hard this week.
+      const weekBest = new Map(), prevCount = new Map(), hardByEx = new Map();
+      for(const h of wkSessions) for(const b of h.blocks||[]){
+        let best = 0, hard = 0;
+        for(const s of b.sets||[]){
+          const v = e1rm(Number(s.weightKg)||0, Number(s.reps)||0);
+          if(v > best) best = v;
+          if(Number(s.rpe) >= 9) hard++;
+        }
+        if(best > 0){
+          weekBest.set(b.exerciseId, Math.max(weekBest.get(b.exerciseId) || 0, best));
+          if(hard >= 2) hardByEx.set(b.exerciseId, true);
+        }
+      }
+      for(const h of allPrev) for(const b of h.blocks||[]) prevCount.set(b.exerciseId, (prevCount.get(b.exerciseId)||0)+1);
+      const exName = id => EXERCISE_BY_ID[id]?.name || id;
+      const improved = [], stalled = [], hard = [];
+      for(const [id, cur] of weekBest){
+        const before = bestBefore.get(id) || 0;
+        const nm = exName(id);
+        if(before > 0 && (cur - before)/before >= 0.02 && improved.length < 3) improved.push(`${nm} (+${Math.round((cur/before-1)*100)}%)`);
+        else if(cur <= before && (prevCount.get(id)||0) >= 2 && stalled.length < 3) stalled.push(nm);
+        if(hardByEx.get(id) && hard.length < 3) hard.push(nm);
+      }
+      const narrative = [];
+      if(improved.length) narrative.push(`Improved: ${improved.join(', ')}`);
+      if(stalled.length) narrative.push(`Stalled: ${stalled.join(', ')} — same performance as before`);
+      if(hard.length) narrative.push(`Targets ran hot: ${hard.join(', ')} (multiple RPE 9+ sets)`);
+      return { review, ackKey, strength, volume, readiness, prs, narrative,
         completion:{ done: wkSessions.length, total: review.targetWeekNumber ? wkSessions.length : wkSessions.length },
         weekNumber: review.targetWeekNumber ? review.targetWeekNumber-1 : null };
     }catch{ return null; }
@@ -73,6 +102,11 @@ export default function WeeklyReviewCard({ store, setStore }){
         <p className="text-sm font-extrabold tracking-tight">WEEK {data.weekNumber ?? ''} REVIEW</p>
         <span className={`ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full border ${structural.length?'border-success text-success':'border-line text-ink3'}`}>{structural.length?`${structural.length} change${structural.length===1?'':'s'} queued`:'no changes'}</span>
       </div>
+      {!!data.narrative.length && (
+        <ul className="space-y-1">
+          {data.narrative.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}
+        </ul>
+      )}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
         {[['Strength', data.strength==null?'—':`${data.strength>0?'↑':'↓'} ${Math.abs(data.strength)}%`],
           ['Completion', `${review.deloadDecision? '':''}${data.completion.done}/${data.completion.total}`],

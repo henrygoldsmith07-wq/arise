@@ -23,6 +23,40 @@ import { movementPatternFor } from './substitutions.js';
 import { computeArms } from './study.js';
 
 export const EVALUATION_SCHEMA_VERSION = 2;
+
+// ── Statistics helpers ──────────────────────────────────────────────────
+// Wilson score interval: honest uncertainty for proportion estimates even at
+// small n (a 3/3 rate must NOT read as "certainly 100%").
+export function wilsonInterval(successes, n, z = 1.96){
+  const s = Number(successes), total = Number(n);
+  if(!total || total < 0 || s < 0 || s > total) return null;
+  const p = s / total;
+  const z2 = z * z;
+  const denom = 1 + z2 / total;
+  const centre = (p + z2 / (2 * total)) / denom;
+  const spread = z * Math.sqrt((p * (1 - p) + z2 / (4 * total)) / denom) / denom;
+  return {
+    low: round(Math.max(0, centre - spread), 3),
+    high: round(Math.min(1, centre + spread), 3),
+  };
+}
+
+// Flag an open recommendation as overridden by the user (they edited targets
+// away from the engine's prescription before logging). Studies can then
+// separate "engine decided" transitions from "user decided" ones.
+export function markRecommendationOverride({ exerciseId, dueDateISO = null, storage = defaultStorage() } = {}){
+  const ledger = loadEvaluationLedger(storage);
+  let changed = false;
+  const next = ledger.map(row=>{
+    if(row.outcome) return row;
+    if(exerciseId && row.exerciseId !== exerciseId) return row;
+    if(dueDateISO && row.dueDateISO !== dueDateISO) return row;
+    changed = true;
+    return { ...row, userOverride: true, overriddenAtISO: new Date().toISOString() };
+  });
+  if(changed) saveEvaluationLedger(next, storage);
+  return changed;
+}
 export const EVALUATION_KEY = 'arise.evaluation.v1';
 
 const SCALE = 100;
@@ -170,6 +204,7 @@ export function recordRecommendation({ exerciseId, recommendation, history = [],
     : (history || []);
   const phase = trainingAgePhase(visibleHistory, dueDateISO, config);
   const previous = lastExposureBest(visibleHistory, exerciseId, dueDateISO);
+  const priors = resolveArisePriors(config);
   let arms = null;
   try{
     arms = computeArms({ exerciseId, history: visibleHistory, targetReps: targetReps || undefined, asOfDateISO: dueDateISO, config });
@@ -198,12 +233,15 @@ export function recordRecommendation({ exerciseId, recommendation, history = [],
     },
     // Frozen baseline prescriptions from the same prior-only history.
     arms,
+    // Policy identity: a study cannot fairly evaluate an engine that changes
+    // silently halfway through — every record knows which policy made it.
+    policy: { id: 'arise-engine', priorsVersion: priors.version, modelVersion: priors.progressionModel.version },
     recommendedAction: classifyRecommendedAction(recommendation, previous),
     basis: {
       visibleSessions: visibleHistory.length,
       previousBest: previous ? { reps: previous.reps, weightKg: previous.weightKg, assistedKg: previous.assistedKg, e1rm: round(previous.score, 2) } : null,
       trainingAgePhase: phase,
-      priorsVersion: resolveArisePriors(config).version,
+      priorsVersion: priors.version,
     },
     outcome: null,
   };
@@ -228,7 +266,16 @@ export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore =
   for(const block of blocks || []){
     if(!block?.exerciseId) continue;
     const best = bestSetOfBlock(block);
-    if(best && !byExercise.has(block.exerciseId)) byExercise.set(block.exerciseId, { best, sets: (block.sets || []).length });
+    if(best && !byExercise.has(block.exerciseId)){
+      const allSets = block.sets || [];
+      let volumeKg = 0, failedSets = 0;
+      for(const s of allSets){
+        const reps = parseReps(s.reps), w = Number(s.weightKg) || 0;
+        volumeKg += reps * Math.max(0, w - (Number(s.assistedKg) || 0));
+        if(s.failed) failedSets++;
+      }
+      byExercise.set(block.exerciseId, { best, sets: allSets.length, failedSets, volumeKg: Math.round(volumeKg) });
+    }
   }
   const next = ledger.map(record=>{
     if(record.outcome) return record;
@@ -286,6 +333,8 @@ export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore =
         assistedKg: best.assistedKg,
         rpe: best.rpe,
         sets: byExercise.get(record.exerciseId).sets,
+        failedSets: byExercise.get(record.exerciseId).failedSets,
+        volumeKg: byExercise.get(record.exerciseId).volumeKg,
         e1rm: actualE1rm,
         previousE1rm,
         changePct,
@@ -311,7 +360,7 @@ export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore =
 // ── Aggregation ─────────────────────────────────────────────────────────
 
 function emptySegment(key){
-  return { key, n: 0, resolved: 0, conclusive: false, progressionSuccessRate: null, regressionRate: null, stagnationRate: null, adherenceRate: null, meanLoadErrorKg: null, meanRepError: null };
+  return { key, n: 0, resolved: 0, conclusive: false, progressionSuccessRate: null, regressionRate: null, stagnationRate: null, adherenceRate: null, meanLoadErrorKg: null, meanRepError: null, failedSetRate: null, totalVolumeKg: 0 };
 }
 
 function summarise(records, minimumSamples){
@@ -319,6 +368,13 @@ function summarise(records, minimumSamples){
   segment.n = records.length;
   const outcomes = records.filter(row=> row.outcome);
   segment.resolved = outcomes.length;
+  let failed = 0, planned = 0;
+  for(const row of outcomes){
+    failed += row.outcome.failedSets || 0;
+    planned += row.outcome.sets || 0;
+    segment.totalVolumeKg += row.outcome.volumeKg || 0;
+  }
+  if(planned) segment.failedSetRate = round(failed / planned, 3);
   if(outcomes.length < minimumSamples) return segment;
   segment.conclusive = true;
   const rate = predicate=> round(outcomes.filter(predicate).length / outcomes.length, 3);
@@ -357,6 +413,9 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
     for(const [key, group] of groupBy(records, keyFn)){
       const summary = summarise(group, minimum);
       summary.key = key;
+      // Subgroup slices are EXPLORATORY: with dozens of them, some will look
+      // significant by chance. They inform hypothesis generation only.
+      summary.exploratory = true;
       output[key] = summary;
     }
     return output;
@@ -398,6 +457,7 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
       byArm[arm].regressionRate = round(regressions / n, 3);
       byArm[arm].conservatismRate = round(conservativeWins / n, 3);
       byArm[arm].meanLoadErrorKg = loadErrs.length ? round(loadErrs.reduce((a,b)=> a+b, 0) / loadErrs.length, 2) : null;
+      byArm[arm].confidenceInterval = wilsonInterval(rows.filter(r=> r.outcome.arms[arm].metTarget).length, n);
     }
   }
 
@@ -419,6 +479,7 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
     pairedVsArise[arm] = {
       pairs, ariseWins: ariseWin, armWins: armWin, bothMetTarget: both, neitherMetTarget: neither,
       ariseWinRate: pairs >= minimum ? round(ariseWin / pairs, 3) : null,
+      confidenceInterval: pairs >= minimum ? wilsonInterval(ariseWin, pairs) : null,
       conclusive: pairs >= minimum,
     };
   }

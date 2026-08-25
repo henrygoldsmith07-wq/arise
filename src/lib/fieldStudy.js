@@ -259,6 +259,7 @@ export function computeFieldStudy(participants, { config = null, minParticipants
     pooled,
     headline,
     claim,
+    protocol: buildStudyProtocol({ config }),
     participants: measures.map(m => ({ ...m, comparative: undefined })),
   };
 }
@@ -271,6 +272,28 @@ function acceptancePooled(measures){
 }
 
 // ── Loading + markdown ──────────────────────────────────────────────────
+
+// FROZEN study protocol: policy identity, inclusion criteria, outcomes and
+// analysis are declared up front so an export can be analysed independently
+// without post-hoc choices. Deterministic — no timestamps inside.
+export function buildStudyProtocol({ config = null } = {}){
+  const cfg = resolveArisePriors(config);
+  return {
+    protocolVersion: 1,
+    policyId: 'arise-engine',
+    enginePriorsVersion: cfg.version,
+    progressionModelVersion: cfg.progressionModel.version,
+    arms: ['arise', 'double-progression', 'linear-progression', 'fixed-rules', 'flat'],
+    inclusionCriteria: [
+      'consented export (preferences.telemetryEnabled)',
+      'ledger record resolved by a logged session at/after its due date',
+      'arm snapshots clamped to the due date (prior-only)',
+    ],
+    outcomes: ['targetAchievementRate','progressionSuccessRate','stallRate','regressionRate','conservatismRate','meanLoadErrorKg','pairedAriseWinRate','failedSetRate','completedVolumeKg'],
+    statistics: `Wilson 95% CIs on proportions; minimumSegmentSamples gate (${cfg.longitudinal.minimumSegmentSamples}); paired win counts on identical transitions; subgroup dimensions marked exploratory`,
+    analysis: 'Intention-to-treat on realised sessions. All arms receive the same prior-only information and are scored against the same realised performance — comparisons measure decision quality, not counterfactual body outcomes. Absence of a significant difference is NOT evidence of equivalence.',
+  };
+}
 
 export function loadParticipantFile(text, index){
   const parsed = parseImportFile(text);
@@ -369,5 +392,17 @@ export function renderFieldReport(result){
     L.push(`- ${m.code}: ${m.sessionsLogged} sessions · ${m.weeksObserved}w · ledger ${m.ledger.resolved} pairs${m.ledger.conclusive?' (conclusive)':''} · adherence ${m.adherence.completionRate == null ? '—' : Math.round(m.adherence.completionRate*100)+'%'} · overrides ${m.overrides.overridden}/${m.overrides.adaptedBlocks}`);
   }
   L.push('');
+  const proto = result.protocol || {};
+  if(proto.protocolVersion != null){
+    L.push('## Study protocol (frozen)');
+    L.push('');
+    L.push(`- Protocol v${proto.protocolVersion} · policy ${proto.policyId} (priors v${proto.enginePriorsVersion}, model v${proto.progressionModelVersion})`);
+    L.push(`- Arms: ${proto.arms.join(', ')}`);
+    L.push(`- Outcomes: ${proto.outcomes.join(', ')}`);
+    L.push(`- Statistics: ${proto.statistics}`);
+    L.push(`- Inclusion: ${proto.inclusionCriteria.join('; ')}`);
+    L.push(`- Analysis: ${proto.analysis}`);
+    L.push('');
+  }
   return L.join('\n');
 }

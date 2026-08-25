@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { hydrateStorage, loadStoreFromIdb, persistStore } from '../src/lib/storage.js';
+import { hydrateStorage, loadStoreFromIdb, persistStore, whenPersisted } from '../src/lib/storage.js';
 import { idbGetAll } from '../src/lib/idb.js';
 import { loadStore, saveStore, STORE_SCHEMA_VERSION } from '../src/lib/store.js';
 
@@ -71,6 +71,7 @@ describe('indexeddb canonical storage', ()=>{
     const s = loadStore();
     s.history.push({ id:'h3', dateISO:'2026-01-12', blocks:[{ exerciseId:'lunge', sets:[set(8,'')] }] });
     assert.equal(saveStore(s), true);
+    await whenPersisted(); // durability: the write is awaited, not raced
     const sessions = await idbGetAll('sessions');
     assert.equal(sessions.length, 3);
     const reloaded = loadStore();
@@ -78,10 +79,13 @@ describe('indexeddb canonical storage', ()=>{
     assert.ok(reloaded.history.find(h => h.id === 'h3'));
   });
 
-  it('without hydration, store.js keeps its legacy synchronous path', ()=>{
+  it('without hydration, store.js keeps its legacy synchronous path', async ()=>{
     delete globalThis.localStorage;
     const s = loadStore(); // falls back to DEFAULT — no crash
     assert.equal(s.version, STORE_SCHEMA_VERSION);
     assert.equal(saveStore({ version:6 }), true);
+    await whenPersisted();
+    const recomposed = await loadStoreFromIdb();
+    assert.ok(recomposed, 'the {version:6} shell persisted through the memory backend');
   });
 });

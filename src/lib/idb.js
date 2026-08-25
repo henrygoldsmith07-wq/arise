@@ -29,7 +29,11 @@ function memoryBackend(){
   let auto = 0;
   return {
     __memory: true,
-    get: (store, key)=> Promise.resolve(data.get(`${store}::${key}`)),
+    // get/getAll must unwrap the internal wrapper exactly like real
+    // IndexedDB resolves the stored value — otherwise the fallback backend
+    // diverges from production semantics (programme/readiness reads came
+    // back as {__store,id,value} envelopes and hydration lost fields).
+    get: (store, key)=> Promise.resolve(data.get(`${store}::${key}`)?.value ?? null),
     getAll: (store)=> Promise.resolve([...data.values()].filter(r => r.__store === store).map(r => r.value)),
     put: (store, value, key)=>{
       const k = key ?? value?.id ?? ++auto;

@@ -177,8 +177,25 @@ export function hydrateStorage(){
 export function getCachedStore(){
   return cache ?? null;
 }
+
+// Writes are serialized (a clear-then-put storm from a fast save must never
+// interleave with the next save's) and tracked, so callers — and tests — can
+// await durability instead of racing fire-and-forget puts. The app can also
+// flush on visibilitychange/beforeunload to shrink the data-loss window.
+let writeQueue = Promise.resolve();
+const pendingWrites = new Set();
+function enqueueWrite(fn){
+  const run = writeQueue.then(fn);
+  const tracked = run.catch(()=>{});
+  pendingWrites.add(tracked);
+  void tracked.finally(()=> pendingWrites.delete(tracked));
+  writeQueue = tracked;
+  return run;
+}
+export function whenPersisted(){
+  return Promise.all([...pendingWrites]).then(()=>{});
+}
 export function setCachedStore(store){
   cache = store;
-  // Fire-and-forget persistence; ordering guaranteed by single-threaded writes.
-  void persistStore(store);
+  void enqueueWrite(()=> persistStore(store));
 }
