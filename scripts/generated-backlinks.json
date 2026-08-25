@@ -1,0 +1,2530 @@
+[
+  {
+    "partner": "incline-bench-press",
+    "newId": "bench-press"
+  },
+  {
+    "partner": "decline-bench-press",
+    "newId": "bench-press"
+  },
+  {
+    "partner": "incline-dumbbell-press",
+    "newId": "bench-press"
+  },
+  {
+    "partner": "bench-press",
+    "newId": "incline-bench-press"
+  },
+  {
+    "partner": "decline-bench-press",
+    "newId": "incline-bench-press"
+  },
+  {
+    "partner": "incline-dumbbell-press",
+    "newId": "incline-bench-press"
+  },
+  {
+    "partner": "bench-press",
+    "newId": "decline-bench-press"
+  },
+  {
+    "partner": "incline-bench-press",
+    "newId": "decline-bench-press"
+  },
+  {
+    "partner": "incline-dumbbell-press",
+    "newId": "decline-bench-press"
+  },
+  {
+    "partner": "pec-deck",
+    "newId": "machine-chest-press"
+  },
+  {
+    "partner": "smith-machine-bench-press",
+    "newId": "machine-chest-press"
+  },
+  {
+    "partner": "bench-press",
+    "newId": "machine-chest-press"
+  },
+  {
+    "partner": "machine-chest-press",
+    "newId": "pec-deck"
+  },
+  {
+    "partner": "smith-machine-bench-press",
+    "newId": "pec-deck"
+  },
+  {
+    "partner": "bench-press",
+    "newId": "pec-deck"
+  },
+  {
+    "partner": "push-up",
+    "newId": "weighted-push-up"
+  },
+  {
+    "partner": "chest-dip",
+    "newId": "weighted-push-up"
+  },
+  {
+    "partner": "bench-press",
+    "newId": "weighted-push-up"
+  },
+  {
+    "partner": "upright-row",
+    "newId": "overhead-press"
+  },
+  {
+    "partner": "landmine-press",
+    "newId": "overhead-press"
+  },
+  {
+    "partner": "seated-dumbbell-press",
+    "newId": "overhead-press"
+  },
+  {
+    "partner": "arnold-press",
+    "newId": "seated-dumbbell-press"
+  },
+  {
+    "partner": "lateral-raise",
+    "newId": "seated-dumbbell-press"
+  },
+  {
+    "partner": "overhead-press",
+    "newId": "seated-dumbbell-press"
+  },
+  {
+    "partner": "cable-front-raise",
+    "newId": "cable-lateral-raise"
+  },
+  {
+    "partner": "overhead-press",
+    "newId": "cable-lateral-raise"
+  },
+  {
+    "partner": "seated-dumbbell-press",
+    "newId": "front-raise"
+  },
+  {
+    "partner": "arnold-press",
+    "newId": "front-raise"
+  },
+  {
+    "partner": "overhead-press",
+    "newId": "front-raise"
+  },
+  {
+    "partner": "overhead-press",
+    "newId": "upright-row"
+  },
+  {
+    "partner": "landmine-press",
+    "newId": "upright-row"
+  },
+  {
+    "partner": "seated-dumbbell-press",
+    "newId": "upright-row"
+  },
+  {
+    "partner": "sumo-deadlift",
+    "newId": "deadlift"
+  },
+  {
+    "partner": "trap-bar-deadlift",
+    "newId": "deadlift"
+  },
+  {
+    "partner": "dumbbell-sumo-deadlift",
+    "newId": "deadlift"
+  },
+  {
+    "partner": "chest-supported-row",
+    "newId": "t-bar-row"
+  },
+  {
+    "partner": "machine-row",
+    "newId": "t-bar-row"
+  },
+  {
+    "partner": "barbell-row",
+    "newId": "t-bar-row"
+  },
+  {
+    "partner": "one-arm-dumbbell-row",
+    "newId": "dumbbell-bent-over-row"
+  },
+  {
+    "partner": "barbell-row",
+    "newId": "dumbbell-bent-over-row"
+  },
+  {
+    "partner": "dumbbell-bent-over-row",
+    "newId": "one-arm-dumbbell-row"
+  },
+  {
+    "partner": "barbell-row",
+    "newId": "one-arm-dumbbell-row"
+  },
+  {
+    "partner": "t-bar-row",
+    "newId": "machine-row"
+  },
+  {
+    "partner": "chest-supported-row",
+    "newId": "machine-row"
+  },
+  {
+    "partner": "barbell-row",
+    "newId": "machine-row"
+  },
+  {
+    "partner": "lat-pulldown",
+    "newId": "close-grip-lat-pulldown"
+  },
+  {
+    "partner": "straight-arm-pulldown",
+    "newId": "close-grip-lat-pulldown"
+  },
+  {
+    "partner": "pull-up",
+    "newId": "close-grip-lat-pulldown"
+  },
+  {
+    "partner": "lat-pulldown",
+    "newId": "assisted-pull-up"
+  },
+  {
+    "partner": "pull-up",
+    "newId": "weighted-pull-up"
+  },
+  {
+    "partner": "neutral-grip-pull-up",
+    "newId": "weighted-pull-up"
+  },
+  {
+    "partner": "lat-pulldown",
+    "newId": "weighted-pull-up"
+  },
+  {
+    "partner": "face-pull",
+    "newId": "shrug"
+  },
+  {
+    "partner": "front-squat",
+    "newId": "squat"
+  },
+  {
+    "partner": "landmine-squat",
+    "newId": "squat"
+  },
+  {
+    "partner": "hack-squat",
+    "newId": "squat"
+  },
+  {
+    "partner": "leg-press",
+    "newId": "hack-squat"
+  },
+  {
+    "partner": "leg-extension",
+    "newId": "hack-squat"
+  },
+  {
+    "partner": "squat",
+    "newId": "hack-squat"
+  },
+  {
+    "partner": "bulgarian-split-squat",
+    "newId": "walking-lunge"
+  },
+  {
+    "partner": "step-up",
+    "newId": "walking-lunge"
+  },
+  {
+    "partner": "squat",
+    "newId": "walking-lunge"
+  },
+  {
+    "partner": "hack-squat",
+    "newId": "leg-extension"
+  },
+  {
+    "partner": "leg-press",
+    "newId": "leg-extension"
+  },
+  {
+    "partner": "squat",
+    "newId": "leg-extension"
+  },
+  {
+    "partner": "seated-leg-curl",
+    "newId": "leg-curl"
+  },
+  {
+    "partner": "lying-leg-curl",
+    "newId": "leg-curl"
+  },
+  {
+    "partner": "romanian-deadlift",
+    "newId": "leg-curl"
+  },
+  {
+    "partner": "leg-curl",
+    "newId": "seated-leg-curl"
+  },
+  {
+    "partner": "lying-leg-curl",
+    "newId": "seated-leg-curl"
+  },
+  {
+    "partner": "romanian-deadlift",
+    "newId": "seated-leg-curl"
+  },
+  {
+    "partner": "seated-calf-raise",
+    "newId": "standing-calf-raise"
+  },
+  {
+    "partner": "donkey-calf-raise",
+    "newId": "standing-calf-raise"
+  },
+  {
+    "partner": "jump-rope",
+    "newId": "standing-calf-raise"
+  },
+  {
+    "partner": "standing-calf-raise",
+    "newId": "seated-calf-raise"
+  },
+  {
+    "partner": "donkey-calf-raise",
+    "newId": "seated-calf-raise"
+  },
+  {
+    "partner": "jump-rope",
+    "newId": "seated-calf-raise"
+  },
+  {
+    "partner": "assisted-chin-up",
+    "newId": "preacher-curl"
+  },
+  {
+    "partner": "chin-up",
+    "newId": "preacher-curl"
+  },
+  {
+    "partner": "rope-hammer-curl",
+    "newId": "cable-curl"
+  },
+  {
+    "partner": "chin-up",
+    "newId": "cable-curl"
+  },
+  {
+    "partner": "wrist-curl",
+    "newId": "reverse-curl"
+  },
+  {
+    "partner": "wrist-extension",
+    "newId": "reverse-curl"
+  },
+  {
+    "partner": "reverse-curl",
+    "newId": "wrist-curl"
+  },
+  {
+    "partner": "wrist-extension",
+    "newId": "wrist-curl"
+  },
+  {
+    "partner": "close-grip-bench-press",
+    "newId": "skull-crusher"
+  },
+  {
+    "partner": "tricep-pushdown",
+    "newId": "skull-crusher"
+  },
+  {
+    "partner": "skull-crusher",
+    "newId": "close-grip-bench-press"
+  },
+  {
+    "partner": "tricep-pushdown",
+    "newId": "close-grip-bench-press"
+  },
+  {
+    "partner": "weighted-dip",
+    "newId": "dip"
+  },
+  {
+    "partner": "bench-dip",
+    "newId": "dip"
+  },
+  {
+    "partner": "tricep-dip-bench",
+    "newId": "dip"
+  },
+  {
+    "partner": "tricep-pushdown",
+    "newId": "dip"
+  },
+  {
+    "partner": "tricep-pushdown",
+    "newId": "assisted-dip"
+  },
+  {
+    "partner": "pallof-press",
+    "newId": "cable-crunch"
+  },
+  {
+    "partner": "cable-woodchop",
+    "newId": "cable-crunch"
+  },
+  {
+    "partner": "plank",
+    "newId": "cable-crunch"
+  },
+  {
+    "partner": "plank",
+    "newId": "ab-wheel"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "ab-wheel"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "ab-wheel"
+  },
+  {
+    "partner": "walking",
+    "newId": "running"
+  },
+  {
+    "partner": "cycling",
+    "newId": "running"
+  },
+  {
+    "partner": "burpee",
+    "newId": "running"
+  },
+  {
+    "partner": "running",
+    "newId": "walking"
+  },
+  {
+    "partner": "cycling",
+    "newId": "walking"
+  },
+  {
+    "partner": "burpee",
+    "newId": "walking"
+  },
+  {
+    "partner": "running",
+    "newId": "cycling"
+  },
+  {
+    "partner": "walking",
+    "newId": "cycling"
+  },
+  {
+    "partner": "burpee",
+    "newId": "cycling"
+  },
+  {
+    "partner": "swimming",
+    "newId": "rowing"
+  },
+  {
+    "partner": "skierg",
+    "newId": "rowing"
+  },
+  {
+    "partner": "barbell-row",
+    "newId": "rowing"
+  },
+  {
+    "partner": "running",
+    "newId": "stair-climber"
+  },
+  {
+    "partner": "walking",
+    "newId": "stair-climber"
+  },
+  {
+    "partner": "burpee",
+    "newId": "stair-climber"
+  },
+  {
+    "partner": "cable-fly",
+    "newId": "incline-cable-fly"
+  },
+  {
+    "partner": "bench-press",
+    "newId": "incline-cable-fly"
+  },
+  {
+    "partner": "incline-dumbbell-press",
+    "newId": "decline-dumbbell-press"
+  },
+  {
+    "partner": "dumbbell-bench-press",
+    "newId": "decline-dumbbell-press"
+  },
+  {
+    "partner": "bench-press-dumbbell",
+    "newId": "decline-dumbbell-press"
+  },
+  {
+    "partner": "bench-press",
+    "newId": "decline-dumbbell-press"
+  },
+  {
+    "partner": "machine-chest-press",
+    "newId": "smith-machine-bench-press"
+  },
+  {
+    "partner": "pec-deck",
+    "newId": "smith-machine-bench-press"
+  },
+  {
+    "partner": "bench-press",
+    "newId": "smith-machine-bench-press"
+  },
+  {
+    "partner": "overhead-press",
+    "newId": "landmine-press"
+  },
+  {
+    "partner": "upright-row",
+    "newId": "landmine-press"
+  },
+  {
+    "partner": "seated-dumbbell-press",
+    "newId": "landmine-press"
+  },
+  {
+    "partner": "push-up",
+    "newId": "chest-dip"
+  },
+  {
+    "partner": "weighted-push-up",
+    "newId": "chest-dip"
+  },
+  {
+    "partner": "bench-press",
+    "newId": "chest-dip"
+  },
+  {
+    "partner": "dip",
+    "newId": "weighted-dip"
+  },
+  {
+    "partner": "bench-dip",
+    "newId": "weighted-dip"
+  },
+  {
+    "partner": "tricep-dip-bench",
+    "newId": "weighted-dip"
+  },
+  {
+    "partner": "tricep-pushdown",
+    "newId": "weighted-dip"
+  },
+  {
+    "partner": "seated-dumbbell-press",
+    "newId": "standing-dumbbell-press"
+  },
+  {
+    "partner": "arnold-press",
+    "newId": "standing-dumbbell-press"
+  },
+  {
+    "partner": "overhead-press",
+    "newId": "standing-dumbbell-press"
+  },
+  {
+    "partner": "overhead-press",
+    "newId": "push-press"
+  },
+  {
+    "partner": "upright-row",
+    "newId": "push-press"
+  },
+  {
+    "partner": "seated-dumbbell-press",
+    "newId": "push-press"
+  },
+  {
+    "partner": "machine-shoulder-press",
+    "newId": "machine-lateral-raise"
+  },
+  {
+    "partner": "overhead-press",
+    "newId": "machine-lateral-raise"
+  },
+  {
+    "partner": "cable-lateral-raise",
+    "newId": "cable-front-raise"
+  },
+  {
+    "partner": "overhead-press",
+    "newId": "cable-front-raise"
+  },
+  {
+    "partner": "overhead-press",
+    "newId": "plate-front-raise"
+  },
+  {
+    "partner": "rear-delt-fly",
+    "newId": "bent-over-rear-delt-raise"
+  },
+  {
+    "partner": "reverse-pec-deck",
+    "newId": "bent-over-rear-delt-raise"
+  },
+  {
+    "partner": "rear-delt-fly",
+    "newId": "cable-rear-delt-fly"
+  },
+  {
+    "partner": "barbell-row",
+    "newId": "pendlay-row"
+  },
+  {
+    "partner": "meadows-row",
+    "newId": "pendlay-row"
+  },
+  {
+    "partner": "t-bar-row",
+    "newId": "pendlay-row"
+  },
+  {
+    "partner": "barbell-row",
+    "newId": "meadows-row"
+  },
+  {
+    "partner": "pendlay-row",
+    "newId": "meadows-row"
+  },
+  {
+    "partner": "t-bar-row",
+    "newId": "meadows-row"
+  },
+  {
+    "partner": "lat-pulldown",
+    "newId": "wide-grip-lat-pulldown"
+  },
+  {
+    "partner": "close-grip-lat-pulldown",
+    "newId": "wide-grip-lat-pulldown"
+  },
+  {
+    "partner": "pull-up",
+    "newId": "wide-grip-lat-pulldown"
+  },
+  {
+    "partner": "pull-up",
+    "newId": "neutral-grip-pull-up"
+  },
+  {
+    "partner": "weighted-pull-up",
+    "newId": "neutral-grip-pull-up"
+  },
+  {
+    "partner": "lat-pulldown",
+    "newId": "neutral-grip-pull-up"
+  },
+  {
+    "partner": "preacher-curl",
+    "newId": "assisted-chin-up"
+  },
+  {
+    "partner": "chin-up",
+    "newId": "assisted-chin-up"
+  },
+  {
+    "partner": "chin-up",
+    "newId": "weighted-chin-up"
+  },
+  {
+    "partner": "bicep-curl",
+    "newId": "weighted-chin-up"
+  },
+  {
+    "partner": "barbell-row",
+    "newId": "rack-pull"
+  },
+  {
+    "partner": "pendlay-row",
+    "newId": "rack-pull"
+  },
+  {
+    "partner": "t-bar-row",
+    "newId": "rack-pull"
+  },
+  {
+    "partner": "superman",
+    "newId": "back-extension"
+  },
+  {
+    "partner": "superman-hold",
+    "newId": "back-extension"
+  },
+  {
+    "partner": "hack-squat",
+    "newId": "smith-machine-squat"
+  },
+  {
+    "partner": "leg-press",
+    "newId": "smith-machine-squat"
+  },
+  {
+    "partner": "squat",
+    "newId": "smith-machine-squat"
+  },
+  {
+    "partner": "hack-squat",
+    "newId": "belt-squat"
+  },
+  {
+    "partner": "leg-press",
+    "newId": "belt-squat"
+  },
+  {
+    "partner": "squat",
+    "newId": "belt-squat"
+  },
+  {
+    "partner": "deadlift",
+    "newId": "trap-bar-deadlift"
+  },
+  {
+    "partner": "sumo-deadlift",
+    "newId": "trap-bar-deadlift"
+  },
+  {
+    "partner": "dumbbell-sumo-deadlift",
+    "newId": "trap-bar-deadlift"
+  },
+  {
+    "partner": "dumbbell-romanian-deadlift",
+    "newId": "single-leg-romanian-deadlift"
+  },
+  {
+    "partner": "romanian-deadlift",
+    "newId": "single-leg-romanian-deadlift"
+  },
+  {
+    "partner": "bulgarian-split-squat",
+    "newId": "reverse-lunge"
+  },
+  {
+    "partner": "walking-lunge",
+    "newId": "reverse-lunge"
+  },
+  {
+    "partner": "squat",
+    "newId": "reverse-lunge"
+  },
+  {
+    "partner": "cable-pull-through",
+    "newId": "cable-kickback"
+  },
+  {
+    "partner": "cable-standing-hip-abduction",
+    "newId": "cable-kickback"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "cable-kickback"
+  },
+  {
+    "partner": "glute-bridge",
+    "newId": "single-leg-glute-bridge"
+  },
+  {
+    "partner": "glute-focused-back-extension",
+    "newId": "single-leg-glute-bridge"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "single-leg-glute-bridge"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "barbell-glute-bridge"
+  },
+  {
+    "partner": "glute-bridge",
+    "newId": "barbell-glute-bridge"
+  },
+  {
+    "partner": "dumbbell-hip-thrust",
+    "newId": "dumbbell-glute-bridge"
+  },
+  {
+    "partner": "dumbbell-sumo-squat",
+    "newId": "dumbbell-glute-bridge"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "dumbbell-glute-bridge"
+  },
+  {
+    "partner": "dumbbell-glute-bridge",
+    "newId": "dumbbell-hip-thrust"
+  },
+  {
+    "partner": "dumbbell-sumo-squat",
+    "newId": "dumbbell-hip-thrust"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "dumbbell-hip-thrust"
+  },
+  {
+    "partner": "hip-abduction-machine",
+    "newId": "smith-machine-hip-thrust"
+  },
+  {
+    "partner": "machine-glute-kickback",
+    "newId": "smith-machine-hip-thrust"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "smith-machine-hip-thrust"
+  },
+  {
+    "partner": "leg-curl",
+    "newId": "smith-machine-romanian-deadlift"
+  },
+  {
+    "partner": "seated-leg-curl",
+    "newId": "smith-machine-romanian-deadlift"
+  },
+  {
+    "partner": "romanian-deadlift",
+    "newId": "smith-machine-romanian-deadlift"
+  },
+  {
+    "partner": "single-leg-romanian-deadlift",
+    "newId": "dumbbell-romanian-deadlift"
+  },
+  {
+    "partner": "romanian-deadlift",
+    "newId": "dumbbell-romanian-deadlift"
+  },
+  {
+    "partner": "romanian-deadlift",
+    "newId": "kettlebell-romanian-deadlift"
+  },
+  {
+    "partner": "hip-abduction-machine",
+    "newId": "machine-glute-kickback"
+  },
+  {
+    "partner": "smith-machine-hip-thrust",
+    "newId": "machine-glute-kickback"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "machine-glute-kickback"
+  },
+  {
+    "partner": "cable-kickback",
+    "newId": "cable-standing-hip-abduction"
+  },
+  {
+    "partner": "cable-pull-through",
+    "newId": "cable-standing-hip-abduction"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "cable-standing-hip-abduction"
+  },
+  {
+    "partner": "hip-adduction-machine",
+    "newId": "cable-standing-hip-adduction"
+  },
+  {
+    "partner": "cable-standing-hip-adduction",
+    "newId": "hip-adduction-machine"
+  },
+  {
+    "partner": "hack-squat",
+    "newId": "smith-machine-bulgarian-split-squat"
+  },
+  {
+    "partner": "leg-press",
+    "newId": "smith-machine-bulgarian-split-squat"
+  },
+  {
+    "partner": "squat",
+    "newId": "smith-machine-bulgarian-split-squat"
+  },
+  {
+    "partner": "hack-squat",
+    "newId": "smith-machine-reverse-lunge"
+  },
+  {
+    "partner": "leg-press",
+    "newId": "smith-machine-reverse-lunge"
+  },
+  {
+    "partner": "squat",
+    "newId": "smith-machine-reverse-lunge"
+  },
+  {
+    "partner": "hack-squat",
+    "newId": "smith-machine-split-squat"
+  },
+  {
+    "partner": "leg-press",
+    "newId": "smith-machine-split-squat"
+  },
+  {
+    "partner": "squat",
+    "newId": "smith-machine-split-squat"
+  },
+  {
+    "partner": "bulgarian-split-squat",
+    "newId": "heel-elevated-goblet-squat"
+  },
+  {
+    "partner": "walking-lunge",
+    "newId": "heel-elevated-goblet-squat"
+  },
+  {
+    "partner": "squat",
+    "newId": "heel-elevated-goblet-squat"
+  },
+  {
+    "partner": "dumbbell-glute-bridge",
+    "newId": "dumbbell-sumo-squat"
+  },
+  {
+    "partner": "dumbbell-hip-thrust",
+    "newId": "dumbbell-sumo-squat"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "dumbbell-sumo-squat"
+  },
+  {
+    "partner": "deadlift",
+    "newId": "dumbbell-sumo-deadlift"
+  },
+  {
+    "partner": "bulgarian-split-squat",
+    "newId": "front-foot-elevated-split-squat"
+  },
+  {
+    "partner": "walking-lunge",
+    "newId": "front-foot-elevated-split-squat"
+  },
+  {
+    "partner": "squat",
+    "newId": "front-foot-elevated-split-squat"
+  },
+  {
+    "partner": "dumbbell-glute-bridge",
+    "newId": "deficit-reverse-lunge"
+  },
+  {
+    "partner": "dumbbell-hip-thrust",
+    "newId": "deficit-reverse-lunge"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "deficit-reverse-lunge"
+  },
+  {
+    "partner": "bulgarian-split-squat",
+    "newId": "dumbbell-lateral-lunge"
+  },
+  {
+    "partner": "walking-lunge",
+    "newId": "dumbbell-lateral-lunge"
+  },
+  {
+    "partner": "squat",
+    "newId": "dumbbell-lateral-lunge"
+  },
+  {
+    "partner": "dumbbell-glute-bridge",
+    "newId": "dumbbell-curtsy-lunge"
+  },
+  {
+    "partner": "dumbbell-hip-thrust",
+    "newId": "dumbbell-curtsy-lunge"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "dumbbell-curtsy-lunge"
+  },
+  {
+    "partner": "squat",
+    "newId": "landmine-squat"
+  },
+  {
+    "partner": "front-squat",
+    "newId": "landmine-squat"
+  },
+  {
+    "partner": "hack-squat",
+    "newId": "landmine-squat"
+  },
+  {
+    "partner": "romanian-deadlift",
+    "newId": "landmine-romanian-deadlift"
+  },
+  {
+    "partner": "good-morning",
+    "newId": "landmine-romanian-deadlift"
+  },
+  {
+    "partner": "leg-curl",
+    "newId": "landmine-romanian-deadlift"
+  },
+  {
+    "partner": "glute-bridge",
+    "newId": "glute-focused-back-extension"
+  },
+  {
+    "partner": "single-leg-glute-bridge",
+    "newId": "glute-focused-back-extension"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "glute-focused-back-extension"
+  },
+  {
+    "partner": "hip-abduction-machine",
+    "newId": "reverse-hyperextension"
+  },
+  {
+    "partner": "smith-machine-hip-thrust",
+    "newId": "reverse-hyperextension"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "reverse-hyperextension"
+  },
+  {
+    "partner": "standing-calf-raise",
+    "newId": "donkey-calf-raise"
+  },
+  {
+    "partner": "seated-calf-raise",
+    "newId": "donkey-calf-raise"
+  },
+  {
+    "partner": "jump-rope",
+    "newId": "donkey-calf-raise"
+  },
+  {
+    "partner": "standing-calf-raise",
+    "newId": "leg-press-calf-raise"
+  },
+  {
+    "partner": "seated-calf-raise",
+    "newId": "leg-press-calf-raise"
+  },
+  {
+    "partner": "jump-rope",
+    "newId": "leg-press-calf-raise"
+  },
+  {
+    "partner": "wall-sit",
+    "newId": "jump-squat"
+  },
+  {
+    "partner": "bodyweight-squat",
+    "newId": "jump-squat"
+  },
+  {
+    "partner": "squat",
+    "newId": "jump-squat"
+  },
+  {
+    "partner": "bicep-curl",
+    "newId": "incline-dumbbell-curl"
+  },
+  {
+    "partner": "hammer-curl",
+    "newId": "incline-dumbbell-curl"
+  },
+  {
+    "partner": "chin-up",
+    "newId": "incline-dumbbell-curl"
+  },
+  {
+    "partner": "bicep-curl",
+    "newId": "concentration-curl"
+  },
+  {
+    "partner": "hammer-curl",
+    "newId": "concentration-curl"
+  },
+  {
+    "partner": "chin-up",
+    "newId": "concentration-curl"
+  },
+  {
+    "partner": "drag-curl",
+    "newId": "ez-bar-curl"
+  },
+  {
+    "partner": "chin-up",
+    "newId": "ez-bar-curl"
+  },
+  {
+    "partner": "bicep-curl",
+    "newId": "spider-curl"
+  },
+  {
+    "partner": "hammer-curl",
+    "newId": "spider-curl"
+  },
+  {
+    "partner": "chin-up",
+    "newId": "spider-curl"
+  },
+  {
+    "partner": "cable-curl",
+    "newId": "rope-hammer-curl"
+  },
+  {
+    "partner": "chin-up",
+    "newId": "rope-hammer-curl"
+  },
+  {
+    "partner": "ez-bar-curl",
+    "newId": "drag-curl"
+  },
+  {
+    "partner": "chin-up",
+    "newId": "drag-curl"
+  },
+  {
+    "partner": "tricep-pushdown",
+    "newId": "rope-tricep-pushdown"
+  },
+  {
+    "partner": "overhead-tricep-extension",
+    "newId": "rope-tricep-pushdown"
+  },
+  {
+    "partner": "skull-crusher",
+    "newId": "rope-tricep-pushdown"
+  },
+  {
+    "partner": "single-dumbbell-skullcrusher",
+    "newId": "dumbbell-skull-crusher"
+  },
+  {
+    "partner": "dumbbell-overhead-tricep-extension",
+    "newId": "dumbbell-skull-crusher"
+  },
+  {
+    "partner": "tricep-pushdown",
+    "newId": "dumbbell-skull-crusher"
+  },
+  {
+    "partner": "dumbbell-skull-crusher",
+    "newId": "single-dumbbell-skullcrusher"
+  },
+  {
+    "partner": "dumbbell-overhead-tricep-extension",
+    "newId": "single-dumbbell-skullcrusher"
+  },
+  {
+    "partner": "tricep-pushdown",
+    "newId": "single-dumbbell-skullcrusher"
+  },
+  {
+    "partner": "dumbbell-skull-crusher",
+    "newId": "dumbbell-overhead-tricep-extension"
+  },
+  {
+    "partner": "single-dumbbell-skullcrusher",
+    "newId": "dumbbell-overhead-tricep-extension"
+  },
+  {
+    "partner": "tricep-pushdown",
+    "newId": "dumbbell-overhead-tricep-extension"
+  },
+  {
+    "partner": "dumbbell-skull-crusher",
+    "newId": "single-arm-dumbbell-tricep-extension"
+  },
+  {
+    "partner": "single-dumbbell-skullcrusher",
+    "newId": "single-arm-dumbbell-tricep-extension"
+  },
+  {
+    "partner": "tricep-pushdown",
+    "newId": "single-arm-dumbbell-tricep-extension"
+  },
+  {
+    "partner": "dumbbell-skull-crusher",
+    "newId": "tricep-kickback"
+  },
+  {
+    "partner": "single-dumbbell-skullcrusher",
+    "newId": "tricep-kickback"
+  },
+  {
+    "partner": "tricep-pushdown",
+    "newId": "tricep-kickback"
+  },
+  {
+    "partner": "farmer-carry",
+    "newId": "wrist-extension"
+  },
+  {
+    "partner": "reverse-curl",
+    "newId": "wrist-extension"
+  },
+  {
+    "partner": "plank",
+    "newId": "crunch"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "crunch"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "crunch"
+  },
+  {
+    "partner": "plank",
+    "newId": "reverse-crunch"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "reverse-crunch"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "reverse-crunch"
+  },
+  {
+    "partner": "plank",
+    "newId": "russian-twist"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "russian-twist"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "russian-twist"
+  },
+  {
+    "partner": "plank",
+    "newId": "bicycle-crunch"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "bicycle-crunch"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "bicycle-crunch"
+  },
+  {
+    "partner": "plank",
+    "newId": "mountain-climber"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "mountain-climber"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "mountain-climber"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "cable-woodchop"
+  },
+  {
+    "partner": "pallof-press",
+    "newId": "cable-woodchop"
+  },
+  {
+    "partner": "plank",
+    "newId": "cable-woodchop"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "half-kneeling-pallof-press"
+  },
+  {
+    "partner": "pallof-press",
+    "newId": "half-kneeling-pallof-press"
+  },
+  {
+    "partner": "plank",
+    "newId": "half-kneeling-pallof-press"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "cable-pallof-hold"
+  },
+  {
+    "partner": "pallof-press",
+    "newId": "cable-pallof-hold"
+  },
+  {
+    "partner": "plank",
+    "newId": "cable-pallof-hold"
+  },
+  {
+    "partner": "plank",
+    "newId": "captains-chair-knee-raise"
+  },
+  {
+    "partner": "plank",
+    "newId": "decline-sit-up"
+  },
+  {
+    "partner": "plank",
+    "newId": "weighted-crunch"
+  },
+  {
+    "partner": "dumbbell-side-bend",
+    "newId": "weighted-russian-twist"
+  },
+  {
+    "partner": "plank",
+    "newId": "weighted-russian-twist"
+  },
+  {
+    "partner": "weighted-russian-twist",
+    "newId": "dumbbell-side-bend"
+  },
+  {
+    "partner": "plank",
+    "newId": "dumbbell-side-bend"
+  },
+  {
+    "partner": "running",
+    "newId": "elliptical"
+  },
+  {
+    "partner": "walking",
+    "newId": "elliptical"
+  },
+  {
+    "partner": "burpee",
+    "newId": "elliptical"
+  },
+  {
+    "partner": "rowing",
+    "newId": "swimming"
+  },
+  {
+    "partner": "skierg",
+    "newId": "swimming"
+  },
+  {
+    "partner": "barbell-row",
+    "newId": "swimming"
+  },
+  {
+    "partner": "running",
+    "newId": "assault-bike"
+  },
+  {
+    "partner": "walking",
+    "newId": "assault-bike"
+  },
+  {
+    "partner": "burpee",
+    "newId": "assault-bike"
+  },
+  {
+    "partner": "rowing",
+    "newId": "skierg"
+  },
+  {
+    "partner": "swimming",
+    "newId": "skierg"
+  },
+  {
+    "partner": "barbell-row",
+    "newId": "skierg"
+  },
+  {
+    "partner": "running",
+    "newId": "hiking"
+  },
+  {
+    "partner": "walking",
+    "newId": "hiking"
+  },
+  {
+    "partner": "burpee",
+    "newId": "hiking"
+  },
+  {
+    "partner": "running",
+    "newId": "treadmill-incline-walk"
+  },
+  {
+    "partner": "walking",
+    "newId": "treadmill-incline-walk"
+  },
+  {
+    "partner": "burpee",
+    "newId": "treadmill-incline-walk"
+  },
+  {
+    "partner": "overhead-press",
+    "newId": "battle-ropes"
+  },
+  {
+    "partner": "push-up",
+    "newId": "knee-push-up"
+  },
+  {
+    "partner": "weighted-push-up",
+    "newId": "knee-push-up"
+  },
+  {
+    "partner": "bench-press",
+    "newId": "knee-push-up"
+  },
+  {
+    "partner": "push-up",
+    "newId": "wide-push-up"
+  },
+  {
+    "partner": "weighted-push-up",
+    "newId": "wide-push-up"
+  },
+  {
+    "partner": "bench-press",
+    "newId": "wide-push-up"
+  },
+  {
+    "partner": "dip",
+    "newId": "diamond-push-up"
+  },
+  {
+    "partner": "weighted-dip",
+    "newId": "diamond-push-up"
+  },
+  {
+    "partner": "tricep-pushdown",
+    "newId": "diamond-push-up"
+  },
+  {
+    "partner": "pike-push-up",
+    "newId": "feet-elevated-pike-push-up"
+  },
+  {
+    "partner": "handstand-push-up",
+    "newId": "feet-elevated-pike-push-up"
+  },
+  {
+    "partner": "overhead-press",
+    "newId": "feet-elevated-pike-push-up"
+  },
+  {
+    "partner": "push-up",
+    "newId": "archer-push-up"
+  },
+  {
+    "partner": "weighted-push-up",
+    "newId": "archer-push-up"
+  },
+  {
+    "partner": "bench-press",
+    "newId": "archer-push-up"
+  },
+  {
+    "partner": "push-up",
+    "newId": "typewriter-push-up"
+  },
+  {
+    "partner": "weighted-push-up",
+    "newId": "typewriter-push-up"
+  },
+  {
+    "partner": "bench-press",
+    "newId": "typewriter-push-up"
+  },
+  {
+    "partner": "push-up",
+    "newId": "explosive-push-up"
+  },
+  {
+    "partner": "weighted-push-up",
+    "newId": "explosive-push-up"
+  },
+  {
+    "partner": "bench-press",
+    "newId": "explosive-push-up"
+  },
+  {
+    "partner": "push-up",
+    "newId": "hindu-push-up"
+  },
+  {
+    "partner": "weighted-push-up",
+    "newId": "hindu-push-up"
+  },
+  {
+    "partner": "bench-press",
+    "newId": "hindu-push-up"
+  },
+  {
+    "partner": "prone-y-raise",
+    "newId": "scapular-push-up"
+  },
+  {
+    "partner": "prone-t-raise",
+    "newId": "scapular-push-up"
+  },
+  {
+    "partner": "face-pull",
+    "newId": "scapular-push-up"
+  },
+  {
+    "partner": "plank",
+    "newId": "push-up-shoulder-tap"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "push-up-shoulder-tap"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "push-up-shoulder-tap"
+  },
+  {
+    "partner": "bench-press",
+    "newId": "wall-push-up"
+  },
+  {
+    "partner": "wall-handstand-push-up",
+    "newId": "wall-walk"
+  },
+  {
+    "partner": "overhead-press",
+    "newId": "wall-walk"
+  },
+  {
+    "partner": "wall-walk",
+    "newId": "wall-handstand-push-up"
+  },
+  {
+    "partner": "overhead-press",
+    "newId": "wall-handstand-push-up"
+  },
+  {
+    "partner": "pike-push-up",
+    "newId": "handstand-push-up"
+  },
+  {
+    "partner": "feet-elevated-pike-push-up",
+    "newId": "handstand-push-up"
+  },
+  {
+    "partner": "overhead-press",
+    "newId": "handstand-push-up"
+  },
+  {
+    "partner": "tricep-pushdown",
+    "newId": "chair-dip"
+  },
+  {
+    "partner": "barbell-row",
+    "newId": "doorway-row"
+  },
+  {
+    "partner": "barbell-row",
+    "newId": "towel-row"
+  },
+  {
+    "partner": "scapular-push-up",
+    "newId": "prone-y-raise"
+  },
+  {
+    "partner": "prone-t-raise",
+    "newId": "prone-y-raise"
+  },
+  {
+    "partner": "face-pull",
+    "newId": "prone-y-raise"
+  },
+  {
+    "partner": "scapular-push-up",
+    "newId": "prone-t-raise"
+  },
+  {
+    "partner": "prone-y-raise",
+    "newId": "prone-t-raise"
+  },
+  {
+    "partner": "face-pull",
+    "newId": "prone-t-raise"
+  },
+  {
+    "partner": "scapular-push-up",
+    "newId": "reverse-snow-angel"
+  },
+  {
+    "partner": "prone-y-raise",
+    "newId": "reverse-snow-angel"
+  },
+  {
+    "partner": "face-pull",
+    "newId": "reverse-snow-angel"
+  },
+  {
+    "partner": "reverse-curl",
+    "newId": "dead-hang"
+  },
+  {
+    "partner": "scapular-pull-up",
+    "newId": "active-hang"
+  },
+  {
+    "partner": "negative-pull-up",
+    "newId": "active-hang"
+  },
+  {
+    "partner": "lat-pulldown",
+    "newId": "active-hang"
+  },
+  {
+    "partner": "active-hang",
+    "newId": "scapular-pull-up"
+  },
+  {
+    "partner": "negative-pull-up",
+    "newId": "scapular-pull-up"
+  },
+  {
+    "partner": "lat-pulldown",
+    "newId": "scapular-pull-up"
+  },
+  {
+    "partner": "active-hang",
+    "newId": "negative-pull-up"
+  },
+  {
+    "partner": "scapular-pull-up",
+    "newId": "negative-pull-up"
+  },
+  {
+    "partner": "lat-pulldown",
+    "newId": "negative-pull-up"
+  },
+  {
+    "partner": "active-hang",
+    "newId": "commando-pull-up"
+  },
+  {
+    "partner": "scapular-pull-up",
+    "newId": "commando-pull-up"
+  },
+  {
+    "partner": "lat-pulldown",
+    "newId": "commando-pull-up"
+  },
+  {
+    "partner": "active-hang",
+    "newId": "l-sit-pull-up"
+  },
+  {
+    "partner": "scapular-pull-up",
+    "newId": "l-sit-pull-up"
+  },
+  {
+    "partner": "lat-pulldown",
+    "newId": "l-sit-pull-up"
+  },
+  {
+    "partner": "lat-pulldown",
+    "newId": "towel-pull-up"
+  },
+  {
+    "partner": "wall-sit",
+    "newId": "pistol-squat"
+  },
+  {
+    "partner": "jump-squat",
+    "newId": "pistol-squat"
+  },
+  {
+    "partner": "squat",
+    "newId": "pistol-squat"
+  },
+  {
+    "partner": "wall-sit",
+    "newId": "assisted-pistol-squat"
+  },
+  {
+    "partner": "jump-squat",
+    "newId": "assisted-pistol-squat"
+  },
+  {
+    "partner": "squat",
+    "newId": "assisted-pistol-squat"
+  },
+  {
+    "partner": "wall-sit",
+    "newId": "shrimp-squat"
+  },
+  {
+    "partner": "jump-squat",
+    "newId": "shrimp-squat"
+  },
+  {
+    "partner": "squat",
+    "newId": "shrimp-squat"
+  },
+  {
+    "partner": "wall-sit",
+    "newId": "cossack-squat"
+  },
+  {
+    "partner": "jump-squat",
+    "newId": "cossack-squat"
+  },
+  {
+    "partner": "squat",
+    "newId": "cossack-squat"
+  },
+  {
+    "partner": "wall-sit",
+    "newId": "sissy-squat"
+  },
+  {
+    "partner": "jump-squat",
+    "newId": "sissy-squat"
+  },
+  {
+    "partner": "squat",
+    "newId": "sissy-squat"
+  },
+  {
+    "partner": "wall-sit",
+    "newId": "lateral-lunge"
+  },
+  {
+    "partner": "jump-squat",
+    "newId": "lateral-lunge"
+  },
+  {
+    "partner": "squat",
+    "newId": "lateral-lunge"
+  },
+  {
+    "partner": "glute-bridge",
+    "newId": "curtsy-lunge"
+  },
+  {
+    "partner": "single-leg-glute-bridge",
+    "newId": "curtsy-lunge"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "curtsy-lunge"
+  },
+  {
+    "partner": "wall-sit",
+    "newId": "skater-squat"
+  },
+  {
+    "partner": "jump-squat",
+    "newId": "skater-squat"
+  },
+  {
+    "partner": "squat",
+    "newId": "skater-squat"
+  },
+  {
+    "partner": "step-down",
+    "newId": "single-leg-box-squat"
+  },
+  {
+    "partner": "squat",
+    "newId": "single-leg-box-squat"
+  },
+  {
+    "partner": "single-leg-box-squat",
+    "newId": "step-down"
+  },
+  {
+    "partner": "squat",
+    "newId": "step-down"
+  },
+  {
+    "partner": "calf-raise",
+    "newId": "single-leg-calf-raise"
+  },
+  {
+    "partner": "fast-feet",
+    "newId": "single-leg-calf-raise"
+  },
+  {
+    "partner": "standing-calf-raise",
+    "newId": "single-leg-calf-raise"
+  },
+  {
+    "partner": "glute-bridge",
+    "newId": "glute-bridge-march"
+  },
+  {
+    "partner": "single-leg-glute-bridge",
+    "newId": "glute-bridge-march"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "glute-bridge-march"
+  },
+  {
+    "partner": "glute-bridge",
+    "newId": "frog-pump"
+  },
+  {
+    "partner": "single-leg-glute-bridge",
+    "newId": "frog-pump"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "frog-pump"
+  },
+  {
+    "partner": "glute-bridge",
+    "newId": "donkey-kick"
+  },
+  {
+    "partner": "single-leg-glute-bridge",
+    "newId": "donkey-kick"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "donkey-kick"
+  },
+  {
+    "partner": "glute-bridge",
+    "newId": "fire-hydrant"
+  },
+  {
+    "partner": "single-leg-glute-bridge",
+    "newId": "fire-hydrant"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "fire-hydrant"
+  },
+  {
+    "partner": "glute-bridge",
+    "newId": "clamshell"
+  },
+  {
+    "partner": "single-leg-glute-bridge",
+    "newId": "clamshell"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "clamshell"
+  },
+  {
+    "partner": "glute-bridge",
+    "newId": "hip-airplane"
+  },
+  {
+    "partner": "single-leg-glute-bridge",
+    "newId": "hip-airplane"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "hip-airplane"
+  },
+  {
+    "partner": "glute-bridge",
+    "newId": "side-lying-hip-abduction"
+  },
+  {
+    "partner": "single-leg-glute-bridge",
+    "newId": "side-lying-hip-abduction"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "side-lying-hip-abduction"
+  },
+  {
+    "partner": "glute-bridge",
+    "newId": "side-lying-leg-raise"
+  },
+  {
+    "partner": "single-leg-glute-bridge",
+    "newId": "side-lying-leg-raise"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "side-lying-leg-raise"
+  },
+  {
+    "partner": "nordic-hamstring-curl",
+    "newId": "lying-hamstring-walkout"
+  },
+  {
+    "partner": "nordic-curl",
+    "newId": "lying-hamstring-walkout"
+  },
+  {
+    "partner": "hamstring-stretch",
+    "newId": "lying-hamstring-walkout"
+  },
+  {
+    "partner": "romanian-deadlift",
+    "newId": "lying-hamstring-walkout"
+  },
+  {
+    "partner": "romanian-deadlift",
+    "newId": "towel-hamstring-curl"
+  },
+  {
+    "partner": "romanian-deadlift",
+    "newId": "stability-ball-hamstring-curl"
+  },
+  {
+    "partner": "banded-hip-thrust",
+    "newId": "banded-glute-bridge"
+  },
+  {
+    "partner": "banded-frog-pump",
+    "newId": "banded-glute-bridge"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "banded-glute-bridge"
+  },
+  {
+    "partner": "banded-glute-bridge",
+    "newId": "banded-hip-thrust"
+  },
+  {
+    "partner": "banded-frog-pump",
+    "newId": "banded-hip-thrust"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "banded-hip-thrust"
+  },
+  {
+    "partner": "banded-glute-bridge",
+    "newId": "banded-frog-pump"
+  },
+  {
+    "partner": "banded-hip-thrust",
+    "newId": "banded-frog-pump"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "banded-frog-pump"
+  },
+  {
+    "partner": "banded-glute-bridge",
+    "newId": "banded-clamshell"
+  },
+  {
+    "partner": "banded-hip-thrust",
+    "newId": "banded-clamshell"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "banded-clamshell"
+  },
+  {
+    "partner": "banded-glute-bridge",
+    "newId": "banded-lateral-walk"
+  },
+  {
+    "partner": "banded-hip-thrust",
+    "newId": "banded-lateral-walk"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "banded-lateral-walk"
+  },
+  {
+    "partner": "banded-glute-bridge",
+    "newId": "banded-monster-walk"
+  },
+  {
+    "partner": "banded-hip-thrust",
+    "newId": "banded-monster-walk"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "banded-monster-walk"
+  },
+  {
+    "partner": "squat",
+    "newId": "banded-squat"
+  },
+  {
+    "partner": "banded-glute-bridge",
+    "newId": "banded-donkey-kick"
+  },
+  {
+    "partner": "banded-hip-thrust",
+    "newId": "banded-donkey-kick"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "banded-donkey-kick"
+  },
+  {
+    "partner": "banded-glute-bridge",
+    "newId": "banded-fire-hydrant"
+  },
+  {
+    "partner": "banded-hip-thrust",
+    "newId": "banded-fire-hydrant"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "banded-fire-hydrant"
+  },
+  {
+    "partner": "banded-glute-bridge",
+    "newId": "banded-kickback"
+  },
+  {
+    "partner": "banded-hip-thrust",
+    "newId": "banded-kickback"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "banded-kickback"
+  },
+  {
+    "partner": "banded-glute-bridge",
+    "newId": "banded-standing-hip-abduction"
+  },
+  {
+    "partner": "banded-hip-thrust",
+    "newId": "banded-standing-hip-abduction"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "banded-standing-hip-abduction"
+  },
+  {
+    "partner": "banded-glute-bridge",
+    "newId": "banded-seated-hip-abduction"
+  },
+  {
+    "partner": "banded-hip-thrust",
+    "newId": "banded-seated-hip-abduction"
+  },
+  {
+    "partner": "hip-thrust",
+    "newId": "banded-seated-hip-abduction"
+  },
+  {
+    "partner": "banded-face-pull",
+    "newId": "band-pull-apart"
+  },
+  {
+    "partner": "face-pull",
+    "newId": "band-pull-apart"
+  },
+  {
+    "partner": "band-pull-apart",
+    "newId": "banded-face-pull"
+  },
+  {
+    "partner": "face-pull",
+    "newId": "banded-face-pull"
+  },
+  {
+    "partner": "lat-pulldown",
+    "newId": "banded-lat-pulldown"
+  },
+  {
+    "partner": "banded-woodchop",
+    "newId": "banded-pallof-press"
+  },
+  {
+    "partner": "banded-dead-bug",
+    "newId": "banded-pallof-press"
+  },
+  {
+    "partner": "plank",
+    "newId": "banded-pallof-press"
+  },
+  {
+    "partner": "banded-pallof-press",
+    "newId": "banded-woodchop"
+  },
+  {
+    "partner": "banded-dead-bug",
+    "newId": "banded-woodchop"
+  },
+  {
+    "partner": "plank",
+    "newId": "banded-woodchop"
+  },
+  {
+    "partner": "banded-pallof-press",
+    "newId": "banded-dead-bug"
+  },
+  {
+    "partner": "banded-woodchop",
+    "newId": "banded-dead-bug"
+  },
+  {
+    "partner": "plank",
+    "newId": "banded-dead-bug"
+  },
+  {
+    "partner": "plank",
+    "newId": "hollow-body-hold"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "hollow-body-hold"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "hollow-body-hold"
+  },
+  {
+    "partner": "plank",
+    "newId": "hollow-rock"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "hollow-rock"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "hollow-rock"
+  },
+  {
+    "partner": "plank",
+    "newId": "v-up"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "v-up"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "v-up"
+  },
+  {
+    "partner": "plank",
+    "newId": "flutter-kick"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "flutter-kick"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "flutter-kick"
+  },
+  {
+    "partner": "plank",
+    "newId": "lying-leg-raise"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "lying-leg-raise"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "lying-leg-raise"
+  },
+  {
+    "partner": "plank",
+    "newId": "toe-touch"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "toe-touch"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "toe-touch"
+  },
+  {
+    "partner": "plank",
+    "newId": "heel-tap"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "heel-tap"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "heel-tap"
+  },
+  {
+    "partner": "plank",
+    "newId": "plank-shoulder-tap"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "plank-shoulder-tap"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "plank-shoulder-tap"
+  },
+  {
+    "partner": "plank",
+    "newId": "plank-jack"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "plank-jack"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "plank-jack"
+  },
+  {
+    "partner": "plank",
+    "newId": "bear-plank"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "bear-plank"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "bear-plank"
+  },
+  {
+    "partner": "dip",
+    "newId": "crab-walk"
+  },
+  {
+    "partner": "weighted-dip",
+    "newId": "crab-walk"
+  },
+  {
+    "partner": "tricep-pushdown",
+    "newId": "crab-walk"
+  },
+  {
+    "partner": "plank",
+    "newId": "inchworm"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "inchworm"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "inchworm"
+  },
+  {
+    "partner": "plank",
+    "newId": "l-sit-hold"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "l-sit-hold"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "l-sit-hold"
+  },
+  {
+    "partner": "plank",
+    "newId": "seated-knee-tuck"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "seated-knee-tuck"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "seated-knee-tuck"
+  },
+  {
+    "partner": "plank",
+    "newId": "side-plank-hip-dip"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "side-plank-hip-dip"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "side-plank-hip-dip"
+  },
+  {
+    "partner": "plank",
+    "newId": "copenhagen-plank"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "copenhagen-plank"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "copenhagen-plank"
+  },
+  {
+    "partner": "plank",
+    "newId": "dragon-flag"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "dragon-flag"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "dragon-flag"
+  },
+  {
+    "partner": "plank",
+    "newId": "half-burpee"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "half-burpee"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "half-burpee"
+  },
+  {
+    "partner": "plank",
+    "newId": "squat-thrust"
+  },
+  {
+    "partner": "side-plank",
+    "newId": "squat-thrust"
+  },
+  {
+    "partner": "cable-crunch",
+    "newId": "squat-thrust"
+  },
+  {
+    "partner": "burpee",
+    "newId": "jumping-jack"
+  },
+  {
+    "partner": "high-knees",
+    "newId": "jumping-jack"
+  },
+  {
+    "partner": "running",
+    "newId": "jumping-jack"
+  },
+  {
+    "partner": "burpee",
+    "newId": "skater-hop"
+  },
+  {
+    "partner": "high-knees",
+    "newId": "skater-hop"
+  },
+  {
+    "partner": "running",
+    "newId": "skater-hop"
+  },
+  {
+    "partner": "burpee",
+    "newId": "lateral-shuffle"
+  },
+  {
+    "partner": "high-knees",
+    "newId": "lateral-shuffle"
+  },
+  {
+    "partner": "running",
+    "newId": "lateral-shuffle"
+  },
+  {
+    "partner": "calf-raise",
+    "newId": "fast-feet"
+  },
+  {
+    "partner": "single-leg-calf-raise",
+    "newId": "fast-feet"
+  },
+  {
+    "partner": "standing-calf-raise",
+    "newId": "fast-feet"
+  },
+  {
+    "partner": "burpee",
+    "newId": "sprawl"
+  },
+  {
+    "partner": "high-knees",
+    "newId": "sprawl"
+  },
+  {
+    "partner": "running",
+    "newId": "sprawl"
+  },
+  {
+    "partner": "push-up",
+    "newId": "seal-jack"
+  },
+  {
+    "partner": "weighted-push-up",
+    "newId": "seal-jack"
+  },
+  {
+    "partner": "bench-press",
+    "newId": "seal-jack"
+  },
+  {
+    "partner": "worlds-greatest-stretch",
+    "newId": "cat-cow-stretch"
+  },
+  {
+    "partner": "leg-swings-stretch",
+    "newId": "cat-cow-stretch"
+  },
+  {
+    "partner": "pike-push-up",
+    "newId": "arm-circles"
+  },
+  {
+    "partner": "feet-elevated-pike-push-up",
+    "newId": "arm-circles"
+  },
+  {
+    "partner": "overhead-press",
+    "newId": "arm-circles"
+  },
+  {
+    "partner": "cat-cow-stretch",
+    "newId": "worlds-greatest-stretch"
+  },
+  {
+    "partner": "leg-swings-stretch",
+    "newId": "worlds-greatest-stretch"
+  },
+  {
+    "partner": "cat-cow-stretch",
+    "newId": "leg-swings-stretch"
+  },
+  {
+    "partner": "worlds-greatest-stretch",
+    "newId": "leg-swings-stretch"
+  },
+  {
+    "partner": "cat-cow-stretch",
+    "newId": "torso-twist-stretch"
+  },
+  {
+    "partner": "worlds-greatest-stretch",
+    "newId": "torso-twist-stretch"
+  },
+  {
+    "partner": "bench-press",
+    "newId": "doorway-chest-stretch"
+  },
+  {
+    "partner": "inverted-row",
+    "newId": "childs-pose"
+  },
+  {
+    "partner": "barbell-row",
+    "newId": "childs-pose"
+  },
+  {
+    "partner": "butterfly-stretch",
+    "newId": "kneeling-hip-flexor-stretch"
+  },
+  {
+    "partner": "nordic-hamstring-curl",
+    "newId": "hamstring-stretch"
+  },
+  {
+    "partner": "nordic-curl",
+    "newId": "hamstring-stretch"
+  },
+  {
+    "partner": "lying-hamstring-walkout",
+    "newId": "hamstring-stretch"
+  },
+  {
+    "partner": "romanian-deadlift",
+    "newId": "hamstring-stretch"
+  },
+  {
+    "partner": "wall-sit",
+    "newId": "standing-quad-stretch"
+  },
+  {
+    "partner": "jump-squat",
+    "newId": "standing-quad-stretch"
+  },
+  {
+    "partner": "squat",
+    "newId": "standing-quad-stretch"
+  },
+  {
+    "partner": "nordic-hamstring-curl",
+    "newId": "seated-forward-fold-stretch"
+  },
+  {
+    "partner": "nordic-curl",
+    "newId": "seated-forward-fold-stretch"
+  },
+  {
+    "partner": "lying-hamstring-walkout",
+    "newId": "seated-forward-fold-stretch"
+  },
+  {
+    "partner": "romanian-deadlift",
+    "newId": "seated-forward-fold-stretch"
+  },
+  {
+    "partner": "pike-push-up",
+    "newId": "cross-body-shoulder-stretch"
+  },
+  {
+    "partner": "feet-elevated-pike-push-up",
+    "newId": "cross-body-shoulder-stretch"
+  },
+  {
+    "partner": "overhead-press",
+    "newId": "cross-body-shoulder-stretch"
+  },
+  {
+    "partner": "calf-raise",
+    "newId": "wall-calf-stretch"
+  },
+  {
+    "partner": "single-leg-calf-raise",
+    "newId": "wall-calf-stretch"
+  },
+  {
+    "partner": "standing-calf-raise",
+    "newId": "wall-calf-stretch"
+  },
+  {
+    "partner": "kneeling-hip-flexor-stretch",
+    "newId": "butterfly-stretch"
+  }
+]

@@ -2,12 +2,16 @@
 // Illustration source: @bryllim/workout-guide v1.0.0 (302 exercises, 906 SVG frames)
 // Assets: CC BY-SA 4.0 © Bryl Lim (https://bryllim.com) — derived from Everkinetic.
 // Code: MIT. Attribution must be preserved when shipping these images.
+//
+// Each entry copies the package's full record for that lift: every animation
+// frame, name, exercise type (weight_reps / timed), equipment and muscle data.
 
 export const IMAGE_BASE = 'https://bryllim.github.io/workout-guide/frames';
 
 /**
- * Returns { url, alt, secondaryMuscles, isStretch } or null.
- * frame is 1-based; defaults to frame 1 (start position).
+ * Returns { url, alt, name, exerciseType, equipment, primaryMuscle,
+ * secondaryMuscles, isStretch, license, creator } or null.
+ * frame is 1-based and clamped to the available frames; defaults to 1 (start).
  */
 export function getExerciseImage(exerciseId, frame = 1){
   const entry = EXERCISE_IMAGES[exerciseId];
@@ -15,7 +19,10 @@ export function getExerciseImage(exerciseId, frame = 1){
   const n = Math.max(1, Math.min(entry.frames.length, Math.round(frame)));
   return {
     url: `${IMAGE_BASE}/${entry.slug}/frame-${n}.svg`,
-    alt: entry.primaryMuscle + ' exercise',
+    alt: entry.name ? `${entry.name} — ${entry.primaryMuscle}` : `${entry.primaryMuscle} exercise`,
+    name: entry.name,
+    exerciseType: entry.exerciseType,
+    equipment: entry.equipment,
     primaryMuscle: entry.primaryMuscle,
     secondaryMuscles: entry.secondaryMuscles,
     isStretch: entry.isStretch,
@@ -24,217 +31,45 @@ export function getExerciseImage(exerciseId, frame = 1){
   };
 }
 
-/** Returns true if this exercise has illustration frames available. */
+/** True if this exercise has illustration frames available. */
 export function hasExerciseImage(exerciseId){
   return !!EXERCISE_IMAGES[exerciseId];
 }
 
-/** Returns available frame indices for an exercise. */
+/** All frame indices for an exercise (the full animation sequence). */
 export function getImageFrames(exerciseId){
   const entry = EXERCISE_IMAGES[exerciseId];
   return entry ? entry.frames : [];
 }
 
-/** Returns all package slugs not yet mapped to an Arise exercise (for library expansion). */
+/**
+ * Full package metadata for an exercise: name, exerciseType, equipment,
+ * primary/secondary muscles, stretch flag and frame count. Null when unknown.
+ */
+export function getExerciseMeta(exerciseId){
+  const entry = EXERCISE_IMAGES[exerciseId];
+  if(!entry) return null;
+  return {
+    name: entry.name,
+    exerciseType: entry.exerciseType,
+    equipment: entry.equipment,
+    primaryMuscle: entry.primaryMuscle,
+    secondaryMuscles: entry.secondaryMuscles,
+    isStretch: entry.isStretch,
+    frames: entry.frames.length,
+    license: entry.license,
+    creator: entry.creator,
+  };
+}
+
+/** All package slugs not yet mapped to an Arise exercise (for library expansion). */
 export function getUnmatchedSlugs(){
   return [
-  {
-    "slug": "incline-bench-press",
-    "name": "Incline Bench Press",
-    "muscle": "Chest",
-    "equipment": "Barbell"
-  },
   {
     "slug": "dumbbell-bench-press",
     "name": "Dumbbell Bench Press",
     "muscle": "Chest",
     "equipment": "Dumbbell"
-  },
-  {
-    "slug": "decline-bench-press",
-    "name": "Decline Bench Press",
-    "muscle": "Chest",
-    "equipment": "Barbell"
-  },
-  {
-    "slug": "machine-chest-press",
-    "name": "Machine Chest Press",
-    "muscle": "Chest",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "pec-deck",
-    "name": "Pec Deck",
-    "muscle": "Chest",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "weighted-push-up",
-    "name": "Weighted Push-up",
-    "muscle": "Chest",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "seated-dumbbell-press",
-    "name": "Dumbbell Seated Shoulder Press",
-    "muscle": "Shoulders",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "cable-lateral-raise",
-    "name": "Cable Lateral Raise",
-    "muscle": "Shoulders",
-    "equipment": "Cable"
-  },
-  {
-    "slug": "front-raise",
-    "name": "Front Raise",
-    "muscle": "Shoulders",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "upright-row",
-    "name": "Upright Row",
-    "muscle": "Shoulders",
-    "equipment": "Barbell"
-  },
-  {
-    "slug": "deadlift",
-    "name": "Deadlift",
-    "muscle": "Posterior Chain",
-    "equipment": "Barbell"
-  },
-  {
-    "slug": "t-bar-row",
-    "name": "T-Bar Row",
-    "muscle": "Back",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "dumbbell-bent-over-row",
-    "name": "Dumbbell Bent Over Row",
-    "muscle": "Back",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "machine-row",
-    "name": "Machine Row",
-    "muscle": "Back",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "close-grip-lat-pulldown",
-    "name": "Close-Grip Lat Pulldown",
-    "muscle": "Lats",
-    "equipment": "Cable"
-  },
-  {
-    "slug": "assisted-pull-up",
-    "name": "Assisted Pull-up",
-    "muscle": "Lats",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "weighted-pull-up",
-    "name": "Weighted Pull-up",
-    "muscle": "Lats",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "shrug",
-    "name": "Barbell Shrug",
-    "muscle": "Upper Back",
-    "equipment": "Barbell"
-  },
-  {
-    "slug": "squat",
-    "name": "Squat",
-    "muscle": "Quads",
-    "equipment": "Barbell"
-  },
-  {
-    "slug": "hack-squat",
-    "name": "Hack Squat",
-    "muscle": "Quads",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "walking-lunge",
-    "name": "Walking Lunge",
-    "muscle": "Quads",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "leg-extension",
-    "name": "Leg Extension",
-    "muscle": "Quads",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "leg-curl",
-    "name": "Leg Curl",
-    "muscle": "Hamstrings",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "seated-leg-curl",
-    "name": "Seated Leg Curl",
-    "muscle": "Hamstrings",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "standing-calf-raise",
-    "name": "Standing Calf Raise",
-    "muscle": "Calves",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "seated-calf-raise",
-    "name": "Seated Calf Raise",
-    "muscle": "Calves",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "preacher-curl",
-    "name": "Preacher Curl",
-    "muscle": "Biceps",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "cable-curl",
-    "name": "Cable Curl",
-    "muscle": "Biceps",
-    "equipment": "Cable"
-  },
-  {
-    "slug": "reverse-curl",
-    "name": "Reverse Curl",
-    "muscle": "Forearms",
-    "equipment": "Barbell"
-  },
-  {
-    "slug": "wrist-curl",
-    "name": "Wrist Curl",
-    "muscle": "Forearms",
-    "equipment": "Barbell"
-  },
-  {
-    "slug": "skull-crusher",
-    "name": "Skull Crusher",
-    "muscle": "Triceps",
-    "equipment": "Barbell"
-  },
-  {
-    "slug": "close-grip-bench-press",
-    "name": "Close-Grip Bench Press",
-    "muscle": "Triceps",
-    "equipment": "Barbell"
-  },
-  {
-    "slug": "assisted-dip",
-    "name": "Assisted Dip",
-    "muscle": "Triceps",
-    "equipment": "Machine"
   },
   {
     "slug": "hanging-leg-raise",
@@ -243,705 +78,15 @@ export function getUnmatchedSlugs(){
     "equipment": "Bodyweight"
   },
   {
-    "slug": "cable-crunch",
-    "name": "Cable Crunch",
-    "muscle": "Core",
-    "equipment": "Cable"
-  },
-  {
-    "slug": "ab-wheel",
-    "name": "Ab Wheel Rollout",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "running",
-    "name": "Running",
-    "muscle": "Legs",
-    "equipment": "Cardio"
-  },
-  {
-    "slug": "walking",
-    "name": "Walking",
-    "muscle": "Legs",
-    "equipment": "Cardio"
-  },
-  {
-    "slug": "cycling",
-    "name": "Cycling",
-    "muscle": "Legs",
-    "equipment": "Cardio"
-  },
-  {
-    "slug": "rowing",
-    "name": "Rowing",
-    "muscle": "Back",
-    "equipment": "Cardio"
-  },
-  {
-    "slug": "stair-climber",
-    "name": "Stair Climber",
-    "muscle": "Legs",
-    "equipment": "Cardio"
-  },
-  {
-    "slug": "incline-cable-fly",
-    "name": "Incline Cable Fly",
-    "muscle": "Chest",
-    "equipment": "Cable"
-  },
-  {
-    "slug": "decline-dumbbell-press",
-    "name": "Decline Dumbbell Press",
-    "muscle": "Chest",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "smith-machine-bench-press",
-    "name": "Smith Machine Bench Press",
-    "muscle": "Chest",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "landmine-press",
-    "name": "Landmine Press",
-    "muscle": "Shoulders",
-    "equipment": "Barbell"
-  },
-  {
-    "slug": "chest-dip",
-    "name": "Chest Dip",
-    "muscle": "Chest",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "weighted-dip",
-    "name": "Weighted Dip",
-    "muscle": "Triceps",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "standing-dumbbell-press",
-    "name": "Standing Dumbbell Press",
-    "muscle": "Shoulders",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "push-press",
-    "name": "Push Press",
-    "muscle": "Shoulders",
-    "equipment": "Barbell"
-  },
-  {
-    "slug": "machine-lateral-raise",
-    "name": "Machine Lateral Raise",
-    "muscle": "Shoulders",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "cable-front-raise",
-    "name": "Cable Front Raise",
-    "muscle": "Shoulders",
-    "equipment": "Cable"
-  },
-  {
-    "slug": "plate-front-raise",
-    "name": "Plate Front Raise",
-    "muscle": "Shoulders",
-    "equipment": "Plate"
-  },
-  {
-    "slug": "bent-over-rear-delt-raise",
-    "name": "Bent-Over Rear Delt Raise",
-    "muscle": "Rear Delts",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "cable-rear-delt-fly",
-    "name": "Cable Rear Delt Fly",
-    "muscle": "Rear Delts",
-    "equipment": "Cable"
-  },
-  {
-    "slug": "pendlay-row",
-    "name": "Pendlay Row",
-    "muscle": "Back",
-    "equipment": "Barbell"
-  },
-  {
-    "slug": "meadows-row",
-    "name": "Meadows Row",
-    "muscle": "Back",
-    "equipment": "Barbell"
-  },
-  {
-    "slug": "wide-grip-lat-pulldown",
-    "name": "Wide-Grip Lat Pulldown",
-    "muscle": "Lats",
-    "equipment": "Cable"
-  },
-  {
-    "slug": "neutral-grip-pull-up",
-    "name": "Neutral-Grip Pull-up",
-    "muscle": "Lats",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "assisted-chin-up",
-    "name": "Assisted Chin-up",
-    "muscle": "Biceps",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "weighted-chin-up",
-    "name": "Weighted Chin-up",
-    "muscle": "Biceps",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "rack-pull",
-    "name": "Rack Pull",
-    "muscle": "Back",
-    "equipment": "Barbell"
-  },
-  {
-    "slug": "back-extension",
-    "name": "Back Extension",
-    "muscle": "Lower Back",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "smith-machine-squat",
-    "name": "Smith Machine Squat",
-    "muscle": "Quads",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "belt-squat",
-    "name": "Belt Squat",
-    "muscle": "Quads",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "trap-bar-deadlift",
-    "name": "Trap Bar Deadlift",
-    "muscle": "Posterior Chain",
-    "equipment": "Barbell"
-  },
-  {
     "slug": "nordic-hamstring-curl",
     "name": "Nordic Hamstring Curl",
     "muscle": "Hamstrings",
     "equipment": "Bodyweight"
   },
   {
-    "slug": "single-leg-romanian-deadlift",
-    "name": "Single-Leg Romanian Deadlift",
-    "muscle": "Hamstrings",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "reverse-lunge",
-    "name": "Reverse Lunge",
-    "muscle": "Quads",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "cable-kickback",
-    "name": "Cable Kickback",
-    "muscle": "Glutes",
-    "equipment": "Cable"
-  },
-  {
-    "slug": "single-leg-glute-bridge",
-    "name": "Single-Leg Glute Bridge",
-    "muscle": "Glutes",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "barbell-glute-bridge",
-    "name": "Barbell Glute Bridge",
-    "muscle": "Glutes",
-    "equipment": "Barbell"
-  },
-  {
-    "slug": "dumbbell-glute-bridge",
-    "name": "Dumbbell Glute Bridge",
-    "muscle": "Glutes",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "dumbbell-hip-thrust",
-    "name": "Dumbbell Hip Thrust",
-    "muscle": "Glutes",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "smith-machine-hip-thrust",
-    "name": "Smith Machine Hip Thrust",
-    "muscle": "Glutes",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "smith-machine-romanian-deadlift",
-    "name": "Smith Machine Romanian Deadlift",
-    "muscle": "Hamstrings",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "dumbbell-romanian-deadlift",
-    "name": "Dumbbell Romanian Deadlift",
-    "muscle": "Hamstrings",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "kettlebell-romanian-deadlift",
-    "name": "Kettlebell Romanian Deadlift",
-    "muscle": "Hamstrings",
-    "equipment": "Kettlebell"
-  },
-  {
-    "slug": "machine-glute-kickback",
-    "name": "Machine Glute Kickback",
-    "muscle": "Glutes",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "cable-standing-hip-abduction",
-    "name": "Cable Standing Hip Abduction",
-    "muscle": "Glutes",
-    "equipment": "Cable"
-  },
-  {
-    "slug": "cable-standing-hip-adduction",
-    "name": "Cable Standing Hip Adduction",
-    "muscle": "Adductors",
-    "equipment": "Cable"
-  },
-  {
-    "slug": "hip-adduction-machine",
-    "name": "Hip Adduction Machine",
-    "muscle": "Adductors",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "smith-machine-bulgarian-split-squat",
-    "name": "Smith Machine Bulgarian Split Squat",
-    "muscle": "Quads",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "smith-machine-reverse-lunge",
-    "name": "Smith Machine Reverse Lunge",
-    "muscle": "Quads",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "smith-machine-split-squat",
-    "name": "Smith Machine Split Squat",
-    "muscle": "Quads",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "heel-elevated-goblet-squat",
-    "name": "Heel-Elevated Goblet Squat",
-    "muscle": "Quads",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "dumbbell-sumo-squat",
-    "name": "Dumbbell Sumo Squat",
-    "muscle": "Glutes",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "dumbbell-sumo-deadlift",
-    "name": "Dumbbell Sumo Deadlift",
-    "muscle": "Posterior Chain",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "front-foot-elevated-split-squat",
-    "name": "Front-Foot Elevated Split Squat",
-    "muscle": "Quads",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "deficit-reverse-lunge",
-    "name": "Deficit Reverse Lunge",
-    "muscle": "Glutes",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "dumbbell-lateral-lunge",
-    "name": "Dumbbell Lateral Lunge",
-    "muscle": "Quads",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "dumbbell-curtsy-lunge",
-    "name": "Dumbbell Curtsy Lunge",
-    "muscle": "Glutes",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "landmine-squat",
-    "name": "Landmine Squat",
-    "muscle": "Quads",
-    "equipment": "Barbell"
-  },
-  {
-    "slug": "landmine-romanian-deadlift",
-    "name": "Landmine Romanian Deadlift",
-    "muscle": "Hamstrings",
-    "equipment": "Barbell"
-  },
-  {
-    "slug": "glute-focused-back-extension",
-    "name": "Glute-Focused Back Extension",
-    "muscle": "Glutes",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "reverse-hyperextension",
-    "name": "Reverse Hyperextension",
-    "muscle": "Glutes",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "donkey-calf-raise",
-    "name": "Donkey Calf Raise",
-    "muscle": "Calves",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "leg-press-calf-raise",
-    "name": "Leg Press Calf Raise",
-    "muscle": "Calves",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "jump-squat",
-    "name": "Jump Squat",
-    "muscle": "Quads",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "incline-dumbbell-curl",
-    "name": "Incline Dumbbell Curl",
-    "muscle": "Biceps",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "concentration-curl",
-    "name": "Concentration Curl",
-    "muscle": "Biceps",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "ez-bar-curl",
-    "name": "EZ-Bar Curl",
-    "muscle": "Biceps",
-    "equipment": "Barbell"
-  },
-  {
-    "slug": "spider-curl",
-    "name": "Spider Curl",
-    "muscle": "Biceps",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "rope-hammer-curl",
-    "name": "Rope Hammer Curl",
-    "muscle": "Biceps",
-    "equipment": "Cable"
-  },
-  {
-    "slug": "drag-curl",
-    "name": "Drag Curl",
-    "muscle": "Biceps",
-    "equipment": "Barbell"
-  },
-  {
-    "slug": "rope-tricep-pushdown",
-    "name": "Rope Tricep Pushdown",
-    "muscle": "Triceps",
-    "equipment": "Cable"
-  },
-  {
-    "slug": "dumbbell-skull-crusher",
-    "name": "Two Dumbbell Skullcrusher",
-    "muscle": "Triceps",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "single-dumbbell-skullcrusher",
-    "name": "Single Dumbbell Skullcrusher",
-    "muscle": "Triceps",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "dumbbell-overhead-tricep-extension",
-    "name": "Dumbbell Overhead Tricep Extension",
-    "muscle": "Triceps",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "single-arm-dumbbell-tricep-extension",
-    "name": "Single Arm Dumbbell Tricep Extension",
-    "muscle": "Triceps",
-    "equipment": "Dumbbell"
-  },
-  {
     "slug": "bench-dip",
     "name": "Bench Dip",
     "muscle": "Triceps",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "tricep-kickback",
-    "name": "Tricep Kickback",
-    "muscle": "Triceps",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "wrist-extension",
-    "name": "Wrist Extension",
-    "muscle": "Forearms",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "crunch",
-    "name": "Crunch",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "reverse-crunch",
-    "name": "Reverse Crunch",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "russian-twist",
-    "name": "Russian Twist",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "bicycle-crunch",
-    "name": "Bicycle Crunch",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "mountain-climber",
-    "name": "Mountain Climber",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "cable-woodchop",
-    "name": "Cable Woodchop",
-    "muscle": "Core",
-    "equipment": "Cable"
-  },
-  {
-    "slug": "half-kneeling-pallof-press",
-    "name": "Half-Kneeling Pallof Press",
-    "muscle": "Core",
-    "equipment": "Cable"
-  },
-  {
-    "slug": "cable-pallof-hold",
-    "name": "Cable Pallof Hold",
-    "muscle": "Core",
-    "equipment": "Cable"
-  },
-  {
-    "slug": "captains-chair-knee-raise",
-    "name": "Captain's Chair Knee Raise",
-    "muscle": "Core",
-    "equipment": "Machine"
-  },
-  {
-    "slug": "decline-sit-up",
-    "name": "Decline Sit-Up",
-    "muscle": "Core",
-    "equipment": "Bench"
-  },
-  {
-    "slug": "weighted-crunch",
-    "name": "Weighted Crunch",
-    "muscle": "Core",
-    "equipment": "Plate"
-  },
-  {
-    "slug": "weighted-russian-twist",
-    "name": "Weighted Russian Twist",
-    "muscle": "Core",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "dumbbell-side-bend",
-    "name": "Dumbbell Side Bend",
-    "muscle": "Core",
-    "equipment": "Dumbbell"
-  },
-  {
-    "slug": "elliptical",
-    "name": "Elliptical",
-    "muscle": "Legs",
-    "equipment": "Cardio"
-  },
-  {
-    "slug": "swimming",
-    "name": "Swimming",
-    "muscle": "Back",
-    "equipment": "Cardio"
-  },
-  {
-    "slug": "assault-bike",
-    "name": "Assault Bike",
-    "muscle": "Legs",
-    "equipment": "Cardio"
-  },
-  {
-    "slug": "skierg",
-    "name": "SkiErg",
-    "muscle": "Back",
-    "equipment": "Cardio"
-  },
-  {
-    "slug": "hiking",
-    "name": "Hiking",
-    "muscle": "Legs",
-    "equipment": "Cardio"
-  },
-  {
-    "slug": "treadmill-incline-walk",
-    "name": "Treadmill Incline Walk",
-    "muscle": "Legs",
-    "equipment": "Cardio"
-  },
-  {
-    "slug": "battle-ropes",
-    "name": "Battle Ropes",
-    "muscle": "Shoulders",
-    "equipment": "Cardio"
-  },
-  {
-    "slug": "knee-push-up",
-    "name": "Knee Push-up",
-    "muscle": "Chest",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "wide-push-up",
-    "name": "Wide Push-up",
-    "muscle": "Chest",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "diamond-push-up",
-    "name": "Diamond Push-up",
-    "muscle": "Triceps",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "feet-elevated-pike-push-up",
-    "name": "Feet-Elevated Pike Push-up",
-    "muscle": "Shoulders",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "archer-push-up",
-    "name": "Archer Push-up",
-    "muscle": "Chest",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "typewriter-push-up",
-    "name": "Typewriter Push-up",
-    "muscle": "Chest",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "explosive-push-up",
-    "name": "Explosive Push-up",
-    "muscle": "Chest",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "hindu-push-up",
-    "name": "Hindu Push-up",
-    "muscle": "Chest",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "scapular-push-up",
-    "name": "Scapular Push-up",
-    "muscle": "Upper Back",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "push-up-shoulder-tap",
-    "name": "Push-up Shoulder Tap",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "wall-push-up",
-    "name": "Wall Push-up",
-    "muscle": "Chest",
-    "equipment": "Wall"
-  },
-  {
-    "slug": "wall-walk",
-    "name": "Wall Walk",
-    "muscle": "Shoulders",
-    "equipment": "Wall"
-  },
-  {
-    "slug": "wall-handstand-push-up",
-    "name": "Wall Handstand Push-up",
-    "muscle": "Shoulders",
-    "equipment": "Wall"
-  },
-  {
-    "slug": "handstand-push-up",
-    "name": "Handstand Push-up",
-    "muscle": "Shoulders",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "chair-dip",
-    "name": "Chair Dip",
-    "muscle": "Triceps",
-    "equipment": "Chair"
-  },
-  {
-    "slug": "doorway-row",
-    "name": "Doorway Row",
-    "muscle": "Back",
-    "equipment": "Doorway"
-  },
-  {
-    "slug": "towel-row",
-    "name": "Towel Row",
-    "muscle": "Back",
-    "equipment": "Towel"
-  },
-  {
-    "slug": "prone-y-raise",
-    "name": "Prone Y Raise",
-    "muscle": "Upper Back",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "prone-t-raise",
-    "name": "Prone T Raise",
-    "muscle": "Upper Back",
     "equipment": "Bodyweight"
   },
   {
@@ -951,538 +96,16 @@ export function getUnmatchedSlugs(){
     "equipment": "Bodyweight"
   },
   {
-    "slug": "reverse-snow-angel",
-    "name": "Reverse Snow Angel",
-    "muscle": "Upper Back",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "dead-hang",
-    "name": "Dead Hang",
-    "muscle": "Forearms",
-    "equipment": "Pull-up Bar"
-  },
-  {
-    "slug": "active-hang",
-    "name": "Active Hang",
-    "muscle": "Lats",
-    "equipment": "Pull-up Bar"
-  },
-  {
-    "slug": "scapular-pull-up",
-    "name": "Scapular Pull-up",
-    "muscle": "Lats",
-    "equipment": "Pull-up Bar"
-  },
-  {
-    "slug": "negative-pull-up",
-    "name": "Negative Pull-up",
-    "muscle": "Lats",
-    "equipment": "Pull-up Bar"
-  },
-  {
-    "slug": "commando-pull-up",
-    "name": "Commando Pull-up",
-    "muscle": "Lats",
-    "equipment": "Pull-up Bar"
-  },
-  {
-    "slug": "l-sit-pull-up",
-    "name": "L-Sit Pull-up",
-    "muscle": "Lats",
-    "equipment": "Pull-up Bar"
-  },
-  {
-    "slug": "towel-pull-up",
-    "name": "Towel Pull-up",
-    "muscle": "Lats",
-    "equipment": "Towel"
-  },
-  {
-    "slug": "pistol-squat",
-    "name": "Pistol Squat",
-    "muscle": "Quads",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "assisted-pistol-squat",
-    "name": "Assisted Pistol Squat",
-    "muscle": "Quads",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "shrimp-squat",
-    "name": "Shrimp Squat",
-    "muscle": "Quads",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "cossack-squat",
-    "name": "Cossack Squat",
-    "muscle": "Quads",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "sissy-squat",
-    "name": "Sissy Squat",
-    "muscle": "Quads",
-    "equipment": "Bodyweight"
-  },
-  {
     "slug": "forward-lunge",
     "name": "Forward Lunge",
     "muscle": "Quads",
     "equipment": "Bodyweight"
   },
   {
-    "slug": "lateral-lunge",
-    "name": "Lateral Lunge",
-    "muscle": "Quads",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "curtsy-lunge",
-    "name": "Curtsy Lunge",
-    "muscle": "Glutes",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "skater-squat",
-    "name": "Skater Squat",
-    "muscle": "Quads",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "single-leg-box-squat",
-    "name": "Single-Leg Box Squat",
-    "muscle": "Quads",
-    "equipment": "Box"
-  },
-  {
-    "slug": "step-down",
-    "name": "Step-Down",
-    "muscle": "Quads",
-    "equipment": "Box"
-  },
-  {
-    "slug": "single-leg-calf-raise",
-    "name": "Single-Leg Calf Raise",
-    "muscle": "Calves",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "glute-bridge-march",
-    "name": "Glute Bridge March",
-    "muscle": "Glutes",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "frog-pump",
-    "name": "Frog Pump",
-    "muscle": "Glutes",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "donkey-kick",
-    "name": "Donkey Kick",
-    "muscle": "Glutes",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "fire-hydrant",
-    "name": "Fire Hydrant",
-    "muscle": "Glutes",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "clamshell",
-    "name": "Clamshell",
-    "muscle": "Glutes",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "hip-airplane",
-    "name": "Hip Airplane",
-    "muscle": "Glutes",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "side-lying-hip-abduction",
-    "name": "Side-Lying Hip Abduction",
-    "muscle": "Glutes",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "side-lying-leg-raise",
-    "name": "Side-Lying Leg Raise",
-    "muscle": "Glutes",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "lying-hamstring-walkout",
-    "name": "Lying Hamstring Walkout",
-    "muscle": "Hamstrings",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "towel-hamstring-curl",
-    "name": "Towel Hamstring Curl",
-    "muscle": "Hamstrings",
-    "equipment": "Towel"
-  },
-  {
-    "slug": "stability-ball-hamstring-curl",
-    "name": "Stability Ball Hamstring Curl",
-    "muscle": "Hamstrings",
-    "equipment": "Stability Ball"
-  },
-  {
-    "slug": "banded-glute-bridge",
-    "name": "Banded Glute Bridge",
-    "muscle": "Glutes",
-    "equipment": "Resistance Band"
-  },
-  {
-    "slug": "banded-hip-thrust",
-    "name": "Banded Hip Thrust",
-    "muscle": "Glutes",
-    "equipment": "Resistance Band"
-  },
-  {
-    "slug": "banded-frog-pump",
-    "name": "Banded Frog Pump",
-    "muscle": "Glutes",
-    "equipment": "Resistance Band"
-  },
-  {
-    "slug": "banded-clamshell",
-    "name": "Banded Clamshell",
-    "muscle": "Glutes",
-    "equipment": "Resistance Band"
-  },
-  {
-    "slug": "banded-lateral-walk",
-    "name": "Banded Lateral Walk",
-    "muscle": "Glutes",
-    "equipment": "Resistance Band"
-  },
-  {
-    "slug": "banded-monster-walk",
-    "name": "Banded Monster Walk",
-    "muscle": "Glutes",
-    "equipment": "Resistance Band"
-  },
-  {
-    "slug": "banded-squat",
-    "name": "Banded Squat",
-    "muscle": "Quads",
-    "equipment": "Resistance Band"
-  },
-  {
-    "slug": "banded-donkey-kick",
-    "name": "Banded Donkey Kick",
-    "muscle": "Glutes",
-    "equipment": "Resistance Band"
-  },
-  {
-    "slug": "banded-fire-hydrant",
-    "name": "Banded Fire Hydrant",
-    "muscle": "Glutes",
-    "equipment": "Resistance Band"
-  },
-  {
-    "slug": "banded-kickback",
-    "name": "Banded Kickback",
-    "muscle": "Glutes",
-    "equipment": "Resistance Band"
-  },
-  {
-    "slug": "banded-standing-hip-abduction",
-    "name": "Banded Standing Hip Abduction",
-    "muscle": "Glutes",
-    "equipment": "Resistance Band"
-  },
-  {
-    "slug": "banded-seated-hip-abduction",
-    "name": "Banded Seated Hip Abduction",
-    "muscle": "Glutes",
-    "equipment": "Resistance Band"
-  },
-  {
-    "slug": "band-pull-apart",
-    "name": "Band Pull-Apart",
-    "muscle": "Upper Back",
-    "equipment": "Resistance Band"
-  },
-  {
-    "slug": "banded-face-pull",
-    "name": "Banded Face Pull",
-    "muscle": "Upper Back",
-    "equipment": "Resistance Band"
-  },
-  {
     "slug": "banded-row",
     "name": "Banded Row",
     "muscle": "Back",
     "equipment": "Resistance Band"
-  },
-  {
-    "slug": "banded-lat-pulldown",
-    "name": "Banded Lat Pulldown",
-    "muscle": "Lats",
-    "equipment": "Resistance Band"
-  },
-  {
-    "slug": "banded-pallof-press",
-    "name": "Banded Pallof Press",
-    "muscle": "Core",
-    "equipment": "Resistance Band"
-  },
-  {
-    "slug": "banded-woodchop",
-    "name": "Banded Woodchop",
-    "muscle": "Core",
-    "equipment": "Resistance Band"
-  },
-  {
-    "slug": "banded-dead-bug",
-    "name": "Banded Dead Bug",
-    "muscle": "Core",
-    "equipment": "Resistance Band"
-  },
-  {
-    "slug": "hollow-body-hold",
-    "name": "Hollow Body Hold",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "hollow-rock",
-    "name": "Hollow Rock",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "v-up",
-    "name": "V-Up",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "flutter-kick",
-    "name": "Flutter Kick",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "lying-leg-raise",
-    "name": "Lying Leg Raise",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "toe-touch",
-    "name": "Toe Touch",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "heel-tap",
-    "name": "Heel Tap",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "plank-shoulder-tap",
-    "name": "Plank Shoulder Tap",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "plank-jack",
-    "name": "Plank Jack",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "bear-plank",
-    "name": "Bear Plank",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "crab-walk",
-    "name": "Crab Walk",
-    "muscle": "Triceps",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "inchworm",
-    "name": "Inchworm",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "l-sit-hold",
-    "name": "L-Sit Hold",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "seated-knee-tuck",
-    "name": "Seated Knee Tuck",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "side-plank-hip-dip",
-    "name": "Side Plank Hip Dip",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "copenhagen-plank",
-    "name": "Copenhagen Plank",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "dragon-flag",
-    "name": "Dragon Flag",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "half-burpee",
-    "name": "Half Burpee",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "squat-thrust",
-    "name": "Squat Thrust",
-    "muscle": "Core",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "jumping-jack",
-    "name": "Jumping Jack",
-    "muscle": "Legs",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "skater-hop",
-    "name": "Skater Hop",
-    "muscle": "Legs",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "lateral-shuffle",
-    "name": "Lateral Shuffle",
-    "muscle": "Legs",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "fast-feet",
-    "name": "Fast Feet",
-    "muscle": "Calves",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "sprawl",
-    "name": "Sprawl",
-    "muscle": "Legs",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "seal-jack",
-    "name": "Seal Jack",
-    "muscle": "Chest",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "cat-cow-stretch",
-    "name": "Cat-Cow Stretch",
-    "muscle": "Mobility",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "arm-circles",
-    "name": "Arm Circles",
-    "muscle": "Shoulders",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "worlds-greatest-stretch",
-    "name": "World's Greatest Stretch",
-    "muscle": "Mobility",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "leg-swings-stretch",
-    "name": "Leg Swings",
-    "muscle": "Mobility",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "torso-twist-stretch",
-    "name": "Torso Twists",
-    "muscle": "Mobility",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "doorway-chest-stretch",
-    "name": "Doorway Chest Stretch",
-    "muscle": "Chest",
-    "equipment": "Doorway"
-  },
-  {
-    "slug": "childs-pose",
-    "name": "Child's Pose",
-    "muscle": "Back",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "kneeling-hip-flexor-stretch",
-    "name": "Kneeling Hip Flexor Stretch",
-    "muscle": "Hips",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "hamstring-stretch",
-    "name": "Hamstring Stretch",
-    "muscle": "Hamstrings",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "standing-quad-stretch",
-    "name": "Standing Quad Stretch",
-    "muscle": "Quads",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "seated-forward-fold-stretch",
-    "name": "Seated Forward Fold",
-    "muscle": "Hamstrings",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "cross-body-shoulder-stretch",
-    "name": "Cross-Body Shoulder Stretch",
-    "muscle": "Shoulders",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "wall-calf-stretch",
-    "name": "Wall Calf Stretch",
-    "muscle": "Calves",
-    "equipment": "Bodyweight"
-  },
-  {
-    "slug": "butterfly-stretch",
-    "name": "Butterfly Stretch",
-    "muscle": "Hips",
-    "equipment": "Bodyweight"
   }
 ];
 }
@@ -1490,6 +113,9 @@ export function getUnmatchedSlugs(){
 const EXERCISE_IMAGES = {
   "push-up": {
     "slug": "push-up",
+    "name": "Push-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
     "frames": [
       1,
       2,
@@ -1506,6 +132,9 @@ const EXERCISE_IMAGES = {
   },
   "incline-push-up": {
     "slug": "incline-push-up",
+    "name": "Incline Push-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
     "frames": [
       1,
       2,
@@ -1523,6 +152,9 @@ const EXERCISE_IMAGES = {
   },
   "incline-dumbbell-press": {
     "slug": "incline-dumbbell-press",
+    "name": "Incline Dumbbell Press",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
     "frames": [
       1,
       2,
@@ -1539,6 +171,9 @@ const EXERCISE_IMAGES = {
   },
   "decline-push-up": {
     "slug": "decline-push-up",
+    "name": "Decline Push-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
     "frames": [
       1,
       2,
@@ -1556,6 +191,9 @@ const EXERCISE_IMAGES = {
   },
   "dumbbell-fly": {
     "slug": "dumbbell-fly",
+    "name": "Dumbbell Fly",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
     "frames": [
       1,
       2,
@@ -1571,6 +209,9 @@ const EXERCISE_IMAGES = {
   },
   "cable-fly": {
     "slug": "cable-fly",
+    "name": "Cable Fly",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
     "frames": [
       1,
       2,
@@ -1586,6 +227,9 @@ const EXERCISE_IMAGES = {
   },
   "pull-up": {
     "slug": "pull-up",
+    "name": "Pull-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
     "frames": [
       1,
       2,
@@ -1602,6 +246,9 @@ const EXERCISE_IMAGES = {
   },
   "lat-pulldown": {
     "slug": "lat-pulldown",
+    "name": "Lat Pulldown",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
     "frames": [
       1,
       2,
@@ -1617,6 +264,9 @@ const EXERCISE_IMAGES = {
   },
   "chin-up": {
     "slug": "chin-up",
+    "name": "Chin-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
     "frames": [
       1,
       2,
@@ -1632,6 +282,9 @@ const EXERCISE_IMAGES = {
   },
   "inverted-row": {
     "slug": "inverted-row",
+    "name": "Inverted Row",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
     "frames": [
       1,
       2,
@@ -1648,6 +301,9 @@ const EXERCISE_IMAGES = {
   },
   "barbell-row": {
     "slug": "barbell-row",
+    "name": "Barbell Row",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
     "frames": [
       1,
       2,
@@ -1664,6 +320,9 @@ const EXERCISE_IMAGES = {
   },
   "straight-arm-pulldown": {
     "slug": "straight-arm-pulldown",
+    "name": "Straight-Arm Pulldown",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
     "frames": [
       1,
       2,
@@ -1679,6 +338,9 @@ const EXERCISE_IMAGES = {
   },
   "single-arm-cable-row": {
     "slug": "single-arm-cable-row",
+    "name": "Single-Arm Cable Row",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
     "frames": [
       1,
       2,
@@ -1695,6 +357,9 @@ const EXERCISE_IMAGES = {
   },
   "chest-supported-row": {
     "slug": "chest-supported-row",
+    "name": "Chest Supported Row",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
     "frames": [
       1,
       2,
@@ -1711,6 +376,9 @@ const EXERCISE_IMAGES = {
   },
   "bodyweight-squat": {
     "slug": "bodyweight-squat",
+    "name": "Bodyweight Squat",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
     "frames": [
       1,
       2,
@@ -1728,6 +396,9 @@ const EXERCISE_IMAGES = {
   },
   "goblet-squat": {
     "slug": "goblet-squat",
+    "name": "Goblet Squat",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
     "frames": [
       1,
       2,
@@ -1744,6 +415,9 @@ const EXERCISE_IMAGES = {
   },
   "front-squat": {
     "slug": "front-squat",
+    "name": "Front Squat",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
     "frames": [
       1,
       2,
@@ -1760,6 +434,9 @@ const EXERCISE_IMAGES = {
   },
   "romanian-deadlift": {
     "slug": "romanian-deadlift",
+    "name": "Romanian Deadlift",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
     "frames": [
       1,
       2,
@@ -1776,6 +453,9 @@ const EXERCISE_IMAGES = {
   },
   "sumo-deadlift": {
     "slug": "sumo-deadlift",
+    "name": "Sumo Deadlift",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
     "frames": [
       1,
       2,
@@ -1792,6 +472,9 @@ const EXERCISE_IMAGES = {
   },
   "good-morning": {
     "slug": "good-morning",
+    "name": "Good Morning",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
     "frames": [
       1,
       2,
@@ -1808,6 +491,9 @@ const EXERCISE_IMAGES = {
   },
   "hip-thrust": {
     "slug": "hip-thrust",
+    "name": "Hip Thrust",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
     "frames": [
       1,
       2,
@@ -1823,6 +509,9 @@ const EXERCISE_IMAGES = {
   },
   "leg-press": {
     "slug": "leg-press",
+    "name": "Leg Press",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
     "frames": [
       1,
       2,
@@ -1839,6 +528,9 @@ const EXERCISE_IMAGES = {
   },
   "hip-abduction-machine": {
     "slug": "hip-abduction-machine",
+    "name": "Hip Abduction Machine",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
     "frames": [
       1,
       2,
@@ -1854,6 +546,9 @@ const EXERCISE_IMAGES = {
   },
   "glute-bridge": {
     "slug": "glute-bridge",
+    "name": "Glute Bridge",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
     "frames": [
       1,
       2,
@@ -1869,6 +564,9 @@ const EXERCISE_IMAGES = {
   },
   "split-squat": {
     "slug": "split-squat",
+    "name": "Split Squat",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
     "frames": [
       1,
       2,
@@ -1885,6 +583,9 @@ const EXERCISE_IMAGES = {
   },
   "bulgarian-split-squat": {
     "slug": "bulgarian-split-squat",
+    "name": "Bulgarian Split Squat",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
     "frames": [
       1,
       2,
@@ -1901,6 +602,9 @@ const EXERCISE_IMAGES = {
   },
   "step-up": {
     "slug": "step-up",
+    "name": "Step-Up",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
     "frames": [
       1,
       2,
@@ -1916,6 +620,9 @@ const EXERCISE_IMAGES = {
   },
   "wall-sit": {
     "slug": "wall-sit",
+    "name": "Wall Sit",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
     "frames": [
       1,
       2,
@@ -1932,6 +639,9 @@ const EXERCISE_IMAGES = {
   },
   "calf-raise": {
     "slug": "calf-raise",
+    "name": "Calf Raise",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
     "frames": [
       1,
       2,
@@ -1945,6 +655,9 @@ const EXERCISE_IMAGES = {
   },
   "arnold-press": {
     "slug": "arnold-press",
+    "name": "Arnold Press",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
     "frames": [
       1,
       2,
@@ -1960,6 +673,9 @@ const EXERCISE_IMAGES = {
   },
   "pike-push-up": {
     "slug": "pike-push-up",
+    "name": "Pike Push-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
     "frames": [
       1,
       2,
@@ -1977,6 +693,9 @@ const EXERCISE_IMAGES = {
   },
   "lateral-raise": {
     "slug": "lateral-raise",
+    "name": "Lateral Raise",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
     "frames": [
       1,
       2,
@@ -1992,6 +711,9 @@ const EXERCISE_IMAGES = {
   },
   "rear-delt-fly": {
     "slug": "rear-delt-fly",
+    "name": "Rear Delt Fly",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
     "frames": [
       1,
       2,
@@ -2007,6 +729,9 @@ const EXERCISE_IMAGES = {
   },
   "face-pull": {
     "slug": "face-pull",
+    "name": "Face Pull",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
     "frames": [
       1,
       2,
@@ -2023,6 +748,9 @@ const EXERCISE_IMAGES = {
   },
   "dumbbell-shrug": {
     "slug": "dumbbell-shrug",
+    "name": "Dumbbell Shrug",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
     "frames": [
       1,
       2,
@@ -2038,6 +766,9 @@ const EXERCISE_IMAGES = {
   },
   "bicep-curl": {
     "slug": "bicep-curl",
+    "name": "Bicep Curl",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
     "frames": [
       1,
       2,
@@ -2053,6 +784,9 @@ const EXERCISE_IMAGES = {
   },
   "hammer-curl": {
     "slug": "hammer-curl",
+    "name": "Hammer Curl",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
     "frames": [
       1,
       2,
@@ -2068,6 +802,9 @@ const EXERCISE_IMAGES = {
   },
   "tricep-pushdown": {
     "slug": "tricep-pushdown",
+    "name": "Tricep Pushdown",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
     "frames": [
       1,
       2,
@@ -2083,6 +820,9 @@ const EXERCISE_IMAGES = {
   },
   "overhead-tricep-extension": {
     "slug": "overhead-tricep-extension",
+    "name": "Overhead Tricep Extension",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
     "frames": [
       1,
       2,
@@ -2098,6 +838,9 @@ const EXERCISE_IMAGES = {
   },
   "plank": {
     "slug": "plank",
+    "name": "Plank",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
     "frames": [
       1,
       2,
@@ -2113,6 +856,9 @@ const EXERCISE_IMAGES = {
   },
   "side-plank": {
     "slug": "side-plank",
+    "name": "Side Plank",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
     "frames": [
       1,
       2,
@@ -2128,6 +874,9 @@ const EXERCISE_IMAGES = {
   },
   "dead-bug": {
     "slug": "dead-bug",
+    "name": "Dead Bug",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
     "frames": [
       1,
       2,
@@ -2143,6 +892,9 @@ const EXERCISE_IMAGES = {
   },
   "bird-dog": {
     "slug": "bird-dog",
+    "name": "Bird Dog",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
     "frames": [
       1,
       2,
@@ -2159,6 +911,9 @@ const EXERCISE_IMAGES = {
   },
   "pallof-press": {
     "slug": "pallof-press",
+    "name": "Pallof Press",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
     "frames": [
       1,
       2,
@@ -2174,6 +929,9 @@ const EXERCISE_IMAGES = {
   },
   "hanging-knee-raise": {
     "slug": "hanging-knee-raise",
+    "name": "Hanging Knee Raise",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Pull-up Bar",
     "frames": [
       1,
       2,
@@ -2189,6 +947,9 @@ const EXERCISE_IMAGES = {
   },
   "high-knees": {
     "slug": "high-knees",
+    "name": "High Knees",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
     "frames": [
       1,
       2,
@@ -2205,6 +966,9 @@ const EXERCISE_IMAGES = {
   },
   "jump-rope": {
     "slug": "jump-rope",
+    "name": "Jump Rope",
+    "exerciseType": "duration",
+    "equipment": "Cardio",
     "frames": [
       1,
       2,
@@ -2221,6 +985,9 @@ const EXERCISE_IMAGES = {
   },
   "kettlebell-swing": {
     "slug": "kettlebell-swing",
+    "name": "Kettlebell Swing",
+    "exerciseType": "weight_reps",
+    "equipment": "Kettlebell",
     "frames": [
       1,
       2,
@@ -2238,6 +1005,9 @@ const EXERCISE_IMAGES = {
   },
   "bear-crawl": {
     "slug": "bear-crawl",
+    "name": "Bear Crawl",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
     "frames": [
       1,
       2,
@@ -2255,6 +1025,9 @@ const EXERCISE_IMAGES = {
   },
   "burpee": {
     "slug": "burpee",
+    "name": "Burpee",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
     "frames": [
       1,
       2,
@@ -2273,6 +1046,9 @@ const EXERCISE_IMAGES = {
   },
   "farmer-carry": {
     "slug": "farmer-carry",
+    "name": "Farmer Carry",
+    "exerciseType": "distance_duration",
+    "equipment": "Dumbbell",
     "frames": [
       1,
       2,
@@ -2289,6 +1065,9 @@ const EXERCISE_IMAGES = {
   },
   "superman": {
     "slug": "superman",
+    "name": "Superman",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
     "frames": [
       1,
       2,
@@ -2306,6 +1085,9 @@ const EXERCISE_IMAGES = {
   },
   "lying-leg-curl": {
     "slug": "lying-leg-curl",
+    "name": "Lying Leg Curl",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
     "frames": [
       1,
       2,
@@ -2321,6 +1103,9 @@ const EXERCISE_IMAGES = {
   },
   "cable-pull-through": {
     "slug": "cable-pull-through",
+    "name": "Cable Pull-Through",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
     "frames": [
       1,
       2,
@@ -2337,6 +1122,9 @@ const EXERCISE_IMAGES = {
   },
   "machine-shoulder-press": {
     "slug": "machine-shoulder-press",
+    "name": "Machine Shoulder Press",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
     "frames": [
       1,
       2,
@@ -2352,6 +1140,9 @@ const EXERCISE_IMAGES = {
   },
   "reverse-pec-deck": {
     "slug": "reverse-pec-deck",
+    "name": "Reverse Pec Deck",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
     "frames": [
       1,
       2,
@@ -2365,8 +1156,11 @@ const EXERCISE_IMAGES = {
     "license": "CC BY-SA 4.0",
     "creator": "Bryl Lim"
   },
-  "bench-press-barbell": {
+  "bench-press": {
     "slug": "bench-press",
+    "name": "Bench Press",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
     "frames": [
       1,
       2,
@@ -2381,8 +1175,105 @@ const EXERCISE_IMAGES = {
     "license": "CC BY-SA 4.0",
     "creator": "Bryl Lim"
   },
-  "overhead-press-barbell": {
+  "incline-bench-press": {
+    "slug": "incline-bench-press",
+    "name": "Incline Bench Press",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Chest",
+    "secondaryMuscles": [
+      "Shoulders",
+      "Triceps"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "decline-bench-press": {
+    "slug": "decline-bench-press",
+    "name": "Decline Bench Press",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Chest",
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "machine-chest-press": {
+    "slug": "machine-chest-press",
+    "name": "Machine Chest Press",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Chest",
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "pec-deck": {
+    "slug": "pec-deck",
+    "name": "Pec Deck",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Chest",
+    "secondaryMuscles": [
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "weighted-push-up": {
+    "slug": "weighted-push-up",
+    "name": "Weighted Push-up",
+    "exerciseType": "weight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Chest",
+    "secondaryMuscles": [
+      "Triceps",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "overhead-press": {
     "slug": "overhead-press",
+    "name": "Overhead Press",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
     "frames": [
       1,
       2,
@@ -2396,23 +1287,103 @@ const EXERCISE_IMAGES = {
     "license": "CC BY-SA 4.0",
     "creator": "Bryl Lim"
   },
-  "dumbbell-row": {
-    "slug": "one-arm-dumbbell-row",
+  "seated-dumbbell-press": {
+    "slug": "seated-dumbbell-press",
+    "name": "Dumbbell Seated Shoulder Press",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
     "frames": [
       1,
       2,
       3
     ],
-    "primaryMuscle": "Back",
+    "primaryMuscle": "Shoulders",
     "secondaryMuscles": [
+      "Triceps"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "cable-lateral-raise": {
+    "slug": "cable-lateral-raise",
+    "name": "Cable Lateral Raise",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Shoulders",
+    "secondaryMuscles": [
+      "Upper Back"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "front-raise": {
+    "slug": "front-raise",
+    "name": "Front Raise",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Shoulders",
+    "secondaryMuscles": [
+      "Chest"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "upright-row": {
+    "slug": "upright-row",
+    "name": "Upright Row",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Shoulders",
+    "secondaryMuscles": [
+      "Upper Back",
       "Biceps"
     ],
     "isStretch": false,
     "license": "CC BY-SA 4.0",
     "creator": "Bryl Lim"
   },
-  "cable-row": {
-    "slug": "seated-row",
+  "deadlift": {
+    "slug": "deadlift",
+    "name": "Deadlift",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Posterior Chain",
+    "secondaryMuscles": [
+      "Back",
+      "Grip"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "t-bar-row": {
+    "slug": "t-bar-row",
+    "name": "T-Bar Row",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
     "frames": [
       1,
       2,
@@ -2427,8 +1398,366 @@ const EXERCISE_IMAGES = {
     "license": "CC BY-SA 4.0",
     "creator": "Bryl Lim"
   },
-  "tricep-dip-bench": {
-    "slug": "dip",
+  "dumbbell-bent-over-row": {
+    "slug": "dumbbell-bent-over-row",
+    "name": "Dumbbell Bent Over Row",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Back",
+    "secondaryMuscles": [
+      "Biceps",
+      "Rear Delts"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "one-arm-dumbbell-row": {
+    "slug": "one-arm-dumbbell-row",
+    "name": "One-Arm Dumbbell Row",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Back",
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "machine-row": {
+    "slug": "machine-row",
+    "name": "Machine Row",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Back",
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "close-grip-lat-pulldown": {
+    "slug": "close-grip-lat-pulldown",
+    "name": "Close-Grip Lat Pulldown",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Lats",
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "assisted-pull-up": {
+    "slug": "assisted-pull-up",
+    "name": "Assisted Pull-up",
+    "exerciseType": "assisted_bodyweight",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Lats",
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "weighted-pull-up": {
+    "slug": "weighted-pull-up",
+    "name": "Weighted Pull-up",
+    "exerciseType": "weight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Lats",
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "shrug": {
+    "slug": "shrug",
+    "name": "Barbell Shrug",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Upper Back",
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "squat": {
+    "slug": "squat",
+    "name": "Squat",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "hack-squat": {
+    "slug": "hack-squat",
+    "name": "Hack Squat",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "walking-lunge": {
+    "slug": "walking-lunge",
+    "name": "Walking Lunge",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Hamstrings"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "leg-extension": {
+    "slug": "leg-extension",
+    "name": "Leg Extension",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "leg-curl": {
+    "slug": "leg-curl",
+    "name": "Leg Curl",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Hamstrings",
+    "secondaryMuscles": [
+      "Calves"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "seated-leg-curl": {
+    "slug": "seated-leg-curl",
+    "name": "Seated Leg Curl",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Hamstrings",
+    "secondaryMuscles": [
+      "Calves"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "standing-calf-raise": {
+    "slug": "standing-calf-raise",
+    "name": "Standing Calf Raise",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Calves",
+    "secondaryMuscles": [],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "seated-calf-raise": {
+    "slug": "seated-calf-raise",
+    "name": "Seated Calf Raise",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Calves",
+    "secondaryMuscles": [],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "preacher-curl": {
+    "slug": "preacher-curl",
+    "name": "Preacher Curl",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Biceps",
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "cable-curl": {
+    "slug": "cable-curl",
+    "name": "Cable Curl",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Biceps",
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "reverse-curl": {
+    "slug": "reverse-curl",
+    "name": "Reverse Curl",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Forearms",
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "wrist-curl": {
+    "slug": "wrist-curl",
+    "name": "Wrist Curl",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Forearms",
+    "secondaryMuscles": [],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "skull-crusher": {
+    "slug": "skull-crusher",
+    "name": "Skull Crusher",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Triceps",
+    "secondaryMuscles": [
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "close-grip-bench-press": {
+    "slug": "close-grip-bench-press",
+    "name": "Close-Grip Bench Press",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
     "frames": [
       1,
       2,
@@ -2438,6 +1767,3870 @@ const EXERCISE_IMAGES = {
     "secondaryMuscles": [
       "Chest",
       "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "dip": {
+    "slug": "dip",
+    "name": "Dip",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Triceps",
+    "secondaryMuscles": [
+      "Chest",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "assisted-dip": {
+    "slug": "assisted-dip",
+    "name": "Assisted Dip",
+    "exerciseType": "assisted_bodyweight",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Triceps",
+    "secondaryMuscles": [
+      "Chest"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "cable-crunch": {
+    "slug": "cable-crunch",
+    "name": "Cable Crunch",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "ab-wheel": {
+    "slug": "ab-wheel",
+    "name": "Ab Wheel Rollout",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "running": {
+    "slug": "running",
+    "name": "Running",
+    "exerciseType": "distance_duration",
+    "equipment": "Cardio",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Legs",
+    "secondaryMuscles": [
+      "Cardio"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "walking": {
+    "slug": "walking",
+    "name": "Walking",
+    "exerciseType": "distance_duration",
+    "equipment": "Cardio",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Legs",
+    "secondaryMuscles": [
+      "Cardio"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "cycling": {
+    "slug": "cycling",
+    "name": "Cycling",
+    "exerciseType": "distance_duration",
+    "equipment": "Cardio",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Legs",
+    "secondaryMuscles": [
+      "Cardio"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "rowing": {
+    "slug": "rowing",
+    "name": "Rowing",
+    "exerciseType": "distance_duration",
+    "equipment": "Cardio",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Back",
+    "secondaryMuscles": [
+      "Legs",
+      "Cardio"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "stair-climber": {
+    "slug": "stair-climber",
+    "name": "Stair Climber",
+    "exerciseType": "duration",
+    "equipment": "Cardio",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Legs",
+    "secondaryMuscles": [
+      "Cardio"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "incline-cable-fly": {
+    "slug": "incline-cable-fly",
+    "name": "Incline Cable Fly",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Chest",
+    "secondaryMuscles": [
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "decline-dumbbell-press": {
+    "slug": "decline-dumbbell-press",
+    "name": "Decline Dumbbell Press",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Chest",
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "smith-machine-bench-press": {
+    "slug": "smith-machine-bench-press",
+    "name": "Smith Machine Bench Press",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Chest",
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "landmine-press": {
+    "slug": "landmine-press",
+    "name": "Landmine Press",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Shoulders",
+    "secondaryMuscles": [
+      "Chest",
+      "Triceps"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "chest-dip": {
+    "slug": "chest-dip",
+    "name": "Chest Dip",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Chest",
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "weighted-dip": {
+    "slug": "weighted-dip",
+    "name": "Weighted Dip",
+    "exerciseType": "weight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Triceps",
+    "secondaryMuscles": [
+      "Chest",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "standing-dumbbell-press": {
+    "slug": "standing-dumbbell-press",
+    "name": "Standing Dumbbell Press",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Shoulders",
+    "secondaryMuscles": [
+      "Triceps",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "push-press": {
+    "slug": "push-press",
+    "name": "Push Press",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Shoulders",
+    "secondaryMuscles": [
+      "Triceps",
+      "Quads"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "machine-lateral-raise": {
+    "slug": "machine-lateral-raise",
+    "name": "Machine Lateral Raise",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Shoulders",
+    "secondaryMuscles": [
+      "Upper Back"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "cable-front-raise": {
+    "slug": "cable-front-raise",
+    "name": "Cable Front Raise",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Shoulders",
+    "secondaryMuscles": [
+      "Chest"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "plate-front-raise": {
+    "slug": "plate-front-raise",
+    "name": "Plate Front Raise",
+    "exerciseType": "weight_reps",
+    "equipment": "Plate",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Shoulders",
+    "secondaryMuscles": [
+      "Chest"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "bent-over-rear-delt-raise": {
+    "slug": "bent-over-rear-delt-raise",
+    "name": "Bent-Over Rear Delt Raise",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Rear Delts",
+    "secondaryMuscles": [
+      "Upper Back"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "cable-rear-delt-fly": {
+    "slug": "cable-rear-delt-fly",
+    "name": "Cable Rear Delt Fly",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Rear Delts",
+    "secondaryMuscles": [
+      "Upper Back"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "pendlay-row": {
+    "slug": "pendlay-row",
+    "name": "Pendlay Row",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Back",
+    "secondaryMuscles": [
+      "Biceps",
+      "Rear Delts"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "meadows-row": {
+    "slug": "meadows-row",
+    "name": "Meadows Row",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Back",
+    "secondaryMuscles": [
+      "Biceps",
+      "Rear Delts"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "wide-grip-lat-pulldown": {
+    "slug": "wide-grip-lat-pulldown",
+    "name": "Wide-Grip Lat Pulldown",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Lats",
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "neutral-grip-pull-up": {
+    "slug": "neutral-grip-pull-up",
+    "name": "Neutral-Grip Pull-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Lats",
+    "secondaryMuscles": [
+      "Biceps",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "assisted-chin-up": {
+    "slug": "assisted-chin-up",
+    "name": "Assisted Chin-up",
+    "exerciseType": "assisted_bodyweight",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Biceps",
+    "secondaryMuscles": [
+      "Lats"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "weighted-chin-up": {
+    "slug": "weighted-chin-up",
+    "name": "Weighted Chin-up",
+    "exerciseType": "weight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Biceps",
+    "secondaryMuscles": [
+      "Lats"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "rack-pull": {
+    "slug": "rack-pull",
+    "name": "Rack Pull",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Back",
+    "secondaryMuscles": [
+      "Glutes",
+      "Hamstrings"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "back-extension": {
+    "slug": "back-extension",
+    "name": "Back Extension",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Lower Back",
+    "secondaryMuscles": [
+      "Glutes",
+      "Hamstrings"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "smith-machine-squat": {
+    "slug": "smith-machine-squat",
+    "name": "Smith Machine Squat",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "belt-squat": {
+    "slug": "belt-squat",
+    "name": "Belt Squat",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "trap-bar-deadlift": {
+    "slug": "trap-bar-deadlift",
+    "name": "Trap Bar Deadlift",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Posterior Chain",
+    "secondaryMuscles": [
+      "Quads",
+      "Grip"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "single-leg-romanian-deadlift": {
+    "slug": "single-leg-romanian-deadlift",
+    "name": "Single-Leg Romanian Deadlift",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Hamstrings",
+    "secondaryMuscles": [
+      "Glutes",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "reverse-lunge": {
+    "slug": "reverse-lunge",
+    "name": "Reverse Lunge",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Hamstrings"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "cable-kickback": {
+    "slug": "cable-kickback",
+    "name": "Cable Kickback",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "single-leg-glute-bridge": {
+    "slug": "single-leg-glute-bridge",
+    "name": "Single-Leg Glute Bridge",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "barbell-glute-bridge": {
+    "slug": "barbell-glute-bridge",
+    "name": "Barbell Glute Bridge",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "dumbbell-glute-bridge": {
+    "slug": "dumbbell-glute-bridge",
+    "name": "Dumbbell Glute Bridge",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "dumbbell-hip-thrust": {
+    "slug": "dumbbell-hip-thrust",
+    "name": "Dumbbell Hip Thrust",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "smith-machine-hip-thrust": {
+    "slug": "smith-machine-hip-thrust",
+    "name": "Smith Machine Hip Thrust",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "smith-machine-romanian-deadlift": {
+    "slug": "smith-machine-romanian-deadlift",
+    "name": "Smith Machine Romanian Deadlift",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Hamstrings",
+    "secondaryMuscles": [
+      "Glutes",
+      "Lower Back"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "dumbbell-romanian-deadlift": {
+    "slug": "dumbbell-romanian-deadlift",
+    "name": "Dumbbell Romanian Deadlift",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Hamstrings",
+    "secondaryMuscles": [
+      "Glutes",
+      "Lower Back"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "kettlebell-romanian-deadlift": {
+    "slug": "kettlebell-romanian-deadlift",
+    "name": "Kettlebell Romanian Deadlift",
+    "exerciseType": "weight_reps",
+    "equipment": "Kettlebell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Hamstrings",
+    "secondaryMuscles": [
+      "Glutes",
+      "Lower Back"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "machine-glute-kickback": {
+    "slug": "machine-glute-kickback",
+    "name": "Machine Glute Kickback",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "cable-standing-hip-abduction": {
+    "slug": "cable-standing-hip-abduction",
+    "name": "Cable Standing Hip Abduction",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "cable-standing-hip-adduction": {
+    "slug": "cable-standing-hip-adduction",
+    "name": "Cable Standing Hip Adduction",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Adductors",
+    "secondaryMuscles": [
+      "Core",
+      "Glutes"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "hip-adduction-machine": {
+    "slug": "hip-adduction-machine",
+    "name": "Hip Adduction Machine",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Adductors",
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "smith-machine-bulgarian-split-squat": {
+    "slug": "smith-machine-bulgarian-split-squat",
+    "name": "Smith Machine Bulgarian Split Squat",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "smith-machine-reverse-lunge": {
+    "slug": "smith-machine-reverse-lunge",
+    "name": "Smith Machine Reverse Lunge",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "smith-machine-split-squat": {
+    "slug": "smith-machine-split-squat",
+    "name": "Smith Machine Split Squat",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "heel-elevated-goblet-squat": {
+    "slug": "heel-elevated-goblet-squat",
+    "name": "Heel-Elevated Goblet Squat",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "dumbbell-sumo-squat": {
+    "slug": "dumbbell-sumo-squat",
+    "name": "Dumbbell Sumo Squat",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Quads",
+      "Adductors",
+      "Hamstrings"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "dumbbell-sumo-deadlift": {
+    "slug": "dumbbell-sumo-deadlift",
+    "name": "Dumbbell Sumo Deadlift",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Posterior Chain",
+    "secondaryMuscles": [
+      "Glutes",
+      "Quads",
+      "Adductors"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "front-foot-elevated-split-squat": {
+    "slug": "front-foot-elevated-split-squat",
+    "name": "Front-Foot Elevated Split Squat",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "deficit-reverse-lunge": {
+    "slug": "deficit-reverse-lunge",
+    "name": "Deficit Reverse Lunge",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Quads",
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "dumbbell-lateral-lunge": {
+    "slug": "dumbbell-lateral-lunge",
+    "name": "Dumbbell Lateral Lunge",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Adductors",
+      "Hamstrings"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "dumbbell-curtsy-lunge": {
+    "slug": "dumbbell-curtsy-lunge",
+    "name": "Dumbbell Curtsy Lunge",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Quads",
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "landmine-squat": {
+    "slug": "landmine-squat",
+    "name": "Landmine Squat",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "landmine-romanian-deadlift": {
+    "slug": "landmine-romanian-deadlift",
+    "name": "Landmine Romanian Deadlift",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Hamstrings",
+    "secondaryMuscles": [
+      "Glutes",
+      "Lower Back"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "glute-focused-back-extension": {
+    "slug": "glute-focused-back-extension",
+    "name": "Glute-Focused Back Extension",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Lower Back"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "reverse-hyperextension": {
+    "slug": "reverse-hyperextension",
+    "name": "Reverse Hyperextension",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Lower Back"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "donkey-calf-raise": {
+    "slug": "donkey-calf-raise",
+    "name": "Donkey Calf Raise",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Calves",
+    "secondaryMuscles": [],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "leg-press-calf-raise": {
+    "slug": "leg-press-calf-raise",
+    "name": "Leg Press Calf Raise",
+    "exerciseType": "weight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Calves",
+    "secondaryMuscles": [],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "jump-squat": {
+    "slug": "jump-squat",
+    "name": "Jump Squat",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Calves"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "incline-dumbbell-curl": {
+    "slug": "incline-dumbbell-curl",
+    "name": "Incline Dumbbell Curl",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Biceps",
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "concentration-curl": {
+    "slug": "concentration-curl",
+    "name": "Concentration Curl",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Biceps",
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "ez-bar-curl": {
+    "slug": "ez-bar-curl",
+    "name": "EZ-Bar Curl",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Biceps",
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "spider-curl": {
+    "slug": "spider-curl",
+    "name": "Spider Curl",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Biceps",
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "rope-hammer-curl": {
+    "slug": "rope-hammer-curl",
+    "name": "Rope Hammer Curl",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Biceps",
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "drag-curl": {
+    "slug": "drag-curl",
+    "name": "Drag Curl",
+    "exerciseType": "weight_reps",
+    "equipment": "Barbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Biceps",
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "rope-tricep-pushdown": {
+    "slug": "rope-tricep-pushdown",
+    "name": "Rope Tricep Pushdown",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Triceps",
+    "secondaryMuscles": [
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "dumbbell-skull-crusher": {
+    "slug": "dumbbell-skull-crusher",
+    "name": "Two Dumbbell Skullcrusher",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Triceps",
+    "secondaryMuscles": [
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "single-dumbbell-skullcrusher": {
+    "slug": "single-dumbbell-skullcrusher",
+    "name": "Single Dumbbell Skullcrusher",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Triceps",
+    "secondaryMuscles": [
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "dumbbell-overhead-tricep-extension": {
+    "slug": "dumbbell-overhead-tricep-extension",
+    "name": "Dumbbell Overhead Tricep Extension",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Triceps",
+    "secondaryMuscles": [
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "single-arm-dumbbell-tricep-extension": {
+    "slug": "single-arm-dumbbell-tricep-extension",
+    "name": "Single Arm Dumbbell Tricep Extension",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Triceps",
+    "secondaryMuscles": [
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "tricep-kickback": {
+    "slug": "tricep-kickback",
+    "name": "Tricep Kickback",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Triceps",
+    "secondaryMuscles": [
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "wrist-extension": {
+    "slug": "wrist-extension",
+    "name": "Wrist Extension",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Forearms",
+    "secondaryMuscles": [],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "crunch": {
+    "slug": "crunch",
+    "name": "Crunch",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "reverse-crunch": {
+    "slug": "reverse-crunch",
+    "name": "Reverse Crunch",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "russian-twist": {
+    "slug": "russian-twist",
+    "name": "Russian Twist",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "bicycle-crunch": {
+    "slug": "bicycle-crunch",
+    "name": "Bicycle Crunch",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "mountain-climber": {
+    "slug": "mountain-climber",
+    "name": "Mountain Climber",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Shoulders",
+      "Legs"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "cable-woodchop": {
+    "slug": "cable-woodchop",
+    "name": "Cable Woodchop",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "half-kneeling-pallof-press": {
+    "slug": "half-kneeling-pallof-press",
+    "name": "Half-Kneeling Pallof Press",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Glutes",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "cable-pallof-hold": {
+    "slug": "cable-pallof-hold",
+    "name": "Cable Pallof Hold",
+    "exerciseType": "duration",
+    "equipment": "Cable",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Glutes",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "captains-chair-knee-raise": {
+    "slug": "captains-chair-knee-raise",
+    "name": "Captain's Chair Knee Raise",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Machine",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "decline-sit-up": {
+    "slug": "decline-sit-up",
+    "name": "Decline Sit-Up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bench",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Quads"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "weighted-crunch": {
+    "slug": "weighted-crunch",
+    "name": "Weighted Crunch",
+    "exerciseType": "weight_reps",
+    "equipment": "Plate",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "weighted-russian-twist": {
+    "slug": "weighted-russian-twist",
+    "name": "Weighted Russian Twist",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "dumbbell-side-bend": {
+    "slug": "dumbbell-side-bend",
+    "name": "Dumbbell Side Bend",
+    "exerciseType": "weight_reps",
+    "equipment": "Dumbbell",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Grip"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "elliptical": {
+    "slug": "elliptical",
+    "name": "Elliptical",
+    "exerciseType": "duration",
+    "equipment": "Cardio",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Legs",
+    "secondaryMuscles": [
+      "Cardio"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "swimming": {
+    "slug": "swimming",
+    "name": "Swimming",
+    "exerciseType": "distance_duration",
+    "equipment": "Cardio",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Back",
+    "secondaryMuscles": [
+      "Shoulders",
+      "Cardio"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "assault-bike": {
+    "slug": "assault-bike",
+    "name": "Assault Bike",
+    "exerciseType": "distance_duration",
+    "equipment": "Cardio",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Legs",
+    "secondaryMuscles": [
+      "Cardio",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "skierg": {
+    "slug": "skierg",
+    "name": "SkiErg",
+    "exerciseType": "distance_duration",
+    "equipment": "Cardio",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Back",
+    "secondaryMuscles": [
+      "Triceps",
+      "Core",
+      "Cardio"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "hiking": {
+    "slug": "hiking",
+    "name": "Hiking",
+    "exerciseType": "distance_duration",
+    "equipment": "Cardio",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Legs",
+    "secondaryMuscles": [
+      "Glutes",
+      "Cardio"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "treadmill-incline-walk": {
+    "slug": "treadmill-incline-walk",
+    "name": "Treadmill Incline Walk",
+    "exerciseType": "distance_duration",
+    "equipment": "Cardio",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Legs",
+    "secondaryMuscles": [
+      "Glutes",
+      "Cardio"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "battle-ropes": {
+    "slug": "battle-ropes",
+    "name": "Battle Ropes",
+    "exerciseType": "duration",
+    "equipment": "Cardio",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Shoulders",
+    "secondaryMuscles": [
+      "Core",
+      "Cardio"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "knee-push-up": {
+    "slug": "knee-push-up",
+    "name": "Knee Push-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Chest",
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "wide-push-up": {
+    "slug": "wide-push-up",
+    "name": "Wide Push-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Chest",
+    "secondaryMuscles": [
+      "Shoulders",
+      "Triceps",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "diamond-push-up": {
+    "slug": "diamond-push-up",
+    "name": "Diamond Push-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Triceps",
+    "secondaryMuscles": [
+      "Chest",
+      "Shoulders",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "feet-elevated-pike-push-up": {
+    "slug": "feet-elevated-pike-push-up",
+    "name": "Feet-Elevated Pike Push-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Shoulders",
+    "secondaryMuscles": [
+      "Triceps",
+      "Chest",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "archer-push-up": {
+    "slug": "archer-push-up",
+    "name": "Archer Push-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Chest",
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "typewriter-push-up": {
+    "slug": "typewriter-push-up",
+    "name": "Typewriter Push-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Chest",
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "explosive-push-up": {
+    "slug": "explosive-push-up",
+    "name": "Explosive Push-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Chest",
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "hindu-push-up": {
+    "slug": "hindu-push-up",
+    "name": "Hindu Push-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Chest",
+    "secondaryMuscles": [
+      "Shoulders",
+      "Triceps",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "scapular-push-up": {
+    "slug": "scapular-push-up",
+    "name": "Scapular Push-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Upper Back",
+    "secondaryMuscles": [
+      "Chest",
+      "Shoulders",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "push-up-shoulder-tap": {
+    "slug": "push-up-shoulder-tap",
+    "name": "Push-up Shoulder Tap",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Chest",
+      "Shoulders",
+      "Triceps"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "wall-push-up": {
+    "slug": "wall-push-up",
+    "name": "Wall Push-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Wall",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Chest",
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "wall-walk": {
+    "slug": "wall-walk",
+    "name": "Wall Walk",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Wall",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Shoulders",
+    "secondaryMuscles": [
+      "Core",
+      "Chest",
+      "Triceps"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "wall-handstand-push-up": {
+    "slug": "wall-handstand-push-up",
+    "name": "Wall Handstand Push-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Wall",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Shoulders",
+    "secondaryMuscles": [
+      "Triceps",
+      "Core",
+      "Chest"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "handstand-push-up": {
+    "slug": "handstand-push-up",
+    "name": "Handstand Push-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Shoulders",
+    "secondaryMuscles": [
+      "Triceps",
+      "Core",
+      "Chest"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "chair-dip": {
+    "slug": "chair-dip",
+    "name": "Chair Dip",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Chair",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Triceps",
+    "secondaryMuscles": [
+      "Chest",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "doorway-row": {
+    "slug": "doorway-row",
+    "name": "Doorway Row",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Doorway",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Back",
+    "secondaryMuscles": [
+      "Biceps",
+      "Upper Back",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "towel-row": {
+    "slug": "towel-row",
+    "name": "Towel Row",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Towel",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Back",
+    "secondaryMuscles": [
+      "Biceps",
+      "Upper Back",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "prone-y-raise": {
+    "slug": "prone-y-raise",
+    "name": "Prone Y Raise",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Upper Back",
+    "secondaryMuscles": [
+      "Rear Delts",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "prone-t-raise": {
+    "slug": "prone-t-raise",
+    "name": "Prone T Raise",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Upper Back",
+    "secondaryMuscles": [
+      "Rear Delts",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "reverse-snow-angel": {
+    "slug": "reverse-snow-angel",
+    "name": "Reverse Snow Angel",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Upper Back",
+    "secondaryMuscles": [
+      "Rear Delts",
+      "Lower Back",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "dead-hang": {
+    "slug": "dead-hang",
+    "name": "Dead Hang",
+    "exerciseType": "duration",
+    "equipment": "Pull-up Bar",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Forearms",
+    "secondaryMuscles": [
+      "Lats",
+      "Shoulders",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "active-hang": {
+    "slug": "active-hang",
+    "name": "Active Hang",
+    "exerciseType": "duration",
+    "equipment": "Pull-up Bar",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Lats",
+    "secondaryMuscles": [
+      "Upper Back",
+      "Forearms",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "scapular-pull-up": {
+    "slug": "scapular-pull-up",
+    "name": "Scapular Pull-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Pull-up Bar",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Lats",
+    "secondaryMuscles": [
+      "Upper Back",
+      "Forearms",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "negative-pull-up": {
+    "slug": "negative-pull-up",
+    "name": "Negative Pull-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Pull-up Bar",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Lats",
+    "secondaryMuscles": [
+      "Biceps",
+      "Upper Back",
+      "Forearms"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "commando-pull-up": {
+    "slug": "commando-pull-up",
+    "name": "Commando Pull-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Pull-up Bar",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Lats",
+    "secondaryMuscles": [
+      "Biceps",
+      "Upper Back",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "l-sit-pull-up": {
+    "slug": "l-sit-pull-up",
+    "name": "L-Sit Pull-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Pull-up Bar",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Lats",
+    "secondaryMuscles": [
+      "Biceps",
+      "Core",
+      "Forearms"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "towel-pull-up": {
+    "slug": "towel-pull-up",
+    "name": "Towel Pull-up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Towel",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Lats",
+    "secondaryMuscles": [
+      "Biceps",
+      "Forearms",
+      "Upper Back"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "pistol-squat": {
+    "slug": "pistol-squat",
+    "name": "Pistol Squat",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "assisted-pistol-squat": {
+    "slug": "assisted-pistol-squat",
+    "name": "Assisted Pistol Squat",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "shrimp-squat": {
+    "slug": "shrimp-squat",
+    "name": "Shrimp Squat",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "cossack-squat": {
+    "slug": "cossack-squat",
+    "name": "Cossack Squat",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "sissy-squat": {
+    "slug": "sissy-squat",
+    "name": "Sissy Squat",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Core",
+      "Calves"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "lateral-lunge": {
+    "slug": "lateral-lunge",
+    "name": "Lateral Lunge",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "curtsy-lunge": {
+    "slug": "curtsy-lunge",
+    "name": "Curtsy Lunge",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Quads",
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "skater-squat": {
+    "slug": "skater-squat",
+    "name": "Skater Squat",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "single-leg-box-squat": {
+    "slug": "single-leg-box-squat",
+    "name": "Single-Leg Box Squat",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Box",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "step-down": {
+    "slug": "step-down",
+    "name": "Step-Down",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Box",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Hamstrings",
+      "Calves"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "single-leg-calf-raise": {
+    "slug": "single-leg-calf-raise",
+    "name": "Single-Leg Calf Raise",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Calves",
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "glute-bridge-march": {
+    "slug": "glute-bridge-march",
+    "name": "Glute Bridge March",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "frog-pump": {
+    "slug": "frog-pump",
+    "name": "Frog Pump",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "donkey-kick": {
+    "slug": "donkey-kick",
+    "name": "Donkey Kick",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "fire-hydrant": {
+    "slug": "fire-hydrant",
+    "name": "Fire Hydrant",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "clamshell": {
+    "slug": "clamshell",
+    "name": "Clamshell",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "hip-airplane": {
+    "slug": "hip-airplane",
+    "name": "Hip Airplane",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "side-lying-hip-abduction": {
+    "slug": "side-lying-hip-abduction",
+    "name": "Side-Lying Hip Abduction",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "side-lying-leg-raise": {
+    "slug": "side-lying-leg-raise",
+    "name": "Side-Lying Leg Raise",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "lying-hamstring-walkout": {
+    "slug": "lying-hamstring-walkout",
+    "name": "Lying Hamstring Walkout",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Hamstrings",
+    "secondaryMuscles": [
+      "Glutes",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "towel-hamstring-curl": {
+    "slug": "towel-hamstring-curl",
+    "name": "Towel Hamstring Curl",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Towel",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Hamstrings",
+    "secondaryMuscles": [
+      "Glutes",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "stability-ball-hamstring-curl": {
+    "slug": "stability-ball-hamstring-curl",
+    "name": "Stability Ball Hamstring Curl",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Stability Ball",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Hamstrings",
+    "secondaryMuscles": [
+      "Glutes",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "banded-glute-bridge": {
+    "slug": "banded-glute-bridge",
+    "name": "Banded Glute Bridge",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Resistance Band",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "banded-hip-thrust": {
+    "slug": "banded-hip-thrust",
+    "name": "Banded Hip Thrust",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Resistance Band",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "banded-frog-pump": {
+    "slug": "banded-frog-pump",
+    "name": "Banded Frog Pump",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Resistance Band",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "banded-clamshell": {
+    "slug": "banded-clamshell",
+    "name": "Banded Clamshell",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Resistance Band",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "banded-lateral-walk": {
+    "slug": "banded-lateral-walk",
+    "name": "Banded Lateral Walk",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Resistance Band",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Quads",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "banded-monster-walk": {
+    "slug": "banded-monster-walk",
+    "name": "Banded Monster Walk",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Resistance Band",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Quads",
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "banded-squat": {
+    "slug": "banded-squat",
+    "name": "Banded Squat",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Resistance Band",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Glutes",
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "banded-donkey-kick": {
+    "slug": "banded-donkey-kick",
+    "name": "Banded Donkey Kick",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Resistance Band",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "banded-fire-hydrant": {
+    "slug": "banded-fire-hydrant",
+    "name": "Banded Fire Hydrant",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Resistance Band",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "banded-kickback": {
+    "slug": "banded-kickback",
+    "name": "Banded Kickback",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Resistance Band",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "banded-standing-hip-abduction": {
+    "slug": "banded-standing-hip-abduction",
+    "name": "Banded Standing Hip Abduction",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Resistance Band",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "banded-seated-hip-abduction": {
+    "slug": "banded-seated-hip-abduction",
+    "name": "Banded Seated Hip Abduction",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Resistance Band",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Glutes",
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "band-pull-apart": {
+    "slug": "band-pull-apart",
+    "name": "Band Pull-Apart",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Resistance Band",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Upper Back",
+    "secondaryMuscles": [
+      "Rear Delts",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "banded-face-pull": {
+    "slug": "banded-face-pull",
+    "name": "Banded Face Pull",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Resistance Band",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Upper Back",
+    "secondaryMuscles": [
+      "Rear Delts",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "banded-lat-pulldown": {
+    "slug": "banded-lat-pulldown",
+    "name": "Banded Lat Pulldown",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Resistance Band",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Lats",
+    "secondaryMuscles": [
+      "Biceps",
+      "Core"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "banded-pallof-press": {
+    "slug": "banded-pallof-press",
+    "name": "Banded Pallof Press",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Resistance Band",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Glutes",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "banded-woodchop": {
+    "slug": "banded-woodchop",
+    "name": "Banded Woodchop",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Resistance Band",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Shoulders",
+      "Glutes"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "banded-dead-bug": {
+    "slug": "banded-dead-bug",
+    "name": "Banded Dead Bug",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Resistance Band",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Glutes",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "hollow-body-hold": {
+    "slug": "hollow-body-hold",
+    "name": "Hollow Body Hold",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Quads"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "hollow-rock": {
+    "slug": "hollow-rock",
+    "name": "Hollow Rock",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Quads"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "v-up": {
+    "slug": "v-up",
+    "name": "V-Up",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Quads"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "flutter-kick": {
+    "slug": "flutter-kick",
+    "name": "Flutter Kick",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Quads"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "lying-leg-raise": {
+    "slug": "lying-leg-raise",
+    "name": "Lying Leg Raise",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Quads"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "toe-touch": {
+    "slug": "toe-touch",
+    "name": "Toe Touch",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "heel-tap": {
+    "slug": "heel-tap",
+    "name": "Heel Tap",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "plank-shoulder-tap": {
+    "slug": "plank-shoulder-tap",
+    "name": "Plank Shoulder Tap",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Shoulders",
+      "Chest"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "plank-jack": {
+    "slug": "plank-jack",
+    "name": "Plank Jack",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Shoulders",
+      "Cardio"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "bear-plank": {
+    "slug": "bear-plank",
+    "name": "Bear Plank",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Quads",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "crab-walk": {
+    "slug": "crab-walk",
+    "name": "Crab Walk",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Triceps",
+    "secondaryMuscles": [
+      "Glutes",
+      "Core",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "inchworm": {
+    "slug": "inchworm",
+    "name": "Inchworm",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Shoulders",
+      "Hamstrings",
+      "Chest"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "l-sit-hold": {
+    "slug": "l-sit-hold",
+    "name": "L-Sit Hold",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Triceps",
+      "Quads",
+      "Shoulders"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "seated-knee-tuck": {
+    "slug": "seated-knee-tuck",
+    "name": "Seated Knee Tuck",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Quads"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "side-plank-hip-dip": {
+    "slug": "side-plank-hip-dip",
+    "name": "Side Plank Hip Dip",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Shoulders",
+      "Glutes"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "copenhagen-plank": {
+    "slug": "copenhagen-plank",
+    "name": "Copenhagen Plank",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Quads",
+      "Glutes"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "dragon-flag": {
+    "slug": "dragon-flag",
+    "name": "Dragon Flag",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Lats",
+      "Quads"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "half-burpee": {
+    "slug": "half-burpee",
+    "name": "Half Burpee",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Legs",
+      "Shoulders",
+      "Cardio"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "squat-thrust": {
+    "slug": "squat-thrust",
+    "name": "Squat Thrust",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Core",
+    "secondaryMuscles": [
+      "Legs",
+      "Shoulders",
+      "Cardio"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "jumping-jack": {
+    "slug": "jumping-jack",
+    "name": "Jumping Jack",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Legs",
+    "secondaryMuscles": [
+      "Shoulders",
+      "Calves",
+      "Cardio"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "skater-hop": {
+    "slug": "skater-hop",
+    "name": "Skater Hop",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Legs",
+    "secondaryMuscles": [
+      "Glutes",
+      "Calves",
+      "Cardio"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "lateral-shuffle": {
+    "slug": "lateral-shuffle",
+    "name": "Lateral Shuffle",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Legs",
+    "secondaryMuscles": [
+      "Glutes",
+      "Calves",
+      "Cardio"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "fast-feet": {
+    "slug": "fast-feet",
+    "name": "Fast Feet",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Calves",
+    "secondaryMuscles": [
+      "Legs",
+      "Cardio"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "sprawl": {
+    "slug": "sprawl",
+    "name": "Sprawl",
+    "exerciseType": "bodyweight_reps",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Legs",
+    "secondaryMuscles": [
+      "Core",
+      "Shoulders",
+      "Cardio"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "seal-jack": {
+    "slug": "seal-jack",
+    "name": "Seal Jack",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Chest",
+    "secondaryMuscles": [
+      "Shoulders",
+      "Legs",
+      "Cardio"
+    ],
+    "isStretch": false,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "cat-cow-stretch": {
+    "slug": "cat-cow-stretch",
+    "name": "Cat-Cow Stretch",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Mobility",
+    "secondaryMuscles": [
+      "Back",
+      "Core"
+    ],
+    "isStretch": true,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "arm-circles": {
+    "slug": "arm-circles",
+    "name": "Arm Circles",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Shoulders",
+    "secondaryMuscles": [
+      "Chest",
+      "Upper Back",
+      "Mobility"
+    ],
+    "isStretch": true,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "worlds-greatest-stretch": {
+    "slug": "worlds-greatest-stretch",
+    "name": "World's Greatest Stretch",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Mobility",
+    "secondaryMuscles": [
+      "Hips",
+      "Hamstrings",
+      "Upper Back"
+    ],
+    "isStretch": true,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "leg-swings-stretch": {
+    "slug": "leg-swings-stretch",
+    "name": "Leg Swings",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Mobility",
+    "secondaryMuscles": [
+      "Hips",
+      "Hamstrings",
+      "Quads"
+    ],
+    "isStretch": true,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "torso-twist-stretch": {
+    "slug": "torso-twist-stretch",
+    "name": "Torso Twists",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Mobility",
+    "secondaryMuscles": [
+      "Core",
+      "Back"
+    ],
+    "isStretch": true,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "doorway-chest-stretch": {
+    "slug": "doorway-chest-stretch",
+    "name": "Doorway Chest Stretch",
+    "exerciseType": "duration",
+    "equipment": "Doorway",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Chest",
+    "secondaryMuscles": [
+      "Shoulders",
+      "Mobility"
+    ],
+    "isStretch": true,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "childs-pose": {
+    "slug": "childs-pose",
+    "name": "Child's Pose",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Back",
+    "secondaryMuscles": [
+      "Shoulders",
+      "Hips",
+      "Mobility"
+    ],
+    "isStretch": true,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "kneeling-hip-flexor-stretch": {
+    "slug": "kneeling-hip-flexor-stretch",
+    "name": "Kneeling Hip Flexor Stretch",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Hips",
+    "secondaryMuscles": [
+      "Quads",
+      "Mobility"
+    ],
+    "isStretch": true,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "hamstring-stretch": {
+    "slug": "hamstring-stretch",
+    "name": "Hamstring Stretch",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Hamstrings",
+    "secondaryMuscles": [
+      "Calves",
+      "Mobility"
+    ],
+    "isStretch": true,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "standing-quad-stretch": {
+    "slug": "standing-quad-stretch",
+    "name": "Standing Quad Stretch",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Quads",
+    "secondaryMuscles": [
+      "Hips",
+      "Mobility"
+    ],
+    "isStretch": true,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "seated-forward-fold-stretch": {
+    "slug": "seated-forward-fold-stretch",
+    "name": "Seated Forward Fold",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Hamstrings",
+    "secondaryMuscles": [
+      "Back",
+      "Calves",
+      "Mobility"
+    ],
+    "isStretch": true,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "cross-body-shoulder-stretch": {
+    "slug": "cross-body-shoulder-stretch",
+    "name": "Cross-Body Shoulder Stretch",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Shoulders",
+    "secondaryMuscles": [
+      "Upper Back",
+      "Mobility"
+    ],
+    "isStretch": true,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "wall-calf-stretch": {
+    "slug": "wall-calf-stretch",
+    "name": "Wall Calf Stretch",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Calves",
+    "secondaryMuscles": [
+      "Mobility"
+    ],
+    "isStretch": true,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "butterfly-stretch": {
+    "slug": "butterfly-stretch",
+    "name": "Butterfly Stretch",
+    "exerciseType": "duration",
+    "equipment": "Bodyweight",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Hips",
+    "secondaryMuscles": [
+      "Groin",
+      "Mobility"
+    ],
+    "isStretch": true,
+    "license": "CC BY-SA 4.0",
+    "creator": "Bryl Lim"
+  },
+  "cable-row": {
+    "slug": "seated-row",
+    "name": "Seated Cable Row",
+    "exerciseType": "weight_reps",
+    "equipment": "Cable",
+    "frames": [
+      1,
+      2,
+      3
+    ],
+    "primaryMuscle": "Back",
+    "secondaryMuscles": [
+      "Biceps",
+      "Rear Delts"
     ],
     "isStretch": false,
     "license": "CC BY-SA 4.0",

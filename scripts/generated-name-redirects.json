@@ -1,0 +1,34 @@
+[
+  {
+    "from": "dumbbell-bench-press",
+    "to": "bench-press-dumbbell"
+  },
+  {
+    "from": "seated-row",
+    "to": "cable-row"
+  },
+  {
+    "from": "hanging-leg-raise",
+    "to": "leg-raise"
+  },
+  {
+    "from": "nordic-hamstring-curl",
+    "to": "nordic-curl"
+  },
+  {
+    "from": "bench-dip",
+    "to": "tricep-dip-bench"
+  },
+  {
+    "from": "superman-hold",
+    "to": "superman"
+  },
+  {
+    "from": "forward-lunge",
+    "to": "lunge"
+  },
+  {
+    "from": "banded-row",
+    "to": "band-row"
+  }
+]

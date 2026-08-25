@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { MUSCLES, LEVELS, EQUIPMENT, EXERCISE_TAGS, searchExercises, EXERCISE_BY_ID } from '../lib/data.js';
-import { hasExerciseImage } from '../lib/exerciseImages.js';
+import { hasExerciseImage, getExerciseMeta } from '../lib/exerciseImages.js';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
 
 export default function ExerciseBrowser({ availableEquipment }){
@@ -97,12 +97,22 @@ export default function ExerciseBrowser({ availableEquipment }){
               <div className="px-4 pb-4 pt-3 space-y-2 border-t border-line bg-surface2">
                 <div className="flex items-start gap-3">
                   {hasExerciseImage(ex.id) && <ExerciseIllustration exerciseId={ex.id} size="lg" />}
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold">Cues</p>
-                    <ul className="list-disc pl-5 text-xs text-ink2 space-y-1">{ex.cues.map((c,i)=> <li key={i}>{c}</li>)}</ul>
-                    <p className="text-xs font-semibold mt-2">If you don’t have the kit</p>
-                    <p className="text-xs text-ink3">{ex.substitution.map(id=> EXERCISE_BY_ID[id]?.name || id).join(' • ')}</p>
-                  </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold">Cues</p>
+                  <ul className="list-disc pl-5 text-xs text-ink2 space-y-1">{ex.cues.map((c,i)=> <li key={i}>{c}</li>)}</ul>
+                  {(() => {
+                    const meta = getExerciseMeta(ex.id);
+                    if(!meta) return null;
+                    return (
+                      <div className="mt-2 text-[11px] text-ink3 space-y-0.5">
+                        <p>Type: {meta.exerciseType} · Equipment: {meta.equipment} · {meta.frames} frames</p>
+                        <p>Muscles: {meta.primaryMuscle}{meta.secondaryMuscles?.length ? ` (secondary: ${meta.secondaryMuscles.join(', ')})` : ''}{meta.isStretch ? ' · stretch' : ''}</p>
+                      </div>
+                    );
+                  })()}
+                  <p className="text-xs font-semibold mt-2">If you don’t have the kit</p>
+                  <p className="text-xs text-ink3">{ex.substitution.map(id=> EXERCISE_BY_ID[id]?.name || id).join(' • ')}</p>
+                </div>
                 </div>
               </div>
             )}
