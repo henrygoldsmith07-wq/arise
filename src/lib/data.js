@@ -396,6 +396,20 @@ export const EXERCISES = [
 
 export const EXERCISE_BY_ID = Object.fromEntries(EXERCISES.map(e => [e.id, e]));
 
+// Equipment class for segmentation (free weights / machines / cables / bodyweight)
+// — from the exercise's declared kit. Lives here so the study and ledger
+// modules can share it without an import cycle.
+export function equipmentClassFor(exerciseId){
+  const ex = EXERCISE_BY_ID[exerciseId];
+  if(!ex) return 'unknown';
+  const equipment = ex.equipment || [];
+  if(equipment.includes('machine')) return 'machines';
+  if(equipment.includes('cable')) return 'cables';
+  if(equipment.some(eq=> ['barbell', 'dumbbells', 'kettlebell'].includes(eq))) return 'free-weights';
+  if(equipment.length === 1 && equipment[0] === 'bodyweight') return 'bodyweight';
+  return 'other';
+}
+
 // Programme templates — reusable blueprints that can be instantiated with different start dates / tweaks.
 // level/goal/daysPerWeek drive template recommendation; version drives template versioning.
 export const PROGRAM_TEMPLATES = [

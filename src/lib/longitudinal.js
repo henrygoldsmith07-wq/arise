@@ -18,10 +18,11 @@
 //      conclusive:false) until the configured minimum sample size is met.
 
 import { resolveArisePriors } from './priors.js';
-import { EXERCISE_BY_ID } from './data.js';
+import { EXERCISE_BY_ID, equipmentClassFor } from './data.js';
 import { movementPatternFor } from './substitutions.js';
+import { computeArms } from './study.js';
 
-export const EVALUATION_SCHEMA_VERSION = 1;
+export const EVALUATION_SCHEMA_VERSION = 2;
 export const EVALUATION_KEY = 'arise.evaluation.v1';
 
 const SCALE = 100;
@@ -85,17 +86,9 @@ export function mergeEvaluationLedgers(current = [], incoming = []){
 
 // ── Segmentation helpers ────────────────────────────────────────────────
 
-// Free weights / machines / cables / bodyweight — from the exercise's declared kit.
-export function equipmentClassFor(exerciseId){
-  const ex = EXERCISE_BY_ID[exerciseId];
-  if(!ex) return 'unknown';
-  const equipment = ex.equipment || [];
-  if(equipment.includes('machine')) return 'machines';
-  if(equipment.includes('cable')) return 'cables';
-  if(equipment.some(eq=> ['barbell', 'dumbbells', 'kettlebell'].includes(eq))) return 'free-weights';
-  if(equipment.length === 1 && equipment[0] === 'bodyweight') return 'bodyweight';
-  return 'other';
-}
+// equipmentClassFor moved to data.js (shared with study.js without a cycle);
+// re-exported here for existing import sites.
+export { equipmentClassFor };
 
 function trainingAgePhase(history, asOfDateISO, config){
   // Local re-implementation to avoid importing progression.js (which would risk
@@ -160,11 +153,30 @@ function makeRecordId(now = Date.now()){
 // Snapshot a recommendation before the workout it targets. Only prior history
 // may be passed in; the basis records how much was visible so audits can
 // confirm no future rows were involved.
-export function recordRecommendation({ exerciseId, recommendation, history = [], dueDateISO = null, preferences = null, config = null, nowISO = null, programId = null, programVersion = null, storage = defaultStorage() } = {}){
+//
+// Alongside arise's own prescription, the SAME point-in-time slice is shown
+// to the baseline arms (double progression, linear progression, fixed rules,
+// flat). Their prescriptions are frozen into the record so the prospective
+// ledger can later score every arm against the same real outcome — the
+// "does adaptive programming actually decide better?" question, answered on
+// real training rather than replay.
+export function recordRecommendation({ exerciseId, recommendation, history = [], dueDateISO = null, preferences = null, config = null, nowISO = null, programId = null, programVersion = null, targetReps = null, storage = defaultStorage() } = {}){
   if(!hasConsent(preferences)) return null;
   if(!exerciseId || !recommendation) return null;
-  const phase = trainingAgePhase(history, dueDateISO, config);
-  const previous = lastExposureBest(history, exerciseId, dueDateISO);
+  // Prior-only guarantee: nothing dated after the due session may inform the
+  // snapshot, even if a caller hands us a longer history.
+  const visibleHistory = dueDateISO
+    ? (history || []).filter(h=> String(h?.dateISO || '') <= String(dueDateISO))
+    : (history || []);
+  const phase = trainingAgePhase(visibleHistory, dueDateISO, config);
+  const previous = lastExposureBest(visibleHistory, exerciseId, dueDateISO);
+  let arms = null;
+  try{
+    arms = computeArms({ exerciseId, history: visibleHistory, targetReps: targetReps || undefined, asOfDateISO: dueDateISO, config });
+    // The arise snapshot above IS the recorded recommendation — keep them
+    // byte-identical by overriding with the caller's own recommendation.
+    arms.arise = { load: recommendation.load ?? null, reps: recommendation.reps ?? null, assistKg: recommendation.assistKg ?? null };
+  }catch{ arms = null; }
   const record = {
     id: makeRecordId(nowISO ? Date.parse(nowISO) || Date.now() : Date.now()),
     schemaVersion: EVALUATION_SCHEMA_VERSION,
@@ -184,9 +196,11 @@ export function recordRecommendation({ exerciseId, recommendation, history = [],
       reason: recommendation.reason || '',
       strategy: recommendation.strategy || null,
     },
+    // Frozen baseline prescriptions from the same prior-only history.
+    arms,
     recommendedAction: classifyRecommendedAction(recommendation, previous),
     basis: {
-      visibleSessions: (history || []).length,
+      visibleSessions: visibleHistory.length,
       previousBest: previous ? { reps: previous.reps, weightKg: previous.weightKg, assistedKg: previous.assistedKg, e1rm: round(previous.score, 2) } : null,
       trainingAgePhase: phase,
       priorsVersion: resolveArisePriors(config).version,
@@ -242,6 +256,25 @@ export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore =
       loadErrorKg: loadTarget != null && best.weightKg > 0 ? round(Math.abs(loadTarget - best.weightKg), 2) : null,
       repError: repTarget != null ? Math.abs(repTarget - best.reps) : null,
     };
+    // Score every FROZEN baseline arm against the same real outcome. All arms
+    // saw the same prior history at record time; the realised training is
+    // identical across arms, so differences are decision quality — would this
+    // prescription have been met by the same performance?
+    const armOutcomes = {};
+    for(const [armName, armRec] of Object.entries(record.arms || {})){
+      if(!armRec || typeof armRec !== 'object') continue;
+      const aRepTarget = armRec.reps != null ? Number(armRec.reps) : null;
+      const aLoadTarget = armRec.load != null && Number(armRec.load) > 0 ? Number(armRec.load) : null;
+      const aAssistTarget = armRec.assistKg != null ? Number(armRec.assistKg) : null;
+      const aRepsMet = aRepTarget == null || best.reps >= aRepTarget;
+      const aLoadMet = aLoadTarget == null || best.weightKg >= aLoadTarget;
+      const aAssistMet = aAssistTarget == null || best.assistedKg <= aAssistTarget;
+      armOutcomes[armName] = {
+        metTarget: aRepsMet && aLoadMet && aAssistMet,
+        loadErrorKg: aLoadTarget != null && best.weightKg > 0 ? round(Math.abs(aLoadTarget - best.weightKg), 2) : null,
+        repError: aRepTarget != null ? Math.abs(aRepTarget - best.reps) : null,
+      };
+    }
     const enriched = {
       ...record,
       outcome: {
@@ -265,6 +298,7 @@ export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore =
           : stagnated ? 'stagnation'
           : metTarget ? 'target-met-hold'
           : 'target-missed',
+        arms: armOutcomes,
       },
     };
     resolved.push(enriched);
@@ -314,6 +348,7 @@ function groupBy(records, keyFn){
 // evaluations.
 export function evaluateLongitudinal(ledger, { config = null } = {}){
   const cfg = resolveArisePriors(config).longitudinal;
+  const gainPct = resolveArisePriors(config).sessionQuality.pr.meaningfulGainPct;
   const minimum = Math.max(1, Number(cfg.minimumSegmentSamples) || 1);
   const records = (ledger || []).filter(row=> row && row.recommendation);
   const overall = summarise(records, minimum);
@@ -326,21 +361,102 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
     }
     return output;
   };
+
+  // ── Prospective arm comparison ─────────────────────────────────────────
+  // All arms were frozen at record time from the same prior-only history and
+  // are scored against the SAME realised performance, so rates compare
+  // decision quality. Realised training (adherence, actual loads) is common
+  // across arms — this is not a counterfactual body-outcome study.
+  const resolvedWithArms = records.filter(row=> row.outcome?.arms && row.outcome.arms.arise);
+  const armNames = [...new Set(resolvedWithArms.flatMap(row=> Object.keys(row.outcome.arms)))].sort();
+  const byArm = {};
+  for(const arm of armNames){
+    const rows = resolvedWithArms.filter(row=> row.outcome.arms[arm]);
+    const n = rows.length;
+    const entry = { key: arm, n, conclusive: false, targetAchievementRate: null, progressionSuccessRate: null, stallRate: null, regressionRate: null, conservatismRate: null, meanLoadErrorKg: null };
+    if(!n){ byArm[arm] = entry; continue; }
+    entry.targetAchievementRate = round(rows.filter(r=> r.outcome.arms[arm].metTarget).length / n, 3);
+    entry.progressionSuccessRate = round(rows.filter(r=> r.outcome.arms[arm].metTarget && (r.outcome.changePct == null || r.outcome.changePct > gainPct)).length / n, 3);
+    byArm[arm] = entry;
+  }
+  // Stall/conservatism need each arm's prescribed demand vs previous best.
+  for(const arm of armNames){
+    const rows = resolvedWithArms.filter(row=> row.outcome.arms[arm]);
+    let stalls = 0, regressions = 0, conservativeWins = 0, loadErrs = [];
+    for(const row of rows){
+      const { demandedMore } = findFrozenArm(row, arm);
+      const changePct = row.outcome.changePct;
+      if(changePct != null && changePct <= -0.05) regressions++;
+      if(demandedMore && changePct != null && changePct <= 0) stalls++;
+      if(!demandedMore && changePct != null && changePct >= gainPct) conservativeWins++;
+      if(Number.isFinite(row.outcome.arms[arm].loadErrorKg)) loadErrs.push(row.outcome.arms[arm].loadErrorKg);
+    }
+    const n = rows.length;
+    if(n >= minimum && n){
+      byArm[arm].conclusive = true;
+      byArm[arm].stallRate = round(stalls / n, 3);
+      byArm[arm].regressionRate = round(regressions / n, 3);
+      byArm[arm].conservatismRate = round(conservativeWins / n, 3);
+      byArm[arm].meanLoadErrorKg = loadErrs.length ? round(loadErrs.reduce((a,b)=> a+b, 0) / loadErrs.length, 2) : null;
+    }
+  }
+
+  // Paired arise-vs-baseline on identical transitions (stronger than two
+  // independent rates): win = arise's target met while the baseline's missed.
+  const pairedVsArise = {};
+  for(const arm of armNames){
+    if(arm === 'arise') continue;
+    let pairs=0, ariseWin=0, armWin=0, both=0, neither=0;
+    for(const row of resolvedWithArms){
+      const a = row.outcome.arms.arise.metTarget, b = row.outcome.arms[arm]?.metTarget;
+      if(b == null) continue;
+      pairs++;
+      if(a && !b) ariseWin++;
+      else if(!a && b) armWin++;
+      else if(a && b) both++;
+      else neither++;
+    }
+    pairedVsArise[arm] = {
+      pairs, ariseWins: ariseWin, armWins: armWin, bothMetTarget: both, neitherMetTarget: neither,
+      ariseWinRate: pairs >= minimum ? round(ariseWin / pairs, 3) : null,
+      conclusive: pairs >= minimum,
+    };
+  }
+
   return {
     schemaVersion: EVALUATION_SCHEMA_VERSION,
     minimumSegmentSamples: minimum,
     totalRecords: records.length,
     openRecords: records.filter(row=> !row.outcome).length,
     overall,
+    byArm,
+    pairedVsArise,
     byTrainingAge: dimension(row=> row.basis?.trainingAgePhase),
     byExercise: dimension(row=> row.exerciseId),
     byMovementPattern: dimension(row=> row.movementPattern),
     byEquipmentClass: dimension(row=> row.equipmentClass),
     byProgramme: dimension(row=> row.programId ? `${row.programId}@v${row.programVersion == null ? '?' : row.programVersion}` : null),
     note: records.length
-      ? `Segments with fewer than ${minimum} resolved recommendation→outcome pairs withhold their rates (conclusive:false). Evaluation data is stored separately from training history and never calibrates recommendations from future sessions.`
+      ? `Segments with fewer than ${minimum} resolved recommendation→outcome pairs withhold their rates (conclusive:false). All arms were frozen at record time from the same prior-only history and scored against the same realised session — comparisons measure decision quality, not counterfactual outcomes. Evaluation data is stored separately from training history and never calibrates recommendations from future sessions.`
       : 'No consented recommendation→outcome pairs recorded yet.',
   };
+}
+
+// Recover an arm's frozen prescription + whether it demanded more than the
+// lifter's previous best (basis.previousBest).
+function findFrozenArm(row, arm){
+  const frozen = row.arms?.[arm] || null;
+  const prev = row.basis?.previousBest || null;
+  let demandedMore = false;
+  if(frozen && prev){
+    const loadTarget = Number(frozen.load) > 0 ? Number(frozen.load) : null;
+    const repTarget = frozen.reps != null ? Number(frozen.reps) : null;
+    if(loadTarget != null && loadTarget > Number(prev.weightKg || 0)) demandedMore = true;
+    else if(loadTarget == null && repTarget != null && repTarget > Number(prev.reps || 0)) demandedMore = true;
+  }else if(frozen && !prev){
+    demandedMore = Number(frozen.load) > 0; // cold start with a load prescription demands progress by definition
+  }
+  return { frozen, demandedMore };
 }
 
 export function longitudinalSummary({ preferences = null, config = null, storage = defaultStorage() } = {}){

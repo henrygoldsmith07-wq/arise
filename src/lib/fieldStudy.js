@@ -117,6 +117,15 @@ export function measureParticipant({ code, store }, { config = null } = {}){
       low: countsFrom(study.segments?.byReadiness?.low?.arise),
       unknown: countsFrom(study.segments?.byReadiness?.unknown?.arise),
     },
+    // PROSPECTIVE arm comparison from the consented on-device ledger: all arms
+    // were frozen at record time and scored against the same realised session.
+    // This is the real-training answer to "does adaptive programming decide
+    // better?", as opposed to the retrospective replay in `comparative`.
+    ledgerArms: {
+      resolved: evaluation.overall.resolved,
+      byArm: evaluation.byArm || {},
+      pairedVsArise: evaluation.pairedVsArise || {},
+    },
     plateau: { holds: plateauHolds, falsePositives: plateauFalsePositives, falsePositiveRate: pct(plateauFalsePositives, plateauHolds) },
     adherence: { scheduled: sessions.length, done, missed, completionRate: pct(done, sessions.length) },
     deload: { decisions: deloadOutcomes.decisions, cutsObservedRate: deloadOutcomes.cutsObservedRate, normalisedWithinTwoWeeksRate: deloadOutcomes.normalisedWithinTwoWeeksRate },
@@ -190,6 +199,40 @@ export function computeFieldStudy(participants, { config = null, minParticipants
     return { n, met, rate: n ? round(met / n) : null };
   };
 
+  // Pooled prospective arm ledger: sum each arm's resolved pairs and met
+  // counts across participants; conclusive once pooled n clears the gate.
+  function poolLedgerArms(measures){
+    const arms = {};
+    for(const m of measures){
+      for(const [arm, entry] of Object.entries(m.ledgerArms?.byArm || {})){
+        if(!arms[arm]) arms[arm] = { n: 0, targetAchievementSum: 0, conclusive: false };
+        arms[arm].n += entry.n || 0;
+        arms[arm].targetAchievementSum += (entry.targetAchievementRate ?? 0) * (entry.n || 0);
+      }
+    }
+    for(const arm of Object.keys(arms)){
+      arms[arm].conclusive = arms[arm].n >= resolveArisePriors(config).longitudinal.minimumSegmentSamples;
+      arms[arm].targetAchievementRate = arms[arm].n ? round(arms[arm].targetAchievementSum / arms[arm].n) : null;
+    }
+    const pairedVsArise = {};
+    for(const m of measures){
+      for(const [arm, p] of Object.entries(m.ledgerArms?.pairedVsArise || {})){
+        if(!pairedVsArise[arm]) pairedVsArise[arm] = { pairs: 0, ariseWins: 0, armWins: 0, bothMetTarget: 0, neitherMetTarget: 0 };
+        pairedVsArise[arm].pairs += p.pairs || 0;
+        pairedVsArise[arm].ariseWins += p.ariseWins || 0;
+        pairedVsArise[arm].armWins += p.armWins || 0;
+        pairedVsArise[arm].bothMetTarget += p.bothMetTarget || 0;
+        pairedVsArise[arm].neitherMetTarget += p.neitherMetTarget || 0;
+      }
+    }
+    for(const arm of Object.keys(pairedVsArise)){
+      const p = pairedVsArise[arm];
+      p.conclusive = p.pairs >= resolveArisePriors(config).longitudinal.minimumSegmentSamples;
+      p.ariseWinRate = p.pairs ? round(p.ariseWins / p.pairs) : null;
+    }
+    return { arms, pairedVsArise };
+  }
+
   return {
     status: gatesPassed ? 'sufficient-evidence' : 'insufficient-evidence',
     gates: {
@@ -211,6 +254,7 @@ export function computeFieldStudy(participants, { config = null, minParticipants
       plateauFalsePositiveRate: pct(sum(measures, m => m.plateau.falsePositives), sum(measures, m => m.plateau.holds)),
       deloadNormalisedRate: avgNonNull(measures.map(m => m.deload.normalisedWithinTwoWeeksRate)),
       readinessBuckets: { high: poolReadinessBucket('high'), low: poolReadinessBucket('low'), unknown: poolReadinessBucket('unknown') },
+      ledgerArms: poolLedgerArms(measures),
     },
     pooled,
     headline,
@@ -290,6 +334,20 @@ export function renderFieldReport(result){
     ['Arise targets · low-readiness days', bucketCell(rb.low)],
     ['Arise targets · readiness unknown', bucketCell(rb.unknown)],
   );
+  // Prospective arm ledger (real training; all arms frozen at record time).
+  const la = t.ledgerArms || { arms: {}, pairedVsArise: {} };
+  const armNames = Object.keys(la.arms).sort();
+  for(const arm of armNames){
+    const a = la.arms[arm];
+    const paired = la.pairedVsArise[arm];
+    let cell = '—';
+    if(a.n){
+      cell = `${Math.round((a.targetAchievementRate ?? 0) * 100)}% of ${a.n}`;
+      if(paired?.pairs) cell += ` · arise wins ${paired.ariseWins}/${paired.pairs}`;
+      cell += a.conclusive ? '' : ' (below gate)';
+    }
+    rows.push([`Ledger arm: ${arm}`, cell]);
+  }
   for(const [k,v] of rows) L.push(`| ${k} | ${v} |`);
   L.push('');
   L.push('## Pooled comparison (next-session targets)');

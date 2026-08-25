@@ -22,10 +22,9 @@
 
 import { recommendNext, e1rm, trainingAgeInfo, strategyForExercise } from './progression.js';
 import { resolveArisePriors } from './priors.js';
-import { EXERCISE_BY_ID } from './data.js';
-import { equipmentClassFor } from './longitudinal.js';
+import { EXERCISE_BY_ID, equipmentClassFor } from './data.js';
 
-export const STUDY_ARMS = ['arise', 'double-progression', 'linear-progression', 'flat'];
+export const STUDY_ARMS = ['arise', 'double-progression', 'linear-progression', 'fixed-rules', 'flat'];
 
 const LINEAR_STEP_KG = 2.5;
 
@@ -105,6 +104,24 @@ export function flatPrescriptionRec({ history, exerciseId, targetReps = '8–12'
   return { load: last.weightKg > 0 ? last.weightKg : null, reps: last.reps };
 }
 
+// Simple fixed rules: progress load only after TWO consecutive top-of-range
+// sessions AND a non-grinding last effort; otherwise hold the load and repeat.
+// The "sensible simple" comparator — a fixed decision list a coach could run
+// from memory. No plateau logic, no noise guards, no readiness input.
+export function simpleRulesRec({ history, exerciseId, targetReps = '8–12' }){
+  const exposures = exposuresFor(history, exerciseId);
+  if(exposures.length < 2) return { load: exposures[exposures.length - 1]?.best.weightKg > 0 ? exposures[exposures.length - 1].best.weightKg : null, reps: repRange(targetReps)[0] };
+  const [lo] = repRange(targetReps);
+  const hi = repRange(targetReps)[1];
+  const last = exposures[exposures.length - 1].best;
+  const prevBest = exposures[exposures.length - 2].best;
+  const bothTop = prevBest.reps >= hi && last.reps >= hi;
+  const grinding = last.rpe != null && Number(last.rpe) >= 9.5;
+  const base = last.weightKg > 0 ? last.weightKg : null;
+  if(bothTop && !grinding) return { load: base != null ? Math.round((base + LINEAR_STEP_KG) * 10) / 10 : null, reps: lo };
+  return { load: base, reps: Math.min(hi, last.reps + 1) };
+}
+
 // Compute every arm's prescription from the SAME prior-only slice.
 export function computeArms({ exerciseId, history, targetReps = '8–12', asOfDateISO = null, config = null }){
   const arise = recommendNext({ exerciseId, history, targetReps, asOfDateISO, config });
@@ -112,6 +129,7 @@ export function computeArms({ exerciseId, history, targetReps = '8–12', asOfDa
     arise: { load: arise.load, reps: arise.reps, assistKg: arise.assistKg ?? null, reason: arise.reason || '', noisy: arise.noisy || [], held: /hold|plateau/i.test(arise.reason || '') },
     'double-progression': doubleProgressionRec({ history, exerciseId, targetReps }),
     'linear-progression': linearProgressionRec({ history, exerciseId, targetReps }),
+    'fixed-rules': simpleRulesRec({ history, exerciseId, targetReps }),
     flat: flatPrescriptionRec({ history, exerciseId, targetReps }),
   };
 }

@@ -250,17 +250,18 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       recordEvent('recommendation:shown', { sessionId:session.id, exerciseId:block.exerciseId, target:suggestedTarget(recommendation,block) });
       // Prospective evaluation record: snapshot the recommendation BEFORE the
       // workout. Consent-gated; stored separately from training history.
-      try{
-        recordRecommendation({
-          exerciseId: block.exerciseId,
-          recommendation,
-          history,
-          dueDateISO: session.dateISO,
-          programId: session.programId || null,
-          programVersion: session.programVersion ?? null,
-          preferences: measurementConsent === true ? { telemetryEnabled: true } : null,
-        });
-      }catch{}
+        try{
+          recordRecommendation({
+            exerciseId: block.exerciseId,
+            recommendation,
+            history,
+            dueDateISO: session.dateISO,
+            programId: session.programId || null,
+            programVersion: session.programVersion ?? null,
+            targetReps: block.reps || undefined,
+            preferences: measurementConsent === true ? { telemetryEnabled: true } : null,
+          });
+        }catch{}
     }
   }, [blocks, history, session.id, session.dateISO, plateConfig, measurementConsent, study]);
 
