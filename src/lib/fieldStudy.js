@@ -373,7 +373,7 @@ export function renderFieldReport(result){
   }
   for(const [k,v] of rows) L.push(`| ${k} | ${v} |`);
   L.push('');
-  L.push('## Pooled comparison (next-session targets)');
+  L.push('## Pooled comparison — retrospective replay (recommendation-outcome agreement, not causal effects)');
   L.push('');
   L.push('| Arm | n | met % | success % | regression % | Δtargets vs arise |');
   L.push('|---|---|---|---|---|---|');

@@ -31,9 +31,23 @@ the identical prior-only slice.
 
 - Muscle growth is not measurable from training logs; no outcome here
   pretends otherwise.
+- **The retrospective replay cannot prove causation.** Scoring five arms'
+  prescriptions against one realised stream of training measures agreement
+  and prescription error — the outcome was generated under whatever policy
+  the lifter actually followed. Causal claims belong to the prospective
+  exercise-level randomised design (`STUDY_DESIGN` in study.js), frozen
+  before any efficacy look.
 - "No significant difference vs double progression" is not equivalence.
+- Transitions are not independent observations: uncertainty in pooled
+  analyses comes from participant-clustered bootstrap
+  (`clusteredBootstrapWinRate` in longitudinal.js — deterministic,
+  participant-level resampling), and participant counts are reported beside
+  transition counts everywhere.
 - Subgroup slices (by equipment, rep range, frequency, readiness) are
   marked exploratory — they generate hypotheses, they do not confirm them.
+- Aggressive prescribing earns nothing: a frozen prescription more than
+  10% above previous load that misses its target counts as an overshoot,
+  never as progress.
 - The AI coach explains engine decisions from engine findings. It cannot
   change programming; overrides are captured as user-decided transitions.
 

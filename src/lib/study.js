@@ -134,6 +134,56 @@ export function computeArms({ exerciseId, history, targetReps = '8–12', asOfDa
   };
 }
 
+// ── Prospective trial design (exercise-level randomisation) ─────────────
+//
+// The decisive experiment assigns POLICIES to exposures. Exercise-level
+// assignment is the design with the lowest contamination risk here: each
+// movement is an independent stream, both policies see identical prior
+// history for their assigned exercises, and carryover between arms is
+// limited to whole-body fatigue (documented, not hidden). Participant-level
+// assignment would halve every lifter's per-arm data; flat-arm-as-primary
+// is rejected as a strawman.
+//
+// Frozen before any efficacy look. Deterministic: same ids + seed → same
+// assignment, forever.
+
+export const STUDY_DESIGN = Object.freeze({
+  designVersion: 1,
+  unitOfAssignment: 'exercise',
+  arms: { arise: 'adaptive engine', 'double-progression': 'evidence-based simple baseline' },
+  secondaryArms: ['linear-progression'],
+  excludedFromPrimary: ['flat', 'fixed-rules'],
+  primaryEndpoint: 'appropriately achieved progression targets over repeated exposures (metTarget AND changePct > meaningful gain)',
+  secondaryEndpoints: ['targetAchievementRate','avoidable target misses','regression rate','stall rate','unnecessary conservatism','failed-set rate','adherence','programme continuation'],
+  analysis: 'intention-to-treat by assigned arm; participant-clustered bootstrap for uncertainty; minimum sample gates; subgroups prespecified only (readiness low/high, equipment class)',
+  contaminationNote: 'both arms train within the same participant; whole-body fatigue carryover is shared and cannot be removed — exercise-level balance mitigates movement-specific drift.',
+});
+
+function hashSeed(str){
+  let h = 2166136261;
+  for(const ch of String(str)){ h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+
+export function assignExerciseArm(exerciseId, seed = 'arise-trial-v1'){
+  // Deterministic 50/50 split over the PRIMARY comparison only.
+  return hashSeed(`${seed}::${exerciseId}`) % 2 === 0 ? 'arise' : 'double-progression';
+}
+
+export function buildStudyDesign(exerciseIds = [], seed = 'arise-trial-v1'){
+  const assignment = {};
+  for(const id of [...exerciseIds].sort()) assignment[id] = assignExerciseArm(id, seed);
+  const ariseCount = Object.values(assignment).filter(a => a === 'arise').length;
+  return {
+    ...STUDY_DESIGN,
+    seed,
+    exercises: exerciseIds.length,
+    ariseExercises: ariseCount,
+    doubleProgressionExercises: exerciseIds.length - ariseCount,
+    assignment,
+  };
+}
+
 // ── Scoring (mirrors longitudinal.attachOutcome semantics) ──────────────
 
 function scoreArm(armName, rec, actual, previousBest, { config = null } = {}){
@@ -215,9 +265,44 @@ function summariseArm(scores, key){
 
 // ── Retrospective comparative replay ────────────────────────────────────
 
-// Replay every exercise's history point-in-time and score each arm against the
-// real next-exposure outcome. Deterministic, offline, prior-only by design.
-export function runComparativeStudy(history, { config = null, targetRepsFor = null, minimumSamples = null, readinessLog = [] } = {}){
+// HONEST SCOPE OF THIS HARNESS (kept because agreement metrics remain useful,
+// renamed because the old framing overclaimed):
+//
+// It measures RECOMMENDATION–OUTCOME AGREEMENT on one realised stream of
+// training: did each arm's prescription match what the lifter actually
+// achieved next? Target attainability, hindsight prescription error,
+// unnecessary conservatism, policy divergence.
+//
+// It CANNOT establish counterfactual training effects. The realised outcome
+// was generated under whatever policy the lifter actually followed — scoring
+// other arms' prescriptions against it does not prove what would have
+// happened had they been followed. Causal claims belong to the PROSPECTIVE
+// ledger (longitudinal.js), whose five-arm snapshots accumulate exactly the
+// decision-quality evidence this replay approximates.
+
+export const RETROSPECTIVE_SCOPE = {
+  measures: ['recommendation-target agreement', 'target attainability', 'hindsight prescription error', 'policy divergence', 'unnecessary conservatism', 'observed outcome compatibility'],
+  cannotEstablish: ['counterfactual training effects', 'causal superiority over baselines'],
+};
+
+// Readiness lookup, strictly causal: candidate must be dated AT OR BEFORE the
+// prescription date; among eligible candidates the MOST RECENT wins; anything
+// older than the lookback window is stale. Never absolute distance.
+function readinessWithProvenance(readinessByTime, asOfDateISO){
+  let best = null;
+  let end = NaN;
+  try{ end = Date.parse(`${asOfDateISO}T00:00:00Z`); }catch{ end = NaN; }
+  if(!Number.isFinite(end)) return null;
+  for(const [dateISO, score] of readinessByTime){
+    if(!Number.isFinite(score)) continue;
+    const time = Date.parse(`${dateISO}T00:00:00Z`);
+    if(time > end || end - time > 3 * 86400000) continue;
+    if(!best || time >= best.time){ best = { score, observedAt: dateISO, time }; }
+  }
+  return best;
+}
+
+export function runComparativeStudy(history, { config = null, targetRepsFor = null, minimumSamples = null, readinessLog = [], includeRows = false } = {}){
   const readinessLogArg = readinessLog;
   const cfg = resolveArisePriors(config);
   const minSamples = Math.max(2, minimumSamples ?? cfg.longitudinal.minimumSegmentSamples);
@@ -233,21 +318,7 @@ export function runComparativeStudy(history, { config = null, targetRepsFor = nu
   const segmentRows = new Map();    // `${dimension}|${key}` -> arm -> scores[]
   const rows = []; // { exerciseId, dateISO, phase, arm, score }
   const readinessByDate = new Map((readinessLogArg || []).map(r => [r.dateISO, Number(r.score)]));
-  // Prior-only readiness: a score may classify a session only if it was logged
-  // at or before that session's date, and the LATEST such entry wins. Nearest
-  // on both sides would let a score logged two days AFTER a workout classify
-  // it — future information. Same 3-day freshness bound as before, one-sided.
-  const readinessAtOrBefore = (asOfDateISO)=>{
-    let best = null, bestTime = -Infinity;
-    const end = Date.parse(`${asOfDateISO}T00:00:00Z`);
-    for(const [dateISO, score] of readinessByDate){
-      if(!Number.isFinite(score)) continue;
-      const time = Date.parse(`${dateISO}T00:00:00Z`);
-      if(time > end || end - time > 3 * 86400000) continue;
-      if(time >= bestTime){ best = score; bestTime = time; }
-    }
-    return best;
-  };
+  const readinessAtOrBefore = asOfDateISO => readinessWithProvenance(readinessByDate, asOfDateISO);
 
   for(const exerciseId of [...exerciseIds].sort()){
     const exposures = exposuresFor(ordered, exerciseId);
@@ -272,15 +343,31 @@ export function runComparativeStudy(history, { config = null, targetRepsFor = nu
       const repRange = medianReps <= 5 ? 'low(≤5)' : medianReps <= 8 ? 'mid(6–8)' : 'high(≥9)';
       const gapDays = Math.round((Date.parse(`${exposures[i].session.dateISO}T00:00:00Z`) - Date.parse(`${exposures[i-1].session.dateISO}T00:00:00Z`)) / 86400000);
       const freqBucket = gapDays <= 2 ? '≤2d' : gapDays <= 3 ? '3d' : gapDays <= 6 ? '4–6d' : '≥7d';
-      const rScore = readinessAtOrBefore(exposures[i].session.dateISO);
+      const rMeta = readinessAtOrBefore(exposures[i].session.dateISO);
+      const rScore = rMeta ? rMeta.score : null;
       const readinessBucket = rScore == null ? 'unknown' : rScore >= cfg.recovery.readinessLowLatest ? 'high' : 'low';
 
       const attrs = { phase, structure, equipClass, strategyName, repRange, freqBucket, readinessBucket };
+      // Provenance: every feature on this row is derivable from information
+      // dated at or before the prescription date. Retained per row so tests —
+      // and independent analyses — can verify the prior-only claim instead of
+      // trusting it.
+      const provenance = {
+        prescriptionAt: exposures[i].session.dateISO,
+        cutoffDateISO: ordered[cutoffIndex - 1]?.dateISO || null,
+        engineVersion: cfg.version,
+        features: {
+          readinessBucket: rMeta
+            ? { value: rScore, observedAt: rMeta.observedAt, cutoff: exposures[i].session.dateISO, validPrior: true }
+            : { value: null, observedAt: null, cutoff: exposures[i].session.dateISO, validPrior: false },
+          repRangeMedian: { priorExposures: i, lastPriorDateISO: exposures[i - 1].session.dateISO, validPrior: true },
+        },
+      };
       const arms = computeArms({ exerciseId, history: prefix, targetReps, asOfDateISO: exposures[i].session.dateISO, config });
       for(const [name, rec] of Object.entries(arms)){
         if(!rec) continue;
         const score = scoreArm(name, rec, exposures[i], previousBest, { config });
-        rows.push({ exerciseId, dateISO: exposures[i].session.dateISO, ...attrs, arm: name, score });
+        rows.push({ exerciseId, dateISO: exposures[i].session.dateISO, ...attrs, arm: name, score, ...(includeRows ? { provenance } : {}) });
         if(!byExerciseRows.has(exerciseId)) byExerciseRows.set(exerciseId, {});
         if(!byExerciseRows.get(exerciseId)[name]) byExerciseRows.get(exerciseId)[name] = [];
         byExerciseRows.get(exerciseId)[name].push(score);
@@ -386,6 +473,7 @@ export function runComparativeStudy(history, { config = null, targetRepsFor = nu
 
   return {
     generatedAtISO: new Date().toISOString(),
+    scope: RETROSPECTIVE_SCOPE,
     priorsVersion: cfg.version,
     minimumSamples: minSamples,
     transitions: rows.length / STUDY_ARMS.length,
@@ -394,8 +482,35 @@ export function runComparativeStudy(history, { config = null, targetRepsFor = nu
     byExperienceLevel,
     segments,
     pairedVsArise,
+    ...(includeRows ? { rows } : {}),
     note: `Every arm receives the identical prior-only history at each transition and is scored against the same real outcome. Segments below ${minSamples} transitions are labelled inconclusive.`,
   };
+}
+
+// Verify the prior-only claim on a set of study rows: every feature with an
+// observation timestamp must have observedAt <= prescriptionAt, and every
+// feature must be marked validPrior. Returns violations for reporting.
+export function assertAllFeaturesPrior(rows){
+  const violations = [];
+  for(const row of rows || []){
+    const p = row.provenance;
+    if(!p) continue;
+    if(p.prescriptionAt && p.cutoffDateISO && String(p.cutoffDateISO) > String(p.prescriptionAt)){
+      violations.push(`row ${row.exerciseId}@${row.dateISO}: cutoff after prescription`);
+    }
+    const readiness = p.features?.readinessBucket;
+    if(readiness){
+      if(readiness.observedAt && String(readiness.observedAt) > String(p.prescriptionAt)){
+        violations.push(`row ${row.exerciseId}@${row.dateISO}: readiness observed ${readiness.observedAt} AFTER prescription ${p.prescriptionAt}`);
+      }
+      if(readiness.value != null && !readiness.validPrior) violations.push(`row ${row.exerciseId}@${row.dateISO}: readiness value without valid prior`);
+    }
+    const rr = p.features?.repRangeMedian;
+    if(rr?.lastPriorDateISO && String(rr.lastPriorDateISO) >= String(p.prescriptionAt)){
+      violations.push(`row ${row.exerciseId}@${row.dateISO}: rep-range median includes the outcome exposure`);
+    }
+  }
+  return { ok: violations.length === 0, violations };
 }
 
 // ── Prospective coverage ────────────────────────────────────────────────

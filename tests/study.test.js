@@ -11,6 +11,7 @@ import {
   scoreCoachPrescriptions,
   validateDeloadDecisions,
   collectDeloadDecisions,
+  assertAllFeaturesPrior,
 } from '../src/lib/study.js';
 import { validateSubstitutions, mergeEvaluationLedgers, saveEvaluationLedger } from '../src/lib/longitudinal.js';
 import { buildExportPayload, parseImportFile, mergeStores } from '../src/lib/export.js';
@@ -122,6 +123,40 @@ describe('runComparativeStudy', ()=>{
     for(const phase of phases){
       for(const arm of STUDY_ARMS) assert.ok(study.byExperienceLevel[phase][arm], `missing ${arm} in phase ${phase}`);
     }
+  });
+
+  // ── Regression: provenance / prior-only guarantees ──
+  it('every feature carries provenance with timestamps <= prescription date (#5)', ()=>{
+    const readinessLog = [
+      { dateISO: '2026-01-06', score: 80 },   // prior to the Jan 8 outcome
+      { dateISO: '2026-01-11', score: 90 },   // AFTER Jan 8 — must stay invisible
+    ];
+    const s = runComparativeStudy(RISING, { readinessLog, includeRows: true });
+    assert.ok(Array.isArray(s.rows) && s.rows.length > 0);
+    for(const row of s.rows){
+      const pr = row.provenance.features.readinessBucket;
+      if(pr.observedAt) assert.ok(pr.observedAt <= row.dateISO, `readiness ${pr.observedAt} classified ${row.dateISO}`);
+      assert.equal(row.provenance.features.repRangeMedian.validPrior, true);
+    }
+    const check = assertAllFeaturesPrior(s.rows);
+    assert.equal(check.ok, true, JSON.stringify(check.violations));
+  });
+
+  it('provenance helper flags a future-dated observation (#5)', ()=>{
+    const rows = [{
+      exerciseId: 'bench', dateISO: '2026-01-10',
+      provenance: {
+        prescriptionAt: '2026-01-10',
+        cutoffDateISO: '2026-01-05',
+        features: {
+          readinessBucket: { value: 42, observedAt: '2026-01-11', validPrior: true },
+          repRangeMedian: { lastPriorDateISO: '2026-01-05', validPrior: true },
+        },
+      },
+    }];
+    const result = assertAllFeaturesPrior(rows);
+    assert.equal(result.ok, false);
+    assert.match(result.violations[0], /readiness.*AFTER/);
   });
 });
 

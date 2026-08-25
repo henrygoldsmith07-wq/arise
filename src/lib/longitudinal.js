@@ -246,10 +246,14 @@ export function recordRecommendation({ exerciseId, recommendation, history = [],
     outcome: null,
   };
   const ledger = loadEvaluationLedger(storage);
-  // Cap open (unresolved) records per exercise so skipped sessions cannot pile up.
+  // Cap OPEN records per exercise so skipped sessions cannot pile up: keep the
+  // newest (maxOpen - 1) and drop only the true EXCESS oldest. The previous
+  // formula computed a negative slice index whenever fewer than maxOpen were
+  // open — silently DELETING valid unresolved recommendations.
   const maxOpen = resolveArisePriors(config).longitudinal.maxOpenRecordsPerExercise;
   const openForExercise = ledger.filter(row=> row.exerciseId === exerciseId && !row.outcome);
-  const dropIds = new Set(openForExercise.slice(Math.max(0, openForExercise.length - maxOpen + 1)).map(row=> row.id));
+  const excess = Math.max(0, openForExercise.length + 1 - maxOpen);
+  const dropIds = new Set(openForExercise.slice(0, excess).map(row=> row.id));
   const next = [...ledger.filter(row=> !dropIds.has(row.id)), record];
   const retention = resolveArisePriors(config).longitudinal.retentionLimit;
   saveEvaluationLedger(next.slice(-retention), storage);
@@ -303,6 +307,21 @@ export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore =
       loadErrorKg: loadTarget != null && best.weightKg > 0 ? round(Math.abs(loadTarget - best.weightKg), 2) : null,
       repError: repTarget != null ? Math.abs(repTarget - best.reps) : null,
     };
+    // Prescription adherence for the ASSIGNED arm (arise): did the lifter
+    // follow what was actually prescribed? Missing prescription ⇒ unknown —
+    // never silently counted as compliant.
+    let followed = null, deviationKg = null;
+    const assigned = record.arms?.arise || (rec.load != null || rec.reps != null ? rec : null);
+    if(assigned){
+      const aLoad = Number(assigned.load) > 0 ? Number(assigned.load) : null;
+      const aReps = assigned.reps != null ? Number(assigned.reps) : null;
+      const aAssist = assigned.assistKg != null ? Number(assigned.assistKg) : null;
+      deviationKg = aLoad != null && best.weightKg > 0 ? round(Math.abs(best.weightKg - aLoad), 2) : null;
+      const loadOk = aLoad == null || (deviationKg != null && deviationKg <= Math.max(0.5, aLoad * 0.02));
+      const repsOk = aReps == null || best.reps >= aReps;
+      const assistOk = aAssist == null || best.assistedKg <= aAssist;
+      followed = loadOk && repsOk && assistOk;
+    }
     // Score every FROZEN baseline arm against the same real outcome. All arms
     // saw the same prior history at record time; the realised training is
     // identical across arms, so differences are decision quality — would this
@@ -339,6 +358,9 @@ export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore =
         previousE1rm,
         changePct,
         metTarget,
+        followed,
+        deviationKg,
+        userOverride: record.userOverride === true,
         repsMet, loadMet, assistMet,
         loadErrorKg: errors.loadErrorKg,
         repError: errors.repError,
@@ -428,6 +450,18 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
   // across arms — this is not a counterfactual body-outcome study.
   const resolvedWithArms = records.filter(row=> row.outcome?.arms && row.outcome.arms.arise);
   const armNames = [...new Set(resolvedWithArms.flatMap(row=> Object.keys(row.outcome.arms)))].sort();
+
+  // Engine versions must never silently merge: each evaluated policy version
+  // is reported separately, and mixing triggers an explicit warning.
+  const policyKeyOf = row => row.policy ? `priors-v${row.policy.priorsVersion}/model-v${row.policy.modelVersion}` : 'unversioned';
+  const byPolicyVersion = {};
+  for(const [key, group] of groupBy(records, policyKeyOf)){
+    const s = summarise(group, minimum);
+    s.key = key;
+    s.exploratory = false; // primary split, prespecified
+    byPolicyVersion[key] = s;
+  }
+  const mixedPolicyVersions = Object.keys(byPolicyVersion);
   const byArm = {};
   for(const arm of armNames){
     const rows = resolvedWithArms.filter(row=> row.outcome.arms[arm]);
@@ -441,12 +475,14 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
   // Stall/conservatism need each arm's prescribed demand vs previous best.
   for(const arm of armNames){
     const rows = resolvedWithArms.filter(row=> row.outcome.arms[arm]);
-    let stalls = 0, regressions = 0, conservativeWins = 0, loadErrs = [];
+    let stalls = 0, regressions = 0, conservativeWins = 0, overshoots = 0, loadErrs = [];
     for(const row of rows){
-      const { demandedMore } = findFrozenArm(row, arm);
+      const { demandedMore, aggressive } = findFrozenArm(row, arm);
       const changePct = row.outcome.changePct;
+      const met = row.outcome.arms[arm].metTarget;
       if(changePct != null && changePct <= -0.05) regressions++;
       if(demandedMore && changePct != null && changePct <= 0) stalls++;
+      if(aggressive && !met) overshoots++;
       if(!demandedMore && changePct != null && changePct >= gainPct) conservativeWins++;
       if(Number.isFinite(row.outcome.arms[arm].loadErrorKg)) loadErrs.push(row.outcome.arms[arm].loadErrorKg);
     }
@@ -458,6 +494,7 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
       byArm[arm].conservatismRate = round(conservativeWins / n, 3);
       byArm[arm].meanLoadErrorKg = loadErrs.length ? round(loadErrs.reduce((a,b)=> a+b, 0) / loadErrs.length, 2) : null;
       byArm[arm].confidenceInterval = wilsonInterval(rows.filter(r=> r.outcome.arms[arm].metTarget).length, n);
+      byArm[arm].aggressiveOvershootRate = round(overshoots / Math.max(1, rows.filter(r=> findFrozenArm(r, arm).aggressive).length), 3);
     }
   }
 
@@ -492,32 +529,87 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
     overall,
     byArm,
     pairedVsArise,
+    byPolicyVersion,
+    mixedPolicyVersions,
     byTrainingAge: dimension(row=> row.basis?.trainingAgePhase),
     byExercise: dimension(row=> row.exerciseId),
     byMovementPattern: dimension(row=> row.movementPattern),
     byEquipmentClass: dimension(row=> row.equipmentClass),
     byProgramme: dimension(row=> row.programId ? `${row.programId}@v${row.programVersion == null ? '?' : row.programVersion}` : null),
     note: records.length
-      ? `Segments with fewer than ${minimum} resolved recommendation→outcome pairs withhold their rates (conclusive:false). All arms were frozen at record time from the same prior-only history and scored against the same realised session — comparisons measure decision quality, not counterfactual outcomes. Evaluation data is stored separately from training history and never calibrates recommendations from future sessions.`
+      ? `Segments with fewer than ${minimum} resolved recommendation→outcome pairs withhold their rates (conclusive:false). All arms were frozen at record time from the same prior-only history and scored against the same realised session — comparisons measure decision quality, not counterfactual outcomes. Evaluation data is stored separately from training history and never calibrates recommendations from future sessions.${mixedPolicyVersions.length > 1 ? ` WARNING: ${mixedPolicyVersions.length} engine versions present (${mixedPolicyVersions.join(' vs ')}) — analyse each separately; never merge treatments across versions.` : ''}`
       : 'No consented recommendation→outcome pairs recorded yet.',
   };
 }
 
-// Recover an arm's frozen prescription + whether it demanded more than the
-// lifter's previous best (basis.previousBest).
+// Participant-clustered bootstrap for the PRIMARY prospective comparison.
+// Transitions within one participant are not independent; uncertainty comes
+// from resampling PARTICIPANTS (their whole per-participant win rate),
+// deterministically, so results are reproducible. Returns null below 2
+// participants — a single lifter cannot yield a clustered interval.
+export function clusteredBootstrapWinRate(pairs, { seed = 'arise-clustered-v1', iterations = 500 } = {}){
+  if(!Array.isArray(pairs) || !pairs.length) return null;
+  const byP = new Map();
+  for(const p of pairs){
+    const code = p?.participant ?? 'single';
+    if(!byP.has(code)) byP.set(code, { wins: 0, n: 0 });
+    const e = byP.get(code);
+    e.n++;
+    if(p.ariseMet && p.armMet === false) e.wins++;
+  }
+  const participants = [...byP.keys()];
+  const perParticipant = participants.map(c => ({ code: c, rate: byP.get(c).n ? byP.get(c).wins / byP.get(c).n : 0 }));
+  if(participants.length < 2) return { participants: participants.length, mean: round(perParticipant[0]?.rate ?? 0, 3), low: null, high: null, conclusive: false };
+  let h = hashSeedStr(seed);
+  const rng = ()=> {
+    h = (h + 0x6D2B79F5) >>> 0;
+    let t = h;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const means = [];
+  for(let i = 0; i < iterations; i++){
+    let sum = 0;
+    for(let j = 0; j < perParticipant.length; j++) sum += perParticipant[Math.floor(rng() * perParticipant.length)].rate;
+    means.push(sum / perParticipant.length);
+  }
+  means.sort((a,b)=> a-b);
+  return {
+    participants: participants.length,
+    mean: round(perParticipant.reduce((a,p)=> a+p.rate, 0) / participants.length, 3),
+    low: round(means[Math.floor(iterations * 0.025)], 3),
+    high: round(means[Math.min(iterations - 1, Math.ceil(iterations * 0.975))], 3),
+    iterations,
+    conclusive: true,
+  };
+}
+function hashSeedStr(str){
+  let h = 2166136261;
+  for(const ch of String(str)){ h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+
+// Recover an arm's frozen prescription + two behavioural flags:
+//   demandedMore — prescribed above previous best (a progression attempt)
+//   aggressive   — demanded MORE than +10% over previous best load; a policy
+//                  must not earn credit merely by prescribing heavier.
 function findFrozenArm(row, arm){
   const frozen = row.arms?.[arm] || null;
   const prev = row.basis?.previousBest || null;
   let demandedMore = false;
+  let aggressive = false;
   if(frozen && prev){
     const loadTarget = Number(frozen.load) > 0 ? Number(frozen.load) : null;
     const repTarget = frozen.reps != null ? Number(frozen.reps) : null;
-    if(loadTarget != null && loadTarget > Number(prev.weightKg || 0)) demandedMore = true;
-    else if(loadTarget == null && repTarget != null && repTarget > Number(prev.reps || 0)) demandedMore = true;
+    if(loadTarget != null && loadTarget > Number(prev.weightKg || 0)){
+      demandedMore = true;
+      aggressive = loadTarget > Number(prev.weightKg || 0) * 1.1;
+    }else if(loadTarget == null && repTarget != null && repTarget > Number(prev.reps || 0)) demandedMore = true;
   }else if(frozen && !prev){
-    demandedMore = Number(frozen.load) > 0; // cold start with a load prescription demands progress by definition
+    demandedMore = Number(frozen.load) > 0;
   }
-  return { frozen, demandedMore };
+  return { frozen, demandedMore, aggressive };
 }
 
 export function longitudinalSummary({ preferences = null, config = null, storage = defaultStorage() } = {}){

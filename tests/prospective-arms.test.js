@@ -4,9 +4,10 @@ import {
   recordRecommendation,
   attachOutcome,
   evaluateLongitudinal,
+  clusteredBootstrapWinRate,
   EVALUATION_SCHEMA_VERSION,
 } from '../src/lib/longitudinal.js';
-import { computeArms, STUDY_ARMS } from '../src/lib/study.js';
+import { computeArms, STUDY_ARMS, assignExerciseArm, buildStudyDesign } from '../src/lib/study.js';
 
 const CONSENT = { telemetryEnabled: true };
 const memStorage = ()=> {
@@ -136,6 +137,73 @@ describe('prospective arm comparison (real-training ledger)', ()=>{
     const ev = evaluateLongitudinal(requireLedger(store));
     assert.ok(ev.byArm.arise.n >= 1);
     assert.ok(!('stallRate' in ev.byArm.arise) || ev.byArm.arise.stallRate != null || true); // shape tolerant
+  });
+});
+
+describe('trial design, policy freezing and honest scoring', ()=>{
+
+  it('exercise-level assignment is deterministic and balanced (#6)', ()=>{
+    const ids = ['bench-press-dumbbell','goblet-squat','romanian-deadlift','lat-pulldown','bicep-curl','leg-press','push-up','deadlift'];
+    const a = buildStudyDesign(ids, 'seed-x');
+    const b = buildStudyDesign(ids, 'seed-x');
+    assert.deepEqual(a.assignment, b.assignment, 'same seed must reproduce the assignment');
+    const again = ids.map(id => assignExerciseArm(id, 'seed-x'));
+    assert.deepEqual(again, ids.map(id => assignExerciseArm(id, 'seed-x')));
+    assert.equal(a.ariseExercises + a.doubleProgressionExercises, ids.length);
+  });
+
+  it('engine-version changes cannot silently merge evaluated treatments (#9)', ()=>{
+    const store = memStorage();
+    const base = { exerciseId:'bench-press-dumbbell', recommendation:{ load:22.5, reps:8 }, history: PREFIX, dueDateISO:'2026-01-08', targetReps:'8–12', preferences: CONSENT, storage: store };
+    recordRecommendation(base);
+    // Same inputs, but the policy has moved forward.
+    recordRecommendation({ ...base, config: { progressionModel: { version: 2 } } });
+    attachOutcome({ sessionId:'s1', dateISO:'2026-01-09', blocks:[{ exerciseId:'bench-press-dumbbell', sets:[set(8,22.5,8)] }], preferences: CONSENT, storage: store });
+    const ev = evaluateLongitudinal(requireLedger(store));
+    assert.ok(ev.mixedPolicyVersions.length >= 2, 'two model versions must be reported separately');
+    assert.match(ev.note, /never merge treatments across versions/);
+    for(const key of ev.mixedPolicyVersions) assert.ok(ev.byPolicyVersion[key], `missing byPolicyVersion ${key}`);
+  });
+
+  it('missing prescription means adherence UNKNOWN, never compliant (#10)', ()=>{
+    const store = memStorage();
+    // Legacy v1-style record: no frozen arms at all.
+    recordRecommendation({ exerciseId:'bench-press-dumbbell', recommendation:{ load:22.5, reps:8 }, history: PREFIX, dueDateISO:'2026-01-08', targetReps:'8–12', preferences: CONSENT, storage: store });
+    const raw = JSON.parse(store.getItem('arise.evaluation.v1'));
+    delete raw.records[0].arms;
+    delete raw.records[0].recommendation;
+    store.setItem('arise.evaluation.v1', JSON.stringify(raw));
+    const resolved = attachOutcome({ sessionId:'s', dateISO:'2026-01-09', blocks:[{ exerciseId:'bench-press-dumbbell', sets:[set(8,22.5,8)] }], preferences: CONSENT, storage: store });
+    assert.equal(resolved[0].outcome.followed, null);
+  });
+
+  it('an aggressive prescription is scored as an overshoot, not progress (#11)', ()=>{
+    const store = memStorage();
+    recordRecommendation({ exerciseId:'bench-press-dumbbell', recommendation:{ load:20, reps:8 }, history: PREFIX, dueDateISO:'2026-01-08', targetReps:'8–12', preferences: CONSENT, storage: store });
+    // Sabotage the frozen arm into a reckless +50% jump (simulating a policy
+    // that just prescribes heavier): 30 kg demanded vs 20 kg previous best.
+    const raw = JSON.parse(store.getItem('arise.evaluation.v1'));
+    raw.records[0].arms['linear-progression'] = { load: 30, reps: 8 };
+    store.setItem('arise.evaluation.v1', JSON.stringify(raw));
+    const resolved = attachOutcome({ sessionId:'s', dateISO:'2026-01-09', blocks:[{ exerciseId:'bench-press-dumbbell', sets:[set(8,22.5,9)] }], preferences: CONSENT, storage: store });
+    assert.equal(resolved[0].outcome.arms['linear-progression'].metTarget, false, '30kg prescribed, 22.5 done — miss');
+    const ev = evaluateLongitudinal(requireLedger(store), { config: { longitudinal: { minimumSegmentSamples: 1 } } });
+    assert.equal(ev.byArm['linear-progression'].aggressiveOvershootRate, 1, 'the jump must be counted as an overshoot');
+    assert.equal(ev.pairedVsArise['linear-progression'].ariseWins + ev.pairedVsArise['linear-progression'].armWins + ev.pairedVsArise['linear-progression'].bothMetTarget + ev.pairedVsArise['linear-progression'].neitherMetTarget, 1);
+  });
+
+  it('participant-clustered bootstrap is deterministic and widens with few participants', ()=>{
+    const pairs = [];
+    for(let p = 0; p < 3; p++){
+      for(let i = 0; i < 10; i++) pairs.push({ participant: `P${p}`, ariseMet: true, armMet: p !== 0 }); // P0 never meets DP targets
+    }
+    const a = clusteredBootstrapWinRate(pairs, { seed: 's' });
+    const b = clusteredBootstrapWinRate(pairs, { seed: 's' });
+    assert.deepEqual(a, b, 'bootstrap must be deterministic');
+    assert.equal(a.participants, 3);
+    assert.ok(a.low <= a.mean && a.mean <= a.high);
+    assert.ok(a.low < a.mean - 0.15, 'a zero-rate participant must widen the interval');
+    assert.equal(clusteredBootstrapWinRate([{ participant:'P0', ariseMet:true, armMet:true }]).conclusive, false, 'one participant cannot yield a clustered interval');
   });
 });
 
