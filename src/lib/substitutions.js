@@ -108,7 +108,7 @@ export function rankedSubstitutions(targetId, availableEquipment=null, limit=4, 
   const ranked = pool
     .filter(candidate=> !(disliked && disliked.has(candidate.id)))
     .map(c=> ({ ex: c, score: scoreSubstitution(target, c, { historyCounts, preferred, disliked, loadability, shortSession, progressionAchievable }) }))
-    .sort((a,b)=> b.score - a.score).slice(0, limit).map(r=> r.ex);
+    .sort((a,b)=> b.score - a.score).map(r=> r.ex);
   const declaredRaw = (target.substitution||[]).map(id=> EXERCISE_BY_ID[id]).filter(Boolean)
     .filter(c=> !has || c.equipment.every(eq=> has.has(eq)) || (c.equipment.length===1 && c.equipment[0]==="bodyweight"))
     .filter(c=> !(disliked && disliked.has(c.id)));
@@ -122,6 +122,8 @@ export function rankedSubstitutions(targetId, availableEquipment=null, limit=4, 
   for(const ex of ranked) if(!merged.some(m=> m.id===ex.id)) merged.push(ex);
   // Preferred movements float to the top of the final list (stable), so a liked
   // exercise is surfaced even when a non-preferred declared alternative exists.
+  // Float BEFORE limiting: slicing first would drop liked movements entirely
+  // whenever the exercise pool grows.
   const ordered = preferred
     ? [...merged.filter(ex=> preferred.has(ex.id)), ...merged.filter(ex=> !preferred.has(ex.id))]
     : merged;
