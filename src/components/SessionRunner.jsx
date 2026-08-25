@@ -8,6 +8,7 @@ import { formatPlateStack } from '../lib/plates.js';
 import { substitutionOptions } from '../lib/substitutions.js';
 import { recordEvent } from '../lib/telemetry.js';
 import { recordRecommendation } from '../lib/longitudinal.js';
+import ExerciseIllustration from './ExerciseIllustration.jsx';
 
 const NOTE_PROMPTS = [
   { id: 'felt-strong', label: 'Felt strong' },
@@ -439,6 +440,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           return (
             <div key={`${b.exerciseId}-${bi}`} className="rounded-2xl border border-line bg-surface p-3 space-y-3">
               <div className="flex items-start justify-between gap-3">
+                <ExerciseIllustration exerciseId={b.exerciseId} size="md" />
                 <div className="min-w-0">
                   <p className="text-sm font-bold">{ex?.name || b.exerciseId} {b.unilateral ? <span className="text-xs font-semibold text-ink3">(per side — L/R)</span> : null}</p>
                   <p className="text-xs text-ink3">{ex?.muscle} • {ex?.level} • {ex?.equipment?.join(', ')} {ex?.progression ? `• ${ex.progression}` : ''}</p>

@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { MUSCLES, LEVELS, EQUIPMENT, EXERCISE_TAGS, searchExercises, EXERCISE_BY_ID } from '../lib/data.js';
+import { hasExerciseImage } from '../lib/exerciseImages.js';
+import ExerciseIllustration from './ExerciseIllustration.jsx';
 
 export default function ExerciseBrowser({ availableEquipment }){
   const [q,setQ]=useState('');
@@ -77,7 +79,9 @@ export default function ExerciseBrowser({ availableEquipment }){
         {results.map(ex=> (
           <li key={ex.id} className="rounded-2xl border border-line bg-surface overflow-hidden">
             <button onClick={()=> setOpenId(openId===ex.id?null:ex.id)} className="w-full text-left px-4 py-3 flex items-center gap-3">
-              <span className="w-9 h-9 grid place-items-center rounded-xl bg-surface2 border border-line text-sm">{EQUIPMENT.find(e=> e.id===ex.equipment[0])?.icon || '•'}</span>
+              {hasExerciseImage(ex.id)
+                ? <ExerciseIllustration exerciseId={ex.id} size="sm" />
+                : <span className="w-9 h-9 grid place-items-center rounded-xl bg-surface2 border border-line text-sm">{EQUIPMENT.find(e=> e.id===ex.equipment[0])?.icon || '•'}</span>}
               <span className="min-w-0">
                 <span className="block text-sm font-bold truncate">{ex.name}</span>
                 <span className="block text-[11px] text-ink3">{ex.muscle} • {ex.level} • {ex.equipment.join(', ')}</span>
@@ -90,11 +94,16 @@ export default function ExerciseBrowser({ availableEquipment }){
               <span className="ml-auto text-ink3" aria-hidden>{openId===ex.id ? '−' : '+'}</span>
             </button>
             {openId===ex.id && (
-              <div className="px-4 pb-4 pt-1 space-y-2 border-t border-line bg-surface2">
-                <p className="text-xs font-semibold">Cues</p>
-                <ul className="list-disc pl-5 text-xs text-ink2 space-y-1">{ex.cues.map((c,i)=> <li key={i}>{c}</li>)}</ul>
-                <p className="text-xs font-semibold mt-2">If you don’t have the kit</p>
-                <p className="text-xs text-ink3">{ex.substitution.map(id=> EXERCISE_BY_ID[id]?.name || id).join(' • ')}</p>
+              <div className="px-4 pb-4 pt-3 space-y-2 border-t border-line bg-surface2">
+                <div className="flex items-start gap-3">
+                  {hasExerciseImage(ex.id) && <ExerciseIllustration exerciseId={ex.id} size="lg" />}
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold">Cues</p>
+                    <ul className="list-disc pl-5 text-xs text-ink2 space-y-1">{ex.cues.map((c,i)=> <li key={i}>{c}</li>)}</ul>
+                    <p className="text-xs font-semibold mt-2">If you don’t have the kit</p>
+                    <p className="text-xs text-ink3">{ex.substitution.map(id=> EXERCISE_BY_ID[id]?.name || id).join(' • ')}</p>
+                  </div>
+                </div>
               </div>
             )}
           </li>
