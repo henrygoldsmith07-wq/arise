@@ -281,10 +281,10 @@ export function recommendNext({ exerciseId, history, targetReps = null, conserva
   if(reps < hi) {
     if(rir >= 2) return plateAware({ load, reps: Math.min(hi, reps + 1), reason: `Room at RPE ${rpe ?? "/"} — add a rep (${reps}→${Math.min(hi, reps+1)}).`, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
     const nextLoad = snapLoad(load * (1 + incPct), cfg);
-    return plateAware({ load: nextLoad, reps: lo, reason: `Close to failure (RIR ~${rir}) — add a little load, reset to ${lo} reps.`, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
+    return plateAware({ load: nextLoad, reps: lo, reason: `Close to failure (RIR ~${rir}) — increase ${load} → ${nextLoad} kg and reset to ${lo} reps.`, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
   }
   const nextLoad = snapLoad(load > 0 ? load * (conservative ? (1 + incPct) : (1 + incPct*cfg.progression.nonConservativeMultiplier)) : 0, cfg);
-  return plateAware({ load: nextLoad || load, reps: lo, reason: `Hit top of ${lo}–${hi} — nudge load, back to ${lo} reps.`, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
+  return plateAware({ load: nextLoad || load, reps: lo, reason: `You hit the top of ${lo}–${hi} at ${load > 0 ? `${load} kg` : `${reps} reps`} — increase ${load > 0 ? `${load} → ${nextLoad} kg` : `the difficulty`} and reset to ${lo} reps.`, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
 }
 
 // Set progression: add a set only after 2 consecutive sessions at the top of the rep

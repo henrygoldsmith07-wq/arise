@@ -83,7 +83,27 @@ function previousSummary(prev){
   const firstW = prev.sets.find(s => s.weightKg != null && String(s.weightKg).trim() !== '')?.weightKg || null;
   const detail = prev.sets.map(s=> `${s.reps}${s.side?` ${s.side}`:''}${s.assistedKg?` (-${s.assistedKg})`:''}`).join(', ');
   const totalReps = prev.sets.reduce((n, s)=> n + parseNum(s.reps), 0);
-  return { summary: firstW ? `${firstW} kg × ${detail}` : detail, totalReps, dateISO: prev.dateISO };
+  const bestKg = prev.sets.reduce((n, s)=> Math.max(n, parseNum(s.weightKg)), 0);
+  const maxReps = prev.sets.reduce((n, s)=> Math.max(n, parseNum(s.reps)), 0);
+  return { summary: firstW ? `${firstW} kg × ${detail}` : detail, totalReps, bestKg, maxReps, dateISO: prev.dateISO };
+}
+
+// What changed vs last time — the arrow chip above the engine's explanation.
+function transitionChip(rec, prevSummary){
+  if(!rec || !prevSummary) return null;
+  const recLoad = Number(rec.load) > 0 ? Number(rec.load) : null;
+  const recReps = rec.reps != null && String(rec.reps).trim() !== '' ? parseNum(rec.reps) : null;
+  if(recLoad != null && prevSummary.bestKg > 0){
+    if(recLoad > prevSummary.bestKg) return `↑ ${prevSummary.bestKg} → ${recLoad} kg`;
+    if(recLoad < prevSummary.bestKg) return `↓ ${prevSummary.bestKg} → ${recLoad} kg`;
+    return `holds ${recLoad} kg`;
+  }
+  if(recReps != null && prevSummary.maxReps > 0){
+    if(recReps > prevSummary.maxReps) return `↑ ${prevSummary.maxReps} → ${recReps} reps`;
+    if(recReps < prevSummary.maxReps) return `↓ ${prevSummary.maxReps} → ${recReps} reps`;
+    return `holds ${recReps} reps`;
+  }
+  return null;
 }
 
 function getRecommendation(block, history, asOfDateISO, plateConfig = null, study = null){
@@ -450,6 +470,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           const clearTarget = clearTargetParts(recommendation, b);
           const prevSummary = prev ? previousSummary(prev) : null;
           const goalText = prevSummary && prevSummary.totalReps > 0 ? `beat ${prevSummary.totalReps} total reps` : 'set your baseline';
+          const changeChip = transitionChip(recommendation, prevSummary);
           // Swap sheet honours the user's liked/disliked movements, and never
           // offers a swap back to the original lift — A→B→A loops would erase
           // the substitution audit trail.
@@ -471,6 +492,12 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     <span className="text-xl font-black tabular-nums leading-none">{clearTarget.text}</span>
                     {recommendation && <button onClick={()=> applyRecommendation(bi,recommendation)} className="relative text-[10px] font-bold underline underline-offset-2 shrink-0 before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']">Use</button>}
                   </div>
+                  {(changeChip || recommendation?.reason) && (
+                    <p className="text-[11px] mt-1 leading-snug">
+                      {changeChip && <span className="font-bold text-success">{changeChip}</span>}
+                      {recommendation?.reason ? <span className="text-ink2">{changeChip ? ` — ${recommendation.reason}` : recommendation.reason}</span> : null}
+                    </p>
+                  )}
                   <p className="text-[11px] text-ink3 mt-1.5">
                     Previous: {prevSummary ? `${prevSummary.summary}` : 'none logged'}
                     {prevSummary ? <span> · {prev.dateISO}</span> : ' — start light and record a baseline'}
@@ -483,8 +510,9 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                       {ex?.cues?.[0] && <p>Cue: {ex.cues[0]}</p>}
                       {b.warmups?.length ? <p>Warm-ups: {b.warmups.map(w=> `${w.reps}×${w.weightKg||'bw'}${w.note?` (${w.note})`:''}`).join(' • ')}</p> : null}
                       {b.restSec ? <p>Rest {fmtRest(b.restSec)} · load hint: {b.loadHint || '—'}</p> : null}
+                      {b.why && <p className="italic">Prescribed: {b.why}</p>}
                       {recommendation?.plateLoad && <p>Plate check · {recommendation.plateLoad.exact ? `${recommendation.plateLoad.loadKg}kg exact` : `${recommendation.plateLoad.targetKg}kg → ${recommendation.plateLoad.loadKg}kg ${recommendation.plateLoad.direction}`} · per side: {formatPlateStack(recommendation.plateLoad.platesPerSide)}</p>}
-                      <p className="italic">{b.substitutionReason ? `Swap rationale: ${b.substitutionReason}` : `Why: ${b.why || recommendation?.reason || 'Follow the prescribed range and stop with good form.'}`}</p>
+                      {b.substitutionReason && <p className="italic">Swap rationale: {b.substitutionReason}</p>}
                     </div>
                   </details>
                 </div>
