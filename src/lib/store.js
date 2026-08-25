@@ -1,4 +1,5 @@
 ﻿import { getCachedStore, setCachedStore } from './storage.js';
+import { ensureStudyParticipantId, generateStudyParticipantId } from './studyIdentity.js';
 
 const KEY = 'arise.store.v1';
 const CORRUPT_KEY = 'arise.store.v1.corrupt';
@@ -19,6 +20,10 @@ const DEFAULT = {
   readinessLog: [], // [{ dateISO, score, sleep, soreness, motivation }]
   programHistory: [], // [{ programId, version, startDateISO, endDateISO }]
   customTemplates: [], // user-created templates: { id, isCustom:true, version, program:{...}, ... }
+  // Pseudonymous study identity (studyIdentity.js): generated once per
+  // installation, travels inside every export, and lets the field study tell
+  // "one person, ten weekly exports" apart from ten people.
+  studyParticipantId: generateStudyParticipantId(),
 };
 
 export function loadStore(){
@@ -34,6 +39,7 @@ export function loadStore(){
     if(j.activeWorkout === undefined) j.activeWorkout = null;
     if(j.eventHistory === undefined) j.eventHistory=[];
     if(j.healthSummary === undefined) j.healthSummary=null;
+    ensureStudyParticipantId(j); // keep the per-installation study identity stable
     j.history = normaliseHistory(j.history);
     return { ...structuredClone(DEFAULT), ...j };
   }
@@ -48,6 +54,7 @@ export function loadStore(){
     if(j.activeWorkout === undefined) j.activeWorkout = null;
     if(j.eventHistory === undefined) j.eventHistory=[];
     if(j.healthSummary === undefined) j.healthSummary=null;
+    ensureStudyParticipantId(j); // keep the per-installation study identity stable
     j.history = normaliseHistory(j.history);
     return { ...structuredClone(DEFAULT), ...j };
   }catch{

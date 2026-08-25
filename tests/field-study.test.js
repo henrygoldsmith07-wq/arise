@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { measureParticipant, computeFieldStudy, renderFieldReport, loadParticipantFile } from '../src/lib/fieldStudy.js';
+import { buildExportPayload, parseImportFile } from '../src/lib/export.js';
 
 const LOOSE = { longitudinal: { minimumSegmentSamples: 1 } };
 
@@ -36,6 +37,8 @@ function participantFixture(code){
       ]},
     ],
   };
+  // Deterministic 16-hex study id per code, matching the production format.
+  const num = Number(String(code).replace(/\D/g, '')) || 0;
   return {
     code,
     store: {
@@ -55,6 +58,7 @@ function participantFixture(code){
       ],
       readinessLog: [ { score:75 }, { score:81 } ],
       customTemplates: [],
+      studyParticipantId: num.toString(16).padStart(16, '0'),
     },
   };
 }
@@ -90,6 +94,34 @@ describe('field study measurements (per participant)', ()=>{
     assert.ok(m.comparative.arise.n > 0);
     assert.equal(m.comparative['double-progression'].n, m.comparative.arise.n);
   });
+
+  it('feeds the participant readiness log into the comparative replay', ()=>{
+    const p = participantFixture('P01');
+    // Dated, prior-only logs: Jan 6 covers itself; Jan 20 covers Jan 21+.
+    // Bench exposures: Jan 1, 5(w1d1), 6, 11, 16, 21, 26, Feb 2.
+    p.store.readinessLog = [
+      { dateISO: '2026-01-06', score: 80 },
+      { dateISO: '2026-01-20', score: 20 },
+      { dateISO: '2026-03-01', score: 90 }, // AFTER every workout — must be ignored
+    ];
+    const r = measureParticipant(p, { config: LOOSE });
+    const rb = r.readiness;
+    assert.ok(rb.high.n > 0, 'a prior high score should classify nearby transitions');
+    assert.ok(rb.low.n > 0, 'a prior low score should classify nearby transitions');
+    assert.ok(rb.unknown.n > 0, 'transitions without prior data stay unknown');
+    assert.equal(
+      rb.high.n + rb.low.n + rb.unknown.n,
+      r.comparative.arise.n,
+      'every transition lands in exactly one readiness bucket',
+    );
+
+    // The future-dated entry changes nothing: identical buckets without it.
+    const withoutFuture = measureParticipant(
+      { ...p, store: { ...p.store, readinessLog: p.store.readinessLog.slice(0, 2) } },
+      { config: LOOSE },
+    );
+    assert.deepEqual(r.readiness, withoutFuture.readiness);
+  });
 });
 
 describe('pooled field study + headline gates', ()=>{
@@ -119,7 +151,55 @@ describe('pooled field study + headline gates', ()=>{
   it('loads participant packages through the import validator', ()=>{
     const pkg = JSON.stringify({ app:'arise', data: participantFixture('P09').store });
     const loaded = loadParticipantFile(pkg, 8);
-    assert.equal(loaded.code, 'P09');
+    assert.equal(loaded.code, '0000000000000009'.slice(0, 8));
+    assert.equal(loaded.studyParticipantId, '0000000000000009');
     assert.ok(Array.isArray(loaded.store.history));
+  });
+});
+
+describe('study identity: one person × many exports = ONE participant', ()=>{
+  it('folds repeated exports of the same id into a single participant without double-counting', ()=>{
+    const full = participantFixture('P01');
+    // An earlier weekly snapshot: same id, only the first four sessions.
+    const earlier = participantFixture('P01');
+    earlier.store.history = full.store.history.slice(0, 4);
+    const single = computeFieldStudy([full], { config: LOOSE, minParticipants: 1, minTransitions: 1 });
+
+    const result = computeFieldStudy([earlier, full], { config: LOOSE, minParticipants: 1, minTransitions: 1 });
+    assert.equal(result.gates.participants, 1, 'two exports, one person — gate must see ONE participant');
+    assert.equal(result.pooled.arise.n, single.pooled.arise.n, 'cumulative snapshots must not double-count transitions');
+
+    const inflated = computeFieldStudy(
+      [participantFixture('P01'), participantFixture('P02')],
+      { config: LOOSE, minParticipants: 2, minTransitions: 3 },
+    );
+    assert.equal(inflated.gates.participants, 2, 'distinct ids stay distinct people');
+  });
+
+  it('never lets file order become identity or satisfy the participant gate', ()=>{
+    // Two legacy exports WITHOUT any study id: indistinguishable people.
+    const a = participantFixture('P01'); delete a.store.studyParticipantId; delete a.studyParticipantId;
+    const b = participantFixture('P02'); delete b.store.studyParticipantId; delete b.studyParticipantId;
+    const result = computeFieldStudy([a, b], { config: LOOSE, minParticipants: 2, minTransitions: 3 });
+    assert.equal(result.gates.participants, 0);
+    assert.equal(result.gates.unidentifiedExports, 2);
+    assert.equal(result.status, 'insufficient-evidence', 'unidentified arrivals must not satisfy the breadth gate');
+    assert.match(renderFieldReport(result), /without a study id/);
+  });
+
+  it('study id survives the export → import round trip', ()=>{
+    globalThis.localStorage = {
+      getItem: ()=> null,
+      setItem: ()=> {},
+      removeItem: ()=> {},
+    };
+    try{
+      const store = participantFixture('P07').store;
+      const parsed = parseImportFile(JSON.stringify(buildExportPayload(store)));
+      assert.equal(parsed.studyParticipantId, store.studyParticipantId);
+      assert.ok(/^[0-9a-f]{16}$/.test(parsed.studyParticipantId));
+    }finally{
+      delete globalThis.localStorage;
+    }
   });
 });

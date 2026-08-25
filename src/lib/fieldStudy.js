@@ -9,7 +9,8 @@
 //    next-session targets with no increase in regression."
 
 import { resolveArisePriors } from './priors.js';
-import { parseImportFile } from './export.js';
+import { parseImportFile, mergeStores } from './export.js';
+import { isValidStudyParticipantId } from './studyIdentity.js';
 import { evaluateLongitudinal } from './longitudinal.js';
 import { runComparativeStudy, collectDeloadDecisions, validateDeloadDecisions } from './study.js';
 import { recommendationAcceptanceStats, loggingTimeStats } from './telemetry.js';
@@ -35,8 +36,11 @@ export function measureParticipant({ code, store }, { config = null } = {}){
   // Prospective ledger outcomes (consent captured at record time on-device).
   const evaluation = evaluateLongitudinal(store.evaluationLedger || [], { config });
 
-  // Retrospective comparative replay (prior-only, all arms).
-  const study = runComparativeStudy(history, { config });
+  // Retrospective comparative replay (prior-only, all arms). The participant's
+  // own readiness log feeds the byReadiness segmentation — the study engine
+  // only accepts measurements logged at or before each workout, so future
+  // entries cannot leak backwards.
+  const study = runComparativeStudy(history, { config, readinessLog: store.readinessLog || [] });
   const o = study.overall || {};
   const countsFrom = seg => ({
     n: seg?.n || 0,
@@ -105,6 +109,14 @@ export function measureParticipant({ code, store }, { config = null } = {}){
       flat: countsFrom(o.flat),
       paired: study.pairedVsArise || {},
     },
+    // Readiness-stratified arise performance (prior-only buckets from the
+    // participant's own log). Kept alongside the pooled arms so the field
+    // report can show whether targets hold on low-readiness days.
+    readiness: {
+      high: countsFrom(study.segments?.byReadiness?.high?.arise),
+      low: countsFrom(study.segments?.byReadiness?.low?.arise),
+      unknown: countsFrom(study.segments?.byReadiness?.unknown?.arise),
+    },
     plateau: { holds: plateauHolds, falsePositives: plateauFalsePositives, falsePositiveRate: pct(plateauFalsePositives, plateauHolds) },
     adherence: { scheduled: sessions.length, done, missed, completionRate: pct(done, sessions.length) },
     deload: { decisions: deloadOutcomes.decisions, cutsObservedRate: deloadOutcomes.cutsObservedRate, normalisedWithinTwoWeeksRate: deloadOutcomes.normalisedWithinTwoWeeksRate },
@@ -117,7 +129,14 @@ export function measureParticipant({ code, store }, { config = null } = {}){
 export function computeFieldStudy(participants, { config = null, minParticipants = 10, minTransitions = 1000 } = {}){
   const cfg = resolveArisePriors(config);
   void cfg;
-  const measures = participants.map(p => measureParticipant(p, { config }));
+  // Repeated exports of the same person collapse into one participant BEFORE
+  // any measurement, so neither the gate nor the pooled rates can be inflated
+  // by export frequency.
+  const { groups: deduped, unidentified: unidentifiedRaw } = groupParticipantsByIdentity(participants);
+  const measures = deduped.map(p => measureParticipant(p, { config }));
+  const unidentifiedMeasures = unidentifiedRaw.map(p => measureParticipant(p, { config }));
+  const identifiedCount = measures.length;
+  const unidentifiedCount = unidentifiedRaw.length;
 
   const sum = (arr, f)=> arr.reduce((acc, m)=> acc + (f(m) || 0), 0);
   const pooledArise = {
@@ -136,7 +155,10 @@ export function computeFieldStudy(participants, { config = null, minParticipants
   const pooled = { arise: pooledArise, 'double-progression': poolArm('double-progression'), 'linear-progression': poolArm('linear-progression'), flat: poolArm('flat') };
 
   const transitions = pooledArise.n;
-  const gatesPassed = measures.length >= minParticipants && transitions >= minTransitions;
+  // Breadth is measured in IDENTIFIED PEOPLE, not file arrivals. Legacy
+  // exports without a study id are reported separately and never satisfy the
+  // participant gate — they cannot be proven distinct from each other.
+  const gatesPassed = identifiedCount >= minParticipants && transitions >= minTransitions;
 
   const headline = {};
   for(const arm of ['double-progression','linear-progression','flat']){
@@ -153,14 +175,30 @@ export function computeFieldStudy(participants, { config = null, minParticipants
 
   const claim = claimReady
     ? {
-        text: `Across ${transitions} real exercise transitions from ${measures.length} consenting participants, Arise produced ${headline['double-progression'].targetAchievementDeltaPct}% more successful next-session targets than standard double progression (regression ${(pooledArise.regression / Math.max(1, pooledArise.n) * 100).toFixed(1)}% vs ${(pooled['double-progression'].regression / Math.max(1, pooled['double-progression'].n) * 100).toFixed(1)}%).`,
+        text: `Across ${transitions} real exercise transitions from ${identifiedCount} consenting participants, Arise produced ${headline['double-progression'].targetAchievementDeltaPct}% more successful next-session targets than standard double progression (regression ${(pooledArise.regression / Math.max(1, pooledArise.n) * 100).toFixed(1)}% vs ${(pooled['double-progression'].regression / Math.max(1, pooled['double-progression'].n) * 100).toFixed(1)}%).`,
         gates: { minParticipants, minTransitions },
       }
     : null;
 
+  const poolReadinessBucket = key => {
+    let n = 0, met = 0;
+    for(const m of measures){
+      const b = m.readiness?.[key];
+      n += b?.n || 0;
+      met += b?.met || 0;
+    }
+    return { n, met, rate: n ? round(met / n) : null };
+  };
+
   return {
     status: gatesPassed ? 'sufficient-evidence' : 'insufficient-evidence',
-    gates: { minParticipants, minTransitions, participants: measures.length, transitions },
+    gates: {
+      minParticipants,
+      minTransitions,
+      participants: identifiedCount,
+      transitions,
+      unidentifiedExports: unidentifiedCount,
+    },
     totals: {
       sessionsLogged: sum(measures, m => m.sessionsLogged),
       ledgerResolvedPairs: sum(measures, m => m.ledger.resolved),
@@ -172,6 +210,7 @@ export function computeFieldStudy(participants, { config = null, minParticipants
       acceptanceRatePooled: acceptancePooled(measures),
       plateauFalsePositiveRate: pct(sum(measures, m => m.plateau.falsePositives), sum(measures, m => m.plateau.holds)),
       deloadNormalisedRate: avgNonNull(measures.map(m => m.deload.normalisedWithinTwoWeeksRate)),
+      readinessBuckets: { high: poolReadinessBucket('high'), low: poolReadinessBucket('low'), unknown: poolReadinessBucket('unknown') },
     },
     pooled,
     headline,
@@ -191,8 +230,31 @@ function acceptancePooled(measures){
 
 export function loadParticipantFile(text, index){
   const parsed = parseImportFile(text);
-  const code = parsed?.data?.participantCode || parsed?.participantCode || `P${String(index + 1).padStart(2,'0')}`;
-  return { code, store: parsed };
+  // Identity comes ONLY from the pseudonymous study id inside the package.
+  // Filename order must never become identity: repeated weekly exports from
+  // one person would otherwise look like several participants.
+  const studyParticipantId = isValidStudyParticipantId(parsed?.studyParticipantId) ? parsed.studyParticipantId : null;
+  const code = studyParticipantId ? studyParticipantId.slice(0, 8) : `anon-${String(index + 1).padStart(2, '0')}`;
+  return { code, studyParticipantId, store: parsed };
+}
+
+// Fold every export carrying the same studyParticipantId into ONE participant.
+// Repeated weekly exports are cumulative snapshots of the same training log,
+// so naive concatenation would double-count transitions; mergeStores unions
+// history/events/readiness by their own ids instead.
+function groupParticipantsByIdentity(participants){
+  const identified = new Map();
+  const unidentified = [];
+  for(const p of participants || []){
+    const id = p?.studyParticipantId ?? (isValidStudyParticipantId(p?.store?.studyParticipantId) ? p.store.studyParticipantId : null);
+    if(!id){ unidentified.push(p); continue; }
+    if(!identified.has(id)) identified.set(id, p);
+    else{
+      const kept = identified.get(id);
+      identified.set(id, { ...kept, store: mergeStores(kept.store, p.store, 'merge') });
+    }
+  }
+  return { groups: [...identified.values()], unidentified };
 }
 
 export function renderFieldReport(result){
@@ -200,6 +262,10 @@ export function renderFieldReport(result){
   L.push(`# Real-world longitudinal study`);
   L.push('');
   L.push(`Status: **${result.status}** · participants ${result.gates.participants}/${result.gates.minParticipants} · transitions ${result.gates.transitions}/${result.gates.minTransitions}`);
+  if(result.gates.unidentifiedExports){
+    L.push('');
+    L.push(`${result.gates.unidentifiedExports} export${result.gates.unidentifiedExports === 1 ? '' : 's'} without a study id — counted in nothing; they cannot be proven distinct people. Re-export from the updated app to be identified.`);
+  }
   if(result.claim) { L.push(''); L.push(`> ${result.claim.text}`); }
   else { L.push(''); L.push('> Headline claim withheld until sample gates are met.'); }
   L.push('');
@@ -217,6 +283,13 @@ export function renderFieldReport(result){
     ['Deload normalisation ≤2wks', t.deloadNormalisedRate == null ? '—' : `${Math.round(t.deloadNormalisedRate*100)}%`],
     ['Programme changes overridden', t.adaptedBlocksOverridden],
   ];
+  const rb = t.readinessBuckets || {};
+  const bucketCell = b => b && b.n ? `${b.met}/${b.n} targets (${Math.round((b.rate ?? 0) * 100)}%)` : '—';
+  rows.push(
+    ['Arise targets · high-readiness days', bucketCell(rb.high)],
+    ['Arise targets · low-readiness days', bucketCell(rb.low)],
+    ['Arise targets · readiness unknown', bucketCell(rb.unknown)],
+  );
   for(const [k,v] of rows) L.push(`| ${k} | ${v} |`);
   L.push('');
   L.push('## Pooled comparison (next-session targets)');

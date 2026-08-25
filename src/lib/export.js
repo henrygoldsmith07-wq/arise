@@ -4,6 +4,7 @@
 import { runMigrations, STORE_SCHEMA_VERSION, mergeCustomTemplates } from './store.js';
 import { getEventHistory } from './telemetry.js';
 import { loadEvaluationLedger, mergeEvaluationLedgers } from './longitudinal.js';
+import { ensureStudyParticipantId } from './studyIdentity.js';
 
 export const EXPORT_VERSION = 3;
 
@@ -13,6 +14,9 @@ export function buildExportPayload(store){
   // survive reinstalls and move between devices like any other user data.
   const evaluationLedger=loadEvaluationLedger();
   const data={ ...store, version: store.version || STORE_SCHEMA_VERSION, eventHistory, evaluationLedger };
+  // Every export carries the pseudonymous study id so repeated weekly exports
+  // from one person can be folded back into ONE participant downstream.
+  ensureStudyParticipantId(data);
   return {
     app: 'arise',
     version: EXPORT_VERSION,
@@ -32,7 +36,9 @@ export function downloadJson(filename, obj){
 
 // Only these top-level keys may enter the store from an imported file.
 // Anything else in a hand-edited backup is dropped rather than persisted forever.
-const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','preferences','readinessLog','programHistory','evaluationLedger','customTemplates'];
+// studyParticipantId is the pseudonymous study identity (studyIdentity.js) —
+// preserved so repeated exports fold into ONE field-study participant.
+const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','preferences','readinessLog','programHistory','evaluationLedger','customTemplates','studyParticipantId'];
 
 export function parseImportFile(text){
   let parsed;
