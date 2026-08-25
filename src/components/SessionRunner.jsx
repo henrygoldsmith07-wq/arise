@@ -20,6 +20,10 @@ const NOTE_PROMPTS = [
 ];
 
 function parseNum(v){ const n=Number(v); return Number.isFinite(n)? n : 0; }
+// Sets are persisted as RPE (engine + history schema), but logged as RIR:
+// "2 RIR" ↔ rpe 8. Blank stays blank.
+function rirFromRpe(rpe){ const t=String(rpe ?? '').trim(); if(t==='') return ''; const n=Number(t); if(!Number.isFinite(n)) return ''; return String(Math.max(0, Math.min(10, Math.round((10-n)*2)/2))); }
+function rpeFromRir(rir){ const t=String(rir ?? '').trim(); if(t==='') return ''; const n=Number(t); if(!Number.isFinite(n)) return ''; return String(Math.max(0, Math.min(10, Math.round((10-n)*2)/2))); }
 function fmtRest(s){ const m=Math.floor(s/60); const r=s%60; return m? `${m}:${String(r).padStart(2,'0')}` : `${r}s`; }
 function firstInt(reps){ const m=String(reps).match(/\d+/); return m? m[0] : ''; }
 
@@ -317,6 +321,15 @@ export default function SessionRunner({ session, history = [], availableEquipmen
         sessionElapsedMs:Math.max(0,now-Date.parse(startedAtRef.current)),
       });
       lastSetAtRef.current=new Date(now).toISOString();
+      // Carry-forward: prefill the next unfinished row with what you just did,
+      // so between-set logging is one tap (Done) per set.
+      const nextIdx = block.sets.findIndex((s,j)=> j>si && !s.completed && (String(s.reps).trim()==='' || String(s.weightKg).trim()===''));
+      if(nextIdx !== -1){
+        const carry = {};
+        if(String(block.sets[nextIdx].reps).trim()==='') carry.reps = set.reps;
+        if(String(block.sets[nextIdx].weightKg).trim()==='') carry.weightKg = set.weightKg;
+        if(Object.keys(carry).length) updateSet(bi,nextIdx,carry);
+      }
       // Auto-start the rest countdown unless the user turned it off
       // (preferences.autoRest, default on). Manual Start rest stays as override.
       if(preferences?.autoRest !== false && hasUnfinishedSet(blocks,bi,si)) startRest(block.restSec, EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId);
@@ -540,20 +553,20 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                 </div>
               )}
 
-              <div className="space-y-2">
-                <div className="grid grid-cols-[28px_minmax(0,1fr)_minmax(0,1fr)_48px_42px_auto_28px] gap-1.5 text-[10px] font-bold uppercase tracking-widest text-ink3 px-1">
-                  <span>#</span><span>Reps</span><span>Load</span><span>RPE</span><span>{b.unilateral?'Side':''}</span><span>Done</span><span></span>
+              <div className="space-y-2.5">
+                <div className="grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] gap-1.5 text-[10px] font-bold uppercase tracking-widest text-ink3 px-1">
+                  <span>#</span><span>Load kg</span><span>Reps</span><span>RIR</span><span>{b.unilateral?'L/R':''}</span><span>Done</span><span></span>
                 </div>
                 {b.sets.map((s,si)=> (
-                  <div key={si} className="grid grid-cols-[28px_minmax(0,1fr)_minmax(0,1fr)_48px_42px_auto_28px] gap-1.5 items-center">
+                  <div key={si} className="grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] gap-1.5 items-center">
                     <span className={`w-7 h-7 grid place-items-center rounded-full border text-xs font-bold tabular-nums ${s.completed?'bg-success text-bg border-success':'bg-surface2 border-line'}`}>{si+1}</span>
-                    <input type="number" min="0" step="1" inputMode="numeric" value={s.reps} onChange={e=> updateSet(bi,si,{reps:e.target.value})} placeholder="8" aria-label={`Reps set ${si+1}`} className="min-w-0 rounded-xl border border-line bg-surface2 px-2 py-2.5 text-sm tabular-nums" />
-                    <input type="number" min="0" step="0.5" inputMode="decimal" value={s.weightKg} onChange={e=> updateSet(bi,si,{weightKg:e.target.value})} placeholder={supportsWeighted?'kg':'bodyweight'} aria-label={`Load set ${si+1}`} className="min-w-0 rounded-xl border border-line bg-surface2 px-2 py-2.5 text-sm tabular-nums" />
-                    <input type="number" min="1" max="10" step="0.5" inputMode="decimal" value={s.rpe} onChange={e=> updateSet(bi,si,{rpe:e.target.value})} placeholder="—" aria-label={`RPE set ${si+1}`} className="min-w-0 rounded-xl border border-line bg-surface2 px-2 py-2.5 text-sm tabular-nums" />
+                    <input type="number" min="0" step="0.5" inputMode="decimal" value={s.weightKg} onChange={e=> updateSet(bi,si,{weightKg:e.target.value})} placeholder={supportsWeighted?'22':'bw'} aria-label={`Load set ${si+1} in kilograms`} className={`min-w-0 rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
+                    <input type="number" min="0" step="1" inputMode="numeric" value={s.reps} onChange={e=> updateSet(bi,si,{reps:e.target.value})} placeholder="9" aria-label={`Reps set ${si+1}`} className={`min-w-0 rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
+                    <input type="number" min="0" max="10" step="1" inputMode="numeric" value={rirFromRpe(s.rpe)} onChange={e=> updateSet(bi,si,{rpe:rpeFromRir(e.target.value)})} placeholder="—" aria-label={`Reps in reserve set ${si+1}`} className={`min-w-0 rounded-xl border border-line bg-surface2 px-1 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
                     {b.unilateral ? (
-                      <select value={s.side||'L'} onChange={e=> updateSet(bi,si,{side:e.target.value})} aria-label={`Side set ${si+1}`} className="min-w-0 rounded-xl border border-line bg-surface2 px-1 py-2.5 text-xs font-bold"><option value="L">L</option><option value="R">R</option></select>
+                      <select value={s.side||'L'} onChange={e=> updateSet(bi,si,{side:e.target.value})} aria-label={`Side set ${si+1}`} className="min-w-0 rounded-xl border border-line bg-surface2 px-1 py-3 text-xs font-bold"><option value="L">L</option><option value="R">R</option></select>
                     ) : <span />}
-                    <button onClick={()=> completeSet(bi,si)} aria-pressed={s.completed} className={`min-h-11 px-2 rounded-xl border text-[11px] font-bold whitespace-nowrap ${s.completed?'bg-success text-bg border-success':'bg-surface2 border-line'}`}>Done</button>
+                    <button onClick={()=> completeSet(bi,si)} aria-pressed={s.completed} className={`min-h-12 px-2.5 rounded-xl border text-[11px] font-bold whitespace-nowrap ${s.completed?'bg-success text-bg border-success':'bg-surface2 border-line'}`}>{s.completed?'✓':'Done'}</button>
                     <button onClick={()=> removeSet(bi,si)} aria-label={`Remove set ${si+1}`} className="relative w-9 h-9 grid place-items-center rounded-full border border-line text-ink3 before:absolute before:-inset-1.5 before:rounded-full before:content-['']">×</button>
                   </div>
                 ))}
@@ -588,12 +601,15 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       <div className="shrink-0 border-t border-line bg-surface px-4 pt-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] space-y-2">
         <div className="max-w-3xl w-full mx-auto space-y-2">
           {restLeft!==null && (
-            <div className="rounded-2xl bg-ink text-bg px-3 py-2.5 flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-widest opacity-80 min-w-0 truncate">Rest · {restLabel}</span>
-              <div className="ml-auto flex items-center gap-1.5 shrink-0">
-                <button onClick={()=> setRestEndsAt(v=> Math.max(Date.now()+5000, (v||Date.now())-15000))} aria-label="Rest 15 seconds less" className="min-h-11 min-w-11 px-2 rounded-full bg-bg/15 text-xs font-bold tabular-nums">−15s</button>
-                <span aria-hidden className="text-lg font-black tabular-nums w-14 text-center">{fmtRest(restLeft)}</span>
-                <button onClick={()=> setRestEndsAt(v=> (v||Date.now())+30000)} aria-label="Rest 30 seconds more" className="min-h-11 min-w-11 px-2 rounded-full bg-bg/15 text-xs font-bold tabular-nums">+30s</button>
+            <div className="rounded-2xl bg-ink text-bg px-4 py-3 flex items-center gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-widest opacity-70 leading-none">Rest</p>
+                <p className="text-xs font-bold truncate opacity-80">{restLabel}</p>
+              </div>
+              <span className="ml-auto text-4xl font-black tabular-nums leading-none" aria-live="off">{fmtRest(restLeft)}</span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button onClick={()=> setRestEndsAt(v=> Math.max(Date.now()+5000, (v||Date.now())-15000))} aria-label="Rest 15 seconds less" className="min-h-11 min-w-11 px-1.5 rounded-full bg-bg/15 text-xs font-bold tabular-nums">−15s</button>
+                <button onClick={()=> setRestEndsAt(v=> (v||Date.now())+30000)} aria-label="Rest 30 seconds more" className="min-h-11 min-w-11 px-1.5 rounded-full bg-bg/15 text-xs font-bold tabular-nums">+30s</button>
                 <button onClick={()=> setRestEndsAt(null)} aria-label="Skip rest" className="min-h-11 px-3 rounded-full bg-bg text-ink text-xs font-bold">Skip</button>
               </div>
             </div>
