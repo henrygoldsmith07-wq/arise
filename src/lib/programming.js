@@ -305,7 +305,7 @@ export function replanSchedule(schedule, history = [], { today = isoToday(), spa
   };
 }
 
-function blockDurationMinutes(block, config = null){
+export function blockDurationMinutes(block, config = null){
   const cfg = resolveArisePriors(config).programming.shortWorkout;
   const timed = parseTimeMinutes(block.reps);
   if(timed != null) return Math.max(cfg.minimumBlockMinutes, timed);
