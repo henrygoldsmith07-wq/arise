@@ -1,4 +1,4 @@
-﻿import { getCachedStore, setCachedStore } from './storage.js';
+import { getCachedStore, setCachedStore } from './storage.js';
 import { ensureStudyParticipantId, generateStudyParticipantId } from './studyIdentity.js';
 
 const KEY = 'arise.store.v1';
@@ -27,6 +27,9 @@ const DEFAULT = {
   // Randomised trial enrollment (studyEnrollment.js): null until the user
   // opts in via measurement consent and starts a treated programme.
   studyEnrollment: null,
+  // Per-exercise policy choices made from the N-of-1 lab. These are only
+  // applied when the user is not in a frozen randomized experiment.
+  progressionOverrides: {},
 };
 
 export function loadStore(){
@@ -42,6 +45,7 @@ export function loadStore(){
     if(j.activeWorkout === undefined) j.activeWorkout = null;
     if(j.eventHistory === undefined) j.eventHistory=[];
     if(j.healthSummary === undefined) j.healthSummary=null;
+    if(!j.progressionOverrides || typeof j.progressionOverrides !== 'object' || Array.isArray(j.progressionOverrides)) j.progressionOverrides={};
     ensureStudyParticipantId(j); // keep the per-installation study identity stable
     if(j.studyEnrollment === undefined) j.studyEnrollment=null;
     j.history = normaliseHistory(j.history);
@@ -58,6 +62,7 @@ export function loadStore(){
     if(j.activeWorkout === undefined) j.activeWorkout = null;
     if(j.eventHistory === undefined) j.eventHistory=[];
     if(j.healthSummary === undefined) j.healthSummary=null;
+    if(!j.progressionOverrides || typeof j.progressionOverrides !== 'object' || Array.isArray(j.progressionOverrides)) j.progressionOverrides={};
     ensureStudyParticipantId(j); // keep the per-installation study identity stable
     if(j.studyEnrollment === undefined) j.studyEnrollment=null;
     j.history = normaliseHistory(j.history);
@@ -237,6 +242,7 @@ export function runMigrations(raw){
   if(j.activeWorkout === undefined) j.activeWorkout = null;
   if(j.eventHistory === undefined) j.eventHistory=[];
   if(j.healthSummary === undefined) j.healthSummary=null;
+  if(!j.progressionOverrides || typeof j.progressionOverrides !== 'object' || Array.isArray(j.progressionOverrides)) j.progressionOverrides={};
   if(!j.preferences) j.preferences={};
   if(j.preferences.syncEnabled==null) j.preferences.syncEnabled=false;
   if(j.preferences.telemetryEnabled==null) j.preferences.telemetryEnabled=null;
@@ -328,3 +334,4 @@ export function streakDays(history){
 }
 
 export { KEY, CORRUPT_KEY, DEFAULT };
+
