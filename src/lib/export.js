@@ -1,4 +1,4 @@
-﻿// Export / restore / import â€” versioned JSON backup for local-first data.
+// Export / restore / import â€” versioned JSON backup for local-first data.
 // No cloud sync; the user owns the file.
 
 import { runMigrations, STORE_SCHEMA_VERSION, mergeCustomTemplates } from './store.js';
@@ -38,7 +38,7 @@ export function downloadJson(filename, obj){
 // Anything else in a hand-edited backup is dropped rather than persisted forever.
 // studyParticipantId is the pseudonymous study identity (studyIdentity.js) —
 // preserved so repeated exports fold into ONE field-study participant.
-const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','preferences','readinessLog','programHistory','evaluationLedger','customTemplates','studyParticipantId','studyEnrollment'];
+const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','preferences','readinessLog','programHistory','evaluationLedger','customTemplates','studyParticipantId','studyEnrollment','progressionOverrides'];
 
 export function parseImportFile(text){
   let parsed;
@@ -98,6 +98,7 @@ export function mergeStores(current, imported, strategy='merge'){
     eventHistory: [...eventById.values()].sort((a,b)=> String(a.at||'').localeCompare(String(b.at||''))),
     healthSummary: currentStore.healthSummary || importedStore.healthSummary || null,
     preferences: { ...(importedStore.preferences||{}), ...(currentStore.preferences||{}) },
+    progressionOverrides: { ...(importedStore.progressionOverrides||{}), ...(currentStore.progressionOverrides||{}) },
     readinessLog: [...(currentStore.readinessLog||[]), ...(importedStore.readinessLog||[])].filter((v,i,a)=> a.findIndex(x=> x.dateISO===v.dateISO && x.at===v.at)===i),
     evaluationLedger: mergeEvaluationLedgers(currentStore.evaluationLedger, importedStore.evaluationLedger),
     customTemplates: mergeCustomTemplates(currentStore.customTemplates, importedStore.customTemplates),
@@ -132,3 +133,4 @@ export function deletionPreview(store){
     healthSummaryPresent: !!store.healthSummary,
   };
 }
+
