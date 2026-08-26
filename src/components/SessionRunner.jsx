@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { lastExerciseSets } from '../lib/store.js';
 import { recommendNext } from '../lib/progression.js';
-import { runComparativeStudy } from '../lib/study.js';
+import { runComparativeStudy, doubleProgressionRec } from '../lib/study.js';
+import { assignmentFor } from '../lib/studyEnrollment.js';
 import { recommendNextWithModel } from '../lib/progressionModel.js';
 import { formatPlateStack } from '../lib/plates.js';
 import { substitutionOptions } from '../lib/substitutions.js';
@@ -110,8 +111,23 @@ function transitionChip(rec, prevSummary){
   return null;
 }
 
-function getRecommendation(block, history, asOfDateISO, plateConfig = null, study = null){
+function getRecommendation(block, history, asOfDateISO, plateConfig = null, study = null, assignedArm = null){
   try{
+    // ── Randomised trial enforcement ──
+    // A double-progression assignment IS the treatment: the product displays
+    // and logs the DP prescription. Arise never runs for that exercise, so
+    // the comparison is between policies actually followed.
+    if(assignedArm === 'double-progression'){
+      const visible = history.filter(h=> String(h?.dateISO || '') <= String(asOfDateISO || '9999'));
+      const rec = doubleProgressionRec({ history: visible, exerciseId: block.exerciseId, targetReps: block.reps || '8–12' });
+      return {
+        load: rec.load ?? null,
+        reps: rec.reps,
+        assistKg: null,
+        reason: 'Study policy — double progression (randomised).',
+        __studyArm: 'double-progression',
+      };
+    }
     // Evidence-gated model: recommendNextWithModel derives the progression
     // model from history + study; capabilities stay inert unless their sample
     // gates AND a proven baseline weakness open them. Falls back to the plain
@@ -135,7 +151,7 @@ function hasUnfinishedSet(blocks, bi, si){
   return false;
 }
 
-export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, onDraftChange, onSave, onCancel }){
+export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, studyEnrollment = null, participantId = null, onDraftChange, onSave, onCancel }){
   const [blocks,setBlocks]=useState(()=> session.blocks.map((b,i)=> normaliseBlock(b, history, draft?.blocks?.[i])));
   const [note,setNote]=useState(()=> draft?.note || '');
   const [noteTags,setNoteTags]=useState(()=> draft?.noteTags || []);
@@ -245,9 +261,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   useEffect(()=>{
     for(const block of blocks){
       if(shownRecommendationRef.current.has(block.exerciseId)) continue;
-      const recommendation=getRecommendation(block,history,session.dateISO,plateConfig,study);
+      const arm = assignmentFor(studyEnrollment, block.exerciseId);
+      const recommendation=getRecommendation(block,history,session.dateISO,plateConfig,study,arm);
       shownRecommendationRef.current.add(block.exerciseId);
-      recordEvent('recommendation:shown', { sessionId:session.id, exerciseId:block.exerciseId, target:suggestedTarget(recommendation,block) });
+      recordEvent('recommendation:shown', { sessionId:session.id, exerciseId:block.exerciseId, assignedArm:arm || 'arise', target:suggestedTarget(recommendation,block) });
       // Prospective evaluation record: snapshot the recommendation BEFORE the
       // workout. Consent-gated; stored separately from training history.
         try{
@@ -259,11 +276,13 @@ export default function SessionRunner({ session, history = [], availableEquipmen
             programId: session.programId || null,
             programVersion: session.programVersion ?? null,
             targetReps: block.reps || undefined,
+            assignedArm: arm || 'arise',
+            participantId,
             preferences: measurementConsent === true ? { telemetryEnabled: true } : null,
           });
         }catch{}
     }
-  }, [blocks, history, session.id, session.dateISO, plateConfig, measurementConsent, study]);
+  }, [blocks, history, session.id, session.dateISO, plateConfig, measurementConsent, study, studyEnrollment, participantId]);
 
   const startRest=(seconds,label)=>{
     const sec=Number(seconds)||0;
@@ -279,14 +298,17 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   // Recommendations and previous-performance lookups scan the full history;
   // compute them once per change instead of once per block per keystroke.
   const blockMeta = useMemo(()=>{
-    const recs=new Map(), prevs=new Map();
+    const recs=new Map(), prevs=new Map(), assigned=new Map();
     for(const b of blocks){
       if(recs.has(b.exerciseId)) continue;
-      recs.set(b.exerciseId, getRecommendation(b,history,session.dateISO,plateConfig,study));
+      // Randomised trial: the assigned arm decides which policy runs.
+      const arm = assignmentFor(studyEnrollment, b.exerciseId);
+      assigned.set(b.exerciseId, arm);
+      recs.set(b.exerciseId, getRecommendation(b,history,session.dateISO,plateConfig,study,arm));
       prevs.set(b.exerciseId, lastExerciseSets(history,b.exerciseId));
     }
-    return { recs, prevs };
-  },[blocks,history,session.dateISO,plateConfig]);
+    return { recs, prevs, assigned };
+  },[blocks,history,session.dateISO,plateConfig,studyEnrollment]);
 
   const volume = useMemo(()=>{
     let total=0;

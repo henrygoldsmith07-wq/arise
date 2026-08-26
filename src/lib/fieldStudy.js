@@ -125,6 +125,7 @@ export function measureParticipant({ code, store }, { config = null } = {}){
       resolved: evaluation.overall.resolved,
       byArm: evaluation.byArm || {},
       pairedVsArise: evaluation.pairedVsArise || {},
+      primaryComparison: evaluation.primaryComparison || null,
     },
     plateau: { holds: plateauHolds, falsePositives: plateauFalsePositives, falsePositiveRate: pct(plateauFalsePositives, plateauHolds) },
     adherence: { scheduled: sessions.length, done, missed, completionRate: pct(done, sessions.length) },
@@ -370,6 +371,29 @@ export function renderFieldReport(result){
       cell += a.conclusive ? '' : ' (below gate)';
     }
     rows.push([`Ledger arm: ${arm}`, cell]);
+  }
+  // PRIMARY randomised comparison (assigned arms, intention-to-treat).
+  const prim = t.primaryComparison;
+  if(prim){
+    const cellFor = a => a.n
+      ? `${Math.round((a.targetAchievementRate ?? 0) * 100)}% of ${a.n} transitions · ${a.participants} participant${a.participants === 1 ? '' : 's'}${a.conclusive ? '' : ' (below gate)'}`
+      : '—';
+    const diff = prim.difference || {};
+    const boot = diff.clusteredBootstrap;
+    let diffCell = '—';
+    if(diff.metRateDelta != null && boot?.mean != null){
+      diffCell = `${diff.metRateDelta > 0 ? '+' : ''}${Math.round(diff.metRateDelta * 100)}pp arise−DP`;
+      if(boot.low != null) diffCell += ` · clustered 95% CI [${Math.round(boot.low*100)}%, ${Math.round(boot.high*100)}%] over ${boot.participants} participants`;
+      else diffCell += ` · ${boot.participants} participant${boot.participants === 1 ? '' : 's'} — clustered CI needs ≥2`;
+    }
+    rows.push(
+      ['PRIMARY · Arise-assigned', cellFor(prim.arise)],
+      ['PRIMARY · Double-progression-assigned', cellFor(prim['double-progression'])],
+      ['PRIMARY · Met-rate difference', diffCell],
+      ['PRIMARY · Adherence', prim.adherence.followedRate != null ? `${Math.round(prim.adherence.followedRate*100)}% followed` + (prim.adherence.unknownAdherence ? ` (${prim.adherence.unknownAdherence} unknown)` : '') : '—'],
+    );
+  } else {
+    rows.push(['PRIMARY randomised comparison', 'not yet collected']);
   }
   for(const [k,v] of rows) L.push(`| ${k} | ${v} |`);
   L.push('');

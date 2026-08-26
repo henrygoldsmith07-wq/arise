@@ -30,7 +30,7 @@ const FUTURE = [sess('c', '2026-02-01', 'bench-press-dumbbell', [set(15, 40, 5)]
 
 describe('prospective arm comparison (real-training ledger)', ()=>{
 
-  it('freezes all five arms at record time, arise byte-identical to the recommendation', ()=>{
+  it('freezes all five arms at record time as PURE shadows; prescription captured separately', ()=>{
     const store = memStorage();
     const rec = recordRecommendation({
       exerciseId: 'bench-press-dumbbell',
@@ -44,14 +44,11 @@ describe('prospective arm comparison (real-training ledger)', ()=>{
     });
     assert.ok(rec.arms, 'arms must be frozen at record time');
     for(const arm of STUDY_ARMS) assert.ok(rec.arms[arm], `missing frozen arm ${arm}`);
-    assert.equal(rec.arms.arise.load, 21);
-    assert.equal(rec.arms.arise.reps, 10);
-    // Baselines computed from the same prefix:
-    const expected = computeArms({ exerciseId: 'bench-press-dumbbell', history: PREFIX, targetReps: '8–12' });
-    assert.deepEqual(
-      { dp: rec.arms['double-progression'], lin: rec.arms['linear-progression'], fr: rec.arms['fixed-rules'], flat: rec.arms.flat },
-      { dp: expected['double-progression'], lin: expected['linear-progression'], fr: expected['fixed-rules'], flat: expected.flat },
-    );
+    // Shadows are pure engine outputs — NOT overwritten by the treatment:
+    assert.equal(rec.arms.arise.load, 20); // engine would add a rep (9→10) at same load
+    // What the product actually prescribed travels separately:
+    assert.equal(rec.prescription.load, 21);
+    assert.equal(rec.prescription.reps, 10);
     assert.equal(rec.schemaVersion, EVALUATION_SCHEMA_VERSION);
   });
 
@@ -63,14 +60,13 @@ describe('prospective arm comparison (real-training ledger)', ()=>{
 
   it('scores every frozen arm against the same realised outcome', ()=>{
     const store = memStorage();
-    // Arise says jump to 22.5 kg × 8; baselines were frozen from PREFIX.
+    // Arise-assigned prescription 22.5 kg × 8; baselines were frozen from PREFIX.
     recordRecommendation({
       exerciseId:'bench-press-dumbbell', recommendation:{ load:22.5, reps:8 },
-      history: PREFIX, dueDateISO:'2026-01-08', targetReps:'8–12', preferences: CONSENT, storage: store,
+      history: PREFIX, dueDateISO:'2026-01-08', targetReps:'8–12',
+      assignedArm:'arise', participantId:'p1',
+      preferences: CONSENT, storage: store,
     });
-    // Realised: best set 22.5 kg × 8 — meets arise AND linear's load but not
-    // their rep targets above; misses double-progression/fixed-rules rep
-    // targets (10) and flat (9).
     const resolved = attachOutcome({
       sessionId:'s-real', dateISO:'2026-01-09',
       blocks:[{ exerciseId:'bench-press-dumbbell', sets:[set(8, 22.5, 8)] }],
@@ -78,9 +74,14 @@ describe('prospective arm comparison (real-training ledger)', ()=>{
     });
     assert.equal(resolved.length, 1);
     const arms = resolved[0].outcome.arms;
-    assert.equal(arms.arise.metTarget, true);
-    assert.equal(arms['double-progression'].metTarget, false, 'DP demanded 10 reps, got 8');
-    assert.equal(arms['linear-progression'].metTarget, false, 'linear demanded 9 reps, got 8');
+    // Assigned treatment met (prescription 22.5 × 8 == realised):
+    assert.equal(resolved[0].outcome.assignedMet, true);
+    assert.equal(resolved[0].outcome.followed, true);
+    assert.equal(resolved[0].outcome.assignedArm, 'arise');
+    // SHADOW slots stay pure engine outputs — arise shadow demanded 10 reps:
+    assert.equal(arms.arise.metTarget, false, 'engine shadow wanted 10 reps');
+    assert.equal(arms['double-progression'].metTarget, false, 'DP shadow demanded 10 reps, got 8');
+    assert.equal(arms['linear-progression'].metTarget, false);
     assert.equal(arms['fixed-rules'].metTarget, false);
     assert.equal(arms.flat.metTarget, false);
   });
@@ -96,7 +97,9 @@ describe('prospective arm comparison (real-training ledger)', ()=>{
         ...PREFIX.map((s,i2)=> ({ ...s, dateISO:`2026-02-${String(1+i2*3).padStart(2,'0')}` })),
         sess(`pre-${i}`, `2026-03-${String(Math.max(1,day-4)).padStart(2,'0')}`, 'bench-press-dumbbell', [set(9, 20, 7)]),
       ];
-      recordRecommendation({ exerciseId:'bench-press-dumbbell', recommendation:{ load:22.5, reps:8 }, history, dueDateISO:dISO, targetReps:'8–12', preferences: CONSENT, storage: store });
+      // Record THIS transition, realise it, then move on — one open record at
+      // a time, exactly like real usage.
+      recordRecommendation({ exerciseId:'bench-press-dumbbell', recommendation:{ load:22.5, reps:8 }, history, dueDateISO:dISO, targetReps:'8–12', assignedArm:'arise', participantId:'p-gates', preferences: CONSENT, storage: store });
       attachOutcome({ sessionId:`real-${i}`, dateISO:dISO, blocks:[{ exerciseId:'bench-press-dumbbell', sets:[set(8, 22.5, 8)] }], preferences: CONSENT, storage: store });
     }
     const ev = evaluateLongitudinal(requireLedger(store));
@@ -109,8 +112,13 @@ describe('prospective arm comparison (real-training ledger)', ()=>{
       assert.equal(p.pairs, p.ariseWins + p.armWins + p.bothMetTarget + p.neitherMetTarget);
       assert.equal(p.conclusive, true);
     }
-    assert.equal(ev.byArm.flat.targetAchievementRate, 0, 'flat demanded 9+ reps every time; the realised 8-rep sets never met it');
-    assert.equal(ev.byArm.arise.targetAchievementRate, 1);
+    // SHADOW arise slot: engine demanded 10 reps at 22.5 kg; realised 8 → miss.
+    assert.equal(ev.byArm.arise.targetAchievementRate, 0);
+    // PRIMARY assigned treatment: prescription == realised → every one met.
+    assert.equal(ev.primaryComparison.arise.targetAchievementRate, 1);
+    // No double-progression-assigned transitions exist in this fixture:
+    assert.equal(ev.primaryComparison['double-progression'].n, 0);
+    assert.equal(ev.primaryComparison['double-progression'].targetAchievementRate, null);
     assert.ok(ev.byArm.flat.conservatismRate != null);
   });
 

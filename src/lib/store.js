@@ -24,6 +24,9 @@ const DEFAULT = {
   // installation, travels inside every export, and lets the field study tell
   // "one person, ten weekly exports" apart from ten people.
   studyParticipantId: generateStudyParticipantId(),
+  // Randomised trial enrollment (studyEnrollment.js): null until the user
+  // opts in via measurement consent and starts a treated programme.
+  studyEnrollment: null,
 };
 
 export function loadStore(){
@@ -40,6 +43,7 @@ export function loadStore(){
     if(j.eventHistory === undefined) j.eventHistory=[];
     if(j.healthSummary === undefined) j.healthSummary=null;
     ensureStudyParticipantId(j); // keep the per-installation study identity stable
+    if(j.studyEnrollment === undefined) j.studyEnrollment=null;
     j.history = normaliseHistory(j.history);
     return { ...structuredClone(DEFAULT), ...j };
   }
@@ -55,6 +59,7 @@ export function loadStore(){
     if(j.eventHistory === undefined) j.eventHistory=[];
     if(j.healthSummary === undefined) j.healthSummary=null;
     ensureStudyParticipantId(j); // keep the per-installation study identity stable
+    if(j.studyEnrollment === undefined) j.studyEnrollment=null;
     j.history = normaliseHistory(j.history);
     return { ...structuredClone(DEFAULT), ...j };
   }catch{

@@ -63,7 +63,7 @@ export function decompose(store){
   const schedule = store.activeSchedule || null;
   const ledger = store.evaluationLedger || [];
   return {
-    profile: { id: PROFILE_ID, version: store.version || 6, onboarding: store.onboarding || null, preferences: store.preferences || {}, healthSummary: store.healthSummary || null },
+    profile: { id: PROFILE_ID, version: store.version || 6, onboarding: store.onboarding || null, preferences: store.preferences || {}, healthSummary: store.healthSummary || null, studyParticipantId: store.studyParticipantId || null, studyEnrollment: store.studyEnrollment || null },
     sessions: historyOf(store),
     sets: splitSets(historyOf(store)),
     programme: { id: PROGRAMME_ID, activeSchedule: schedule, programHistory: store.programHistory || [] },
@@ -132,6 +132,8 @@ export async function loadStoreFromIdb(){
     onboarding: profile?.onboarding ?? null,
     preferences: profile?.preferences ?? {},
     healthSummary: profile?.healthSummary ?? null,
+    studyParticipantId: profile?.studyParticipantId ?? null,
+    studyEnrollment: profile?.studyEnrollment ?? null,
     history: sessions || [],
     activeSchedule: schedule,
     programHistory: programme?.programHistory || [],

@@ -20,7 +20,8 @@
 import { resolveArisePriors } from './priors.js';
 import { EXERCISE_BY_ID, equipmentClassFor } from './data.js';
 import { movementPatternFor } from './substitutions.js';
-import { computeArms } from './study.js';
+import { computeArms, STUDY_DESIGN } from './study.js';
+import { STUDY_VERSION } from './studyEnrollment.js';
 
 export const EVALUATION_SCHEMA_VERSION = 2;
 
@@ -184,6 +185,14 @@ function makeRecordId(now = Date.now()){
   return `eval-${now}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+// metTarget against an arbitrary prescription {reps, load, assistKg}.
+function meetsPrescription(best, rx){
+  const repsOk = rx.reps == null || best.reps >= Number(rx.reps);
+  const loadOk = rx.load == null || !(Number(rx.load) > 0) || best.weightKg >= Number(rx.load);
+  const assistOk = rx.assistKg == null || best.assistedKg <= Number(rx.assistKg);
+  return repsOk && loadOk && assistOk;
+}
+
 // Snapshot a recommendation before the workout it targets. Only prior history
 // may be passed in; the basis records how much was visible so audits can
 // confirm no future rows were involved.
@@ -194,7 +203,7 @@ function makeRecordId(now = Date.now()){
 // ledger can later score every arm against the same real outcome — the
 // "does adaptive programming actually decide better?" question, answered on
 // real training rather than replay.
-export function recordRecommendation({ exerciseId, recommendation, history = [], dueDateISO = null, preferences = null, config = null, nowISO = null, programId = null, programVersion = null, targetReps = null, storage = defaultStorage() } = {}){
+export function recordRecommendation({ exerciseId, recommendation, history = [], dueDateISO = null, preferences = null, config = null, nowISO = null, programId = null, programVersion = null, targetReps = null, assignedArm = null, participantId = null, storage = defaultStorage() } = {}){
   if(!hasConsent(preferences)) return null;
   if(!exerciseId || !recommendation) return null;
   // Prior-only guarantee: nothing dated after the due session may inform the
@@ -207,15 +216,15 @@ export function recordRecommendation({ exerciseId, recommendation, history = [],
   const priors = resolveArisePriors(config);
   let arms = null;
   try{
+    // SHADOW snapshot: what every algorithm would prescribe from the same
+    // prior-only slice. Pure — never overwritten by the assigned treatment.
     arms = computeArms({ exerciseId, history: visibleHistory, targetReps: targetReps || undefined, asOfDateISO: dueDateISO, config });
-    // The arise snapshot above IS the recorded recommendation — keep them
-    // byte-identical by overriding with the caller's own recommendation.
-    arms.arise = { load: recommendation.load ?? null, reps: recommendation.reps ?? null, assistKg: recommendation.assistKg ?? null };
   }catch{ arms = null; }
+  const recordedAtISO = nowISO || new Date().toISOString();
   const record = {
     id: makeRecordId(nowISO ? Date.parse(nowISO) || Date.now() : Date.now()),
     schemaVersion: EVALUATION_SCHEMA_VERSION,
-    recordedAtISO: nowISO || new Date().toISOString(),
+    recordedAtISO,
     dueDateISO,
     exerciseId,
     movementPattern: movementPatternFor(exerciseId) || 'unknown',
@@ -231,7 +240,23 @@ export function recordRecommendation({ exerciseId, recommendation, history = [],
       reason: recommendation.reason || '',
       strategy: recommendation.strategy || null,
     },
-    // Frozen baseline prescriptions from the same prior-only history.
+    // ── Randomised trial fields (immutable once written) ──
+    // participantId: pseudonymous study id (studyIdentity.js)
+    // assignedArm:    which policy the product actually enforced
+    // prescription:   the treatment that was displayed/used
+    // assignmentVersion / studyVersion / policy: frozen at entry
+    participantId: participantId || null,
+    assignedArm: assignedArm || null,
+    studyVersion: STUDY_VERSION,
+    prescription: {
+      arm: assignedArm || null,
+      load: recommendation.load ?? null,
+      reps: recommendation.reps ?? null,
+      assistKg: recommendation.assistKg ?? null,
+    },
+    prescriptionCreatedAt: recordedAtISO,
+    // Frozen baseline prescriptions from the same prior-only history —
+    // SHADOW analysis only (decision agreement), never causal observations.
     arms,
     // Policy identity: a study cannot fairly evaluate an engine that changes
     // silently halfway through — every record knows which policy made it.
@@ -307,20 +332,26 @@ export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore =
       loadErrorKg: loadTarget != null && best.weightKg > 0 ? round(Math.abs(loadTarget - best.weightKg), 2) : null,
       repError: repTarget != null ? Math.abs(repTarget - best.reps) : null,
     };
-    // Prescription adherence for the ASSIGNED arm (arise): did the lifter
-    // follow what was actually prescribed? Missing prescription ⇒ unknown —
-    // never silently counted as compliant.
-    let followed = null, deviationKg = null;
-    const assigned = record.arms?.arise || (rec.load != null || rec.reps != null ? rec : null);
-    if(assigned){
-      const aLoad = Number(assigned.load) > 0 ? Number(assigned.load) : null;
-      const aReps = assigned.reps != null ? Number(assigned.reps) : null;
-      const aAssist = assigned.assistKg != null ? Number(assigned.assistKg) : null;
+    // Prescription adherence measured against the ASSIGNED arm's frozen
+    // prescription (falling back through arise-slot / record for legacy rows).
+    // Missing prescription ⇒ followed stays null: unknown is never counted
+    // as compliant.
+    let followed = null, deviationKg = null, assignedMet = null;
+    const rx = record.prescription?.arm
+      ? record.prescription
+      : (record.assignedArm && record.arms?.[record.assignedArm]
+        ? { arm: record.assignedArm, ...record.arms[record.assignedArm] }
+        : (rec.load != null || rec.reps != null ? { arm: 'arise', ...rec } : null));
+    if(rx){
+      const aLoad = Number(rx.load) > 0 ? Number(rx.load) : null;
+      const aReps = rx.reps != null ? Number(rx.reps) : null;
+      const aAssist = rx.assistKg != null ? Number(rx.assistKg) : null;
       deviationKg = aLoad != null && best.weightKg > 0 ? round(Math.abs(best.weightKg - aLoad), 2) : null;
       const loadOk = aLoad == null || (deviationKg != null && deviationKg <= Math.max(0.5, aLoad * 0.02));
       const repsOk = aReps == null || best.reps >= aReps;
       const assistOk = aAssist == null || best.assistedKg <= aAssist;
       followed = loadOk && repsOk && assistOk;
+      assignedMet = meetsPrescription(best, { reps: aReps, load: aLoad, assistKg: aAssist });
     }
     // Score every FROZEN baseline arm against the same real outcome. All arms
     // saw the same prior history at record time; the realised training is
@@ -360,6 +391,8 @@ export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore =
         metTarget,
         followed,
         deviationKg,
+        assignedMet,
+        assignedArm: record.assignedArm || null,
         userOverride: record.userOverride === true,
         repsMet, loadMet, assistMet,
         loadErrorKg: errors.loadErrorKg,
@@ -443,16 +476,77 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
     return output;
   };
 
-  // ── Prospective arm comparison ─────────────────────────────────────────
-  // All arms were frozen at record time from the same prior-only history and
-  // are scored against the SAME realised performance, so rates compare
-  // decision quality. Realised training (adherence, actual loads) is common
-  // across arms — this is not a counterfactual body-outcome study.
   const resolvedWithArms = records.filter(row=> row.outcome?.arms && row.outcome.arms.arise);
   const armNames = [...new Set(resolvedWithArms.flatMap(row=> Object.keys(row.outcome.arms)))].sort();
 
-  // Engine versions must never silently merge: each evaluated policy version
-  // is reported separately, and mixing triggers an explicit warning.
+  // ── PRIMARY comparison: randomised assigned arms only ──────────────────
+  // arise-assigned vs double-progression-assigned transitions, scored by
+  // assignedMet (the prescription the product actually enforced). ITT: every
+  // resolved assigned transition counts, compliant or not.
+  const PRIMARY = ['arise', 'double-progression'];
+  const primaryRows = resolvedWithArms.filter(row => PRIMARY.includes(row.assignedArm) && row.outcome.assignedMet != null);
+  const participantsInPrimary = new Set(primaryRows.map(r => r.participantId || r.exerciseId + '::anonymous'));
+  const armStatsFor = (arm)=>{
+    const rows = primaryRows.filter(r => r.assignedArm === arm);
+    const n = rows.length;
+    const metCount = rows.filter(r => r.outcome.assignedMet).length;
+    const stats = {
+      key: arm, n, participants: new Set(rows.map(r => r.participantId || 'anonymous')).size,
+      metCount,
+      conclusive: false,
+      targetAchievementRate: n ? round(metCount / n, 3) : null,
+      confidenceInterval: n ? wilsonInterval(metCount, n) : null,
+      stallRate: null, regressionRate: null, meanLoadErrorKg: null,
+    };
+    if(n >= minimum){
+      stats.conclusive = true;
+      let stalls = 0, regressions = 0; const errs = [];
+      for(const row of rows){
+        const rx = row.prescription || {};
+        const prev = row.basis?.previousBest || null;
+        const loadTarget = Number(rx.load) > 0 ? Number(rx.load) : null;
+        const demandedMore = loadTarget != null && prev && loadTarget > Number(prev.weightKg || 0);
+        if(row.outcome.changePct != null && row.outcome.changePct <= -0.05) regressions++;
+        if(demandedMore && row.outcome.changePct != null && row.outcome.changePct <= 0) stalls++;
+        if(Number.isFinite(row.outcome.loadErrorKg)) errs.push(row.outcome.loadErrorKg);
+      }
+      stats.stallRate = round(stalls / n, 3);
+      stats.regressionRate = round(regressions / n, 3);
+      stats.meanLoadErrorKg = errs.length ? round(errs.reduce((a,b)=> a+b, 0) / errs.length, 2) : null;
+    }
+    return stats;
+  };
+  const ariseStats = armStatsFor('arise');
+  const dpStats = armStatsFor('double-progression');
+  // Participant-clustered bootstrap on the difference of met rates between
+  // assigned arms — the prespecified uncertainty analysis.
+  const bootPairs = primaryRows.map(r => ({
+    participant: r.participantId || 'anonymous',
+    group: r.assignedArm,
+    met: r.outcome.assignedMet === true,
+  }));
+  const clusteredDifference = clusteredBootstrapDifference(bootPairs, { seed: `primary-diff-v${STUDY_VERSION}` });
+  const primaryComparison = {
+    designVersion: STUDY_DESIGN.designVersion,
+    studyVersion: STUDY_VERSION,
+    unitOfAssignment: STUDY_DESIGN.unitOfAssignment,
+    participants: participantsInPrimary.size,
+    transitions: primaryRows.length,
+    conclusive: ariseStats.conclusive && dpStats.conclusive && participantsInPrimary.size >= 2,
+    arise: ariseStats,
+    'double-progression': dpStats,
+    difference: {
+      metRateDelta: (ariseStats.targetAchievementRate != null && dpStats.targetAchievementRate != null)
+        ? round(ariseStats.targetAchievementRate - dpStats.targetAchievementRate, 3) : null,
+      clusteredBootstrap: clusteredDifference,
+    },
+    adherence: {
+      followedRate: primaryRows.length ? round(primaryRows.filter(r => r.outcome.followed === true).length / primaryRows.length, 3) : null,
+      unknownAdherence: primaryRows.filter(r => r.outcome.followed == null).length,
+      userOverrides: primaryRows.filter(r => r.outcome.userOverride).length,
+    },
+  };
+
   const policyKeyOf = row => row.policy ? `priors-v${row.policy.priorsVersion}/model-v${row.policy.modelVersion}` : 'unversioned';
   const byPolicyVersion = {};
   for(const [key, group] of groupBy(records, policyKeyOf)){
@@ -489,12 +583,15 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
     const n = rows.length;
     if(n >= minimum && n){
       byArm[arm].conclusive = true;
+      byArm[arm].shadow = true;
       byArm[arm].stallRate = round(stalls / n, 3);
       byArm[arm].regressionRate = round(regressions / n, 3);
       byArm[arm].conservatismRate = round(conservativeWins / n, 3);
       byArm[arm].meanLoadErrorKg = loadErrs.length ? round(loadErrs.reduce((a,b)=> a+b, 0) / loadErrs.length, 2) : null;
       byArm[arm].confidenceInterval = wilsonInterval(rows.filter(r=> r.outcome.arms[arm].metTarget).length, n);
       byArm[arm].aggressiveOvershootRate = round(overshoots / Math.max(1, rows.filter(r=> findFrozenArm(r, arm).aggressive).length), 3);
+    } else {
+      byArm[arm].shadow = true;
     }
   }
 
@@ -518,6 +615,7 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
       ariseWinRate: pairs >= minimum ? round(ariseWin / pairs, 3) : null,
       confidenceInterval: pairs >= minimum ? wilsonInterval(ariseWin, pairs) : null,
       conclusive: pairs >= minimum,
+      shadow: true,
     };
   }
 
@@ -529,6 +627,7 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
     overall,
     byArm,
     pairedVsArise,
+    primaryComparison,
     byPolicyVersion,
     mixedPolicyVersions,
     byTrainingAge: dimension(row=> row.basis?.trainingAgePhase),
@@ -537,9 +636,63 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
     byEquipmentClass: dimension(row=> row.equipmentClass),
     byProgramme: dimension(row=> row.programId ? `${row.programId}@v${row.programVersion == null ? '?' : row.programVersion}` : null),
     note: records.length
-      ? `Segments with fewer than ${minimum} resolved recommendation→outcome pairs withhold their rates (conclusive:false). All arms were frozen at record time from the same prior-only history and scored against the same realised session — comparisons measure decision quality, not counterfactual outcomes. Evaluation data is stored separately from training history and never calibrates recommendations from future sessions.${mixedPolicyVersions.length > 1 ? ` WARNING: ${mixedPolicyVersions.length} engine versions present (${mixedPolicyVersions.join(' vs ')}) — analyse each separately; never merge treatments across versions.` : ''}`
+      ? `Segments with fewer than ${minimum} resolved recommendation→outcome pairs withhold their rates (conclusive:false). All arms were frozen at record time from the same prior-only history. byArm/pairedVsArise are SHADOW decision-agreement analyses; causal comparison lives in primaryComparison (assigned arms, ITT). Evaluation data is stored separately from training history and never calibrates recommendations from future sessions.${mixedPolicyVersions.length > 1 ? ` WARNING: ${mixedPolicyVersions.length} engine versions present (${mixedPolicyVersions.join(' vs ')}) — analyse each separately; never merge treatments across versions.` : ''}`
       : 'No consented recommendation→outcome pairs recorded yet.',
   };
+}
+
+// Participant-clustered bootstrap: DIFFERENCE of met rates between the two
+// assigned arms (arise − double-progression), resampling participants.
+export function clusteredBootstrapDifference(pairs, { seed = 'primary-diff-v1', iterations = 500 } = {}){
+  if(!Array.isArray(pairs) || !pairs.length) return null;
+  const acc = new Map(); // participant -> { arise:{n,met}, dp:{n,met} }
+  for(const p of pairs){
+    const code = p?.participant ?? 'anonymous';
+    if(!acc.has(code)) acc.set(code, { arise: { n:0, met:0 }, dp: { n:0, met:0 } });
+    const e = acc.get(code);
+    const bucket = p.group === 'double-progression' ? e.dp : e.arise;
+    bucket.n++;
+    if(p.met) bucket.met++;
+  }
+  const participants = [...acc.keys()];
+  if(participants.length < 2) return { participants: participants.length, mean: null, low: null, high: null, conclusive: false };
+  let h = hashSeedStr(seed);
+  const rng = ()=> {
+    h = (h + 0x6D2B79F5) >>> 0;
+    let t = h;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const rate = (e)=> e.n ? e.met / e.n : null;
+  const diffs = [];
+  for(let i = 0; i < iterations; i++){
+    let sum = 0, count = 0;
+    for(let j = 0; j < participants.length; j++){
+      const e = acc.get(participants[Math.floor(rng() * participants.length)]);
+      const a = rate(e.arise), d = rate(e.dp);
+      if(a != null && d != null){ sum += a - d; count++; }
+    }
+    if(count) diffs.push(sum / count);
+  }
+  diffs.sort((a,b)=> a-b);
+  const overallArise = rate(aggregate(acc, 'arise'));
+  const overallDp = rate(aggregate(acc, 'dp'));
+  return {
+    participants: participants.length,
+    ariseMetRate: overallArise,
+    doubleProgressionMetRate: overallDp,
+    mean: round(diffs.reduce((a,b)=> a+b, 0) / Math.max(1, diffs.length), 3),
+    low: round(diffs[Math.floor(diffs.length * 0.025)] ?? NaN, 3),
+    high: round(diffs[Math.min(diffs.length - 1, Math.ceil(diffs.length * 0.975))] ?? NaN, 3),
+    iterations,
+    conclusive: participants.length >= 2 && diffs.length > 0,
+  };
+}
+function aggregate(acc, kind){
+  let n=0, met=0;
+  for(const e of acc.values()){ n += e[kind].n; met += e[kind].met; }
+  return { n, met };
 }
 
 // Participant-clustered bootstrap for the PRIMARY prospective comparison.

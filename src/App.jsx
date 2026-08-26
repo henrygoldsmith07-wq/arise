@@ -376,6 +376,8 @@ export default function App(){
           preferences={store.onboarding || null}
           draft={store.activeWorkout?.session?.id===activeSession.id ? store.activeWorkout : null}
           measurementConsent={store.preferences?.telemetryEnabled === true}
+          studyEnrollment={store.studyEnrollment || null}
+          participantId={store.studyParticipantId || null}
           onDraftChange={handleDraftChange}
           onSave={handleSaveSession}
           onCancel={handleCancelSession}
