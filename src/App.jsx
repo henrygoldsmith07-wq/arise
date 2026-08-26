@@ -4,6 +4,7 @@ import TodayView from './components/TodayView.jsx';
 import TrainView from './components/TrainView.jsx';
 import ExerciseBrowser from './components/ExerciseBrowser.jsx';
 import ProgressView from './components/ProgressView.jsx';
+import ProgressionLabView from './components/ProgressionLabView.jsx';
 import MoreView from './components/MoreView.jsx';
 import SessionRunner from './components/SessionRunner.jsx';
 import Onboarding from './components/Onboarding.jsx';
@@ -365,6 +366,7 @@ export default function App(){
         </>
       )}
       {tab==='progress' && <ProgressView store={store} />}
+      {tab==='lab' && <ProgressionLabView store={store} setStore={setStore} />}
       {tab==='more' && <MoreView store={store} setStore={setStore} setTab={setTab} onboardingOpen={onboardingOpen} setOnboardingOpen={setOnboardingOpen} />}
 
       {activeSession && (
@@ -378,6 +380,7 @@ export default function App(){
           measurementConsent={store.preferences?.telemetryEnabled === true}
           studyEnrollment={store.studyEnrollment || null}
           participantId={store.studyParticipantId || null}
+          progressionOverrides={store.progressionOverrides || {}}
           onDraftChange={handleDraftChange}
           onSave={handleSaveSession}
           onCancel={handleCancelSession}
@@ -406,3 +409,4 @@ function formatDraftTime(value){
   const date=new Date(value);
   return Number.isNaN(date.getTime()) ? 'recently' : date.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
 }
+
