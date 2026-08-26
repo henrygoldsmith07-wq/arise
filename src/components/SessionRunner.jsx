@@ -111,13 +111,14 @@ function transitionChip(rec, prevSummary){
   return null;
 }
 
-function getRecommendation(block, history, asOfDateISO, plateConfig = null, study = null, assignedArm = null){
+function getRecommendation(block, history, asOfDateISO, plateConfig = null, study = null, assignedArm = null, overrideArm = null){
   try{
+    const policyArm = assignedArm || overrideArm;
     // ── Randomised trial enforcement ──
     // A double-progression assignment IS the treatment: the product displays
     // and logs the DP prescription. Arise never runs for that exercise, so
     // the comparison is between policies actually followed.
-    if(assignedArm === 'double-progression'){
+    if(policyArm === 'double-progression'){
       const visible = history.filter(h=> String(h?.dateISO || '') <= String(asOfDateISO || '9999'));
       const rec = doubleProgressionRec({ history: visible, exerciseId: block.exerciseId, targetReps: block.reps || '8–12' });
       return {
@@ -151,7 +152,7 @@ function hasUnfinishedSet(blocks, bi, si){
   return false;
 }
 
-export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, studyEnrollment = null, participantId = null, onDraftChange, onSave, onCancel }){
+export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, studyEnrollment = null, participantId = null, progressionOverrides = null, onDraftChange, onSave, onCancel }){
   const [blocks,setBlocks]=useState(()=> session.blocks.map((b,i)=> normaliseBlock(b, history, draft?.blocks?.[i])));
   const [note,setNote]=useState(()=> draft?.note || '');
   const [noteTags,setNoteTags]=useState(()=> draft?.noteTags || []);
@@ -262,9 +263,11 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     for(const block of blocks){
       if(shownRecommendationRef.current.has(block.exerciseId)) continue;
       const arm = assignmentFor(studyEnrollment, block.exerciseId);
-      const recommendation=getRecommendation(block,history,session.dateISO,plateConfig,study,arm);
+      const overrideArm = progressionOverrides?.[block.exerciseId] || null;
+      const effectiveArm = arm || overrideArm || 'arise';
+      const recommendation=getRecommendation(block,history,session.dateISO,plateConfig,study,arm,overrideArm);
       shownRecommendationRef.current.add(block.exerciseId);
-      recordEvent('recommendation:shown', { sessionId:session.id, exerciseId:block.exerciseId, assignedArm:arm || 'arise', target:suggestedTarget(recommendation,block) });
+      recordEvent('recommendation:shown', { sessionId:session.id, exerciseId:block.exerciseId, assignedArm:effectiveArm, policySource: arm ? 'randomized' : overrideArm ? 'lab' : 'default', target:suggestedTarget(recommendation,block) });
       // Prospective evaluation record: snapshot the recommendation BEFORE the
       // workout. Consent-gated; stored separately from training history.
         try{
@@ -276,13 +279,13 @@ export default function SessionRunner({ session, history = [], availableEquipmen
             programId: session.programId || null,
             programVersion: session.programVersion ?? null,
             targetReps: block.reps || undefined,
-            assignedArm: arm || 'arise',
+            assignedArm: effectiveArm,
             participantId,
             preferences: measurementConsent === true ? { telemetryEnabled: true } : null,
           });
         }catch{}
     }
-  }, [blocks, history, session.id, session.dateISO, plateConfig, measurementConsent, study, studyEnrollment, participantId]);
+  }, [blocks, history, session.id, session.dateISO, plateConfig, measurementConsent, study, studyEnrollment, participantId, progressionOverrides]);
 
   const startRest=(seconds,label)=>{
     const sec=Number(seconds)||0;
@@ -301,14 +304,17 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     const recs=new Map(), prevs=new Map(), assigned=new Map();
     for(const b of blocks){
       if(recs.has(b.exerciseId)) continue;
-      // Randomised trial: the assigned arm decides which policy runs.
+      // A frozen randomized assignment wins over a lab override; otherwise a
+      // user-selected lab policy is used for this exercise.
       const arm = assignmentFor(studyEnrollment, b.exerciseId);
-      assigned.set(b.exerciseId, arm);
-      recs.set(b.exerciseId, getRecommendation(b,history,session.dateISO,plateConfig,study,arm));
+      const overrideArm = progressionOverrides?.[b.exerciseId] || null;
+      const effectiveArm = arm || overrideArm || 'arise';
+      assigned.set(b.exerciseId, effectiveArm);
+      recs.set(b.exerciseId, getRecommendation(b,history,session.dateISO,plateConfig,study,arm,overrideArm));
       prevs.set(b.exerciseId, lastExerciseSets(history,b.exerciseId));
     }
     return { recs, prevs, assigned };
-  },[blocks,history,session.dateISO,plateConfig,studyEnrollment]);
+  },[blocks,history,session.dateISO,plateConfig,studyEnrollment,progressionOverrides]);
 
   const volume = useMemo(()=>{
     let total=0;
@@ -665,3 +671,4 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     </div>
   );
 }
+
