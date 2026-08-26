@@ -74,7 +74,7 @@ function MetricBar({ label, value, barClass, emphasized = false }){
   );
 }
 
-function ArmCard({ arm, summary, metric, winner }){
+function ArmCard({ arm, summary, winner }){
   const meta = ARM_META[arm];
   const isWinner = winner === arm;
   return (
@@ -114,8 +114,9 @@ export default function ProgressionLabView({ store, setStore }){
   const exerciseIds = useMemo(() => {
     const ids = new Set();
     for(const session of history) for(const block of session.blocks || []) if(block?.exerciseId) ids.add(block.exerciseId);
+    for(const session of store.activeSchedule?.sessions || []) for(const block of session.blocks || []) if(block?.exerciseId) ids.add(block.exerciseId);
     return [...ids].sort((a, b) => (EXERCISE_BY_ID[a]?.name || a).localeCompare(EXERCISE_BY_ID[b]?.name || b));
-  }, [history]);
+  }, [history, store.activeSchedule]);
 
   const activeExerciseId = exerciseIds.includes(selectedExerciseId) ? selectedExerciseId : exerciseIds[0] || '';
   const exposureCounts = useMemo(() => Object.fromEntries(exerciseIds.map(id => [id, exposuresFor(history, id).length])), [exerciseIds, history]);
@@ -231,8 +232,8 @@ export default function ProgressionLabView({ store, setStore }){
               <div className="mt-3 h-1.5 rounded-full bg-surface"><div className="h-full rounded-full bg-ink transition-all" style={{ width: `${Math.min(100, Math.round(selectedResult.exposureCount / MIN_EXPOSURES * 100))}%` }} /></div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <ArmCard arm="arise" summary={selectedResult.adaptive} metric="target fit" winner={selectedResult.winner} />
-              <ArmCard arm="double-progression" summary={selectedResult.simple} metric="target fit" winner={selectedResult.winner} />
+              <ArmCard arm="arise" summary={selectedResult.adaptive} winner={selectedResult.winner} />
+              <ArmCard arm="double-progression" summary={selectedResult.simple} winner={selectedResult.winner} />
             </div>
             <div className="rounded-xl border border-line bg-surface2 px-3 py-3">
               <p className="text-sm font-bold">{winnerCopy(selectedResult)}</p>
