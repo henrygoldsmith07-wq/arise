@@ -45,7 +45,11 @@ function percent(value){
 }
 
 function groupRows(groups){
-  return groups.filter(group => group.n > 0).sort((a, b) => b.n - a.n || (b.meanChangePct || -Infinity) - (a.meanChangePct || -Infinity));
+  return groups.filter(group => group.n > 0).sort((a, b) => {
+    const aChange = a.meanChangePct == null ? -Infinity : a.meanChangePct;
+    const bChange = b.meanChangePct == null ? -Infinity : b.meanChangePct;
+    return b.n - a.n || bChange - aChange;
+  });
 }
 
 function GroupList({ title, groups }){
@@ -124,5 +128,4 @@ export default function ResponseFingerprintCard({ history = [], exerciseId = '',
     </section>
   );
 }
-
 
