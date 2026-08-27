@@ -3,6 +3,7 @@ import { EXERCISE_BY_ID } from '../lib/data.js';
 import { exposuresFor, runComparativeStudy } from '../lib/study.js';
 import { enrollParticipant, enrollmentAudit } from '../lib/studyEnrollment.js';
 import { recordEvent } from '../lib/telemetry.js';
+import ResponseFingerprintCard from './ResponseFingerprintCard.jsx';
 
 const MIN_EXPOSURES = 6;
 
@@ -247,6 +248,8 @@ export default function ProgressionLabView({ store, setStore }){
           </>
         )}
       </section>
+
+      <ResponseFingerprintCard history={history} exerciseId={activeExerciseId} readinessLog={store.readinessLog || []} />
 
       <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
         <div className="flex items-start justify-between gap-3">
