@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { buildExportPayload, downloadJson, parseImportFile, mergeStores, portableCsv, deletionPreview } from '../lib/export.js';
 import { clearStore } from '../lib/store.js';
 import { clearTelemetry, telemetrySummary, getEventHistory, mergeEventHistory, replaceEventHistory, recordEvent } from '../lib/telemetry.js';
@@ -8,9 +8,26 @@ import { loadEvaluationLedger } from '../lib/longitudinal.js';
 import { deriveProgressionModel } from '../lib/progressionModel.js';
 import { getAiSettings, saveAiSettings, clearAiSettings, buildTrainingContext, requestCoachInsight, DEFAULT_MODEL } from '../lib/aiCoach.js';
 import { STUDY_ARMS, studyCoverage, runComparativeStudy, collectDeloadDecisions, validateDeloadDecisions } from '../lib/study.js';
+import { fetchAccount, startGoogleSignIn, signOut as signOutAccount, push as pushRemote, pull as pullRemote, deleteRemote } from '../lib/account.js';
+
+/** Google's four-colour "G", inlined so the button needs no network image. */
+function GoogleMark(){
+  return (
+    <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true" className="inline-block align-[-3px] mr-2">
+      <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62Z" />
+      <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18Z" />
+      <path fill="#FBBC05" d="M3.97 10.72a5.41 5.41 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33Z" />
+      <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58Z" />
+    </svg>
+  );
+}
 
 export default function MoreView({ store, setStore, setTab, onboardingOpen, setOnboardingOpen }){
   const [importStrategy,setImportStrategy]=useState('merge');
+  const [account,setAccount]=useState({ available:false, user:null });
+  const [accountMsg,setAccountMsg]=useState(null);
+  const [syncBusy,setSyncBusy]=useState(false);
+  const [knownRemote,setKnownRemote]=useState(null);
   const [msg,setMsg]=useState(null);
   const fileRef = useRef(null);
   const [showTelemetry,setShowTelemetry]=useState(false);
@@ -49,6 +66,81 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   const setAccessibility = (patch)=> setStore({ ...store, preferences: { ...prefs, accessibility: { ...a11y, ...patch } } });
 
   const healthAdapter = typeof window !== 'undefined' ? window.__ARISE_HEALTH_ADAPTER__ : null;
+
+  // Load the account once. `available` is false on a deployment with no
+  // accounts configured, and the whole section stays hidden.
+  useEffect(()=>{
+    let alive = true;
+    (async ()=>{
+      const next = await fetchAccount();
+      if(!alive) return;
+      setAccount(next);
+      if(next.user){
+        const { remoteUpdatedAt } = await import('../lib/account.js');
+        const at = await remoteUpdatedAt().catch(()=> null);
+        if(alive) setKnownRemote(at);
+      }
+    })();
+    return ()=>{ alive = false; };
+  }, []);
+
+  // The callback sends the browser back with ?signin=…; report it once and
+  // clean the URL so a refresh does not repeat the message.
+  useEffect(()=>{
+    const params = new URLSearchParams(window.location.search);
+    const outcome = params.get('signin');
+    if(!outcome) return;
+    if(outcome === 'ok') setAccountMsg('Signed in.');
+    else if(outcome === 'cancelled') setAccountMsg('Sign-in cancelled.');
+    else setAccountMsg('Sign-in failed. Please try again.');
+    params.delete('signin'); params.delete('reason');
+    const query = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (query ? `?${query}` : ''));
+  }, []);
+
+  const uploadNow = async (force=false)=>{
+    setSyncBusy(true); setAccountMsg(null);
+    const result = await pushRemote(buildExportPayload(store), knownRemote, force);
+    setSyncBusy(false);
+    if(result.status==='ok'){
+      setKnownRemote(result.updatedAt);
+      setAccountMsg('Uploaded to your account.');
+      return;
+    }
+    if(result.status==='conflict'){
+      // Never overwrite a copy this device has not seen without asking: a lost
+      // training history cannot be reconstructed.
+      const when = result.remoteUpdatedAt ? new Date(result.remoteUpdatedAt).toLocaleString() : 'unknown';
+      if(window.confirm(`Another device uploaded at ${when}. Overwrite it with this device's data? Download first if you are unsure.`)){
+        await uploadNow(true);
+        return;
+      }
+      setAccountMsg('Left the other device\'s copy alone.');
+      return;
+    }
+    setAccountMsg(result.message || 'Sync failed.');
+  };
+
+  const downloadNow = async ()=>{
+    setSyncBusy(true); setAccountMsg(null);
+    const result = await pullRemote();
+    setSyncBusy(false);
+    if(result.status==='empty'){ setAccountMsg('Nothing has been uploaded for this account yet.'); return; }
+    if(result.status!=='ok'){ setAccountMsg(result.message || 'Sync failed.'); return; }
+    try{
+      // The uploaded document IS a backup, so it goes through exactly the same
+      // validation and merge as Import — one code path, one set of guarantees.
+      const imported = parseImportFile(JSON.stringify(result.payload));
+      const merged = mergeStores(store, imported, importStrategy);
+      if(importStrategy==='replace') replaceEventHistory(imported.eventHistory || []);
+      else if(imported.eventHistory?.length) mergeEventHistory(imported.eventHistory);
+      setStore({ ...merged, eventHistory:getEventHistory() });
+      setKnownRemote(result.updatedAt);
+      setAccountMsg(importStrategy==='replace' ? 'Replaced this device with your account\'s copy.' : 'Merged your account\'s copy into this device.');
+    }catch(err){
+      setAccountMsg(String(err.message || err));
+    }
+  };
 
   const exportNow = ()=>{
     const payload = buildExportPayload(store);
@@ -139,9 +231,49 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
         <p className="text-xs text-ink3">Backup, portability, privacy and help.</p>
       </div>
 
+      {account.available && (
+        <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+          <h3 className="text-sm font-bold">Account & sync</h3>
+          {account.user ? (
+            <>
+              <p className="text-xs text-ink3">
+                Signed in as <span className="font-semibold text-ink">{account.user.email}</span>
+                {knownRemote ? ` — last upload ${new Date(knownRemote).toLocaleString()}` : ' — nothing uploaded yet'}.
+                Uploading and downloading use the same versioned backup format as Export/Import below,
+                and the Merge/Replace choice there applies here too.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={()=> uploadNow()} disabled={syncBusy} className="btn btn-primary min-h-10 rounded-xl px-4 disabled:opacity-40">Upload this device</button>
+                <button onClick={downloadNow} disabled={syncBusy} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-40">Download to this device</button>
+                <button
+                  onClick={async ()=>{ await signOutAccount(); setAccount({ ...account, user:null }); setKnownRemote(null); setAccountMsg('Signed out. Your training stays on this device.'); }}
+                  className="btn btn-secondary min-h-10 rounded-xl px-4"
+                >Sign out</button>
+                <button
+                  onClick={async ()=>{
+                    if(!window.confirm('Delete the copy stored in your account? This device keeps its data.')) return;
+                    await deleteRemote(); setKnownRemote(null); setAccountMsg('Removed the copy from your account.');
+                  }}
+                  className="btn btn-secondary min-h-10 rounded-xl px-4"
+                >Delete account copy</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-ink3">Optional. Sign in to carry your training between devices. Arise still works entirely offline without an account — nothing is uploaded unless you press Upload.</p>
+              <button onClick={startGoogleSignIn} className="btn btn-primary min-h-10 rounded-xl px-4">
+                <GoogleMark />
+                Continue with Google
+              </button>
+            </>
+          )}
+          {accountMsg && <p role="status" className="text-xs bg-surface2 border border-line rounded-xl px-3 py-2">{accountMsg}</p>}
+        </section>
+      )}
+
       <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
         <h3 className="text-sm font-bold">Backup & portability</h3>
-        <p className="text-xs text-ink3">Local-first — your history lives on this device. Export JSON (full, versioned) or CSV (history only) and restore/merge on another device. No account required.</p>
+        <p className="text-xs text-ink3">Local-first — your history lives on this device. Export JSON (full, versioned) or CSV (history only) and restore/merge on another device. An account is optional; these files work without one.</p>
         <div className="flex flex-wrap gap-2">
           <button onClick={exportNow} className="btn btn-primary min-h-10 rounded-xl px-4">Export JSON</button>
           <button onClick={exportCsv} className="btn btn-secondary min-h-10 rounded-xl px-4">Export CSV</button>
