@@ -2,13 +2,13 @@
 
 A game-like, offline-first training companion. Not a nutrition app.
 
-**Stack:** Vite + React + Tailwind v4 + `le-studio.css` design tokens. Local-first (`localStorage`), no backend, no account. PWA-ready. **Progression engine** in `progression.js` + `substitutions.js`, **template engine** in `templates.js`, **analytics** in `analytics.js`, **session generator** in `sessionGenerator.js` (fatigue-aware ordering in `warmup.js`).
+**Stack:** Vite + React + Tailwind v4 + `le-studio.css` design tokens. Local-first (IndexedDB) and fully usable with **no account** — plus optional Google sign-in for cross-device sync (see *Accounts & sync*). PWA-ready. **Progression engine** in `progression.js` + `substitutions.js`, **template engine** in `templates.js`, **analytics** in `analytics.js`, **session generator** in `sessionGenerator.js` (fatigue-aware ordering in `warmup.js`).
 
 ## What it does — in order
 
 1. **Wires `data.js`** — single source of truth: `EQUIPMENT` / `LOCATIONS` / `MUSCLES` / `LEVELS` / `EXERCISES` + `PROGRAMS`. Every exercise declares `equipment[]` and `substitution[]`; validation is runnable (`npm run lint:content`).
 2. **Exercise browser** — search + filters (muscle / equipment / level) plus an **Only my kit** toggle gated by onboarding. Always shows a substitution when kit is missing; never pretends a barbell lift is “recommended” to a bodyweight-only user.
-3. **Export / restore / import** — validated, schema-versioned JSON backup (`{ app:'arise', version, schemaVersion, exportedAt, data }`) plus CSV and event-history export. `Merge` de-dupes by session `id` and event id; `Replace` overwrites. No cloud sync — the user owns the file.
+3. **Export / restore / import** — validated, schema-versioned JSON backup (`{ app:'arise', version, schemaVersion, exportedAt, data }`) plus CSV and event-history export. `Merge` de-dupes by session `id` and event id; `Replace` overwrites. The user owns the file; optional account sync reuses this exact format and merge.
 4. **Programs are scheduled training** — picking a program in **Train** creates dated sessions (`activeSchedule.sessions[]`) via `scheduleProgram()`. Today shows the session for today (or up next); progress is `done/total`.
 5. **Onboarding shapes recommendations** — goal + location + equipment + level/days/time + optional liked/avoided movements + barbell plate setup. `recommendExercises()` and `availablePrograms()` are deterministic and re-sort visibly when onboarding changes (minimal kit → beginner-friendly first; location biases conditioning).
 6. **Resistance / load tracking** — every logged set is `{ reps, weightKg, rpe }`. Leave weight blank for bodyweight. Session volume (`kg`) is derived live; `SessionRunner` enforces reps-filled before save.
@@ -124,3 +124,30 @@ scripts/lint-content.mjs  validates exercises/programs
 e2e/REAL_GYM_FIELD_TESTS.md  real gym, offline, recovery and connector protocol
 tsconfig.json + jsconfig.json  real type-check (noEmit)
 ```
+
+
+## Accounts & sync (optional)
+
+Arise works completely offline with no account. Where a deployment configures
+it, **More → Account & sync** also offers Google sign-in so one person's
+training follows them between devices.
+
+Sync deliberately reuses the backup format and merge that Export/Import already
+use: what is uploaded is exactly `buildExportPayload(store)`, and what comes
+back goes through the same `parseImportFile` validation and `mergeStores`
+merge — including the Merge/Replace choice. A second, parallel notion of "all
+my data" is how the two drift apart and one starts quietly losing sessions.
+
+Nothing uploads automatically. Pressing *Upload this device* does it, and if
+another device has uploaded since this one last looked, the push is **refused
+and you are asked** rather than silently overwriting a history that cannot be
+reconstructed.
+
+To enable it, set `DATABASE_URL`, `AUTH_SECRET`, `AUTH_GOOGLE_ID` and
+`AUTH_GOOGLE_SECRET` (see [`.env.example`](.env.example)) and apply
+`database/migrations/001_accounts_and_sync.sql`. With any of them missing the
+account section does not appear at all.
+
+The API routes under `api/` are serverless functions, so `npm run dev` (Vite
+alone) serves the app without them — use `vercel dev` to exercise sign-in
+locally.
