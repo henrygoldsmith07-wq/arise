@@ -19,7 +19,7 @@ export function weeklyVolume(history){
 // Monday-start week keys (week 1 = the week containing Jan 1). The old ceil formula
 // split a Monday-start week across two keys (e.g. Mon 5 Jan → W01 but Wed 7 Jan → W02),
 // which diluted volume-based signals like deload detection. offset = days since Monday.
-function weekKey(d){ const jan1=new Date(d.getFullYear(),0,1); const days=Math.floor((d-jan1)/86400000); const offset=(d.getDay()+6)%7; const wk=Math.floor((days-offset+7)/7); return `${d.getFullYear()}-W${String(wk).padStart(2,"0")}`; }
+export function weekKey(d){ const jan1=new Date(d.getFullYear(),0,1); const days=Math.floor((d-jan1)/86400000); const offset=(d.getDay()+6)%7; const wk=Math.floor((days-offset+7)/7); return `${d.getFullYear()}-W${String(wk).padStart(2,"0")}`; }
 
 export function frequencyByMuscleSync(history, byId){
   const counts={};

@@ -7,6 +7,8 @@ import { strengthTrendWithConfidence, classifyPR } from '../lib/progression.js';
 import { exerciseHistorySummary, plateauDetection, programAdherence, recommendationCalibration, validateDeloadLogic } from '../lib/programming.js';
 import { badSessionAttribution, plateauAttribution } from '../lib/sessionQuality.js';
 import { longitudinalSummary } from '../lib/longitudinal.js';
+import { e1rmChartModel, stackedVolumeModel, adherenceStripModel } from '../lib/charts.js';
+import { E1rmSparkline, WeeklyMuscleVolumeChart, AdherenceStrip } from './Charts.jsx';
 
 export default function ProgressView({ store }){
   const attrs = useMemo(()=> deriveAttributes(store.history), [store.history]);
@@ -45,6 +47,9 @@ export default function ProgressView({ store }){
     if(!segment.conclusive) return `${segment.resolved} pairs (need ${evaluation.minimumSegmentSamples}+ for conclusions)`;
     return `${Math.round((segment.progressionSuccessRate ?? 0) * 100)}% progression success • ${Math.round((segment.adherenceRate ?? 0) * 100)}% adherence • n=${segment.resolved}`;
   };
+  const stackedVolume = useMemo(()=> stackedVolumeModel(history, EXERCISE_BY_ID), [history]);
+  const adherenceStrip = useMemo(()=> adherenceStripModel(store.activeSchedule, history), [store.activeSchedule, history]);
+  const e1rmChart = useMemo(()=> exerciseId ? e1rmChartModel(history, exerciseId) : null, [history, exerciseId]);
   const plateauRows = useMemo(()=>{
     const ids=[...new Set(history.flatMap(h=> (h.blocks||[]).map(b=> b.exerciseId)))];
     return ids.map(exerciseId=> ({ exerciseId, result: plateauAttribution(history, exerciseId, { readinessLog: store.readinessLog || [] }) }))
@@ -80,6 +85,7 @@ export default function ProgressView({ store }){
             <span className="text-xs font-black tabular-nums">{programmeAdherence.toDateRate == null ? '—' : `${Math.round(programmeAdherence.toDateRate * 100)}%`}</span>
           </div>
           <p className="text-xs text-ink3">{programmeAdherence.completed} completed • {programmeAdherence.missed} missed • {programmeAdherence.upcoming} upcoming. Future sessions do not lower the rate yet.</p>
+          <AdherenceStrip model={adherenceStrip} />
           {programmeAdherence.missed > 0 && <p className="text-xs text-ink2 bg-reviewsoft border border-review/30 rounded-xl px-3 py-2">Missed sessions are recoverable in order. Open Today to re-plan the schedule rather than doubling the next workout.</p>}
         </section>
       )}
@@ -103,6 +109,12 @@ export default function ProgressView({ store }){
           </div>
         )}
         {!!wv.length && <p className="text-xs text-ink3 mt-2">{wv[wv.length-1]?.vol> (wv[wv.length-2]?.vol||0)*1.2 ? `Volume up ${Math.round((wv[wv.length-1].vol/(wv[wv.length-2]?.vol||1)-1)*100)}% vs last week — hold steady or deload if RPE was high.` : wv[wv.length-1]?.vol < (wv[wv.length-2]?.vol||0)*0.8 ? 'Volume dipped — good if planned deload, otherwise add a session.' : 'Trends look steady — keep progressing where RIR ≥2.'}</p>}
+      </section>
+
+      <section className="rounded-2xl border border-line bg-surface p-4">
+        <h3 className="text-sm font-bold">Weekly sets by muscle</h3>
+        <p className="text-xs text-ink3">Stacked per week. An outlined block sits in the high landmark band — rough context, not a target.</p>
+        <WeeklyMuscleVolumeChart model={stackedVolume} />
       </section>
 
       <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
@@ -201,6 +213,7 @@ export default function ProgressView({ store }){
               <span><strong className="text-ink">{exerciseSummary.trend.confidence}</strong> trend confidence</span>
               <span className={plateau?.detected ? 'font-bold text-review' : ''}>{plateau?.detected ? 'Plateau detected' : plateau?.status === 'fatigue' ? 'Fatigue signal' : 'No plateau'}</span>
             </div>
+            <E1rmSparkline model={e1rmChart} />
             <p className="text-xs text-ink3">{plateau?.reason || 'Keep logging consistent sets before judging a plateau.'}</p>
             <div className="rounded-xl border border-line bg-surface2 px-3 py-2">
               <p className="text-xs font-bold">Next step: {exerciseSummary.recommendation.reason}</p>
