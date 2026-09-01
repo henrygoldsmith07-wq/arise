@@ -11,3 +11,7 @@ html, body, #root { height: 100%; }
 
 @keyframes pop { 0%{transform:scale(.96); opacity:0} 100%{transform:scale(1); opacity:1} }
 .pop{ animation: pop .22s cubic-bezier(.2,.9,.25,1) }
+
+/* Exercise illustration SVGs ship white-on-transparent; invert them on light
+   themes so figures stay visible against the light surface chips. */
+html:not(.dark) .exercise-illustration { filter: invert(1); }

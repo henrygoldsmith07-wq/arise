@@ -31,7 +31,7 @@ export default function ExerciseIllustration({ exerciseId, size = 'md', animate 
       loading="lazy"
       decoding="async"
       title={`Illustration © ${img.creator} · ${img.license}`}
-      className={`shrink-0 rounded-xl border border-line bg-surface2 object-contain ${className}`}
+      className={`exercise-illustration shrink-0 rounded-xl border border-line bg-surface2 object-contain ${className}`}
     />
   );
 }
