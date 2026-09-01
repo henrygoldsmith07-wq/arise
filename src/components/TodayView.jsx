@@ -80,8 +80,8 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
           <details className="rounded-xl border border-line bg-surface px-3 py-2">
             <summary className="text-xs font-bold cursor-pointer">Why these prescriptions?</summary>
             <ul className="mt-2 space-y-2">
-              {explanations.map(explanation => (
-                <li key={explanation.exerciseId} className="text-[11px] text-ink3">
+              {explanations.map((explanation, index) => (
+                <li key={`${explanation.exerciseId}-${index}`} className="text-[11px] text-ink3">
                   <span className="font-bold text-ink">{explanation.exerciseName}</span> — {explanation.summary}
                   <span className="block mt-0.5">{explanation.rule} <span className="font-semibold">{explanation.confidence} confidence</span></span>
                 </li>
