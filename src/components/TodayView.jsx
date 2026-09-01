@@ -44,6 +44,11 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
     onStartSession(result.session);
   };
 
+  const startGuided = ()=>{
+    if(!today) return;
+    onStartSession({ ...today, mode: 'guided' });
+  };
+
   return (
     <>
     {heroSession ? (
@@ -89,6 +94,7 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
               {today ? "Start today's session" : 'Start this session'}
             </button>
             {today && <button onClick={startShort} className="btn btn-secondary min-h-12 rounded-xl px-3 text-xs">Short<br/>20 min</button>}
+            {today && <button onClick={startGuided} className="btn btn-secondary min-h-12 rounded-xl px-3 text-xs">Guided<br/>step-by-step</button>}
             {!today && onOpenTrain && <button onClick={onOpenTrain} className="btn btn-secondary min-h-12 rounded-xl px-4 text-xs">Schedule</button>}
           </div>
         </div>

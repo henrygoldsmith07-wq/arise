@@ -6,6 +6,7 @@ import ExerciseBrowser from './components/ExerciseBrowser.jsx';
 import ProgressView from './components/ProgressView.jsx';
 import MoreView from './components/MoreView.jsx';
 import SessionRunner from './components/SessionRunner.jsx';
+import GuidedRunner from './components/GuidedRunner.jsx';
 import Onboarding from './components/Onboarding.jsx';
 import { loadStore, saveStore, upsertHistory } from './lib/store.js';
 import { recommendExercises } from './lib/data.js';
@@ -367,7 +368,19 @@ export default function App(){
       {tab==='progress' && <ProgressView store={store} />}
       {tab==='more' && <MoreView store={store} setStore={setStore} setTab={setTab} onboardingOpen={onboardingOpen} setOnboardingOpen={setOnboardingOpen} />}
 
-      {activeSession && (
+      {activeSession && activeSession.mode === 'guided' && (
+        <GuidedRunner
+          session={activeSession}
+          history={store.history || []}
+          availableEquipment={store.onboarding?.equipment || []}
+          draft={store.activeWorkout?.session?.id===activeSession.id ? store.activeWorkout : null}
+          measurementConsent={store.preferences?.telemetryEnabled === true}
+          onDraftChange={handleDraftChange}
+          onSave={handleSaveSession}
+          onCancel={handleCancelSession}
+        />
+      )}
+      {activeSession && activeSession.mode !== 'guided' && (
         <SessionRunner
           session={activeSession}
           history={store.history || []}
