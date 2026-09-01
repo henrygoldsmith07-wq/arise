@@ -61,15 +61,21 @@ export default function ProgressView({ store }){
       </div>
 
       <div className="rounded-2xl border border-line bg-surface p-4 flex items-center gap-4">
-        <div className="w-14 h-14 rounded-2xl bg-ink text-bg grid place-items-center font-black text-lg">{lvl.level}</div>
-        <div>
-          <p className="text-sm font-bold">Level {lvl.level} — {lvl.title}</p>
+        <div className="w-14 h-14 rounded-2xl bg-ink text-bg grid place-items-center font-black text-lg shrink-0">{lvl.level}</div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold truncate">Level {lvl.level} — {lvl.title}</p>
           <p className="text-xs text-ink3">Avg {lvl.avg}/100 • {history.length} sessions {adherence.total ? `• ${adherence.done}/${adherence.total} planned done` : ''}</p>
-          <div className="mt-2 h-1.5 rounded-full bg-surface2 w-40 overflow-hidden"><div className="h-full bg-ink" style={{width:`${lvl.avg}%`}} /></div>
+          <div className="mt-2 h-1.5 rounded-full bg-surface2 max-w-48 overflow-hidden"><div className="h-full bg-ink transition-all" style={{width:`${lvl.avg}%`}} /></div>
         </div>
-        <div className="ml-auto text-right text-xs">
-          <p className="font-bold tabular-nums">{vol.toLocaleString()} kg</p><p className="text-ink3">total volume</p>
-          <p className="font-bold tabular-nums mt-1">{streak} days</p><p className="text-ink3">streak</p>
+        <div className="ml-auto shrink-0 flex gap-4 text-xs">
+          <div>
+            <p className="font-bold tabular-nums">{vol.toLocaleString()}<span className="font-semibold text-ink3"> kg</span></p>
+            <p className="text-ink3">volume</p>
+          </div>
+          <div className="pl-4 border-l border-line">
+            <p className="font-bold tabular-nums">{streak}<span className="font-semibold text-ink3"> days</span></p>
+            <p className="text-ink3">streak</p>
+          </div>
         </div>
       </div>
 

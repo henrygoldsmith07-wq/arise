@@ -170,15 +170,16 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
           const isActive = active?.programId===p.id;
           return (
             <button key={p.id} onClick={()=> setProgramId(p.id)}
-              className={`text-left rounded-2xl border p-4 ${programId===p.id ? 'bg-ink text-bg border-ink' : 'bg-surface border-line hover:border-ink3'} ${!ok ? 'opacity-90' : ''}`}>
-              <span className="flex items-center gap-2">
-                <span className={`text-xs font-bold px-2 py-1 rounded-full border ${programId===p.id ? 'bg-bg/15 border-bg/20 text-bg' : 'bg-surface2 border-line text-ink3'}`}>{p.level} • {p.daysPerWeek}×/week</span>
+              className={`text-left rounded-2xl border p-4 transition-colors ${programId===p.id ? 'bg-surface2 border-ink ring-1 ring-ink' : 'bg-surface border-line hover:border-ink3'} ${!ok ? 'opacity-90' : ''}`}>
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold px-2 py-1 rounded-full border bg-surface border-line text-ink3">{p.level} • {p.daysPerWeek}×/week</span>
+                {programId===p.id && <span className="text-xs font-bold px-2 py-1 rounded-full bg-ink text-bg">✓ Selected</span>}
                 {isActive && <span className="text-xs font-bold px-2 py-1 rounded-full bg-success text-bg">Active</span>}
                 {!ok && <span className="text-[11px] font-semibold text-review bg-reviewsoft border border-review/30 rounded-full px-2 py-1">Needs: {p.equipment.join(', ')}</span>}
                 {p.mesocycle && <span className="text-[11px] text-ink3">• {p.mesocycle.weeks}w • {p.mesocycle.progression}</span>}
               </span>
-              <span className={`block mt-2 font-bold ${programId===p.id?'text-bg':'text-ink'}`}>{p.name} <span className="text-xs font-semibold">v{p.version||1}</span></span>
-              <span className={`block text-xs ${programId===p.id?'text-bg/80':'text-ink3'}`}>{p.tagline}</span>
+              <span className="block mt-2 font-bold text-ink">{p.name} <span className="text-xs font-semibold">v{p.version||1}</span></span>
+              <span className="block text-xs text-ink3">{p.tagline}</span>
             </button>
           );
         })}
