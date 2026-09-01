@@ -1,6 +1,33 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { lastExerciseSets, prsHitBySession, normaliseHistory, upsertHistory } from '../src/lib/store.js';
+import { lastExerciseSets, prsHitBySession, normaliseHistory, upsertHistory, runMigrations, STORE_SCHEMA_VERSION } from '../src/lib/store.js';
+
+describe('store — soundCues, voiceCoach and voiceRate preference migrations (v6 → v9)', () => {
+  it('defaults sound cues on, voice coach off, rate 1× for older stores, honouring explicit choices', () => {
+    const migrated = runMigrations({ version: 6, preferences: {} });
+    assert.equal(migrated.version, STORE_SCHEMA_VERSION);
+    assert.equal(migrated.preferences.soundCues, true);
+    assert.equal(migrated.preferences.voiceCoach, false);
+    assert.equal(migrated.preferences.voiceRate, 1);
+
+    const optedOut = runMigrations({ version: 6, preferences: { soundCues: false } });
+    assert.equal(optedOut.preferences.soundCues, false);
+
+    const fromV1 = runMigrations({ version: 1, preferences: { units: 'kg', theme: null } });
+    assert.equal(fromV1.preferences.soundCues, true);
+    assert.equal(fromV1.preferences.voiceCoach, false);
+    assert.equal(fromV1.preferences.voiceRate, 1);
+
+    const voiceOptIn = runMigrations({ version: 7, preferences: { voiceCoach: true } });
+    assert.equal(voiceOptIn.preferences.voiceCoach, true);
+
+    const fast = runMigrations({ version: 8, preferences: { voiceRate: 1.2 } });
+    assert.equal(fast.preferences.voiceRate, 1.2);
+
+    const absurd = runMigrations({ version: 8, preferences: { voiceRate: 42 } });
+    assert.equal(absurd.preferences.voiceRate, 1);
+  });
+});
 
 describe('store — lastExerciseSets / prsHitBySession (Life OS port)', () => {
   const hist = [

@@ -8,6 +8,7 @@ import { loadEvaluationLedger } from '../lib/longitudinal.js';
 import { deriveProgressionModel } from '../lib/progressionModel.js';
 import { getAiSettings, saveAiSettings, clearAiSettings, buildTrainingContext, requestCoachInsight, DEFAULT_MODEL } from '../lib/aiCoach.js';
 import { STUDY_ARMS, studyCoverage, runComparativeStudy, collectDeloadDecisions, validateDeloadDecisions } from '../lib/study.js';
+import { voiceSupported } from '../lib/voiceCoach.js';
 
 export default function MoreView({ store, setStore, setTab, onboardingOpen, setOnboardingOpen }){
   const [importStrategy,setImportStrategy]=useState('merge');
@@ -123,6 +124,25 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
     setHealthMsg(enabled ? 'Health summary import enabled.' : 'Health summary disabled and its saved summary removed.');
   };
 
+  const generateInsight = async ()=>{
+    if(aiBusy) return;
+    const key = aiKeyInput.trim() || ai.apiKey;
+    if(!key){ setAiResult({ ok:false, error:'Paste your NVIDIA API key first.' }); return; }
+    setAiBusy(true);
+    setAiResult(null);
+    try{
+      saveAiSettings({ apiKey: key, model: aiModelInput, enabled: true });
+      setAiEnabled(true);
+      const context = buildTrainingContext({ history: store.history || [], schedule: store.activeSchedule, readinessLog: store.readinessLog || [], customTemplates: store.customTemplates || [] });
+      const result = await requestCoachInsight({ context, apiKey: key, model: aiModelInput });
+      setAiResult(result);
+    }catch(err){
+      setAiResult({ ok:false, error:String(err?.message || err).slice(0, 140) });
+    }finally{
+      setAiBusy(false);
+    }
+  };
+
   const importHealthSummary=async()=>{
     if(!store.preferences?.healthSummaryEnabled){ setHealthMsg('Enable health summary consent first.'); return; }
     const result=await pullHealthSummary(healthAdapter);
@@ -196,6 +216,41 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
           <ToggleRow bare label="Larger text" hint="Scales the whole interface up by roughly 12%." checked={a11y.largeText === true} onChange={value=> setAccessibility({ largeText: value })} />
           <ToggleRow bare label="High contrast" hint="Pushes text and borders to maximum contrast against the background." checked={a11y.highContrast === true} onChange={value=> setAccessibility({ highContrast: value })} />
           <ToggleRow bare label="Reduce motion" hint="Removes transitions and animations, regardless of your OS setting." checked={a11y.reduceMotion === true} onChange={value=> setAccessibility({ reduceMotion: value })} />
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+        <h3 className="text-sm font-bold">Guided mode</h3>
+        <p className="text-xs text-ink3">Applies to guided sessions — one set at a time, with timers. Changes take effect immediately, including mid-workout.</p>
+
+        <ToggleRow
+          label="Sound cues"
+          hint="Short tones when rest starts, a 3-2-1 tick, and a completion chime. A mute button also lives on the rest timer itself."
+          checked={prefs.soundCues !== false}
+          onChange={value=> setPreference({ soundCues: value })}
+        />
+
+        <ToggleRow
+          label="Voice coach"
+          hint="Speaks the exercise name, set number and rep target as each new step starts. Uses your device's built-in speech — nothing is sent anywhere."
+          checked={prefs.voiceCoach === true}
+          onChange={value=> setPreference({ voiceCoach: value })}
+        />
+
+        <div className={`rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2 ${prefs.voiceCoach === true ? '' : 'opacity-60'}`}>
+          <p className="text-xs font-bold">Speech rate</p>
+          <div className="flex gap-1.5" role="group" aria-label="Voice coach speech rate">
+            {VOICE_RATE_OPTIONS.map(option=> {
+              const active = (Number(prefs.voiceRate) || 1) === option.rate;
+              return (
+                <button key={option.label} onClick={()=> setPreference({ voiceRate: option.rate })} aria-pressed={active}
+                  className={`flex-1 min-h-10 rounded-xl border text-xs font-bold ${active ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink2 hover:border-ink3'}`}>
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[11px] text-ink3">{voiceSupported() ? 'Applies to the voice coach only — sound cues keep their own rhythm.' : 'Speech is not supported in this browser — the voice coach toggle stays off.'}</p>
         </div>
       </section>
 
@@ -312,25 +367,6 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
                       const row = evidenceData.comparative.overall[arm];
                       if(!row) return null;
                       const pct = v=> v == null ? '—' : `${Math.round(v * 100)}%`;
-  const generateInsight = async ()=>{
-    if(aiBusy) return;
-    const key = aiKeyInput.trim() || ai.apiKey;
-    if(!key){ setAiResult({ ok:false, error:'Paste your NVIDIA API key first.' }); return; }
-    setAiBusy(true);
-    setAiResult(null);
-    try{
-      saveAiSettings({ apiKey: key, model: aiModelInput, enabled: true });
-      setAiEnabled(true);
-      const context = buildTrainingContext({ history: store.history || [], schedule: store.activeSchedule, readinessLog: store.readinessLog || [], customTemplates: store.customTemplates || [] });
-      const result = await requestCoachInsight({ context, apiKey: key, model: aiModelInput });
-      setAiResult(result);
-    }catch(err){
-      setAiResult({ ok:false, error:String(err?.message || err).slice(0, 140) });
-    }finally{
-      setAiBusy(false);
-    }
-  };
-
   return (
                         <div key={arm} role="row" className="flex items-center gap-2 text-[11px]">
                           <span className="font-semibold w-36 truncate" role="cell">{arm}</span>
@@ -423,6 +459,12 @@ const THEME_OPTIONS = [
   { id: null, label: 'System' },
   { id: 'light', label: 'Light' },
   { id: 'dark', label: 'Dark' },
+];
+
+const VOICE_RATE_OPTIONS = [
+  { rate: 0.85, label: 'Slow' },
+  { rate: 1, label: 'Normal' },
+  { rate: 1.2, label: 'Fast' },
 ];
 
 // A labelled switch built on a real checkbox, so it is reachable by keyboard and

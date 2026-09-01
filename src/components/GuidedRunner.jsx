@@ -12,13 +12,15 @@ import {
   buildGuidedPayload,
 } from '../lib/guidedMode.js';
 import { recordEvent } from '../lib/telemetry.js';
+import { restStartCue, restTickCue, restCompleteCue } from '../lib/audioCues.js';
+import { speak, cancelSpeech, voiceSupported } from '../lib/voiceCoach.js';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
 
 // GuidedRunner — the guided workout mode: one set at a time, full-screen.
 // Reuses the same draft persistence contract as SessionRunner (onDraftChange
 // with { session, blocks, ... }), so crash recovery and cross-tab protection
 // in App.jsx work identically for both modes.
-export default function GuidedRunner({ session, history = [], availableEquipment = [], draft = null, measurementConsent = false, onDraftChange, onSave, onCancel }){
+export default function GuidedRunner({ session, history = [], availableEquipment = [], draft = null, measurementConsent = false, soundCues = true, onToggleSoundCues = null, voiceCoach = false, onToggleVoiceCoach = null, voiceRate = 1, onDraftChange, onSave, onCancel }){
   const [blocks,setBlocks]=useState(()=> initGuidedBlocks(session, history, draft?.blocks));
   const [note,setNote]=useState(()=> draft?.note || '');
   const [noteTags,setNoteTags]=useState(()=> draft?.noteTags || []);
@@ -26,6 +28,11 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   const [restLabel,setRestLabel]=useState(()=> draft?.restLabel || '');
   const [clock,setClock]=useState(()=> Date.now());
   const [celebrate,setCelebrate]=useState(false);
+  const [soundOn,setSoundOn]=useState(soundCues);
+  const [voiceOn,setVoiceOn]=useState(voiceCoach);
+  const [announcement,setAnnouncement]=useState('');
+  const restTickRef=useRef(null);
+  const spokenStepRef=useRef(null);
   const draftRef=useRef(null);
   const rootRef=useRef(null);
   const closeRef=useRef(null);
@@ -69,6 +76,63 @@ export default function GuidedRunner({ session, history = [], availableEquipment
 
   const restLeft = restEndsAt ? Math.max(0, Math.ceil((restEndsAt-clock)/1000)) : null;
 
+  // 3-2-1 ticks: one cue per remaining second, never repeated for the same second.
+  useEffect(()=>{
+    if(!restEndsAt){ restTickRef.current = null; return; }
+    const left = Math.ceil((restEndsAt - Date.now())/1000);
+    if(left >= 1 && left <= 3 && restTickRef.current !== left){
+      restTickRef.current = left;
+      if(soundOn) restTickCue();
+      try{ navigator.vibrate?.(30); }catch{}
+    }
+  },[clock, restEndsAt, soundOn]);
+
+  // Rest expiry — clears the countdown, fires the completion cue and a
+  // distinct triple-pulse haptic so the next set is unmissable.
+  useEffect(()=>{
+    if(restEndsAt && restEndsAt <= Date.now()){
+      setRestEndsAt(null);
+      setAnnouncement('Rest complete — next set.');
+      if(soundOn) restCompleteCue();
+      try{ navigator.vibrate?.([140, 60, 140]); }catch{}
+    }
+  },[restEndsAt, clock, soundOn]);
+
+  // Sound-cue toggle: flips the persisted preference when a callback is wired.
+  const toggleSound = ()=>{
+    const next = !soundOn;
+    setSoundOn(next);
+    onToggleSoundCues?.(next);
+    try { recordEvent('guided:sound-cues', { enabled: next }); } catch {}
+  };
+
+  // Voice coach: speaks the exercise name, set number and rep target when a
+  // new step starts. Toggling it on announces the current step immediately.
+  const speakCurrentStep = (stepArg, blocksArg, on)=>{
+    if(!on || !stepArg) return;
+    const block = blocksArg[stepArg.blockIndex];
+    if(!block) return;
+    const set = block.sets[stepArg.setIndex];
+    const name = EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId;
+    const reps = String(set?.reps || block.reps || '').trim();
+    const load = String(set?.weightKg || '').trim();
+    const parts = [`${name}.`, `Set ${stepArg.setIndex + 1} of ${block.sets.length}.`];
+    if(reps) parts.push(`${reps} reps`);
+    if(load) parts.push(`at ${load} kilograms`);
+    speak(parts.join(' '), voiceRate);
+  };
+
+  const toggleVoice = ()=>{
+    const next = !voiceOn;
+    setVoiceOn(next);
+    onToggleVoiceCoach?.(next);
+    try { recordEvent('guided:voice-coach', { enabled: next }); } catch {}
+    if(next) speakCurrentStep(step, blocks, true); else cancelSpeech();
+  };
+
+  // Leaving the runner (save/cancel/unmount) must stop any queued speech.
+  useEffect(()=> ()=> cancelSpeech(), []);
+
   // Persist every meaningful interaction via the shared draft contract.
   useEffect(()=>{
     const nextDraft = {
@@ -98,6 +162,16 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   const step = useMemo(()=> nextGuidedStep(blocks), [blocks]);
   const progress = useMemo(()=> guidedProgress(blocks), [blocks]);
   const volume = useMemo(()=> guidedVolumeKg(blocks), [blocks]);
+
+  // Announce each new step exactly once (keyed by block/set, not object
+  // identity — blocks re-created on every edit would re-speak).
+  const stepKey = step ? `${step.blockIndex}:${step.setIndex}` : null;
+  useEffect(()=>{
+    if(!stepKey){ spokenStepRef.current = null; return; }
+    if(spokenStepRef.current === stepKey) return;
+    spokenStepRef.current = stepKey;
+    speakCurrentStep(step, blocks, voiceOn);
+  }, [stepKey, voiceOn]);
   const elapsed = sessionElapsedMs(startedAtRef.current, clock);
 
   const currentBlock = step ? blocks[step.blockIndex] : null;
@@ -112,6 +186,8 @@ export default function GuidedRunner({ session, history = [], availableEquipment
     setRestLabel(label);
     setRestEndsAt(Date.now() + sec*1000);
     setClock(Date.now());
+    if(soundOn) restStartCue();
+    try{ navigator.vibrate?.(60); }catch{}
   };
 
   // Complete the current step, auto-chain the rest timer, then announce.
@@ -165,7 +241,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   return (
     <div ref={rootRef} onKeyDown={trapTab} className="fixed inset-0 z-40 bg-bg flex flex-col" role="dialog" aria-modal="true" aria-label={`Guided session — ${session.title}`}>
       <span className="sr-only" role="status" aria-live="polite">
-        {restLeft!==null ? `Rest: ${fmtRest(restLeft)} remaining.` : step ? `Step ${progress.completed + progress.skipped + 1} of ${progress.total}: ${currentExercise?.name || currentBlock?.exerciseId}, set ${step.setIndex + 1}.` : 'All sets resolved. Ready to save.'}
+        {announcement || (restLeft!==null ? `Rest: ${fmtRest(restLeft)} remaining.` : step ? `Step ${progress.completed + progress.skipped + 1} of ${progress.total}: ${currentExercise?.name || currentBlock?.exerciseId}, set ${step.setIndex + 1}.` : 'All sets resolved. Ready to save.')}
       </span>
 
       {/* Header: session identity + live elapsed timer + overall progress bar */}
@@ -176,6 +252,9 @@ export default function GuidedRunner({ session, history = [], availableEquipment
           <p className="font-bold truncate">{session.title} • {session.dateISO}</p>
         </div>
         <div className="ml-auto flex items-center gap-2 shrink-0">
+          {voiceSupported() && (
+            <button onClick={toggleVoice} aria-pressed={voiceOn} aria-label={voiceOn ? 'Voice coach on' : 'Voice coach off'} title={voiceOn ? 'Voice coach on' : 'Voice coach off'} className={`min-h-9 min-w-9 px-1.5 grid place-items-center rounded-full border text-sm leading-none ${voiceOn ? 'border-ink bg-ink text-bg' : 'border-line bg-surface2 text-ink3'}`}>🗣️</button>
+          )}
           <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums" aria-label={`Elapsed time ${formatElapsed(elapsed)}`}>⏱ {formatElapsed(elapsed)}</span>
           <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums">{progress.completed + progress.skipped}/{progress.total} sets • {volume} kg</span>
         </div>
@@ -281,6 +360,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
               </div>
               <span className="ml-auto text-4xl font-black tabular-nums leading-none" aria-live="off">{fmtRest(restLeft)}</span>
               <div className="flex items-center gap-1.5 shrink-0">
+                <button onClick={toggleSound} aria-pressed={soundOn} aria-label={soundOn ? 'Sound cues on' : 'Sound cues off'} title={soundOn ? 'Sound cues on' : 'Sound cues off'} className="min-h-11 min-w-11 px-1.5 rounded-full bg-bg/15 text-sm leading-none">{soundOn ? '🔊' : '🔇'}</button>
                 <button onClick={()=> setRestEndsAt(v=> Math.max(Date.now()+5000, (v||Date.now())-15000))} aria-label="Rest 15 seconds less" className="min-h-11 min-w-11 px-1.5 rounded-full bg-bg/15 text-xs font-bold tabular-nums">−15s</button>
                 <button onClick={()=> setRestEndsAt(v=> (v||Date.now())+30000)} aria-label="Rest 30 seconds more" className="min-h-11 min-w-11 px-1.5 rounded-full bg-bg/15 text-xs font-bold tabular-nums">+30s</button>
                 <button onClick={()=> setRestEndsAt(null)} aria-label="Skip rest" className="min-h-11 px-3 rounded-full bg-bg text-ink text-xs font-bold">Skip</button>

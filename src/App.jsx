@@ -375,6 +375,11 @@ export default function App(){
           availableEquipment={store.onboarding?.equipment || []}
           draft={store.activeWorkout?.session?.id===activeSession.id ? store.activeWorkout : null}
           measurementConsent={store.preferences?.telemetryEnabled === true}
+          soundCues={store.preferences?.soundCues !== false}
+          onToggleSoundCues={(v)=> setStore(prev=> ({ ...prev, preferences:{ ...(prev.preferences||{}), soundCues: v } }))}
+          voiceCoach={store.preferences?.voiceCoach === true}
+          onToggleVoiceCoach={(v)=> setStore(prev=> ({ ...prev, preferences:{ ...(prev.preferences||{}), voiceCoach: v } }))}
+          voiceRate={Number(store.preferences?.voiceRate) || 1}
           onDraftChange={handleDraftChange}
           onSave={handleSaveSession}
           onCancel={handleCancelSession}

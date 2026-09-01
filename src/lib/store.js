@@ -3,7 +3,7 @@ import { ensureStudyParticipantId, generateStudyParticipantId } from './studyIde
 
 const KEY = 'arise.store.v1';
 const CORRUPT_KEY = 'arise.store.v1.corrupt';
-export const STORE_SCHEMA_VERSION = 6;
+export const STORE_SCHEMA_VERSION = 9;
 
 const DEFAULT = {
   version: STORE_SCHEMA_VERSION,
@@ -16,7 +16,7 @@ const DEFAULT = {
   // theme null follows OS; telemetry null = prompt. `accessibility` drives the
   // opt-in root classes le-studio.css already defines (large-text, high-contrast,
   // reduce-motion) — independent of the OS-level media queries.
-  preferences: { units: 'kg', theme: null, syncEnabled: false, telemetryEnabled: null, pulseEnabled: false, healthSummaryEnabled: false, autoRest: true, accessibility: { largeText: false, highContrast: false, reduceMotion: false } },
+  preferences: { units: 'kg', theme: null, syncEnabled: false, telemetryEnabled: null, pulseEnabled: false, healthSummaryEnabled: false, autoRest: true, soundCues: true, voiceCoach: false, voiceRate: 1, accessibility: { largeText: false, highContrast: false, reduceMotion: false } },
   readinessLog: [], // [{ dateISO, score, sleep, soreness, motivation }]
   programHistory: [], // [{ programId, version, startDateISO, endDateISO }]
   customTemplates: [], // user-created templates: { id, isCustom:true, version, program:{...}, ... }
@@ -234,6 +234,26 @@ export function runMigrations(raw){
     if(j.preferences.autoRest==null) j.preferences.autoRest=true;
     j.version = STORE_SCHEMA_VERSION;
   }
+  if(j.version === 6){
+    // v6 -> v7: guided-mode sound cues preference (default on — cues only play
+    // inside the guided runner, so prior behaviour is unchanged).
+    if(!j.preferences) j.preferences={};
+    if(j.preferences.soundCues==null) j.preferences.soundCues=true;
+    j.version = STORE_SCHEMA_VERSION;
+  }
+  if(j.version === 7){
+    // v7 -> v8: guided-mode voice coach (default OFF — speech is intrusive, so
+    // it is strictly opt-in).
+    if(!j.preferences) j.preferences={};
+    if(j.preferences.voiceCoach==null) j.preferences.voiceCoach=false;
+    j.version = STORE_SCHEMA_VERSION;
+  }
+  if(j.version === 8){
+    // v8 -> v9: voice coach speech rate (default 1× — the Web Speech default).
+    if(!j.preferences) j.preferences={};
+    if(j.preferences.voiceRate==null) j.preferences.voiceRate=1;
+    j.version = STORE_SCHEMA_VERSION;
+  }
   if(j.activeWorkout === undefined) j.activeWorkout = null;
   if(j.eventHistory === undefined) j.eventHistory=[];
   if(j.healthSummary === undefined) j.healthSummary=null;
@@ -243,6 +263,14 @@ export function runMigrations(raw){
   if(j.preferences.pulseEnabled==null) j.preferences.pulseEnabled=false;
   if(j.preferences.healthSummaryEnabled==null) j.preferences.healthSummaryEnabled=false;
   if(j.preferences.autoRest==null) j.preferences.autoRest=true;
+  if(j.preferences.soundCues==null) j.preferences.soundCues=true;
+  if(j.preferences.voiceCoach==null) j.preferences.voiceCoach=false;
+  { 
+    // Clamp the speech rate to the same range the player enforces, so a
+    // hand-edited backup can't produce absurd speech.
+    const r = Number(j.preferences.voiceRate);
+    j.preferences.voiceRate = Number.isFinite(r) && r >= 0.5 && r <= 2 ? r : 1;
+  }
   if(!j.preferences.accessibility || typeof j.preferences.accessibility !== 'object'){
     j.preferences.accessibility = { largeText:false, highContrast:false, reduceMotion:false };
   } else {
