@@ -284,9 +284,9 @@ export default function GuidedRunner({ session, history = [], availableEquipment
         ) : (
           <>
             {/* Step progress dots */}
-            <div className="flex flex-wrap gap-1.5 justify-center pb-4" aria-hidden>
+            <div className="flex flex-wrap gap-2 justify-center pb-4" aria-hidden>
               {blocks.flatMap((b,bi)=> b.sets.map((s,si)=> (
-                <span key={`${bi}-${si}`} className={`w-2.5 h-2.5 rounded-full ${s.completed ? 'bg-success' : s.skipped ? 'bg-review' : (step.blockIndex===bi && step.setIndex===si) ? 'bg-ink' : 'bg-surface2 border border-line'}`} />
+                <span key={`${bi}-${si}`} className={`w-3.5 h-3.5 rounded-full transition-colors ${s.completed ? 'bg-success' : s.skipped ? 'bg-review' : (step.blockIndex===bi && step.setIndex===si) ? 'bg-ink ring-2 ring-ink/30' : 'bg-surface2 border border-line'}`} />
               )))}
             </div>
 
