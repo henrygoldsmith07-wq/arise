@@ -54,7 +54,12 @@ then taps `Rest {time}` as a second action.
 **Files:** `SessionRunner.jsx` (`startRest`, the reps `onChange` commit),
 `store.js` migration for the new preference.
 
-### 2. Faster exercise substitution — **M**
+### 2. Faster exercise substitution — **M** — *shipped*
+
+`SessionRunner` has a per-block Swap sheet backed by `substitutionOptions()`;
+it honours liked/disliked movements and refuses a swap back to the original
+lift. This entry is kept for the record.
+
 
 `rankedSubstitutions(targetId, availableEquipment, limit, history)` already
 scores by pattern, muscle, equipment and difficulty — and already accepts
@@ -196,7 +201,25 @@ week for this muscle?").
 Ship it behind the same uncertainty treatment as
 `strengthTrendWithConfidence()`.
 
-### 10. Better history visualisation — **M**
+### 10. Better history visualisation — **M** — *shipped*
+
+Shipped as `src/lib/charts.js` (pure geometry, `tests/charts.test.js`) plus
+`src/components/Charts.jsx` (inline SVG, no library):
+
+- **Per-lift e1RM sparkline** with the confidence band *drawn* — ±1.96 residual
+  standard errors around the fitted line, never below the engine's own
+  three-point floor, and labelled as the spread of logged sessions rather than
+  a forecast.
+- **Weekly sets by muscle** as a stacked bar; muscles in the `high` landmark
+  band carry a hairline outline (context, not a warning colour).
+- **Planned vs completed** as an adherence strip — filled done, hollow missed,
+  dashed upcoming. A future session is never counted as missed.
+
+Charts paint with `currentColor` so OS theme needs no second palette, nothing
+animates (`prefers-reduced-motion` is already clamped globally in
+`le-studio.css`), and every model returns a `summary` used as the SVG's
+accessible name and repeated as visible text.
+
 
 `ProgressView` already computes `weeklyVolume`, `volumeDistribution`,
 `strengthSeriesWithConfidence`, `plannedVsCompletedStats` — 183 lines rendering
