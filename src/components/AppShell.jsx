@@ -3,6 +3,7 @@ const TABS = [
   ['train','Train','🏋️'],
   ['exercises','Exercises','🔎'],
   ['progress','Progress','📈'],
+  ['lab','Lab','🧪'],
   ['more','More','⋯'],
 ];
 
@@ -46,3 +47,4 @@ export default function AppShell({ children, tab, setTab, storeVersion, theme = 
     </div>
   );
 }
+
