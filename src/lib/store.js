@@ -19,7 +19,11 @@ const DEFAULT = {
   preferences: { units: 'kg', theme: null, syncEnabled: false, telemetryEnabled: null, pulseEnabled: false, healthSummaryEnabled: false, autoRest: true, soundCues: true, voiceCoach: false, voiceRate: 1, accessibility: { largeText: false, highContrast: false, reduceMotion: false } },
   readinessLog: [], // [{ dateISO, score, sleep, soreness, motivation }]
   programHistory: [], // [{ programId, version, startDateISO, endDateISO }]
-  customTemplates: [], // user-created templates: { id, isCustom:true, version, program:{...}, ... }
+  customTemplates: [], // user-created templates: { id, isCustom:true, version, program:{...}, deletedAt? , ... }
+  // Deletion tombstones for sync: { id:'entity:refId', entity, refId, deletedAt, deviceId }.
+  // Soft-deleted rows keep their data locally; the tombstone tells other
+  // devices (when sync lands) that the deletion should win over their copy.
+  tombstones: [],
   // Pseudonymous study identity (studyIdentity.js): generated once per
   // installation, travels inside every export, and lets the field study tell
   // "one person, ten weekly exports" apart from ten people.

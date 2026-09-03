@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { PROGRAMS, PROGRAM_BY_ID, PROGRAM_TEMPLATES, programHistory as programVersionHistory, availablePrograms, EXERCISE_BY_ID, EXERCISES, plannedVsCompleted, GOALS, LEVELS, scheduleProgram } from '../lib/data.js';
+import { markSoftDeleted, unDelete, makeTombstone } from '../lib/domain.js';
 import { startProgram } from '../lib/schedule.js';
 import { adaptScheduleForEquipment, programAdherence, recordProgramStart, userProgramHistory } from '../lib/programming.js';
 import { generateProgramme } from '../lib/programmeGenerator.js';
@@ -45,7 +46,12 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
   const [builderOpen,setBuilderOpen]=useState(false);
   const [editingId,setEditingId]=useState(null);
   const [form,setForm]=useState({ name:'', description:'', level:'Beginner', goal:'general', days:[{ ...EMPTY_DAY }] });
-  const customTemplates = store.customTemplates || [];
+  const customTemplates = useMemo(
+    ()=> (store.customTemplates || []).filter((t) => !t.deletedAt),
+    [store.customTemplates]
+  );
+  const lastDeleted = (store.customTemplates || []).filter((t) => t.deletedAt)
+    .sort((a, b) => String(b.deletedAt).localeCompare(String(a.deletedAt)))[0] || null;
   const allPrograms = useMemo(()=> [
     ...PROGRAMS,
     ...customTemplates.map(t => ({ ...t.program, id: t.id, isCustom: true })),
@@ -114,10 +120,28 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
     setBuilderOpen(false);
     setProgramId(tpl.id);
   };
+  // Deletion is soft: the row stays recoverable (undo below), analytics and
+  // the UI filter on deletedAt, and a tombstone records the deletion so a
+  // future sync can propagate it instead of resurrecting the template.
   const deleteCustom = (id)=>{
-    if(!confirm('Delete this template? Schedules already started from it are not affected.')) return;
-    setStore({ ...store, customTemplates: customTemplates.filter(t => t.id !== id) });
+    const target = (store.customTemplates || []).find(t => t.id === id);
+    if(!target) return;
+    if(!confirm('Delete this template? Schedules already started from it are not affected. You can undo right after.')) return;
+    const deleted = markSoftDeleted(target);
+    const tombstone = makeTombstone('templates', id, { deviceId: undefined });
+    setStore({
+      ...store,
+      customTemplates: (store.customTemplates || []).map(t => t.id === id ? deleted : t),
+      tombstones: [...(store.tombstones || []).filter(t => t.refId !== id), tombstone],
+    });
     if(programId === id) setProgramId(PROGRAMS[0].id);
+  };
+  const undoDelete = (id)=>{
+    setStore({
+      ...store,
+      customTemplates: (store.customTemplates || []).map(t => t.id === id ? unDelete(t) : t),
+      tombstones: (store.tombstones || []).filter(t => t.refId !== id),
+    });
   };
 
   const applyEquipmentChanges = ()=>{
@@ -162,6 +186,11 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
           ))}
         </div>
         <p className="text-[11px] text-ink3 mt-1">{PROGRAM_TEMPLATES.find(t=> t.programId===programId)?.description || customTemplates.find(t=> t.id===programId)?.description || ''}</p>
+        {lastDeleted && (
+          <p className="text-[11px] text-ink3">
+            Deleted “{lastDeleted.program?.name || lastDeleted.id}” — <button onClick={()=> undoDelete(lastDeleted.id)} className="underline font-semibold">Undo</button>
+          </p>
+        )}
       </div>
 
       <div className="grid gap-2">

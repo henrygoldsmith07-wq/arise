@@ -14,7 +14,7 @@
 
 const SUPPORTED_STORES = new Set([
   'profile','sessions','sets','programme','adaptations',
-  'recommendations','outcomes','events','readiness','templates','quarantine','snapshots','archive',
+  'recommendations','outcomes','events','readiness','templates','quarantine','snapshots','archive','tombstones',
 ]);
 
 let dbRef = null;          // shared open handle, set by idb.js on first use

@@ -23,6 +23,7 @@ import { idbGet, idbGetAll, idbPut, idbDelete, idbClearStore, STORES } from './i
 import { idbTransaction } from './idb-tx.js';
 import { enforceIntegrity, quarantineBrokenStore } from './integrity.js';
 import { captureSnapshot } from './snapshots.js';
+import { normalizeHistoryForWrite, makeTombstone } from './domain.js';
 
 const LS_KEY = 'arise.store.v1';
 const POINTER_KEY = 'arise.store.v1.pointer';
@@ -65,17 +66,25 @@ function splitSets(history){
 export function decompose(store){
   const schedule = store.activeSchedule || null;
   const ledger = store.evaluationLedger || [];
+  // Write-time normalisation: every save passes its history through the
+  // canonical schema (coercions, source tags, dropped-unreadable reporting).
+  const { history: canonicalHistory } = normalizeHistoryForWrite(historyOf(store), { source: 'manual' });
+  const tombstones = (store.tombstones || []).map((t) => ({ ...makeTombstone(t.entity, t.refId, { at: t.deletedAt, deviceId: t.deviceId }), id: t.id || makeTombstone(t.entity, t.refId, { at: t.deletedAt, deviceId: t.deviceId }).id }));
   return {
     profile: { id: PROFILE_ID, version: store.version || 6, onboarding: store.onboarding || null, preferences: store.preferences || {}, healthSummary: store.healthSummary || null, studyParticipantId: store.studyParticipantId || null, studyEnrollment: store.studyEnrollment || null },
-    sessions: historyOf(store),
-    sets: splitSets(historyOf(store)),
+    sessions: canonicalHistory,
+    sets: splitSets(canonicalHistory),
     programme: { id: PROGRAMME_ID, activeSchedule: schedule, programHistory: store.programHistory || [] },
     adaptations: (schedule?.adaptationHistory || []).map(row => ({ ...row, id: row.basisKey || `${row.dateISO}` })),
     recommendations: ledger.filter(r => !r.outcome).map(r => ({ ...r, id: r.id })),
     outcomes: ledger.filter(r => r.outcome).map(r => ({ ...r, id: r.id })),
     events: store.eventHistory || [],
     readiness: { id: READINESS_ID, log: store.readinessLog || [] },
+    // Soft-deleted templates stay in the store (deletedAt on the row) so the
+    // deletion is recoverable locally; consumers filter on deletedAt, and
+    // tombstones carry the deletion to other devices at sync time.
     templates: store.customTemplates || [],
+    tombstones,
   };
 }
 
@@ -92,7 +101,7 @@ export async function persistStore(store){
   // silently produced a half-saved world (history without its programme,
   // ledger rows split across two stores).
   await idbTransaction(
-    ['profile','sessions','sets','programme','adaptations','recommendations','outcomes','events','readiness','templates'],
+    ['profile','sessions','sets','programme','adaptations','recommendations','outcomes','events','readiness','templates','tombstones'],
     (ops)=> {
       ops.put('profile', d.profile);
       ops.clearStore('sessions');
@@ -111,6 +120,8 @@ export async function persistStore(store){
       ops.put('readiness', d.readiness);
       ops.clearStore('templates');
       for(const t of d.templates) ops.put('templates', t);
+      ops.clearStore('tombstones');
+      for(const t of d.tombstones) ops.put('tombstones', t);
     },
   );
   // Demote localStorage to a pointer + paint-critical prefs.
@@ -124,7 +135,7 @@ export async function persistStore(store){
 }
 
 export async function loadStoreFromIdb(){
-  const [profile, sessions, programme, adaptations, recs, outs, events, readiness, templates] = await Promise.all([
+  const [profile, sessions, programme, adaptations, recs, outs, events, readiness, templates, tombstones] = await Promise.all([
     idbGet('profile', PROFILE_ID),
     idbGetAll('sessions'),
     idbGet('programme', PROGRAMME_ID),
@@ -134,6 +145,7 @@ export async function loadStoreFromIdb(){
     idbGetAll('events'),
     idbGet('readiness', READINESS_ID),
     idbGetAll('templates'),
+    idbGetAll('tombstones'),
   ]);
   if(!profile && !(sessions || []).length) return null;
   const schedule = programme?.activeSchedule || null;
@@ -158,6 +170,7 @@ export async function loadStoreFromIdb(){
     eventHistory: events || [],
     readinessLog: readiness?.log || [],
     customTemplates: templates || [],
+    tombstones: tombstones || [],
     evaluationLedger: [...ledgerMap.values()],
   };
 }
