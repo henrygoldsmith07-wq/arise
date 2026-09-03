@@ -6,6 +6,7 @@
 import { buildExportPayload, parseImportFile, mergeStores } from "./export.js";
 import { STORE_SCHEMA_VERSION, mergeCustomTemplates } from "./store.js";
 import { mergeEvaluationLedgers } from "./longitudinal.js";
+import { applyTombstones, isTombstone } from "./domain.js";
 
 export function makeSyncAdapter({ pull, push }){ return { pull, push }; }
 
@@ -38,6 +39,10 @@ export function mergeStoresWithConflicts(current, imported){
       if(tsOf(h) >= tsOf(existing)) byId.set(h.id, h);
     }
   }
+  // Deletions propagate: a tombstone removes the row from BOTH sides unless
+  // the local copy was written after the deletion (an offline edit wins).
+  const tombstones = [...(current.tombstones||[]), ...(imported.tombstones||[])
+    .filter((t) => isTombstone(t) && !(current.tombstones||[]).some((c) => c.id === t.id))];
   // onboarding: keep current unless missing; if both present, prefer newer by presence of programHistory length or activeSchedule recency
   let onboarding = current.onboarding || imported.onboarding || null;
   // if imported has strictly newer schedule, prefer it when current has no schedule
@@ -59,14 +64,15 @@ export function mergeStoresWithConflicts(current, imported){
     activeSchedule,
     activeWorkout: current.activeWorkout || imported.activeWorkout || null,
     // Guarded comparator: an entry missing dateISO must not crash the sync.
-    history: [...byId.values()].sort((a,b)=> String(a?.dateISO||'').localeCompare(String(b?.dateISO||''))),
+    history: applyTombstones([...byId.values()].sort((a,b)=> String(a?.dateISO||'').localeCompare(String(b?.dateISO||''))), tombstones),
     preferences,
     eventHistory: [...eventById.values()].sort((a,b)=> String(a.at||'').localeCompare(String(b.at||''))),
     healthSummary: current.healthSummary || imported.healthSummary || null,
     readinessLog: [...rByKey.values()].sort((a,b)=> String(a?.dateISO||'').localeCompare(String(b?.dateISO||''))),
     evaluationLedger: mergeEvaluationLedgers(current.evaluationLedger, imported.evaluationLedger),
-    customTemplates: mergeCustomTemplates(current.customTemplates, imported.customTemplates),
+    customTemplates: applyTombstones(mergeCustomTemplates(current.customTemplates, imported.customTemplates), tombstones),
     programHistory: [...(current.programHistory||[]), ...(imported.programHistory||[])].filter((v,i,a)=> a.findIndex(x=> x.programId===v.programId && x.version===v.version)===i),
+    tombstones: [...(current.tombstones||[]), ...(imported.tombstones||[])].filter((v,i,a)=> a.findIndex(x=> x.id===v.id)===i),
   };
 }
 

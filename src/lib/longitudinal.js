@@ -22,6 +22,8 @@ import { EXERCISE_BY_ID, equipmentClassFor } from './data.js';
 import { movementPatternFor } from './substitutions.js';
 import { computeArms, STUDY_DESIGN } from './study.js';
 import { STUDY_VERSION } from './studyEnrollment.js';
+import { withProvenance } from './domain.js';
+import { getDeviceId } from './exportPolicy.js';
 
 export const EVALUATION_SCHEMA_VERSION = 2;
 
@@ -272,6 +274,9 @@ export function recordRecommendation({ exerciseId, recommendation, history = [],
     },
     outcome: null,
   };
+  // Provenance: this recommendation came from the live engine on this device —
+  // distinguishable from imported/replayed records in every downstream rollup.
+  const stamped = withProvenance(record, 'live-engine', { deviceId: getDeviceId() });
   const ledger = loadEvaluationLedger(storage);
   // Cap OPEN records per exercise so skipped sessions cannot pile up: keep the
   // newest (maxOpen - 1) and drop only the true EXCESS oldest. The previous
@@ -281,10 +286,10 @@ export function recordRecommendation({ exerciseId, recommendation, history = [],
   const openForExercise = ledger.filter(row=> row.exerciseId === exerciseId && !row.outcome);
   const excess = Math.max(0, openForExercise.length + 1 - maxOpen);
   const dropIds = new Set(openForExercise.slice(0, excess).map(row=> row.id));
-  const next = [...ledger.filter(row=> !dropIds.has(row.id)), record];
+  const next = [...ledger.filter(row=> !dropIds.has(row.id)), stamped];
   const retention = resolveArisePriors(config).longitudinal.retentionLimit;
   saveEvaluationLedger(next.slice(-retention), storage);
-  return record;
+  return stamped;
 }
 
 // Attach the real outcome once the following workout completes. The outcome is
@@ -406,6 +411,10 @@ export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore =
           : 'target-missed',
         arms: armOutcomes,
       },
+      // The outcome was measured on this device from the user's own log —
+      // merged-in outcomes carry a different origin and never count as
+      // first-party evidence in the study pipeline.
+      outcomeProvenance: { origin: 'live-engine', capturedAt: nowISO || new Date().toISOString(), deviceId: getDeviceId() },
     };
     resolved.push(enriched);
     return enriched;

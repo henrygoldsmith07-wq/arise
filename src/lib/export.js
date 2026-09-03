@@ -1,12 +1,14 @@
 ﻿// Export / restore / import â€” versioned JSON backup for local-first data.
 // No cloud sync; the user owns the file.
 
-import { runMigrations, STORE_SCHEMA_VERSION, mergeCustomTemplates } from './store.js';
+import { runMigrations, STORE_SCHEMA_VERSION, mergeCustomTemplates, normaliseHistory } from './store.js';
 import { getEventHistory } from './telemetry.js';
 import { loadEvaluationLedger, mergeEvaluationLedgers } from './longitudinal.js';
 import { ensureStudyParticipantId } from './studyIdentity.js';
+import { buildEnvelope, applyFieldPolicy } from './exportPolicy.js';
+import { withProvenance, ensureSourceTags } from './domain.js';
 
-export const EXPORT_VERSION = 3;
+export const EXPORT_VERSION = 4;
 
 export function buildExportPayload(store){
   const eventHistory=getEventHistory();
@@ -17,13 +19,11 @@ export function buildExportPayload(store){
   // Every export carries the pseudonymous study id so repeated weekly exports
   // from one person can be folded back into ONE participant downstream.
   ensureStudyParticipantId(data);
-  return {
-    app: 'arise',
-    version: EXPORT_VERSION,
+  return buildEnvelope({
+    payload: data,
+    payloadVersion: EXPORT_VERSION,
     schemaVersion: STORE_SCHEMA_VERSION,
-    exportedAt: new Date().toISOString(),
-    data,
-  };
+  });
 }
 
 export function downloadJson(filename, obj){
@@ -117,7 +117,7 @@ export async function parseBackupFile(textOrEnvelope){
 // Anything else in a hand-edited backup is dropped rather than persisted forever.
 // studyParticipantId is the pseudonymous study identity (studyIdentity.js) —
 // preserved so repeated exports fold into ONE field-study participant.
-const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','preferences','readinessLog','programHistory','evaluationLedger','customTemplates','studyParticipantId','studyEnrollment'];
+const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','preferences','readinessLog','programHistory','evaluationLedger','customTemplates','studyParticipantId','studyEnrollment','tombstones'];
 
 export function parseImportFile(text){
   let parsed;
@@ -132,7 +132,15 @@ export function parseImportFile(text){
   if(!validation.ok) throw new Error(`Backup validation failed: ${validation.errors.join(' ')}`);
   const clean = {};
   for(const key of STORE_KEYS) if(key in data) clean[key]=data[key];
-  return runMigrations(typeof structuredClone==='function' ? structuredClone(clean) : JSON.parse(JSON.stringify(clean)));
+  const migrated = runMigrations(typeof structuredClone==='function' ? structuredClone(clean) : JSON.parse(JSON.stringify(clean)));
+  // Dangerous-field policy runs AFTER migrations (which can rename keys) and
+  // BEFORE the payload is merged: consent, study identity and health data are
+  // device-local and never file-supplied. Imported sessions get honest
+  // provenance: source 'import', ledger origin 'imported'.
+  const safe = applyFieldPolicy(migrated);
+  if(Array.isArray(safe.history)) safe.history = safe.history.map((s)=> ensureSourceTags(s, 'import'));
+  if(Array.isArray(safe.evaluationLedger)) safe.evaluationLedger = safe.evaluationLedger.map((r)=> withProvenance(r, 'imported'));
+  return safe;
 }
 
 export function validateStoreData(data){
@@ -189,6 +197,8 @@ export function mergeStores(current, imported, strategy='merge'){
     evaluationLedger: mergeEvaluationLedgers(currentStore.evaluationLedger, importedStore.evaluationLedger),
     customTemplates: mergeCustomTemplates(currentStore.customTemplates, importedStore.customTemplates),
     programHistory: [...(currentStore.programHistory||[]), ...(importedStore.programHistory||[])].filter((v,i,a)=> a.findIndex(x=> x.programId===v.programId && x.version===v.version)===i),
+    // Deletions must propagate: incoming tombstones union with local ones.
+    tombstones: [...(currentStore.tombstones||[]), ...(importedStore.tombstones||[])].filter((v,i,a)=> a.findIndex(x=> x.id===v.id)===i),
   };
 }
 

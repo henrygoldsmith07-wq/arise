@@ -18,9 +18,9 @@
 // so every caller stays testable and fail-soft.
 
 const DB_NAME = 'arise-idb-v1';
-const DB_VERSION = 4; // v2 'quarantine'; v3 snapshots+indexes; v4 'archive'.
+const DB_VERSION = 5; // v2 'quarantine'; v3 snapshots+indexes; v4 'archive'; v5 'tombstones'.
 
-export const STORES = ['profile','sessions','sets','programme','adaptations','recommendations','outcomes','events','readiness','templates','quarantine','snapshots','archive'];
+export const STORES = ['profile','sessions','sets','programme','adaptations','recommendations','outcomes','events','readiness','templates','quarantine','snapshots','archive','tombstones'];
 
 let dbPromise = null;
 

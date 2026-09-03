@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { buildExportPayload, downloadJson, parseImportFile, mergeStores, portableCsv, deletionPreview, downloadBackup, parseBackupFile } from '../lib/export.js';
+import { buildImportPreview } from '../lib/exportPolicy.js';
 import { clearStore } from '../lib/store.js';
 import { clearAllStoredData, getIntegrityNotice, clearIntegrityNotice, whenPersisted } from '../lib/storage.js';
 import { storageHealth, requestPersistentStorage } from '../lib/storageQuota.js';
@@ -92,15 +93,10 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
       const pass = prompt(`Passphrase for ${file.name}:`, '');
       if(pass == null){ e.target.value = ''; return; }
       const payload = await decryptBackup(bytes, pass);
-      const imported = parseImportFile(JSON.stringify(payload));
-      const merged = mergeStores(store, imported, importStrategy);
-      if(importStrategy==='replace') replaceEventHistory(imported.eventHistory || []);
-      else if(imported.eventHistory?.length) mergeEventHistory(imported.eventHistory);
-      setStore({ ...merged, eventHistory:getEventHistory() });
-      setMsg(importStrategy==='replace' ? 'Encrypted backup restored — replaced this device.' : 'Encrypted backup merged — history combined.');
+      e.target.value = '';
+      await queueImportPreview(payload);
     }catch(err){
       setMsg(String(err.message || err));
-    }finally{
       e.target.value = '';
       setTimeout(()=> setMsg(null), 5000);
     }
@@ -128,25 +124,52 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
     setTimeout(()=> setMsg(null), 3000);
   };
 
+  // Import is a two-step, reviewable flow: the file is parsed and previewed
+  // (counts, conflicts, denied fields, origin metadata) and NOTHING is applied
+  // until the user confirms. Cancel discards the preview entirely.
+  const [importPreview, setImportPreview] = useState(null);
+
+  const queueImportPreview = async (inner)=>{
+    const preview = buildImportPreview(inner, store);
+    if(!preview.ok){
+      setMsg(preview.reason || 'This file could not be previewed.');
+      setTimeout(()=> setMsg(null), 5000);
+      return;
+    }
+    setImportPreview(preview);
+  };
+
   const onPickFile = async (e)=>{
     const file = e.target.files?.[0];
     if(!file) return;
     const text = await file.text();
+    e.target.value='';
     try{
       // Accepts plain JSON and the compressed .arise envelope alike.
       const inner = await parseBackupFile(text);
-      const imported = parseImportFile(JSON.stringify(inner));
+      await queueImportPreview(inner);
+    }catch(err){
+      setMsg(String(err.message || err));
+      setTimeout(()=> setMsg(null), 5000);
+    }
+  };
+
+  const applyImportPreview = ()=>{
+    if(!importPreview) return;
+    try{
+      const imported = parseImportFile(JSON.stringify(importPreview.envelope));
       const merged = mergeStores(store, imported, importStrategy);
       if(importStrategy==='replace') replaceEventHistory(imported.eventHistory || []);
       else if(imported.eventHistory?.length) mergeEventHistory(imported.eventHistory);
       setStore({ ...merged, eventHistory:getEventHistory() });
-      setMsg(importStrategy==='replace' ? 'Backup restored — replaced this device.' : 'Backup merged — history combined.');
+      setMsg(importStrategy==='replace'
+        ? 'Backup restored — replaced this device.'
+        : `Backup merged — ${importPreview.counts.additions} new session${importPreview.counts.additions === 1 ? '' : 's'} added${importPreview.counts.updates ? `, ${importPreview.counts.updates} conflict${importPreview.counts.updates === 1 ? '' : 's'} kept your current copy` : ''}.`);
     }catch(err){
       setMsg(String(err.message || err));
-    }finally{
-      e.target.value='';
-      setTimeout(()=> setMsg(null), 4000);
     }
+    setImportPreview(null);
+    setTimeout(()=> setMsg(null), 6000);
   };
 
   const reset = resetAllData;
@@ -277,6 +300,50 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
           <label className="flex items-center gap-1.5"><input type="radio" name="strategy" checked={importStrategy==='replace'} onChange={()=> setImportStrategy('replace')} /> Replace</label>
           <span className="text-ink3 ml-auto">Merge de-dupes by session id; Replace overwrites.</span>
         </div>
+        {importPreview && (
+          <div role="dialog" aria-label="Import preview" className="rounded-xl border border-line bg-surface2 p-3 text-xs space-y-2">
+            <p className="font-bold">Review this backup before applying</p>
+            <p className="text-ink3">
+              Exported {importPreview.meta.exportedAt && importPreview.meta.exportedAt !== '1970-01-01T00:00:00.000Z' ? new Date(importPreview.meta.exportedAt).toLocaleString() : 'at an unknown time'}
+              {importPreview.meta.device && importPreview.meta.device !== 'unknown' && importPreview.meta.device !== 'unknown-pre-contract' ? ` · device ${importPreview.meta.device}` : ''}
+              {importPreview.meta.appVersion ? ` · Arise ${importPreview.meta.appVersion}` : ''}
+              {importPreview.meta.contractRecognised ? '' : importPreview.meta.adapter ? ` · converted from an older format (${importPreview.meta.adapter})` : ' · older format, imported as-is'}</p>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              <span>{importPreview.counts.sessions} session{importPreview.counts.sessions === 1 ? '' : 's'}</span>
+              <span>{importPreview.counts.sets} set{importPreview.counts.sets === 1 ? '' : 's'}</span>
+              {importPreview.counts.events > 0 && <span>{importPreview.counts.events} event{importPreview.counts.events === 1 ? '' : 's'}</span>}
+              {importPreview.counts.ledger > 0 && <span>{importPreview.counts.ledger} recommendation record{importPreview.counts.ledger === 1 ? '' : 's'}</span>}
+              {importPreview.counts.templates > 0 && <span>{importPreview.counts.templates} template{importPreview.counts.templates === 1 ? '' : 's'}</span>}
+              {importPreview.counts.readiness > 0 && <span>{importPreview.counts.readiness} readiness entr{importPreview.counts.readiness === 1 ? 'y' : 'ies'}</span>}
+            </div>
+            <p>
+              {importStrategy === 'merge'
+                ? <>{importPreview.counts.additions} new · {importPreview.counts.updates} conflict{importPreview.counts.updates === 1 ? '' : 's'} (your current copy is kept)</>
+                : 'Replace overwrites everything on this device with the backup.'}
+            </p>
+            {importPreview.conflictsTotal > 0 && (
+              <details>
+                <summary className="font-semibold cursor-pointer">Conflicts ({importPreview.conflictsTotal})</summary>
+                <ul className="mt-1 space-y-0.5 text-ink3">
+                  {importPreview.conflicts.map((c)=> (
+                    <li key={c.sessionId}>
+                      {c.dateISO}: backup has {c.incomingSets} set{c.incomingSets === 1 ? '' : 's'}, this device has {c.existingSets}
+                      {c.incomingNewer ? ' — backup copy is newer but merge keeps yours' : ''}
+                    </li>
+                  ))}
+                  {importPreview.conflictsTotal > importPreview.conflicts.length && <li>…and {importPreview.conflictsTotal - importPreview.conflicts.length} more</li>}
+                </ul>
+              </details>
+            )}
+            {importPreview.deniedFields.length > 0 && (
+              <p className="text-ink3">Ignored for your safety (device-local settings): {importPreview.deniedFields.join(', ')}</p>
+            )}
+            <div className="flex gap-2">
+              <button onClick={applyImportPreview} className="btn btn-primary min-h-9 rounded-xl px-4">Apply {importStrategy}</button>
+              <button onClick={()=> setImportPreview(null)} className="btn btn-secondary min-h-9 rounded-xl px-4">Cancel</button>
+            </div>
+          </div>
+        )}
         <p className="text-xs text-ink3">Cross-device sync is Merge with last-write-wins per session (via savedAt). Conflicts resolve without losing either device's work.</p>
         {msg && <p role="status" className="text-xs bg-surface2 border border-line rounded-xl px-3 py-2">{msg}</p>}
         <details className="text-xs">
