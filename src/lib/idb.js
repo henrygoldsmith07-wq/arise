@@ -1,6 +1,6 @@
 // idb.js — minimal IndexedDB wrapper with the canonical Arise object stores.
 //
-// Layout (v1):
+// Layout (v2; v1 as shipped, v2 adds 'quarantine' for validated-boot repairs):
 //   profile         id:'profile'   version/onboarding/preferences/healthSummary
 //   sessions        id             one record per completed session (sets embedded;
 //                                  the sets store mirrors them flattened for queries)
@@ -18,9 +18,9 @@
 // so every caller stays testable and fail-soft.
 
 const DB_NAME = 'arise-idb-v1';
-const DB_VERSION = 1;
+const DB_VERSION = 4; // v2 'quarantine'; v3 snapshots+indexes; v4 'archive'.
 
-export const STORES = ['profile','sessions','sets','programme','adaptations','recommendations','outcomes','events','readiness','templates'];
+export const STORES = ['profile','sessions','sets','programme','adaptations','recommendations','outcomes','events','readiness','templates','quarantine','snapshots','archive'];
 
 let dbPromise = null;
 
@@ -51,13 +51,32 @@ function openDb(){
     try{
       if(typeof indexedDB === 'undefined'){ resolve(null); return; }
       const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onblocked = ()=> { /* older tab still open on a previous version; upgrade waits */ };
       req.onupgradeneeded = ()=> {
         const db = req.result;
+        const autoStores = new Set(['sets', 'events']);
         for(const name of STORES){
           if(!db.objectStoreNames.contains(name)){
-            db.createObjectStore(name, name === 'sets' || name === 'events' ? { autoIncrement: true } : { keyPath: 'id' });
+            // sets/events rows always carry an `id` field (splitSets, event
+            // normalisation); keying on it keeps delete-by-id consistent with
+            // the memory fallback, while autoIncrement still covers id-less
+            // legacy rows by assigning into the record.
+            db.createObjectStore(name, autoStores.has(name) ? { keyPath: 'id', autoIncrement: true } : { keyPath: 'id' });
           }
         }
+        // v3: indexes backing queries.js (date / exercise / session lookups)
+        // and the automatic-snapshot store (snapshots.js).
+        const up = req.transaction;
+        const idx = (storeName, indexName, keyPath)=> {
+          if(!db.objectStoreNames.contains(storeName)) return;
+          const os = up.objectStore(storeName);
+          if(os && !os.indexNames.contains(indexName)) os.createIndex(indexName, keyPath);
+        };
+        idx('sets', 'by_date', 'dateISO');
+        idx('sets', 'by_exercise', 'exerciseId');
+        idx('sets', 'by_session', 'sessionId');
+        idx('sessions', 'by_date', 'dateISO');
+        idx('events', 'by_at', 'at');
       };
       req.onsuccess = ()=> resolve(req.result);
       req.onerror = ()=> reject(req.error);
@@ -102,8 +121,9 @@ async function backend(){
           return req;
         }),
         put: (store, value, key)=>{
-          const hasKP = store !== 'sets' && store !== 'events';
-          return tx(db, store, 'readwrite', os => hasKP ? os.put(value) : os.put(value, key));
+          // Every store now has keyPath 'id' (v4). Passing an explicit key to
+          // a keyPath store throws, so route through it uniformly.
+          return tx(db, store, 'readwrite', os => os.put(value));
         },
         delete: (store, key)=> tx(db, store, 'readwrite', os => os.delete(key)),
         clearStore: (store)=> tx(db, store, 'readwrite', os => os.clear()),
@@ -116,6 +136,17 @@ async function backend(){
 // In environments without IndexedDB every operation routes through the
 // shared in-memory fallback; otherwise we go straight to the real backend.
 function usingFallback(){ return typeof indexedDB === 'undefined'; }
+
+// The atomic-write layer (idb-tx.js) shares this module's single connection
+// and fallback instance instead of opening its own — one upgrade path, one
+// 'versionchange' owner, one shared in-memory backend for tests. The promise
+// resolves even when no DB exists, so the binding learns the real outcome.
+import { bindTransactionSources } from './idb-tx.js';
+openDb().then((db)=> {
+  bindTransactionSources({ db, fallback: db ? null : fallback() });
+}).catch(()=> {
+  bindTransactionSources({ db: null, fallback: fallback() });
+});
 
 export async function idbGet(store, key){
   if(usingFallback()) return fallback().get(store, key);

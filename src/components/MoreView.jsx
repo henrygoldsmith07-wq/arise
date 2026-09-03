@@ -1,6 +1,9 @@
-import { useRef, useState } from 'react';
-import { buildExportPayload, downloadJson, parseImportFile, mergeStores, portableCsv, deletionPreview } from '../lib/export.js';
+import { useEffect, useRef, useState } from 'react';
+import { buildExportPayload, downloadJson, parseImportFile, mergeStores, portableCsv, deletionPreview, downloadBackup, parseBackupFile } from '../lib/export.js';
 import { clearStore } from '../lib/store.js';
+import { clearAllStoredData, getIntegrityNotice, clearIntegrityNotice, whenPersisted } from '../lib/storage.js';
+import { storageHealth, requestPersistentStorage } from '../lib/storageQuota.js';
+import { cryptoAvailable, encryptBackup, decryptBackup, looksEncrypted } from '../lib/cryptoBackup.js';
 import { clearTelemetry, telemetrySummary, getEventHistory, mergeEventHistory, replaceEventHistory, recordEvent } from '../lib/telemetry.js';
 import { mergeHealthSummary, pullHealthSummary } from '../lib/health.js';
 import { LOCATIONS, GOALS } from '../lib/data.js';
@@ -9,6 +12,7 @@ import { deriveProgressionModel } from '../lib/progressionModel.js';
 import { getAiSettings, saveAiSettings, clearAiSettings, buildTrainingContext, requestCoachInsight, DEFAULT_MODEL } from '../lib/aiCoach.js';
 import { STUDY_ARMS, studyCoverage, runComparativeStudy, collectDeloadDecisions, validateDeloadDecisions } from '../lib/study.js';
 import { voiceSupported } from '../lib/voiceCoach.js';
+import StorageDiagnostics from './StorageDiagnostics.jsx';
 
 export default function MoreView({ store, setStore, setTab, onboardingOpen, setOnboardingOpen }){
   const [importStrategy,setImportStrategy]=useState('merge');
@@ -54,9 +58,60 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   const exportNow = ()=>{
     const payload = buildExportPayload(store);
     const date = new Date().toISOString().slice(0,10);
-    downloadJson(`arise-backup-${date}.json`, payload);
+    // Compressed when the browser supports it; plain JSON otherwise — both
+    // shapes import identically (parseBackupFile unwraps the envelope).
+    downloadBackup(payload, `arise-backup-${date}.arise`);
     setMsg('Export downloaded — keep it somewhere safe.');
     setTimeout(()=> setMsg(null), 3000);
+  };
+
+  const exportEncrypted = async ()=>{
+    if(!cryptoAvailable()){ setMsg('Encrypted backups need a newer browser — plain export still works.'); setTimeout(()=> setMsg(null), 4000); return; }
+    const pass = prompt('Choose a passphrase for this backup.\n\nIf you lose it, the backup cannot be recovered — there is no reset.', '');
+    if(pass == null) return;
+    if(pass.length < 8){ setMsg('Use at least 8 characters — a short passphrase makes the backup guessable.'); setTimeout(()=> setMsg(null), 4000); return; }
+    try{
+      const payload = buildExportPayload(store);
+      const bytes = await encryptBackup(payload, pass);
+      const blob = new Blob([bytes], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `arise-backup-${new Date().toISOString().slice(0,10)}.arisebak`; a.click();
+      setTimeout(()=> URL.revokeObjectURL(url), 2000);
+      setMsg('Encrypted backup downloaded — the file is useless without your passphrase.');
+    }catch(err){ setMsg(String(err.message || err)); }
+    setTimeout(()=> setMsg(null), 5000);
+  };
+
+  const onPickEncrypted = async (e)=>{
+    const file = e.target.files?.[0];
+    if(!file) return;
+    try{
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      if(!looksEncrypted(bytes)) throw new Error('Not an Arise encrypted backup file.');
+      const pass = prompt(`Passphrase for ${file.name}:`, '');
+      if(pass == null){ e.target.value = ''; return; }
+      const payload = await decryptBackup(bytes, pass);
+      const imported = parseImportFile(JSON.stringify(payload));
+      const merged = mergeStores(store, imported, importStrategy);
+      if(importStrategy==='replace') replaceEventHistory(imported.eventHistory || []);
+      else if(imported.eventHistory?.length) mergeEventHistory(imported.eventHistory);
+      setStore({ ...merged, eventHistory:getEventHistory() });
+      setMsg(importStrategy==='replace' ? 'Encrypted backup restored — replaced this device.' : 'Encrypted backup merged — history combined.');
+    }catch(err){
+      setMsg(String(err.message || err));
+    }finally{
+      e.target.value = '';
+      setTimeout(()=> setMsg(null), 5000);
+    }
+  };
+
+  const resetAllData = async ()=>{
+    if(!confirm('Clear all local data on this device? This cannot be undone unless you have an export.')) return;
+    await whenPersisted();
+    await clearAllStoredData();
+    clearStore(); clearTelemetry();
+    location.reload();
   };
   const exportCsv = ()=>{
     const csv = portableCsv(store.history||[]);
@@ -78,7 +133,9 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
     if(!file) return;
     const text = await file.text();
     try{
-      const imported = parseImportFile(text);
+      // Accepts plain JSON and the compressed .arise envelope alike.
+      const inner = await parseBackupFile(text);
+      const imported = parseImportFile(JSON.stringify(inner));
       const merged = mergeStores(store, imported, importStrategy);
       if(importStrategy==='replace') replaceEventHistory(imported.eventHistory || []);
       else if(imported.eventHistory?.length) mergeEventHistory(imported.eventHistory);
@@ -92,17 +149,34 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
     }
   };
 
-  const reset = ()=>{
-    if(!confirm('Clear all local data on this device? This cannot be undone unless you have an export.')) return;
-    clearStore(); clearTelemetry();
-    location.reload();
-  };
-  const deleteAccount = ()=>{
+  const reset = resetAllData;
+  const deleteAccount = async ()=>{
     const preview = deletionPreview(store);
     if(!confirm(`Delete all Arise data on this device?\n\nHistory: ${preview.historyCount} sessions\nSchedule: ${preview.schedulePresent?'yes':'no'}\nOnboarding: ${preview.onboardingPresent?'yes':'no'}\nReadiness: ${preview.readinessCount} entries\n\nThis cannot be undone.`)) return;
+    await whenPersisted();
+    await clearAllStoredData();
     clearStore(); clearTelemetry();
     location.reload();
   };
+
+  const [storageInfo, setStorageInfo] = useState(null);
+  const [noticeDismissed, setNoticeDismissed] = useState(false);
+  useEffect(()=> {
+    let live = true;
+    storageHealth().then((h)=> { if(live) setStorageInfo(h); });
+    return ()=> { live = false; };
+  }, []);
+  const persistStorageNow = async ()=>{
+    const granted = await requestPersistentStorage();
+    setStorageInfo(await storageHealth());
+    setMsg(granted === null
+      ? 'Persistent storage is not supported in this browser — regular exports are your safety net.'
+      : granted
+        ? 'Storage marked persistent — the browser will not evict your data under pressure.'
+        : 'The browser declined persistent storage for now; keep exporting backups.');
+    setTimeout(()=> setMsg(null), 5000);
+  };
+  const integrity = !noticeDismissed ? getIntegrityNotice() : null;
 
   const setTelemetryConsent=(enabled)=>{
     setStore({ ...store, preferences:{ ...(store.preferences||{}), telemetryEnabled:enabled } });
@@ -161,16 +235,43 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
 
       <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
         <h3 className="text-sm font-bold">Backup & portability</h3>
-        <p className="text-xs text-ink3">Local-first — your history lives on this device. Export JSON (full, versioned) or CSV (history only) and restore/merge on another device. No account required.</p>
+        {integrity && (
+          <div role="alert" className="rounded-xl border border-danger/40 bg-dangersoft px-3 py-2 text-xs space-y-1">
+            <p className="font-bold">Stored data needed repair on startup.</p>
+            <p className="text-ink3">A broken copy was kept in quarantine and the readable parts were restored. Nothing was lost silently. Details: {integrity.errors.join(' ')}</p>
+            <button onClick={()=> { clearIntegrityNotice(); setNoticeDismissed(true); }} className="underline font-semibold">Dismiss</button>
+          </div>
+        )}
+        <p className="text-xs text-ink3">Local-first — your history lives on this device. Export JSON (full, versioned), an encrypted backup, or CSV (history only) and restore/merge on another device. No account required.</p>
         <div className="flex flex-wrap gap-2">
           <button onClick={exportNow} className="btn btn-primary min-h-10 rounded-xl px-4">Export JSON</button>
+          <button onClick={exportEncrypted} className="btn btn-primary min-h-10 rounded-xl px-4">Export encrypted</button>
           <button onClick={exportCsv} className="btn btn-secondary min-h-10 rounded-xl px-4">Export CSV</button>
           <button onClick={exportEvents} className="btn btn-secondary min-h-10 rounded-xl px-4">Export events</button>
           <label className="btn btn-secondary min-h-10 rounded-xl px-4 cursor-pointer">
             Import backup
-            <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onPickFile} />
+            <input ref={fileRef} type="file" accept=".arise,.json,application/json" className="hidden" onChange={onPickFile} />
+          </label>
+          <label className="btn btn-secondary min-h-10 rounded-xl px-4 cursor-pointer">
+            Import encrypted
+            <input type="file" accept=".arisebak,application/octet-stream" className="hidden" onChange={onPickEncrypted} />
           </label>
         </div>
+        {storageInfo && (
+          <div className="rounded-xl border border-line bg-surface2 px-3 py-2 text-xs space-y-1">
+            {storageInfo.estimate
+              ? <p>Storage: {storageInfo.estimate.usageMb} MB of about {storageInfo.estimate.quotaMb} MB used{storageInfo.level !== 'ok' ? <span className="font-bold"> — {storageInfo.level === 'critical' ? 'nearly full, export a backup now' : 'getting full'}</span> : null}.</p>
+              : <p>Storage usage cannot be estimated in this browser.</p>}
+            <p className="text-ink3">
+              {storageInfo.persisted === true
+                ? 'The browser has marked Arise’s storage persistent — it will not be evicted under pressure.'
+                : storageInfo.persisted === false
+                  ? 'This data is best-effort: the browser may remove it if space runs out. '
+                  : null}
+              {storageInfo.persisted === false && <button onClick={persistStorageNow} className="underline font-semibold">Request persistent storage</button>}
+            </p>
+          </div>
+        )}
         <div className="flex gap-2 text-xs">
           <label className="flex items-center gap-1.5"><input type="radio" name="strategy" checked={importStrategy==='merge'} onChange={()=> setImportStrategy('merge')} /> Merge</label>
           <label className="flex items-center gap-1.5"><input type="radio" name="strategy" checked={importStrategy==='replace'} onChange={()=> setImportStrategy('replace')} /> Replace</label>
@@ -183,6 +284,8 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
           <pre className="mt-2 overflow-auto rounded-xl bg-surface2 border border-line p-3 text-[11px] leading-relaxed">{JSON.stringify({ app:'arise', version:3, schemaVersion:4, exportedAt:'…', data:{ onboarding:'{goal,equipment,location,level,daysPerWeek,availableMinutes,preferredExerciseIds,dislikedExerciseIds,plateConfig}', activeSchedule:'{programId,sessions}', activeWorkout:'recoverable draft or null', history:'[{id,date,blocks:[{exerciseId,sets:[{reps,weightKg,rpe,side,rom}]}]}]', preferences:'{units,theme,telemetryEnabled,pulseEnabled,healthSummaryEnabled}', eventHistory:'[{id,type,at,payload}]', healthSummary:'optional summary or null' }}, null, 2)}</pre>
         </details>
       </section>
+
+      <StorageDiagnostics setMsg={setMsg} />
 
       <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
         <h3 className="text-sm font-bold">Appearance & accessibility</h3>

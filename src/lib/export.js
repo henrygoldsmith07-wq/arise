@@ -34,6 +34,85 @@ export function downloadJson(filename, obj){
   setTimeout(()=> URL.revokeObjectURL(url), 2000);
 }
 
+// ── Compressed backups ──────────────────────────────────────────────────────
+// A decade of sessions is megabytes of JSON. Exports are gzip-compressed when
+// the browser exposes CompressionStream, and written as a versioned envelope
+// `{ app:'arise', format:'arise+gzip', v:1, encoding:'base64', data }` so an
+// import can tell compressed from plain without guessing. Old browsers fall
+// back to the plain JSON path — every existing file still imports.
+
+export const BACKUP_FORMAT = 'arise+gzip';
+
+function bytesToBase64(bytes){
+  let bin = '';
+  for(const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+function base64ToBytes(b64){
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for(let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function gzipBytes(text){
+  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+async function gunzipBytes(bytes){
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new TextDecoder().decode(await new Response(stream).arrayBuffer());
+}
+
+export function compressionAvailable(){
+  return typeof CompressionStream === 'function' && typeof DecompressionStream === 'function';
+}
+
+/** Serialize + compress. Returns the same envelope shape either way. */
+export async function compressPayload(payload){
+  const json = JSON.stringify(payload);
+  if(!compressionAvailable()) return { envelope: payload, compressed: false };
+  const gz = await gzipBytes(json);
+  // Only worth it when compression actually shrinks (tiny payloads can grow).
+  if(gz.length >= json.length) return { envelope: payload, compressed: false };
+  return {
+    envelope: {
+      app: 'arise',
+      format: BACKUP_FORMAT,
+      v: 1,
+      encoding: 'base64',
+      data: bytesToBase64(gz),
+    },
+    compressed: true,
+  };
+}
+
+/** Reverse of compressPayload for compressed envelopes; passthrough otherwise. */
+export async function decompressPayload(envelope){
+  if(envelope?.format === BACKUP_FORMAT){
+    if(envelope.encoding !== 'base64') throw new Error('Unsupported backup encoding.');
+    const json = await gunzipBytes(base64ToBytes(String(envelope.data || '')));
+    return JSON.parse(json);
+  }
+  return envelope;
+}
+
+/** Serialize (+compress when possible) and trigger a file download. */
+export async function downloadBackup(payload, filename = 'arise-backup.arise'){
+  const { envelope } = await compressPayload(payload);
+  const blob = new Blob([JSON.stringify(envelope)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  setTimeout(()=> URL.revokeObjectURL(url), 2000);
+}
+
+/** Accepts plain JSON text or a compressed envelope object. */
+export async function parseBackupFile(textOrEnvelope){
+  const envelope = typeof textOrEnvelope === 'string' ? JSON.parse(textOrEnvelope) : textOrEnvelope;
+  return decompressPayload(envelope);
+}
+
 // Only these top-level keys may enter the store from an imported file.
 // Anything else in a hand-edited backup is dropped rather than persisted forever.
 // studyParticipantId is the pseudonymous study identity (studyIdentity.js) —
@@ -62,7 +141,10 @@ export function validateStoreData(data){
   if(data.version!=null && (!Number.isInteger(Number(data.version)) || Number(data.version)<1)) errors.push('Schema version must be a positive integer.');
   if(Number(data.version) > STORE_SCHEMA_VERSION) errors.push(`Schema version ${data.version} is newer than this app supports (${STORE_SCHEMA_VERSION}).`);
   if(data.history!=null && !Array.isArray(data.history)) errors.push('History must be an array.');
-  for(const [i,session] of (data.history||[]).entries()){
+  // Iterate only when actually an array — a string/object history must
+  // produce a clean validation error, not a TypeError that escapes the gate.
+  const historyRows = Array.isArray(data.history) ? data.history : [];
+  for(const [i,session] of historyRows.entries()){
     if(!session || typeof session!=='object') { errors.push(`History item ${i+1} is not an object.`); continue; }
     if(!session.id) errors.push(`History item ${i+1} is missing an id.`);
     // dateISO is load-bearing: sorting, week bucketing and training age all key
@@ -75,6 +157,11 @@ export function validateStoreData(data){
   if(data.eventHistory!=null && !Array.isArray(data.eventHistory)) errors.push('Event history must be an array.');
   if(data.evaluationLedger!=null && !Array.isArray(data.evaluationLedger)) errors.push('Evaluation ledger must be an array.');
   if(data.healthSummary!=null && typeof data.healthSummary!=='object') errors.push('Health summary must be an object or null.');
+  // Collections mergeStores/readiness consumers iterate unconditionally — a
+  // non-array here would crash import/boot rather than fail validation.
+  if(data.readinessLog!=null && !Array.isArray(data.readinessLog)) errors.push('Readiness log must be an array.');
+  if(data.programHistory!=null && !Array.isArray(data.programHistory)) errors.push('Program history must be an array.');
+  if(data.customTemplates!=null && !Array.isArray(data.customTemplates)) errors.push('Custom templates must be an array.');
   return { ok: errors.length===0, errors };
 }
 

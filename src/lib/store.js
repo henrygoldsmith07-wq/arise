@@ -178,7 +178,23 @@ export function normaliseHistory(history = []){
   return [...loose, ...byId.values()].sort((a, b)=> String(a?.dateISO || '').localeCompare(String(b?.dateISO || '')) || historyTimestamp(a) - historyTimestamp(b));
 }
 
-export function clearStore(){ try{ localStorage.removeItem(KEY);}catch{} }
+// Deletion must cover EVERY canonical location. Clearing only localStorage
+// left the IndexedDB stores intact, so a deleted account silently
+// resurrected on the next boot when hydration found the IDB payload.
+export async function clearStore(){
+  try{ localStorage.removeItem(KEY); }catch{}
+  try{ localStorage.removeItem('arise.store.v1.pointer'); }catch{}
+  try{ localStorage.removeItem('arise.store.v1.pre-idb-backup'); }catch{}
+  try{ localStorage.removeItem('arise.store.v1.corrupt'); }catch{}
+  try{
+    const { idbClearStore, STORES: IDB_STORES } = await import('./idb.js');
+    for(const store of IDB_STORES) await idbClearStore(store);
+  }catch{}
+  try{
+    const storage = await import('./storage.js');
+    storage.resetHydratedCache();
+  }catch{}
+}
 
 export function runMigrations(raw){
   let j=raw;

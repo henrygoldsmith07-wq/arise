@@ -10,6 +10,7 @@ import { substitutionOptions } from '../lib/substitutions.js';
 import { recordEvent } from '../lib/telemetry.js';
 import { recordRecommendation, markRecommendationOverride } from '../lib/longitudinal.js';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
+import StepperButton from './StepperButton.jsx';
 
 const NOTE_PROMPTS = [
   { id: 'felt-strong', label: 'Felt strong' },
@@ -358,12 +359,30 @@ export default function SessionRunner({ session, history = [], availableEquipmen
         if(String(block.sets[nextIdx].weightKg).trim()==='') carry.weightKg = set.weightKg;
         if(Object.keys(carry).length) updateSet(bi,nextIdx,carry);
       }
+      // One-thumb flow: the field you edit between sets is the NEXT set's
+      // reps. Auto-advance focus there so the keyboard is up and its content
+      // selected during the rest countdown — a new number, or a stepper tap,
+      // lands without hunting for the row.
+      const nextSet = blocks[bi]?.sets?.findIndex((s,j)=> j>si && !s.completed);
+      if(nextSet !== -1 && nextSet != null){
+        requestAnimationFrame(()=> {
+          const el = rootRef.current?.querySelector(`input[aria-label="Reps set ${nextSet + 1}"]`);
+          el?.focus({ preventScroll: false });
+          el?.select?.();
+        });
+      }
       // Auto-start the rest countdown unless the user turned it off
       // (preferences.autoRest, default on). Manual Start rest stays as override.
       if(preferences?.autoRest !== false && hasUnfinishedSet(blocks,bi,si)) startRest(block.restSec, EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId);
     }
   };
   const addSet = (bi)=> setBlocks(prev=> prev.map((b,i)=> i!==bi? b : { ...b, sets: [...b.sets, newSet('', b.unilateral, b.sets[b.sets.length-1])] }));
+  // One-thumb adjustment for the set being logged: reps move in whole reps,
+  // clamped at zero. The stepper carries the tap; the input stays typable.
+  const adjustReps = (bi, si, delta)=>{
+    const current = parseNum(blocks[bi]?.sets?.[si]?.reps);
+    updateSet(bi, si, { reps: String(Math.max(0, current + delta)) });
+  };
   const duplicateUnilateral = (bi)=> setBlocks(prev=> prev.map((b,i)=>{
     if(i!==bi || !b.unilateral) return b;
     const last=b.sets[b.sets.length-1]; if(!last) return b;
@@ -585,11 +604,22 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                 <div className="grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] gap-1.5 text-[10px] font-bold uppercase tracking-widest text-ink3 px-1">
                   <span>#</span><span>Load kg</span><span>Reps</span><span>RIR</span><span>{b.unilateral?'L/R':''}</span><span>Done</span><span></span>
                 </div>
-                {b.sets.map((s,si)=> (
+                {b.sets.map((s,si)=> {
+                  const activeSetIdx = b.sets.findIndex(x=> !x.completed);
+                  const isActive = si === activeSetIdx; // the row being logged now
+                  return (
                   <div key={si} className="grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] gap-1.5 items-center">
                     <span className={`w-7 h-7 grid place-items-center rounded-full border text-xs font-bold tabular-nums ${s.completed?'bg-success text-bg border-success':'bg-surface2 border-line'}`}>{si+1}</span>
                     <input type="number" min="0" step="0.5" inputMode="decimal" value={s.weightKg} onChange={e=> updateSet(bi,si,{weightKg:e.target.value})} placeholder={supportsWeighted?'22':'bw'} aria-label={`Load set ${si+1} in kilograms`} className={`min-w-0 rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
+                    {isActive ? (
+                      <div className="flex items-center gap-1 min-w-0">
+                        <StepperButton label="−" ariaLabel={`Decrease reps set ${si+1}`} onStep={()=> adjustReps(bi,si,-1)} className="w-9 px-0" />
+                        <input type="number" min="0" step="1" inputMode="numeric" value={s.reps} onChange={e=> updateSet(bi,si,{reps:e.target.value})} placeholder="9" aria-label={`Reps set ${si+1}`} className={`min-w-0 flex-1 rounded-xl border border-line bg-surface2 px-1 py-2 text-xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
+                        <StepperButton label="+" ariaLabel={`Increase reps set ${si+1}`} onStep={()=> adjustReps(bi,si,1)} className="w-9 px-0" />
+                      </div>
+                    ) : (
                     <input type="number" min="0" step="1" inputMode="numeric" value={s.reps} onChange={e=> updateSet(bi,si,{reps:e.target.value})} placeholder="9" aria-label={`Reps set ${si+1}`} className={`min-w-0 rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
+                    )}
                     <input type="number" min="0" max="10" step="1" inputMode="numeric" value={rirFromRpe(s.rpe)} onChange={e=> updateSet(bi,si,{rpe:rpeFromRir(e.target.value)})} placeholder="—" aria-label={`Reps in reserve set ${si+1}`} className={`min-w-0 rounded-xl border border-line bg-surface2 px-1 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
                     {b.unilateral ? (
                       <select value={s.side||'L'} onChange={e=> updateSet(bi,si,{side:e.target.value})} aria-label={`Side set ${si+1}`} className="min-w-0 rounded-xl border border-line bg-surface2 px-1 py-3 text-xs font-bold"><option value="L">L</option><option value="R">R</option></select>
@@ -597,7 +627,8 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     <button onClick={()=> completeSet(bi,si)} aria-pressed={s.completed} className={`min-h-12 px-2.5 rounded-xl border text-[11px] font-bold whitespace-nowrap ${s.completed?'bg-success text-bg border-success':'bg-surface2 border-line'}`}>{s.completed?'✓':'Done'}</button>
                     <button onClick={()=> removeSet(bi,si)} aria-label={`Remove set ${si+1}`} className="relative w-9 h-9 grid place-items-center rounded-full border border-line text-ink3 before:absolute before:-inset-1.5 before:rounded-full before:content-['']">×</button>
                   </div>
-                ))}
+                  );
+                })}
                 {(supportsAssisted || b.unilateral) && b.sets.length>0 && (
                   <div className="grid grid-cols-2 gap-2">
                     {supportsAssisted && <label className="text-[11px]">Assisted kg off (all sets) <input value={b.sets[0]?.assistedKg||''} onChange={e=> { const v=e.target.value; setBlocks(prev=> prev.map((blk,idx)=> idx!==bi?blk:{...blk, sets: blk.sets.map(x=> ({...x, assistedKg:v}))})); }} placeholder="e.g. 10" className="ml-1 rounded-lg border border-line bg-surface2 px-2 py-1 text-xs w-20" /></label>}

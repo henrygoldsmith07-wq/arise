@@ -145,6 +145,8 @@ function hasConsent(preferences){
   return preferences?.telemetryEnabled === true;
 }
 
+export { hasConsent };
+
 function bestSetOfBlock(block){
   let best = null;
   for(const set of block?.sets || []){
