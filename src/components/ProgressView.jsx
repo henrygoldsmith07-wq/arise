@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { deriveAttributes, levelFromAttributes } from '../lib/attributes.js';
 import { totalVolumeKg, streakDays } from '../lib/store.js';
 import { EXERCISE_BY_ID } from '../lib/data.js';
@@ -6,7 +6,7 @@ import { weeklyVolume, frequencyByMuscleSync, volumeLandmarks, volumeDistributio
 import { strengthTrendWithConfidence, classifyPR } from '../lib/progression.js';
 import { exerciseHistorySummary, plateauDetection, programAdherence, recommendationCalibration, validateDeloadLogic } from '../lib/programming.js';
 import { badSessionAttribution, plateauAttribution } from '../lib/sessionQuality.js';
-import { longitudinalSummary } from '../lib/longitudinal.js';
+import { longitudinalSummaryAsync } from '../lib/analyticsWorker.js';
 
 export default function ProgressView({ store }){
   const attrs = useMemo(()=> deriveAttributes(store.history), [store.history]);
@@ -38,7 +38,17 @@ export default function ProgressView({ store }){
     profile: { availableEquipment: store.onboarding?.equipment || [] },
   }), [history, store.readinessLog, store.activeSchedule, store.onboarding?.equipment]);
   const badAttribution = useMemo(()=> badSessionAttribution(history, { readinessLog: store.readinessLog || [] }), [history, store.readinessLog]);
-  const longitudinal = useMemo(()=> longitudinalSummary({ preferences: store.preferences }), [store.preferences]);
+  // Longitudinal evaluation runs off the main thread (analyticsWorker): it is
+  // the heaviest computation on this screen and previously blocked the first
+  // paint of Progress on a long history. The async wrapper resolves to the
+  // same shape; until it lands we render '—' (one frame on inline fallback).
+  const [longitudinal, setLongitudinal] = useState(null);
+  const prefsKey = store.preferences?.telemetryEnabled === true ? 'on' : 'off';
+  useEffect(()=> {
+    let live = true;
+    longitudinalSummaryAsync({ preferences: store.preferences }).then((result)=> { if(live) setLongitudinal(result); });
+    return ()=> { live = false; };
+  }, [prefsKey]);
   const evaluation = longitudinal?.evaluation || null;
   const formatSegment = segment=> {
     if(!segment || !segment.resolved) return '—';

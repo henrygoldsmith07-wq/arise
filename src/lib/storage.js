@@ -19,7 +19,10 @@
 // ({ __ariseIdb: true }) plus a minimal preferences copy so index.html can
 // still theme before first paint. Rollback = delete DB; old data pointer kept.
 
-import { idbGet, idbGetAll, idbPut, idbDelete, STORES } from './idb.js';
+import { idbGet, idbGetAll, idbPut, idbDelete, idbClearStore, STORES } from './idb.js';
+import { idbTransaction } from './idb-tx.js';
+import { enforceIntegrity, quarantineBrokenStore } from './integrity.js';
+import { captureSnapshot } from './snapshots.js';
 
 const LS_KEY = 'arise.store.v1';
 const POINTER_KEY = 'arise.store.v1.pointer';
@@ -83,18 +86,33 @@ function historyOf(store){
 
 export async function persistStore(store){
   const d = decompose(store);
-  await Promise.all([
-    idbPut('profile', d.profile),
-    idbDelete('sessions').then(()=> Promise.all(d.sessions.map(s => idbPut('sessions', s)))),
-    idbDelete('sets').then(()=> Promise.all(d.sets.map(s => idbPut('sets', s)))),
-    idbPut('programme', d.programme),
-    idbDelete('adaptations').then(()=> Promise.all(d.adaptations.map(a => idbPut('adaptations', a)))),
-    idbDelete('recommendations').then(()=> Promise.all(d.recommendations.map(r => idbPut('recommendations', r)))),
-    idbDelete('outcomes').then(()=> Promise.all(d.outcomes.map(o => idbPut('outcomes', o)))),
-    idbDelete('events').then(()=> Promise.all(d.events.map(e => idbPut('events', e)))),
-    idbPut('readiness', d.readiness),
-    idbDelete('templates').then(()=> Promise.all(d.templates.map(t => idbPut('templates', t)))),
-  ]);
+  // One transaction across every touched store: a save is all-or-nothing.
+  // The previous clear-then-put-per-store storm could leave stores from
+  // different points in time after a mid-save crash, and recomposition then
+  // silently produced a half-saved world (history without its programme,
+  // ledger rows split across two stores).
+  await idbTransaction(
+    ['profile','sessions','sets','programme','adaptations','recommendations','outcomes','events','readiness','templates'],
+    (ops)=> {
+      ops.put('profile', d.profile);
+      ops.clearStore('sessions');
+      for(const s of d.sessions) ops.put('sessions', s);
+      ops.clearStore('sets');
+      for(const s of d.sets) ops.put('sets', s);
+      ops.put('programme', d.programme);
+      ops.clearStore('adaptations');
+      for(const a of d.adaptations) ops.put('adaptations', a);
+      ops.clearStore('recommendations');
+      for(const r of d.recommendations) ops.put('recommendations', r);
+      ops.clearStore('outcomes');
+      for(const o of d.outcomes) ops.put('outcomes', o);
+      ops.clearStore('events');
+      for(const e of d.events) ops.put('events', e);
+      ops.put('readiness', d.readiness);
+      ops.clearStore('templates');
+      for(const t of d.templates) ops.put('templates', t);
+    },
+  );
   // Demote localStorage to a pointer + paint-critical prefs.
   try{
     const legacy = lsRead();
@@ -159,6 +177,7 @@ async function migrateLegacy(){
 export function hydrateStorage(){
   if(hydratePromise) return hydratePromise;
   hydratePromise = (async ()=>{
+    cleared = false; // a re-hydrate after deliberate clearing starts fresh
     await migrateLegacy();
     let store = await loadStoreFromIdb();
     if(!store){
@@ -168,11 +187,65 @@ export function hydrateStorage(){
       store = legacy && !legacy.__ariseIdb ? legacy : null;
       if(store) await persistStore(store);
     }
+    if(store){
+      // Boot gate: the recomposed whole must satisfy the same strict schema
+      // imported backups do. A failed check is quarantined (recoverable) and
+      // repaired (defaults + per-row salvage) rather than handed to the app.
+      const checked = enforceIntegrity(store);
+      if(checked.repaired){
+        await quarantineBrokenStore(store, checked.errors);
+        store = checked.store;
+        // Persist the repair immediately so the broken shape cannot hydrate
+        // again on the next boot.
+        try{ await persistStore(store); }catch{}
+        integrityNotice = {
+          at: new Date().toISOString(),
+          errors: checked.errors.slice(0, 5),
+        };
+      }
+      // Automatic local backup: a last-known-good snapshot at every boot
+      // (rate-limited by snapshots.js), forced past the rate limit right
+      // after a repair so the repaired state itself becomes recoverable.
+      try{ await captureSnapshot({ force: Boolean(integrityNotice), reason: integrityNotice ? 'post-repair' : 'boot' }); }catch{}
+    }
     cache = store || undefined;
     return cache || null;
   })();
   return hydratePromise;
 }
+
+// Set when boot validation had to quarantine + repair; the app surfaces it
+// once (More → Data) so recovery is visible instead of silent.
+let integrityNotice = null;
+export function getIntegrityNotice(){ return integrityNotice; }
+export function clearIntegrityNotice(){ integrityNotice = null; }
+
+// Full reset (account deletion, restore-from-scratch): forget the hydrated
+// cache and the one-time migration marker so the next boot starts clean.
+export function resetHydratedCache(){
+  cache = undefined;
+  hydratePromise = null;
+  integrityNotice = null;
+}
+
+// Deletion across every canonical location. `cleared` makes queued (not yet
+// started) persist writes no-op, so a save in flight at tap time cannot
+// resurrect the data a moment after the stores were cleared. A write already
+// executing is harmless: IndexedDB serializes overlapping transactions, so
+// the clear below commits after it and wins.
+let cleared = false;
+export async function clearAllStoredData(){
+  cleared = true;
+  resetHydratedCache();
+  try{
+    await idbTransaction([...STORES], (ops)=> { for(const s of STORES) ops.clearStore(s); });
+  }catch{
+    for(const s of STORES){ try{ await idbClearStore(s); }catch{} }
+  }
+  try{ localStorage.removeItem(POINTER_KEY); }catch{}
+}
+
+export function isCleared(){ return cleared; }
 
 // ── Sync-facing surface backed by the cache ─────────────────────────────
 
@@ -187,7 +260,8 @@ export function getCachedStore(){
 let writeQueue = Promise.resolve();
 const pendingWrites = new Set();
 function enqueueWrite(fn){
-  const run = writeQueue.then(fn);
+  if(cleared) return Promise.resolve();
+  const run = writeQueue.then(()=> { if(cleared) return undefined; return fn(); });
   const tracked = run.catch(()=>{});
   pendingWrites.add(tracked);
   void tracked.finally(()=> pendingWrites.delete(tracked));
@@ -200,4 +274,13 @@ export function whenPersisted(){
 export function setCachedStore(store){
   cache = store;
   void enqueueWrite(()=> persistStore(store));
+}
+
+// Shrink the data-loss window: a save is async and a user can close the tab
+// the moment a set is logged. Flush pending writes when the page hides or is
+// being unloaded — the transaction makes each flush all-or-nothing.
+if(typeof window !== 'undefined' && typeof window.addEventListener === 'function'){
+  const flush = ()=> { void whenPersisted(); };
+  window.addEventListener('pagehide', flush);
+  window.addEventListener('visibilitychange', ()=> { if(document.visibilityState === 'hidden') flush(); });
 }
