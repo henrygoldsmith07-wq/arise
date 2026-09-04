@@ -45,6 +45,15 @@ html.reduce-motion .settings-flash { animation: none }
 /* Reduced motion: the app-level preference (any animation/transition off,
    regardless of OS) and the OS setting itself (for users who never open
    settings). scroll-behavior stays auto — smooth scrolling is motion too. */
+/* Standalone PWA: iOS black-translucent status bar draws over the app —
+   pad the top by the real inset. Browser tabs keep zero. */
+body.standalone {
+  padding-top: env(safe-area-inset-top);
+}
+body.standalone header {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

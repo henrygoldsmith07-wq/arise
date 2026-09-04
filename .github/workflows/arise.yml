@@ -57,6 +57,8 @@ jobs:
         run: npx playwright install --with-deps
       - name: Run Playwright E2E
         run: npx playwright test --reporter=list
+      - name: Run Playwright E2E (PWA, production build)
+        run: npm run e2e:pwa -- --reporter=list
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v4

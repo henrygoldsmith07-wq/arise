@@ -25,7 +25,8 @@
     "e2e": "playwright test",
     "e2e:ci": "playwright test --reporter=list",
     "bundle:budget": "node scripts/bundle-budget.cjs",
-    "audit:deps": "npm audit --omit=dev --audit-level=high"
+    "audit:deps": "npm audit --omit=dev --audit-level=high",
+    "e2e:pwa": "npm run build && playwright test --config playwright.pwa.config.js"
   },
   "dependencies": {
     "react": "^18.3.1",

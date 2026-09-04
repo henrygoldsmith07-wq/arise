@@ -1,8 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// pwa.spec.js needs the PRODUCTION build (service worker is PROD-only);
+// it runs via `npm run e2e:pwa` (playwright.pwa.config.js, vite preview).
 export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.spec.js',
+  testIgnore: '**/pwa.spec.js',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
