@@ -10,6 +10,12 @@ import { formatPlateStack } from '../lib/plates.js';
 import { substitutionOptions } from '../lib/substitutions.js';
 import { recordEvent } from '../lib/telemetry.js';
 import { recordRecommendation, markRecommendationOverride } from '../lib/longitudinal.js';
+import { quickJumps, applyQuickJump, skipTo, restPresetFor } from '../lib/gymMode.js';
+import { SESSION_QUALITY_OPTIONS, sessionQualityLabel } from '../lib/gymMode.js';
+import { createWakeLock } from '../lib/wakeLock.js';
+import { restStartCue, restCompleteCue } from '../lib/audioCues.js';
+import { speak, cancelSpeech } from '../lib/voiceCoach.js';
+import { LoadNumpad, RestDock, swipeRowHandlers } from './GymModePanel.jsx';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
 import StepperButton from './StepperButton.jsx';
 
@@ -154,16 +160,29 @@ function hasUnfinishedSet(blocks, bi, si){
   return false;
 }
 
-export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, studyEnrollment = null, participantId = null, onDraftChange, onSave, onCancel }){
+export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, appPrefs = null, gymPrefs = null, onSetRestPreset = null, studyEnrollment = null, participantId = null, onDraftChange, onSave, onCancel }){
   const [blocks,setBlocks]=useState(()=> session.blocks.map((b,i)=> normaliseBlock(b, history, draft?.blocks?.[i])));
   const [note,setNote]=useState(()=> draft?.note || '');
   const [noteTags,setNoteTags]=useState(()=> draft?.noteTags || []);
   const [restEndsAt,setRestEndsAt]=useState(()=> draft?.restEndsAt || null);
   const [restLabel,setRestLabel]=useState(()=> draft?.restLabel || '');
+  const [restExerciseId,setRestExerciseId]=useState(()=> draft?.restExerciseId || null);
   const [clock,setClock]=useState(()=> Date.now());
   const [swapOpen,setSwapOpen]=useState(null);
   const [discardConfirmOpen,setDiscardConfirmOpen]=useState(false);
   const [restAnnouncement,setRestAnnouncement]=useState('');
+  const [qualityRating,setQualityRating]=useState(()=> draft?.quality || null);
+  const [skipQuery,setSkipQuery]=useState('');
+  // ── Gym Mode state ──
+  // gymMode: focus mode (one block at a time). focusIdx drives it and resets
+  // whenever the focused block completes. keypadOpen: which set row's load
+  // numpad is open (null = closed) — long-press or the field's ✛ opens it.
+  // Persisted choice wins (resume), else the More → Gym mode default.
+  const [gymMode,setGymMode]=useState(()=> draft?.gymMode != null ? draft.gymMode === true : appPrefs?.focusDefault === true);
+  const [focusIdx,setFocusIdx]=useState(0);
+  const [keypadOpen,setKeypadOpen]=useState(null);
+  const wakeLockRef=useRef(null);
+  const announcedRestRef=useRef(null);
   const draftRef=useRef(null);
   const rootRef=useRef(null);
   const closeRef=useRef(null);
@@ -188,6 +207,9 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     window.addEventListener('keydown', onKey);
     return ()=> window.removeEventListener('keydown', onKey);
   }, [onCancel, swapOpen, discardConfirmOpen, blocks]);
+
+  // Leaving the runner stops any queued speech.
+  useEffect(()=> ()=> { try{ cancelSpeech(); }catch{} }, []);
 
   // Dialog semantics: move focus in on mount, restore it on unmount.
   useEffect(()=>{
@@ -219,14 +241,25 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     return ()=> clearInterval(id);
   }, [restEndsAt]);
 
+  // Gym Mode: keep the screen awake for the whole session. Opt-in preference,
+  // always released on unmount; the handle re-acquires across tab switches.
+  useEffect(()=>{
+    if(appPrefs?.wakeLock !== true) return undefined;
+    const lock = createWakeLock();
+    wakeLockRef.current = lock;
+    lock.acquire();
+    return ()=> { wakeLockRef.current = null; lock.release(); };
+  }, [appPrefs?.wakeLock]);
+
   const restLeft = restEndsAt ? Math.max(0, Math.ceil((restEndsAt-clock)/1000)) : null;
   useEffect(()=>{
     if(restEndsAt && restEndsAt <= Date.now()){
       setRestEndsAt(null);
       setRestAnnouncement('Rest complete — next set.');
       try{ navigator.vibrate?.(180); }catch{}
+      if(appPrefs?.soundCues !== false) restCompleteCue();
     }
-  }, [restEndsAt, clock]);
+  }, [restEndsAt, clock, appPrefs?.soundCues]);
 
   // Persist every meaningful interaction. localStorage is synchronous, so the
   // latest set is available even if the page crashes before React unmounts.
@@ -237,15 +270,18 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       blocks,
       note,
       noteTags,
+      gymMode,
       restEndsAt,
       restLabel,
+      restExerciseId,
       startedAt:startedAtRef.current,
       lastSetAt:lastSetAtRef.current,
+      quality: qualityRating || undefined,
       updatedAt: new Date().toISOString(),
     };
     draftRef.current = nextDraft;
     onDraftChange?.(nextDraft);
-  }, [blocks, note, noteTags, restEndsAt, restLabel, session, onDraftChange]);
+  }, [blocks, note, noteTags, gymMode, restEndsAt, restLabel, restExerciseId, qualityRating, session, onDraftChange]);
 
   useEffect(()=>{
     const persistOnPageHide=()=>{
@@ -287,22 +323,34 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     }
   }, [blocks, history, session.id, session.dateISO, plateConfig, measurementConsent, study, studyEnrollment, participantId]);
 
-  const startRest=(seconds,label)=>{
+  const startRest=(seconds,label,exerciseId=null)=>{
     const sec=Number(seconds)||0;
     if(sec<=0){ setRestEndsAt(null); return; }
     setRestLabel(label);
+    setRestExerciseId(exerciseId);
     setRestEndsAt(Date.now() + sec*1000);
     setClock(Date.now());
     // Announce once, politely — the ticking countdown itself must not flood
     // screen readers (a11y baseline: live regions announce without flooding).
     setRestAnnouncement(`Rest started for ${label}: ${fmtRest(sec)}.`);
+    if(appPrefs?.soundCues !== false) restStartCue();
+    try{ navigator.vibrate?.(60); }catch{}
+    if(appPrefs?.voiceCoach === true) speak(`Rest ${fmtRest(sec)} for ${label}.`, Number(appPrefs?.voiceRate) || 1);
   };
 
-  // Policy + explanation mode flow from user preferences (More → Training).
-  // The standard policy is a passthrough, so users who never touch the setting
-  // get exactly the engine behaviour this component has always had.
-  const policy = POLICY_ORDER.includes(preferences?.progressionPolicy) ? preferences.progressionPolicy : 'standard';
-  const explanationMode = ['simple', 'standard', 'advanced'].includes(preferences?.explanationMode) ? preferences.explanationMode : 'standard';
+  // ── Preferences. Two sources, two jobs: ──
+  // appPrefs (store.preferences) owns session-wide behaviour: progression
+  // policy, explanation mode, auto-rest, sound cues, voice coach, wake lock.
+  // preferences (the onboarding payload) owns programme taste: liked/disliked
+  // movements for substitutions.
+  // NOTE: policy and explanation mode previously read `preferences` here —
+  // the onboarding object — so the More → Training settings never reached
+  // standard sessions. Fixed by reading appPrefs.
+  const appPolicy = POLICY_ORDER.includes(appPrefs?.progressionPolicy) ? appPrefs.progressionPolicy : 'standard';
+  const appExplanationMode = ['simple', 'standard', 'advanced'].includes(appPrefs?.explanationMode) ? appPrefs.explanationMode : 'standard';
+  // Gym Mode preference: auto-rest on completion (default on) and audio set
+  // cues honour their own switches; gymMode defaults to the persisted opt-in.
+  const audioCueOn = appPrefs?.soundCues !== false;
 
   // Recommendations and previous-performance lookups scan the full history;
   // compute them once per change instead of once per block per keystroke.
@@ -313,11 +361,11 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       // Randomised trial: the assigned arm decides which policy runs.
       const arm = assignmentFor(studyEnrollment, b.exerciseId);
       assigned.set(b.exerciseId, arm);
-      recs.set(b.exerciseId, getRecommendation(b,history,session.dateISO,plateConfig,study,arm, policy, explanationMode));
+      recs.set(b.exerciseId, getRecommendation(b,history,session.dateISO,plateConfig,study,arm, appPolicy, appExplanationMode));
       prevs.set(b.exerciseId, lastExerciseSets(history,b.exerciseId));
     }
     return { recs, prevs, assigned };
-  },[blocks,history,session.dateISO,plateConfig,studyEnrollment,policy,explanationMode]);
+  },[blocks,history,session.dateISO,plateConfig,studyEnrollment,appPolicy,appExplanationMode]);
 
   const volume = useMemo(()=>{
     let total=0;
@@ -330,7 +378,14 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   const totalSets = blocks.reduce((n,b)=> n+b.sets.length, 0);
   const completedSets = blocks.reduce((n,b)=> n+b.sets.filter(s=> s.completed).length, 0);
 
+  // Gym Mode skip-to: index into the full block list for the first match.
+  const skipTarget = useMemo(()=> skipTo(blocks, skipQuery), [blocks, skipQuery]);
+
   const updateSet = (bi, si, patch)=>{
+    // Guard against the rare stale-closure path (gesture completion after a
+    // reorder): a set row that no longer exists must not resurrect as an edit
+    // of the wrong row.
+    if(!blocks[bi]?.sets?.[si]) return;
     if((patch.reps!==undefined || patch.weightKg!==undefined) && !dismissedRecommendationRef.current.has(bi)){
       dismissedRecommendationRef.current.add(bi);
       recordEvent('recommendation:dismissed', { sessionId:session.id, exerciseId:blocks[bi]?.exerciseId, reason:'manual set edit' });
@@ -358,6 +413,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
         sessionElapsedMs:Math.max(0,now-Date.parse(startedAtRef.current)),
       });
       lastSetAtRef.current=new Date(now).toISOString();
+      if(audioCueOn){ try{ const ctx=new (window.AudioContext||window.webkitAudioContext)(); const o=ctx.createOscillator(); const g=ctx.createGain(); o.connect(g); g.connect(ctx.destination); o.frequency.value=880; g.gain.setValueAtTime(0.08, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.18); o.start(); o.stop(ctx.currentTime+0.2); setTimeout(()=> ctx.close(), 300); }catch{} }
       // Carry-forward: prefill the next unfinished row with what you just did,
       // so between-set logging is one tap (Done) per set.
       const nextIdx = block.sets.findIndex((s,j)=> j>si && !s.completed && (String(s.reps).trim()==='' || String(s.weightKg).trim()===''));
@@ -381,7 +437,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       }
       // Auto-start the rest countdown unless the user turned it off
       // (preferences.autoRest, default on). Manual Start rest stays as override.
-      if(preferences?.autoRest !== false && hasUnfinishedSet(blocks,bi,si)) startRest(block.restSec, EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId);
+      if(preferences?.autoRest !== false && appPrefs?.autoRest !== false && hasUnfinishedSet(blocks,bi,si)) startRest(restPresetFor(gymPrefs, block.exerciseId, block.restSec) || block.restSec, EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId, block.exerciseId);
     }
   };
   const addSet = (bi)=> setBlocks(prev=> prev.map((b,i)=> i!==bi? b : { ...b, sets: [...b.sets, newSet('', b.unilateral, b.sets[b.sets.length-1])] }));
@@ -397,6 +453,32 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     return { ...b, sets: [...b.sets, { ...last, side:last.side==='L'?'R':'L', completed:false }] };
   }));
   const removeSet = (bi,si)=> setBlocks(prev=> prev.map((b,i)=> i!==bi? b : { ...b, sets: b.sets.filter((_,j)=> j!==si) }));
+  // Gym Mode: mark a set failed (attempted, didn't get the reps). Persisted as
+  // `failed: true`, which the store already normalises.
+  const markFailed = (bi,si)=>{
+    if(!blocks[bi]?.sets?.[si]) return;
+    updateSet(bi,si,{ failed: true, completed: false });
+    try{ navigator.vibrate?.([80, 40, 80]); }catch{}
+  };
+
+  // Focus mode navigation: next block with an unfinished set, wrapping once.
+  // Returns false when everything is done — the runner then shows all blocks.
+  const focusModeNext = ()=>{
+    setFocusIdx(idx=>{
+      for(let step=1; step<=blocks.length; step++){
+        const j = (idx + step) % blocks.length;
+        if(blocks[j]?.sets.some(s=> !s.completed && !s.failed)) return j;
+      }
+      return idx;
+    });
+  };
+  // Reset to the first actionable block whenever focus mode turns on or the
+  // focused block finishes (last set completed/failed).
+  useEffect(()=>{
+    if(!gymMode) return;
+    const b = blocks[focusIdx];
+    if(!b || b.sets.every(s=> s.completed || s.failed)) focusModeNext();
+  }, [gymMode, focusIdx, blocks]);
 
   const swapBlock = (bi, option)=>{
     setBlocks(prev=> prev.map((b,i)=>{
@@ -504,6 +586,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       note: finalNote || undefined,
       noteTags: noteTags.length ? noteTags : undefined,
       sessionDuration: durationMinutes,
+      quality: qualityRating || undefined,
     };
     onSave(payload);
   };
@@ -517,20 +600,64 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">{session.mode === 'short' ? 'Short session' : 'Session'}</p>
           <p className="font-bold truncate">{session.title} • {session.dateISO}</p>
         </div>
-        <span className="ml-auto text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums">{completedSets}/{totalSets} sets • {volume} kg</span>
+        <div className="ml-auto flex items-center gap-2 shrink-0">
+          <button
+            onClick={()=> setGymMode(v=> !v)}
+            aria-pressed={gymMode}
+            title={gymMode ? 'Gym mode: focus on — one exercise at a time' : 'Gym mode: focus off'}
+            className={`min-h-11 min-w-11 grid place-items-center rounded-full border text-base ${gymMode ? 'bg-ink text-bg border-ink' : 'border-line bg-surface2'}`}
+          >🏋️</button>
+          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums">{completedSets}/{totalSets} sets • {volume} kg</span>
+        </div>
         <div aria-hidden className="absolute inset-x-0 bottom-0 h-1 bg-surface2">
           <div className="h-full bg-success bar-anim" style={{ width: `${totalSets ? Math.round(completedSets/totalSets*100) : 0}%` }} />
         </div>
       </div>
 
       <div className="flex-1 overflow-auto px-4 pt-5 pb-6 space-y-4 max-w-3xl w-full mx-auto">
+        {gymMode && (
+          <div className="rounded-2xl border border-line bg-surface2 px-3 py-2 flex items-center gap-2">
+            <span className="text-base" aria-hidden>🎯</span>
+            <span className="text-xs"><strong>Focus mode:</strong> one exercise at a time. Swipe a row right to complete it, left to mark it failed, or long-press it to open the load keypad.</span>
+          </div>
+        )}
+
+        {!gymMode && (
         <div className="rounded-2xl border border-line bg-surface2 px-3 py-2.5 text-xs flex items-center gap-2">
           <span className="text-base" aria-hidden>⚡</span>
           <span><strong>Fast logging:</strong> previous reps and load are prefilled. Edit them directly, then tap <strong>Done</strong> once the set is complete.</span>
         </div>
+        )}
+
+        {gymMode && (
+          <div role="search">
+            <input
+              type="search"
+              value={skipQuery}
+              onChange={e=> setSkipQuery(e.target.value)}
+              placeholder="Skip to exercise…"
+              aria-label="Skip to exercise"
+              className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm"
+            />
+            {skipQuery && (
+              skipTarget ? (
+                <button
+                  onClick={()=>{ setSkipQuery(''); setFocusIdx(skipTarget.blockIndex); document.getElementById(`block-${skipTarget.blockIndex}`)?.scrollIntoView({ behavior:'smooth', block:'start' }); }}
+                  className="mt-1.5 w-full rounded-xl border border-line bg-surface px-3 py-2 text-left text-xs hover:border-ink3"
+                >
+                  Jump to <strong>{EXERCISE_BY_ID[blocks[skipTarget.blockIndex]?.exerciseId]?.name || blocks[skipTarget.blockIndex]?.exerciseId}</strong>
+                  {skipTarget.blockIndex !== focusIdx ? ' (next unfinished set highlighted)' : ''}
+                </button>
+              ) : (
+                <p className="mt-1.5 text-[11px] text-ink3 px-1">No exercise in this session matches “{skipQuery}”.</p>
+              )
+            )}
+          </div>
+        )}
 
         {blocks.map((b,bi)=>{
           const ex=EXERCISE_BY_ID[b.exerciseId];
+          if(gymMode && bi !== focusIdx) return null;
           const prev=blockMeta.prevs.get(b.exerciseId) || null;
           const supportsWeighted=ex?.supportsWeighted;
           const supportsAssisted=ex?.supportsAssisted;
@@ -549,7 +676,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
             dislikedExerciseIds: preferences?.dislikedExerciseIds || [],
           }).filter(o=> o.id && o.id!==swapOrigin) : [];
           return (
-            <div key={`${b.exerciseId}-${bi}`} className="rounded-2xl border border-line bg-surface p-3 space-y-3">
+            <div key={`${b.exerciseId}-${bi}`} id={`block-${bi}`} className={`rounded-2xl border bg-surface p-3 space-y-3 ${gymMode && skipQuery && skipTarget?.blockIndex === bi ? 'border-ink ring-2 ring-ink/30' : 'border-line'}`}>
               <div className="flex items-start justify-between gap-3">
                 <ExerciseIllustration exerciseId={b.exerciseId} size="md" />
                 <div className="min-w-0">
@@ -590,7 +717,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                   </details>
                 </div>
                 <div className="flex gap-1.5 shrink-0 flex-wrap justify-end max-w-[190px]">
-                  {b.restSec ? <button onClick={()=> startRest(b.restSec, ex?.name || b.exerciseId)} className="relative text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">Start rest</button> : null}
+                  {b.restSec ? <button onClick={()=> startRest(restPresetFor(gymPrefs, b.exerciseId, b.restSec) || b.restSec, ex?.name || b.exerciseId, b.exerciseId)} className="relative text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">Start rest</button> : null}
                   <button onClick={()=> setSwapOpen(swapOpen===bi ? null : bi)} aria-expanded={swapOpen===bi} className="relative text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">Swap</button>
                   <button onClick={()=> addSet(bi)} className="relative min-h-[32px] text-xs font-bold px-3 py-1.5 rounded-full bg-ink text-bg before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">+ Set</button>
                   {b.unilateral ? <button onClick={()=> duplicateUnilateral(bi)} className="relative text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">+ other side</button> : null}
@@ -620,10 +747,23 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                 {b.sets.map((s,si)=> {
                   const activeSetIdx = b.sets.findIndex(x=> !x.completed);
                   const isActive = si === activeSetIdx; // the row being logged now
+                  // Gym Mode row gestures: right = complete, left = failed,
+                  // long-press = load keypad. Buttons/inputs stay exclusive.
+                  const gestures = gymMode && !s.completed ? swipeRowHandlers({
+                    onComplete: ()=> completeSet(bi,si),
+                    onFail: ()=> markFailed(bi,si),
+                    onLongPress: ()=> setKeypadOpen(`${bi}:${si}`),
+                  }) : null;
                   return (
-                  <div key={si} className="grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] gap-1.5 items-center">
-                    <span className={`w-7 h-7 grid place-items-center rounded-full border text-xs font-bold tabular-nums ${s.completed?'bg-success text-bg border-success':'bg-surface2 border-line'}`}>{si+1}</span>
-                    <input type="number" min="0" step="0.5" inputMode="decimal" value={s.weightKg} onChange={e=> updateSet(bi,si,{weightKg:e.target.value})} placeholder={supportsWeighted?'22':'bw'} aria-label={`Load set ${si+1} in kilograms`} className={`min-w-0 rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
+                  <div key={si} {...(gestures ? { onPointerDown:gestures.onPointerDown, onPointerMove:gestures.onPointerMove, onPointerUp:gestures.onPointerUp, onPointerLeave:gestures.onPointerLeave, onPointerCancel:gestures.onPointerCancel } : {})} style={gestures?.style}
+                    className={`grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] gap-1.5 items-center rounded-xl ${s.failed ? 'bg-reviewsoft border border-review/30' : ''}`}>
+                    <span className={`w-7 h-7 grid place-items-center rounded-full border text-xs font-bold tabular-nums ${s.completed?'bg-success text-bg border-success':s.failed?'bg-review text-bg border-review':'bg-surface2 border-line'}`}>{si+1}</span>
+                    <div className="min-w-0 flex items-center gap-1">
+                      <input type="number" min="0" step="0.5" inputMode="decimal" value={s.weightKg} onChange={e=> updateSet(bi,si,{weightKg:e.target.value})} placeholder={supportsWeighted?'22':'bw'} aria-label={`Load set ${si+1} in kilograms`} className={`min-w-0 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
+                      {supportsWeighted && !s.completed && (
+                        <button onClick={()=> setKeypadOpen(`${bi}:${si}`)} aria-label={`Open load keypad for set ${si+1}`} title="Load keypad" className="shrink-0 w-9 h-9 grid place-items-center rounded-xl border border-line bg-surface2 text-sm font-black">✛</button>
+                      )}
+                    </div>
                     {isActive ? (
                       <div className="flex items-center gap-1 min-w-0">
                         <StepperButton label="−" ariaLabel={`Decrease reps set ${si+1}`} onStep={()=> adjustReps(bi,si,-1)} className="w-9 px-0" />
@@ -650,9 +790,29 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                 )}
                 {!b.sets.length && <p className="text-xs text-ink3">No sets — add one.</p>}
               </div>
+
+              {keypadOpen && keypadOpen.startsWith(`${bi}:`) && (
+                <LoadNumpad
+                  value={b.sets[Number(keypadOpen.split(':')[1])]?.weightKg || ''}
+                  onChange={(v)=> updateSet(bi, Number(keypadOpen.split(':')[1]), { weightKg: v })}
+                  onClose={()=> setKeypadOpen(null)}
+                  equipment={ex?.equipment?.[0] || 'barbell'}
+                  plateConfig={plateConfig}
+                  exerciseName={ex?.name || b.exerciseId}
+                />
+              )}
             </div>
           );
         })}
+
+        {gymMode && (
+          <div className="flex gap-2">
+            <button onClick={focusModeNext} className="btn btn-secondary flex-1 min-h-12 rounded-xl">Next exercise →</button>
+            {!blocks[focusIdx] || blocks[focusIdx].sets.every(s=> s.completed || s.failed) ? null : (
+              <button onClick={()=>{ const act = blocks[focusIdx].sets.findIndex(s=> !s.completed && !s.failed); if(act !== -1) completeSet(focusIdx, act); }} className="btn btn-primary min-h-12 rounded-xl px-4">Complete next set</button>
+            )}
+          </div>
+        )}
 
         <section className="rounded-2xl border border-line bg-surface p-3 space-y-2">
           <div className="flex items-center justify-between gap-2">
@@ -661,6 +821,15 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           </div>
           <div className="flex flex-wrap gap-1.5">
             {NOTE_PROMPTS.map(prompt=> <button key={prompt.id} onClick={()=> toggleNoteTag(prompt.id)} aria-pressed={noteTags.includes(prompt.id)} className={`text-xs font-semibold px-2.5 py-1.5 rounded-full border ${noteTags.includes(prompt.id)?'bg-ink text-bg border-ink':'bg-surface2 border-line'}`}>{prompt.label}</button>)}
+          </div>
+          <div role="group" aria-label="How did the session feel?" className="flex flex-wrap gap-1.5">
+            <span className="text-[11px] text-ink3 self-center mr-1">Session quality:</span>
+            {SESSION_QUALITY_OPTIONS.map(opt=> (
+              <button key={opt.id} onClick={()=> setQualityRating(q=> q===opt.id ? null : opt.id)} aria-pressed={qualityRating===opt.id}
+                className={`text-xs font-semibold px-2.5 py-1.5 rounded-full border ${qualityRating===opt.id?'bg-ink text-bg border-ink':'bg-surface2 border-line'}`}>
+                {opt.emoji} {opt.label}
+              </button>
+            ))}
           </div>
           <textarea value={note} onChange={e=> setNote(e.target.value)} rows={2} placeholder="What should change next time? Mention sleep, pain, technique, ROM, time or load." className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm" />
         </section>
@@ -673,18 +842,18 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       <div className="shrink-0 border-t border-line bg-surface px-4 pt-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] space-y-2">
         <div className="max-w-3xl w-full mx-auto space-y-2">
           {restLeft!==null && (
-            <div className="rounded-2xl bg-ink text-bg px-4 py-3 flex items-center gap-3">
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-widest opacity-70 leading-none">Rest</p>
-                <p className="text-xs font-bold truncate opacity-80">{restLabel}</p>
-              </div>
-              <span className="ml-auto text-4xl font-black tabular-nums leading-none" aria-live="off">{fmtRest(restLeft)}</span>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button onClick={()=> setRestEndsAt(v=> Math.max(Date.now()+5000, (v||Date.now())-15000))} aria-label="Rest 15 seconds less" className="min-h-11 min-w-11 px-1.5 rounded-full bg-bg/15 text-xs font-bold tabular-nums">−15s</button>
-                <button onClick={()=> setRestEndsAt(v=> (v||Date.now())+30000)} aria-label="Rest 30 seconds more" className="min-h-11 min-w-11 px-1.5 rounded-full bg-bg/15 text-xs font-bold tabular-nums">+30s</button>
-                <button onClick={()=> setRestEndsAt(null)} aria-label="Skip rest" className="min-h-11 px-3 rounded-full bg-bg text-ink text-xs font-bold">Skip</button>
-              </div>
-            </div>
+            <RestDock
+              endsAt={restEndsAt}
+              clock={clock}
+              label={restLabel}
+              onChange={setRestEndsAt}
+              exerciseId={restExerciseId}
+              exerciseName={restExerciseId ? EXERCISE_BY_ID[restExerciseId]?.name || restExerciseId : ''}
+              presetSeconds={restPresetFor(gymPrefs, restExerciseId, null)}
+              gymPrefs={gymPrefs}
+              onSetRestPreset={onSetRestPreset}
+              voiceRate={Number(appPrefs?.voiceRate) || 1}
+            />
           )}
           {saveBlocker && <p className="text-xs text-review bg-reviewsoft border border-review/30 rounded-xl px-3 py-2">{saveBlocker}</p>}
           <div className="flex gap-2">

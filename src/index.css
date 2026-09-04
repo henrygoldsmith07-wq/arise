@@ -21,3 +21,9 @@ html { scroll-padding-block: calc(4rem + 1px) calc(4.5rem + 1px); }
 /* Exercise illustration SVGs ship white-on-transparent; invert them on light
    themes so figures stay visible against the light surface chips. */
 html:not(.dark) .exercise-illustration { filter: invert(1); }
+
+/* More → search jump: brief highlight so the landed section is findable in a
+   long page of cards. Honours reduced-motion. */
+@keyframes settingsFlash { 0%,100%{ box-shadow:0 0 0 0 rgba(0,0,0,0) } 30%{ box-shadow:0 0 0 3px var(--accent, #6366f1) } }
+.settings-flash { animation: settingsFlash 1.6s ease }
+html.reduce-motion .settings-flash { animation: none }

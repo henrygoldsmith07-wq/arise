@@ -14,18 +14,22 @@ import {
 import { recordEvent } from '../lib/telemetry.js';
 import { restStartCue, restTickCue, restCompleteCue } from '../lib/audioCues.js';
 import { speak, cancelSpeech, voiceSupported } from '../lib/voiceCoach.js';
+import { createWakeLock } from '../lib/wakeLock.js';
+import { restPresetFor } from '../lib/gymMode.js';
+import { RestDock } from './GymModePanel.jsx';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
 
 // GuidedRunner — the guided workout mode: one set at a time, full-screen.
 // Reuses the same draft persistence contract as SessionRunner (onDraftChange
 // with { session, blocks, ... }), so crash recovery and cross-tab protection
 // in App.jsx work identically for both modes.
-export default function GuidedRunner({ session, history = [], availableEquipment = [], draft = null, measurementConsent = false, soundCues = true, onToggleSoundCues = null, voiceCoach = false, onToggleVoiceCoach = null, voiceRate = 1, onDraftChange, onSave, onCancel }){
+export default function GuidedRunner({ session, history = [], availableEquipment = [], draft = null, measurementConsent = false, soundCues = true, onToggleSoundCues = null, voiceCoach = false, onToggleVoiceCoach = null, voiceRate = 1, wakeLock = false, gymPrefs = null, onSetRestPreset = null, onDraftChange, onSave, onCancel }){
   const [blocks,setBlocks]=useState(()=> initGuidedBlocks(session, history, draft?.blocks));
   const [note,setNote]=useState(()=> draft?.note || '');
   const [noteTags,setNoteTags]=useState(()=> draft?.noteTags || []);
   const [restEndsAt,setRestEndsAt]=useState(()=> draft?.restEndsAt || null);
   const [restLabel,setRestLabel]=useState(()=> draft?.restLabel || '');
+  const [restExerciseId,setRestExerciseId]=useState(()=> draft?.restExerciseId || null);
   const [clock,setClock]=useState(()=> Date.now());
   const [celebrate,setCelebrate]=useState(false);
   const [soundOn,setSoundOn]=useState(soundCues);
@@ -33,6 +37,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   const [announcement,setAnnouncement]=useState('');
   const restTickRef=useRef(null);
   const spokenStepRef=useRef(null);
+  const wakeLockRef=useRef(null);
   const draftRef=useRef(null);
   const rootRef=useRef(null);
   const closeRef=useRef(null);
@@ -73,6 +78,15 @@ export default function GuidedRunner({ session, history = [], availableEquipment
     const id=setInterval(()=> setClock(Date.now()), 500);
     return ()=> clearInterval(id);
   },[]);
+
+  // Gym Mode: keep the screen awake for the whole guided session (opt-in).
+  useEffect(()=>{
+    if(!wakeLock) return undefined;
+    const lock = createWakeLock();
+    wakeLockRef.current = lock;
+    lock.acquire();
+    return ()=> { wakeLockRef.current = null; lock.release(); };
+  }, [wakeLock]);
 
   const restLeft = restEndsAt ? Math.max(0, Math.ceil((restEndsAt-clock)/1000)) : null;
 
@@ -144,12 +158,13 @@ export default function GuidedRunner({ session, history = [], availableEquipment
       noteTags,
       restEndsAt,
       restLabel,
+      restExerciseId,
       startedAt: startedAtRef.current,
       updatedAt: new Date().toISOString(),
     };
     draftRef.current = nextDraft;
     onDraftChange?.(nextDraft);
-  }, [blocks, note, noteTags, restEndsAt, restLabel, session, onDraftChange]);
+  }, [blocks, note, noteTags, restEndsAt, restLabel, restExerciseId, session, onDraftChange]);
 
   useEffect(()=>{
     const persistOnPageHide=()=>{
@@ -180,10 +195,11 @@ export default function GuidedRunner({ session, history = [], availableEquipment
 
   const updateSet = (bi, si, patch)=> setBlocks(prev=> prev.map((b,i)=> i!==bi? b : { ...b, sets: b.sets.map((s,j)=> j!==si? s : { ...s, ...patch }) }));
 
-  const startRest=(seconds,label)=>{
+  const startRest=(seconds,label,exerciseId=null)=>{
     const sec=Number(seconds)||0;
     if(sec<=0){ setRestEndsAt(null); return; }
     setRestLabel(label);
+    setRestExerciseId(exerciseId);
     setRestEndsAt(Date.now() + sec*1000);
     setClock(Date.now());
     if(soundOn) restStartCue();
@@ -210,7 +226,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
         });
       } catch {}
     }
-    if(!skipped && block.restSec && nextGuidedStep(blocks)) startRest(block.restSec, EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId);
+    if(!skipped && block.restSec && nextGuidedStep(blocks)) startRest(restPresetFor(gymPrefs, block.exerciseId, block.restSec) || block.restSec, EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId, block.exerciseId);
     try{ navigator.vibrate?.(skipped ? 60 : 180); }catch{}
   };
 
@@ -252,6 +268,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
           <p className="font-bold truncate">{session.title} • {session.dateISO}</p>
         </div>
         <div className="ml-auto flex items-center gap-2 shrink-0">
+          <button onClick={toggleSound} aria-pressed={soundOn} aria-label={soundOn ? 'Sound cues on' : 'Sound cues off'} title={soundOn ? 'Sound cues on' : 'Sound cues off'} className={`min-h-9 min-w-9 px-1.5 grid place-items-center rounded-full border text-sm leading-none ${soundOn ? 'border-ink bg-ink text-bg' : 'border-line bg-surface2 text-ink3'}`}>{soundOn ? '🔊' : '🔇'}</button>
           {voiceSupported() && (
             <button onClick={toggleVoice} aria-pressed={voiceOn} aria-label={voiceOn ? 'Voice coach on' : 'Voice coach off'} title={voiceOn ? 'Voice coach on' : 'Voice coach off'} className={`min-h-9 min-w-9 px-1.5 grid place-items-center rounded-full border text-sm leading-none ${voiceOn ? 'border-ink bg-ink text-bg' : 'border-line bg-surface2 text-ink3'}`}>🗣️</button>
           )}
@@ -353,19 +370,18 @@ export default function GuidedRunner({ session, history = [], availableEquipment
       <div className="shrink-0 border-t border-line bg-surface px-4 pt-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] space-y-2">
         <div className="max-w-3xl w-full mx-auto space-y-2">
           {restLeft!==null && (
-            <div className="rounded-2xl bg-ink text-bg px-4 py-3 flex items-center gap-3">
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-widest opacity-70 leading-none">Rest</p>
-                <p className="text-xs font-bold truncate opacity-80">{restLabel}</p>
-              </div>
-              <span className="ml-auto text-4xl font-black tabular-nums leading-none" aria-live="off">{fmtRest(restLeft)}</span>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button onClick={toggleSound} aria-pressed={soundOn} aria-label={soundOn ? 'Sound cues on' : 'Sound cues off'} title={soundOn ? 'Sound cues on' : 'Sound cues off'} className="min-h-11 min-w-11 px-1.5 rounded-full bg-bg/15 text-sm leading-none">{soundOn ? '🔊' : '🔇'}</button>
-                <button onClick={()=> setRestEndsAt(v=> Math.max(Date.now()+5000, (v||Date.now())-15000))} aria-label="Rest 15 seconds less" className="min-h-11 min-w-11 px-1.5 rounded-full bg-bg/15 text-xs font-bold tabular-nums">−15s</button>
-                <button onClick={()=> setRestEndsAt(v=> (v||Date.now())+30000)} aria-label="Rest 30 seconds more" className="min-h-11 min-w-11 px-1.5 rounded-full bg-bg/15 text-xs font-bold tabular-nums">+30s</button>
-                <button onClick={()=> setRestEndsAt(null)} aria-label="Skip rest" className="min-h-11 px-3 rounded-full bg-bg text-ink text-xs font-bold">Skip</button>
-              </div>
-            </div>
+            <RestDock
+              endsAt={restEndsAt}
+              clock={clock}
+              label={restLabel}
+              onChange={setRestEndsAt}
+              exerciseId={restExerciseId}
+              exerciseName={restExerciseId ? EXERCISE_BY_ID[restExerciseId]?.name || restExerciseId : ''}
+              presetSeconds={restPresetFor(gymPrefs, restExerciseId, null)}
+              gymPrefs={gymPrefs}
+              onSetRestPreset={onSetRestPreset}
+              voiceRate={voiceRate}
+            />
           )}
           <div className="flex gap-2">
             <button onClick={onCancel} className="btn btn-secondary min-h-11 rounded-xl px-4">Cancel</button>
