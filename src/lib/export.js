@@ -10,17 +10,55 @@ import { withProvenance, ensureSourceTags } from './domain.js';
 
 export const EXPORT_VERSION = 4;
 
+// preferences.sync carries the user's WebDAV/backup credentials and is
+// DEVICE-LOCAL, same policy class as consent toggles: it must never appear in
+// any export, backup, coach file or sync payload. (Imports already deny it.)
+export function stripDeviceLocalPrefs(preferences){
+  if(!preferences || typeof preferences !== 'object') return preferences;
+  const { sync, ...rest } = preferences;
+  return rest;
+}
+
 export function buildExportPayload(store){
   const eventHistory=getEventHistory();
   // The evaluation ledger travels with the backup: a longitudinal study must
   // survive reinstalls and move between devices like any other user data.
   const evaluationLedger=loadEvaluationLedger();
   const data={ ...store, version: store.version || STORE_SCHEMA_VERSION, eventHistory, evaluationLedger };
+  // Credential hygiene: never let device-local sync config ride along.
+  if(data.preferences) data.preferences = stripDeviceLocalPrefs(data.preferences);
   // Every export carries the pseudonymous study id so repeated weekly exports
   // from one person can be folded back into ONE participant downstream.
   ensureStudyParticipantId(data);
   return buildEnvelope({
     payload: data,
+    payloadVersion: EXPORT_VERSION,
+    schemaVersion: STORE_SCHEMA_VERSION,
+  });
+}
+
+// ── Partial exports ─────────────────────────────────────────────────────────
+// Same versioned envelope contract as a full backup, but carrying one slice.
+// 'history'  = training sessions only (no preferences, no events)
+// 'settings' = onboarding profile + preferences (no history, no events)
+// 'events'   = the local event ledger (product measurements)
+const PARTIAL_KEYS = {
+  history:  ['history'],
+  settings: ['onboarding', 'preferences'],
+  events:   ['eventHistory'],
+};
+
+export function buildPartialExportPayload(store, kind){
+  const keys = PARTIAL_KEYS[kind];
+  if(!keys) throw new Error(`Unknown partial export kind: ${kind}`);
+  const slice = {};
+  for(const key of keys){
+    if(key === 'eventHistory') slice[key] = getEventHistory();
+    else slice[key] = store?.[key] ?? null;
+  }
+  if(slice.preferences) slice.preferences = stripDeviceLocalPrefs(slice.preferences);
+  return buildEnvelope({
+    payload: slice,
     payloadVersion: EXPORT_VERSION,
     schemaVersion: STORE_SCHEMA_VERSION,
   });
