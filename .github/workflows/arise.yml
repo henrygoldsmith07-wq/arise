@@ -35,6 +35,8 @@ jobs:
       # benchmark/ fails CI instead of rotting until real data arrives.
       - name: Smoke gate - verify (lint, types, tests, build)
         run: npm run verify
+      - name: Smoke gate - bundle size budget
+        run: npm run bundle:budget
       - name: Smoke gate - validate + backtest
         run: npm run benchmark
       # Cross-commit reproducibility: the artifact comparator fails on metric

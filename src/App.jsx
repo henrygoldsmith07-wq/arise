@@ -1,14 +1,45 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AppShell from './components/AppShell.jsx';
 import TodayView from './components/TodayView.jsx';
-import TrainView from './components/TrainView.jsx';
-import ExerciseBrowser from './components/ExerciseBrowser.jsx';
-import ProgressView from './components/ProgressView.jsx';
-import MoreView from './components/MoreView.jsx';
-import SessionRunner from './components/SessionRunner.jsx';
-import GuidedRunner from './components/GuidedRunner.jsx';
 import Onboarding from './components/Onboarding.jsx';
 import LiveAnnouncer from './components/LiveAnnouncer.jsx';
+
+// Route-level code splitting: the boot path ships only the shell, Today view
+// and onboarding — everything else loads on first navigation. Each lazy view
+// is ALSO warmed up after first paint (warmLazyViews below), so on anything
+// but a cold offline start the chunk is local before the user taps the tab:
+// splitting is for boot bytes, not for navigation jank.
+const loadTrainView = ()=> import('./components/TrainView.jsx');
+const loadExerciseBrowser = ()=> import('./components/ExerciseBrowser.jsx');
+const loadProgressView = ()=> import('./components/ProgressView.jsx');
+const loadMoreView = ()=> import('./components/MoreView.jsx');
+const loadSessionRunner = ()=> import('./components/SessionRunner.jsx');
+const loadGuidedRunner = ()=> import('./components/GuidedRunner.jsx');
+
+const TrainView = lazy(loadTrainView);
+const ExerciseBrowser = lazy(loadExerciseBrowser);
+const ProgressView = lazy(loadProgressView);
+const MoreView = lazy(loadMoreView);
+const SessionRunner = lazy(loadSessionRunner);
+const GuidedRunner = lazy(loadGuidedRunner);
+
+let warmStarted = false;
+function warmLazyViews(){
+  if(warmStarted || typeof window === 'undefined') return;
+  warmStarted = true;
+  const idle = typeof window.requestIdleCallback === 'function'
+    ? (fn)=> window.requestIdleCallback(fn, { timeout: 4000 })
+    : (fn)=> window.setTimeout(fn, 1200);
+  idle(()=> {
+    // Warm every split chunk right after first paint so on anything but a
+    // cold offline start the code is local before the user taps its tab:
+    // splitting is for boot bytes, not for navigation jank. Failures are
+    // harmless — the real navigation retries through Suspense.
+    for(const load of [loadTrainView, loadExerciseBrowser, loadProgressView, loadMoreView, loadSessionRunner, loadGuidedRunner]) {
+      load().catch(()=>{});
+    }
+  });
+}
 import { loadStore, saveStore, upsertHistory } from './lib/store.js';
 import { recommendExercises } from './lib/data.js';
 import { recordEvent } from './lib/telemetry.js';
@@ -18,6 +49,18 @@ import { reviewCompletedWeek, applyWeeklyReview } from './lib/mesocycle.js';
 import { attachOutcome } from './lib/longitudinal.js';
 import { setRestPreset } from './lib/gymMode.js';
 
+// Suspense fallback for lazy tabs: same chrome height as a view header so
+// the tab bar doesn't jump when the chunk resolves.
+function TabFallback({ label }){
+  return (
+    <div className="px-4 py-10 animate-pulse" role="status" aria-label={`Loading ${label} view`}>
+      <div className="h-5 w-28 rounded bg-surface2 mb-4" />
+      <div className="h-20 rounded-2xl bg-surface2 mb-3" />
+      <div className="h-20 rounded-2xl bg-surface2" />
+    </div>
+  );
+}
+
 export default function App(){
   const [store,setStoreState]=useState(()=> loadStore());
   const [tab,setTab]=useState('today');
@@ -26,6 +69,7 @@ export default function App(){
   const [consentOpen,setConsentOpen]=useState(()=> loadStore().preferences?.telemetryEnabled == null);
   const [onboardingOpen,setOnboardingOpen]=useState(()=> !loadStore().onboarding);
   const [updateReady,setUpdateReady]=useState(false);
+  const [updateDeferred,setUpdateDeferred]=useState(false);
   const [persistFailed,setPersistFailed]=useState(false);
   const [toast,setToast]=useState(null);
   const applyReloadRef=useRef(false);
@@ -40,6 +84,9 @@ export default function App(){
   useEffect(()=>{
     if(!saveStore(store)) setPersistFailed(true);
   },[store]);
+
+  // Warm the lazy route chunks once boot has settled (see warmLazyViews).
+  useEffect(()=>{ warmLazyViews(); },[]);
 
   useEffect(()=>{
     setConsentOpen(store.preferences?.telemetryEnabled == null);
@@ -282,6 +329,19 @@ export default function App(){
   const draftDone = store.activeWorkout?.blocks?.reduce((n,b)=> n+(b.sets||[]).filter(s=> s.completed).length, 0) || 0;
 
   const applyUpdate = ()=>{
+    // Safe update: never interrupt a workout in progress. The draft and the
+    // runner live in this page instance; a reload mid-session risks losing
+    // unsaved keystrokes. With an active session, the banner switches to a
+    // non-blocking "restart when ready" state instead.
+    if(activeSession){
+      setUpdateDeferred(true);
+      try { recordEvent('update:deferred', { sessionId: activeSession.id }, { essential:false }); } catch {}
+      return;
+    }
+    performUpdateReload();
+  };
+
+  const performUpdateReload = ()=>{
     if('serviceWorker' in navigator){
       navigator.serviceWorker.getRegistration().then(r=>{
         if(r?.waiting){
@@ -295,13 +355,19 @@ export default function App(){
     }
   };
 
+  // A deferred update applies automatically the moment the workout ends
+  // (save or discard both clear activeSession).
+  useEffect(()=>{
+    if(updateReady && updateDeferred && !activeSession) performUpdateReload();
+  }, [updateReady, updateDeferred, activeSession]);
+
   return (
     <AppShell tab={tab} setTab={setTab} storeVersion={store.version} theme={theme} onCycleTheme={cycleTheme}>
       <LiveAnnouncer />
       {updateReady && (
         <div className="mx-4 mt-2 rounded-xl border border-review/30 bg-reviewsoft px-3 py-2 flex items-center gap-2 text-xs">
           <span className="font-bold text-review">Update available</span>
-          <span className="text-ink2">New version cached — reload to apply.</span>
+          <span className="text-ink2">{updateDeferred ? 'Update will apply after this workout — no rush.' : 'New version cached — reload to apply.'}</span>
           <button onClick={applyUpdate} className="ml-auto btn btn-primary min-h-8 rounded-xl px-3 text-xs">Update</button>
         </div>
       )}
@@ -351,16 +417,16 @@ export default function App(){
         />
       )}
       {tab==='train' && (
-        <TrainView
+        <Suspense fallback={<TabFallback label="Train" />}> <TrainView
           store={store}
           setStore={setStore}
           onStartSession={handleStartSession}
           availableEquipment={store.onboarding?.equipment || []}
-        />
+        /></Suspense>
       )}
       {tab==='exercises' && (
         <>
-          <ExerciseBrowser availableEquipment={store.onboarding?.equipment || []} />
+          <Suspense fallback={<TabFallback label="Exercises" />}><ExerciseBrowser availableEquipment={store.onboarding?.equipment || []} /></Suspense>
           {!!recs.length && (
             <div className="px-4 pb-4 -mt-2">
               <div className="rounded-2xl border border-line bg-surface p-3">
@@ -375,11 +441,11 @@ export default function App(){
           )}
         </>
       )}
-      {tab==='progress' && <ProgressView store={store} />}
-      {tab==='more' && <MoreView store={store} setStore={setStore} setTab={setTab} onboardingOpen={onboardingOpen} setOnboardingOpen={setOnboardingOpen} />}
+      {tab==='progress' && <Suspense fallback={<TabFallback label="Progress" />}><ProgressView store={store} /></Suspense>}
+      {tab==='more' && <Suspense fallback={<TabFallback label="More" />}><MoreView store={store} setStore={setStore} setTab={setTab} onboardingOpen={onboardingOpen} setOnboardingOpen={setOnboardingOpen} /></Suspense>}
 
       {activeSession && activeSession.mode === 'guided' && (
-        <GuidedRunner
+        <Suspense fallback={null}><GuidedRunner
           session={activeSession}
           history={store.history || []}
           availableEquipment={store.onboarding?.equipment || []}
@@ -396,10 +462,10 @@ export default function App(){
           onDraftChange={handleDraftChange}
           onSave={handleSaveSession}
           onCancel={handleCancelSession}
-        />
+        /></Suspense>
       )}
       {activeSession && activeSession.mode !== 'guided' && (
-        <SessionRunner
+        <Suspense fallback={null}><SessionRunner
           session={activeSession}
           history={store.history || []}
           availableEquipment={store.onboarding?.equipment || []}
@@ -415,7 +481,7 @@ export default function App(){
           onDraftChange={handleDraftChange}
           onSave={handleSaveSession}
           onCancel={handleCancelSession}
-        />
+        /></Suspense>
       )}
 
       <Onboarding
