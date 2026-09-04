@@ -19,6 +19,7 @@ import { speak, cancelSpeech } from '../lib/voiceCoach.js';
 import { LoadNumpad, RestDock, swipeRowHandlers } from './GymModePanel.jsx';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
 import StepperButton from './StepperButton.jsx';
+import { tracePhase, traceStart, traceEnd } from '../lib/perfTrace.js';
 
 const NOTE_PROMPTS = [
   { id: 'felt-strong', label: 'Felt strong' },
@@ -214,6 +215,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
 
   // Dialog semantics: move focus in on mount, restore it on unmount.
   useEffect(()=>{
+    tracePhase('session-runner:open', ()=> {}, 'mount');
     const previous=document.activeElement;
     closeRef.current?.focus();
     return ()=> { try{ previous?.focus?.(); }catch{} };
@@ -536,6 +538,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
 
   const save = ()=>{
     if(!canSave) return;
+    tracePhase('session-runner:save', ()=> {}, 'begin');
     const labels=noteTags.map(id=> NOTE_PROMPTS.find(t=> t.id===id)?.label).filter(Boolean);
     const finalNote=[labels.join(', '), note.trim()].filter(Boolean).join(' · ');
     const nowISO = new Date().toISOString();
@@ -589,6 +592,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       sessionDuration: durationMinutes,
       quality: qualityRating || undefined,
     };
+    traceEnd('session-runner:save', 'payload built');
     onSave(payload);
   };
 

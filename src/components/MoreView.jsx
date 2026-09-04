@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { buildExportPayload, downloadJson, parseImportFile, mergeStores, portableCsv, deletionPreview, downloadBackup, parseBackupFile } from '../lib/export.js';
 import { buildImportPreview } from '../lib/exportPolicy.js';
 import { clearStore } from '../lib/store.js';
@@ -16,8 +16,8 @@ import { voiceSupported } from '../lib/voiceCoach.js';
 import { setRestPreset } from '../lib/gymMode.js';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { PROGRESSION_POLICIES, POLICY_ORDER } from '../lib/progressionPolicies.js';
-import StorageDiagnostics from './StorageDiagnostics.jsx';
-import EvidenceDashboard from './EvidenceDashboard.jsx';
+const StorageDiagnostics = lazy(()=> import('./StorageDiagnostics.jsx'));
+const EvidenceDashboard = lazy(()=> import('./EvidenceDashboard.jsx'));
 
 export default function MoreView({ store, setStore, setTab, onboardingOpen, setOnboardingOpen }){
   const [importStrategy,setImportStrategy]=useState('merge');
@@ -451,7 +451,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
         </details>
       </section>
 
-      <StorageDiagnostics setMsg={setMsg} />
+      <Suspense fallback={null}><StorageDiagnostics setMsg={setMsg} /></Suspense>
 
       <section id="sec-appearance" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
         <h3 className="text-sm font-bold">Appearance & accessibility</h3>
@@ -655,7 +655,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
             <summary className="text-sm font-semibold cursor-pointer">Study status{evidenceSummary ? ` — ${evidenceSummary}` : ''}</summary>
             {evidenceData && (
               <div className="mt-3 space-y-3">
-                <EvidenceDashboard records={evidenceData.ledger || []} archivedCount={evidenceData.archivedCount} />
+                <Suspense fallback={null}><EvidenceDashboard records={evidenceData.ledger || []} archivedCount={evidenceData.archivedCount} /></Suspense>
                 <div>
                   <p className="text-xs font-bold">Coverage</p>
                   <p className="text-[11px] text-ink3 mt-1">{evidenceData.coverage.totalResolved} resolved pairs · {evidenceData.coverage.openRecords} awaiting their workout · {evidenceData.coverage.exercisesTracked} exercises tracked. Segments need {evidenceData.coverage.minimumSamples}+ pairs to conclude.</p>

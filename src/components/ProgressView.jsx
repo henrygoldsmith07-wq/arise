@@ -399,16 +399,39 @@ export default function ProgressView({ store }){
       <section className="rounded-2xl border border-line bg-surface p-4">
         <h3 className="text-sm font-bold">History</h3>
         {!history.length ? <p className="text-sm text-ink3 mt-2">No sessions yet — schedule a program and run it from Today.</p> : (
-          <ul className="mt-2 space-y-2 max-h-80 overflow-auto pr-1">
-            {[...history].slice().reverse().map(h=> (
-              <li key={h.id} className="rounded-xl border border-line bg-surface2 px-3 py-2">
-                <p className="text-sm font-bold">{h.title} <span className="text-xs text-ink3">• {h.dateISO} • W{h.week} D{h.day}</span></p>
-                <p className="text-xs text-ink3">{h.blocks.map(b=> `${EXERCISE_BY_ID[b.exerciseId]?.name || b.exerciseId}: ${b.sets.map(s=> `${s.reps}${s.weightKg?`@${s.weightKg}kg`:''}${s.side?` ${s.side}`:''}${s.rom?` ${s.rom}`:''}`).join(', ')}`).join(' • ')}</p>
-              </li>
-            ))}
-          </ul>
+          <SessionHistoryList history={history} />
         )}
       </section>
+    </div>
+  );
+}
+
+// History, newest first, paginated: render HISTORY_PAGE sessions at a time and
+// append on demand. A year of training is 150+ sessions whose set summaries
+// are expensive JSX; mounting all of them up front stalls the Progress tab
+// exactly when it already runs its evaluation. (max-h-80 scroll kept.)
+const HISTORY_PAGE = 15;
+
+function SessionHistoryList({ history }){
+  const [visibleCount, setVisibleCount] = useState(HISTORY_PAGE);
+  const visible = useMemo(()=> [...history].slice(-visibleCount).reverse(), [history, visibleCount]);
+  const remaining = Math.max(0, history.length - visibleCount);
+  return (
+    <div>
+      <p className="text-[11px] text-ink3 mt-1" role="status">Showing {visible.length} of {history.length} sessions</p>
+      <ul className="mt-2 space-y-2 max-h-80 overflow-auto pr-1">
+        {visible.map(h=> (
+          <li key={h.id} className="rounded-xl border border-line bg-surface2 px-3 py-2">
+            <p className="text-sm font-bold">{h.title} <span className="text-xs text-ink3">• {h.dateISO} • W{h.week} D{h.day}</span></p>
+            <p className="text-xs text-ink3">{h.blocks.map(b=> `${EXERCISE_BY_ID[b.exerciseId]?.name || b.exerciseId}: ${b.sets.map(s=> `${s.reps}${s.weightKg?`@${s.weightKg}kg`:''}${s.side?` ${s.side}`:''}${s.rom?` ${s.rom}`:''}`).join(', ')}`).join(' • ')}</p>
+          </li>
+        ))}
+      </ul>
+      {remaining > 0 && (
+        <button onClick={()=> setVisibleCount(c=> c + HISTORY_PAGE)} className="mt-2 w-full btn btn-secondary min-h-10 rounded-xl text-xs font-bold">
+          Load {Math.min(HISTORY_PAGE, remaining)} older sessions ({remaining} hidden)
+        </button>
+      )}
     </div>
   );
 }
