@@ -13,6 +13,8 @@ import { deriveProgressionModel } from '../lib/progressionModel.js';
 import { getAiSettings, saveAiSettings, clearAiSettings, buildTrainingContext, requestCoachInsight, DEFAULT_MODEL } from '../lib/aiCoach.js';
 import { STUDY_ARMS, studyCoverage, runComparativeStudy, collectDeloadDecisions, validateDeloadDecisions } from '../lib/study.js';
 import { voiceSupported } from '../lib/voiceCoach.js';
+import { setRestPreset } from '../lib/gymMode.js';
+import { EXERCISE_BY_ID } from '../lib/data.js';
 import { PROGRESSION_POLICIES, POLICY_ORDER } from '../lib/progressionPolicies.js';
 import StorageDiagnostics from './StorageDiagnostics.jsx';
 import EvidenceDashboard from './EvidenceDashboard.jsx';
@@ -55,6 +57,37 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   const a11y = prefs.accessibility || {};
   const setPreference = (patch)=> setStore({ ...store, preferences: { ...prefs, ...patch } });
   const setAccessibility = (patch)=> setStore({ ...store, preferences: { ...prefs, accessibility: { ...a11y, ...patch } } });
+  const setGymPref = (patch)=> setStore({ ...store, gymPrefs: { ...(store.gymPrefs||{}), ...patch } });
+
+  // Settings search: More has grown to nine sections; this index turns a
+  // query into a jump. Matching scrolls the section into view and flashes it,
+  // so nothing is hidden — filtering out sections would hide unrelated
+  // settings the query happened not to name.
+  const [searchQuery, setSearchQuery] = useState('');
+  const settingsIndex = [
+    { id: 'sec-gym', title: 'Gym mode', keywords: 'gym focus wake screen stay awake rest timer presets keypad swipe one thumb' },
+    { id: 'sec-backup', title: 'Backup & portability', keywords: 'backup export import csv encrypt data file' },
+    { id: 'sec-appearance', title: 'Appearance & accessibility', keywords: 'theme dark light text contrast motion auto rest' },
+    { id: 'sec-guided', title: 'Guided mode', keywords: 'guided sound cues voice coach speech rate' },
+    { id: 'sec-policy', title: 'Training policy', keywords: 'policy conservative standard aggressive maintenance explanation confidence' },
+    { id: 'sec-personalise', title: 'Personalise', keywords: 'onboarding goal kit location level equipment plates' },
+    { id: 'sec-privacy', title: 'Privacy & data', keywords: 'privacy telemetry consent measurements delete storage diagnostics' },
+    { id: 'sec-ai', title: 'AI coach', keywords: 'ai coach model api key insight' },
+    { id: 'sec-evidence', title: 'Progression evidence', keywords: 'evidence study ledger metrics calibration dashboard' },
+    { id: 'sec-help', title: 'Help & testing', keywords: 'help testing diagnostics about version' },
+  ];
+  const searchMatches = (()=>{
+    const q = searchQuery.trim().toLowerCase();
+    if(!q) return [];
+    return settingsIndex.filter(s=> `${s.title} ${s.keywords}`.toLowerCase().includes(q));
+  })();
+  const jumpToSetting = (id)=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.scrollIntoView({ behavior:'smooth', block:'start' });
+    el.classList.add('settings-flash');
+    setTimeout(()=> el.classList.remove('settings-flash'), 1800);
+  };
 
   const healthAdapter = typeof window !== 'undefined' ? window.__ARISE_HEALTH_ADAPTER__ : null;
 
@@ -251,6 +284,9 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
     setHealthMsg('Health summary imported locally.');
   };
 
+  const restPresetEntries = Object.entries(store.gymPrefs?.restPresets || {});
+  const exerciseName = (id)=> EXERCISE_BY_ID[id]?.name || id;
+
   return (
     <div className="px-4 py-5 space-y-4 max-w-3xl mx-auto">
       <div>
@@ -258,7 +294,68 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
         <p className="text-xs text-ink3">Backup, portability, privacy and help.</p>
       </div>
 
-      <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+      <div role="search" className="relative">
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={e=> setSearchQuery(e.target.value)}
+          placeholder="Search settings… (e.g. voice, wake, policy)"
+          aria-label="Search settings"
+          className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm"
+        />
+        {searchQuery && (
+          searchMatches.length ? (
+            <div className="absolute inset-x-0 top-full mt-1 z-20 rounded-xl border border-line bg-surface shadow-lg overflow-hidden">
+              {searchMatches.map(m=> (
+                <button key={m.id} onClick={()=>{ jumpToSetting(m.id); setSearchQuery(''); }}
+                  className="w-full text-left px-3 py-2.5 text-xs font-semibold hover:bg-surface2 border-b border-line last:border-b-0">
+                  {m.title}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="absolute inset-x-0 top-full mt-1 z-20 rounded-xl border border-line bg-surface px-3 py-2.5 text-xs text-ink3 shadow-lg">No settings match “{searchQuery}”.</p>
+          )
+        )}
+      </div>
+
+      <section id="sec-gym" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+        <h3 className="text-sm font-bold">Gym mode</h3>
+        <p className="text-xs text-ink3">Built for one-thumb logging between sets: focus mode, swipe gestures and a load keypad live inside every standard session (the 🏋️ button in the session header).</p>
+
+        <ToggleRow
+          label="Focus mode by default"
+          hint="Open every session showing one exercise at a time with the swipe hint bar and skip-to search."
+          checked={store.gymPrefs?.focusDefault === true}
+          onChange={value=> setGymPref({ focusDefault: value })}
+        />
+
+        <ToggleRow
+          label="Keep screen awake"
+          hint="Requests the screen wake lock for the whole session, so your phone never dims mid-rest. Re-applies itself after tab switches; released on exit."
+          checked={prefs.wakeLock === true}
+          onChange={value=> setPreference({ wakeLock: value })}
+        />
+
+        <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5">
+          <p className="text-xs font-bold">Rest presets by exercise</p>
+          {restPresetEntries.length ? (
+            <ul className="mt-2 space-y-1">
+              {restPresetEntries.map(([exerciseId, seconds])=> (
+                <li key={exerciseId} className="flex items-center gap-2 text-xs">
+                  <span className="truncate">{exerciseName(exerciseId)}</span>
+                  <span className="ml-auto font-bold tabular-nums shrink-0">{seconds < 60 ? `${seconds}s` : `${seconds / 60}m`}</span>
+                  <button onClick={()=> setGymPref({ restPresets: setRestPreset(store.gymPrefs, exerciseId, 0) })} aria-label={`Clear rest preset for ${exerciseName(exerciseId)}`} className="shrink-0 w-8 h-8 grid place-items-center rounded-full border border-line text-ink3">✕</button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[11px] text-ink3 mt-1">None yet — tap a preset chip on the rest timer during a session and it is remembered for that exercise.</p>
+          )}
+        </div>
+      </section>
+
+      <section id="sec-backup" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
         <h3 className="text-sm font-bold">Backup & portability</h3>
         {integrity && (
           <div role="alert" className="rounded-xl border border-danger/40 bg-dangersoft px-3 py-2 text-xs space-y-1">
@@ -356,7 +453,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
 
       <StorageDiagnostics setMsg={setMsg} />
 
-      <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+      <section id="sec-appearance" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
         <h3 className="text-sm font-bold">Appearance & accessibility</h3>
         <p className="text-xs text-ink3">Applies to every screen on this device, including the session runner. Stored with your other preferences and included in a backup.</p>
 
@@ -391,7 +488,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
         </div>
       </section>
 
-      <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+      <section id="sec-guided" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
         <h3 className="text-sm font-bold">Guided mode</h3>
         <p className="text-xs text-ink3">Applies to guided sessions — one set at a time, with timers. Changes take effect immediately, including mid-workout.</p>
 
@@ -426,7 +523,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
         </div>
       </section>
 
-      <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+      <section id="sec-policy" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
         <h3 className="text-sm font-bold">Training policy</h3>
         <p className="text-xs text-ink3">Shapes how the engine reacts to your logged sessions — the standard policy is the engine as designed. Applies from the next session.</p>
         <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
@@ -463,7 +560,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
         </div>
       </section>
 
-      <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+      <section id="sec-personalise" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
         <h3 className="text-sm font-bold">Personalise</h3>
           <p className="text-xs text-ink3">Onboarding gates recommendations honestly — kit, time, level and movement preferences shape generated programmes.</p>
         <div className="rounded-xl border border-line bg-surface2 px-3 py-2 text-sm">
@@ -482,7 +579,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
         <button onClick={()=> setOnboardingOpen(true)} className="btn btn-secondary w-full min-h-11 rounded-xl">{store.onboarding ? 'Edit onboarding' : 'Start onboarding'}</button>
       </section>
 
-      <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+      <section id="sec-privacy" className="rounded-2xl border border-line bg-surface p-4 space-y-2">
         <h3 className="text-sm font-bold">Privacy & data</h3>
         <p className="text-xs text-ink3">Local-first. Event measurements stay on this device. Nothing is sent to Pulse or a health platform unless you explicitly enable that separate integration.</p>
         <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
@@ -523,7 +620,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
         </div>
       </section>
 
-      <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+      <section id="sec-ai" className="rounded-2xl border border-line bg-surface p-4 space-y-2">
         <h3 className="text-sm font-bold">AI coach (optional)</h3>
         <p className="text-xs text-ink3">Optional: an NVIDIA-hosted model reads <span className="font-semibold text-ink">aggregated numbers only</span> (weekly sets/volume, adherence, readiness average) and returns short coaching notes. Your key is stored on this device only — never exported, synced, or included in backups.</p>
         <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
@@ -548,7 +645,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
         </div>
       </section>
 
-      <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+      <section id="sec-evidence" className="rounded-2xl border border-line bg-surface p-4 space-y-2">
         <h3 className="text-sm font-bold">Progression evidence</h3>
         <p className="text-xs text-ink3">Arise records each recommendation before the workout (with your measurement consent) and scores it against what you actually did next — compared against simple double progression, linear progression and a flat baseline on the same sessions.</p>
         {store.preferences?.telemetryEnabled !== true ? (
@@ -642,7 +739,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
         )}
       </section>
 
-      <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+      <section id="sec-help" className="rounded-2xl border border-line bg-surface p-4 space-y-2">
         <h3 className="text-sm font-bold">Help & testing</h3>
         <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
           <summary className="text-sm font-semibold cursor-pointer">Test on a real phone (30-second checklist)</summary>

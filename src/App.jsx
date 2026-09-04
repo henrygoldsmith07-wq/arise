@@ -15,6 +15,7 @@ import { pushToPulse } from './lib/pulse.js';
 import { adaptActiveSchedule } from './lib/programming.js';
 import { reviewCompletedWeek, applyWeeklyReview } from './lib/mesocycle.js';
 import { attachOutcome } from './lib/longitudinal.js';
+import { setRestPreset } from './lib/gymMode.js';
 
 export default function App(){
   const [store,setStoreState]=useState(()=> loadStore());
@@ -153,6 +154,12 @@ export default function App(){
     // Pure updater — the [store] effect below owns persistence. Writing
     // localStorage inside an updater double-fires under StrictMode.
     setStoreState(prev=> ({ ...prev, activeWorkout: draft }));
+  },[]);
+
+  // Gym Mode preferences (rest presets, focus defaults) live beside the app
+  // preferences: session-behavioural, device-local, safe to merge forward.
+  const handleSetRestPreset = useCallback((exerciseId, seconds)=>{
+    setStoreState(prev=> ({ ...prev, gymPrefs: { ...(prev.gymPrefs||{}), restPresets: setRestPreset(prev.gymPrefs, exerciseId, seconds) } }));
   },[]);
 
   const handleSaveSession = (payload)=>{
@@ -376,6 +383,9 @@ export default function App(){
           availableEquipment={store.onboarding?.equipment || []}
           draft={store.activeWorkout?.session?.id===activeSession.id ? store.activeWorkout : null}
           measurementConsent={store.preferences?.telemetryEnabled === true}
+          wakeLock={store.preferences?.wakeLock === true}
+          gymPrefs={store.gymPrefs || null}
+          onSetRestPreset={handleSetRestPreset}
           soundCues={store.preferences?.soundCues !== false}
           onToggleSoundCues={(v)=> setStore(prev=> ({ ...prev, preferences:{ ...(prev.preferences||{}), soundCues: v } }))}
           voiceCoach={store.preferences?.voiceCoach === true}
@@ -393,6 +403,9 @@ export default function App(){
           availableEquipment={store.onboarding?.equipment || []}
           plateConfig={store.onboarding?.plateConfig || null}
           preferences={store.onboarding || null}
+          appPrefs={store.preferences || null}
+          gymPrefs={store.gymPrefs || null}
+          onSetRestPreset={handleSetRestPreset}
           draft={store.activeWorkout?.session?.id===activeSession.id ? store.activeWorkout : null}
           measurementConsent={store.preferences?.telemetryEnabled === true}
           studyEnrollment={store.studyEnrollment || null}
