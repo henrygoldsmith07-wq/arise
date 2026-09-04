@@ -43,12 +43,63 @@ function hasConsent(essential=false){
   }catch{ return false; }
 }
 
-export function recordEvent(type, payload={}, { essential=false }={}){
+// ── Granular consent ─────────────────────────────────────────────────────────
+// The master switch (preferences.telemetryEnabled) gates measurements as a
+// whole. Two optional refinements default OFF, live device-local, and never
+// travel in exports (applyFieldPolicy strips them):
+//   errorDiagnostics — structured error events used to debug crashes; kept in
+//     a SEPARATE store so the 2000-event product ledger stays product-only.
+//   sessionTimings  — the logging-time metric (how long a set takes to log).
+export const TELEMETRY_OPTIONS = ['errorDiagnostics', 'sessionTimings'];
+
+function granularOptions(){
+  try{
+    const raw=localStorage.getItem(STORE_KEY);
+    const store=raw ? JSON.parse(raw) : null;
+    const o=store?.preferences?.telemetryOptions || {};
+    return { errorDiagnostics: o.errorDiagnostics === true, sessionTimings: o.sessionTimings === true };
+  }catch{ return { errorDiagnostics: false, sessionTimings: false }; }
+}
+
+export function hasTelemetryOption(option){
+  if(!TELEMETRY_OPTIONS.includes(option)) return false;
+  if(!hasConsent()) return false;
+  return granularOptions()[option] === true;
+}
+
+// ── Payload sanitizer ────────────────────────────────────────────────────────
+// Events are product measurements, not a journal of whatever a call site had
+// in scope. Anything matching a sensitive key (own or inherited) is dropped —
+// health metrics are the critical class (medical data must never land in a
+// log), plus identity and free-text keys that invite accidental capture.
+const SENSITIVE_KEY_RE = /(heart|hr|rate|sleep|weight|kg|steps|calorie|cal|nutrition|bp|blood|spo2|oxygen|vo2|temp(erature)?|glucose|body|health|fitness|medication|dose|pain|injur|symptom|diagnos|email|phone|token|secret|password|passphrase|address|geo|lat|lng|gps|name|note|text|message|summary|consent)/i;
+const MAX_STRING_LEN = 160;
+
+export function sanitizeEventPayload(input, { sensitiveKeys = SENSITIVE_KEY_RE } = {}){
+  const out={};
+  for(const key of Object.keys(input || {})){
+    if(key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+    const value = input[key];
+    if(value == null || typeof value !== 'object'){
+      if(sensitiveKeys?.test?.(key)) continue;
+      out[key] = typeof value === 'string' ? value.slice(0, MAX_STRING_LEN) : value;
+    }
+    // Objects/arrays are dropped by design: payload fields must be scalar
+    // facts (ids, counts, durations), never structured dumps.
+  }
+  return out;
+}
+
+export function recordEvent(type, payload={}, { essential=false, sensitiveKeys=SENSITIVE_KEY_RE }={}){
   if(!hasConsent(essential)) return null;
+  // Granular gate: metric-specific options must be on for their event types.
+  if(type === 'error' && !hasTelemetryOption('errorDiagnostics')) return null;
+  if(type === 'logging-time' && !hasTelemetryOption('sessionTimings')) return null;
   // Identity fields are pinned after the payload spread so a stray
   // { id, type, at } in the payload can't corrupt dedup or time ordering.
+  const safePayload = sensitiveKeys ? sanitizeEventPayload(payload, { sensitiveKeys }) : payload;
   const event={
-    ...payload,
+    ...safePayload,
     id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
     schemaVersion: STORE_SCHEMA_VERSION,
     type,
@@ -71,7 +122,36 @@ export function mergeEventHistory(events){
 }
 
 export function clearTelemetry(){
-  try{ localStorage.removeItem(KEY); localStorage.removeItem(LEGACY_KEY); }catch{}
+  try{ localStorage.removeItem(KEY); localStorage.removeItem(LEGACY_KEY); localStorage.removeItem(ERROR_KEY); }catch{}
+}
+
+// ── Error diagnostics (separate, capped, sanitizer-only store) ───────────────
+// Crash/debug events never enter the 2000-event product ledger. They carry no
+// caller payloads at all — only the truncated message, stack head, and coarse
+// source — so even a bug that throws a health summary can't persist it here.
+const ERROR_KEY = 'arise.errors.v1';
+const ERROR_LIMIT = 50;
+
+export function recordErrorEvent(error, context){
+  if(!hasTelemetryOption('errorDiagnostics')) return null;
+  const event={
+    id: `err-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+    schemaVersion: STORE_SCHEMA_VERSION,
+    type: 'error',
+    at: new Date().toISOString(),
+    message: String(error?.message || error || 'unknown').slice(0, MAX_STRING_LEN),
+    stackHead: typeof error?.stack === 'string' ? error.stack.split('\n').slice(0, 3).join(' | ').slice(0, MAX_STRING_LEN) : null,
+    source: String(context || 'unhandled').slice(0, 40),
+  };
+  const current=normaliseEvents(readJson(ERROR_KEY, { events: [] }));
+  try{ localStorage.setItem(ERROR_KEY, JSON.stringify({ version: 1, events: [...current, event].slice(-ERROR_LIMIT) })); }catch{}
+  return event;
+}
+
+export function getErrorEvents(){ return normaliseEvents(readJson(ERROR_KEY, { events: [] })); }
+
+export function clearErrorEvents(){
+  try{ localStorage.removeItem(ERROR_KEY); }catch{}
 }
 
 function eventsFor(events){ return Array.isArray(events) ? events : loadEvents(); }

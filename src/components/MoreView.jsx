@@ -5,7 +5,7 @@ import { clearStore } from '../lib/store.js';
 import { clearAllStoredData, getIntegrityNotice, clearIntegrityNotice, whenPersisted } from '../lib/storage.js';
 import { storageHealth, requestPersistentStorage } from '../lib/storageQuota.js';
 import { cryptoAvailable, encryptBackup, decryptBackup, looksEncrypted } from '../lib/cryptoBackup.js';
-import { clearTelemetry, telemetrySummary, getEventHistory, mergeEventHistory, replaceEventHistory, recordEvent } from '../lib/telemetry.js';
+import { clearTelemetry, telemetrySummary, getEventHistory, mergeEventHistory, replaceEventHistory, recordEvent, getErrorEvents, clearErrorEvents } from '../lib/telemetry.js';
 import { mergeHealthSummary, pullHealthSummary } from '../lib/health.js';
 import { LOCATIONS, GOALS } from '../lib/data.js';
 import { loadEvaluationLedger, loadArchivedEvaluationCount } from '../lib/longitudinal.js';
@@ -24,6 +24,13 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   const [msg,setMsg]=useState(null);
   const fileRef = useRef(null);
   const [showTelemetry,setShowTelemetry]=useState(false);
+  const [showErrors,setShowErrors]=useState(false);
+  // Optional consent-expiration: a purely local, self-set reminder. No server,
+  // no notification permission — just an honest "review due" card here.
+  const CONSENT_REVIEW_DAYS = 90;
+  const consentReviewDue = store.preferences?.consentReview?.remind === true
+    && (!store.preferences.consentReview.lastReviewedAt
+        || Date.now() - Date.parse(store.preferences.consentReview.lastReviewedAt) > CONSENT_REVIEW_DAYS * 86400000);
   const [healthMsg,setHealthMsg]=useState(null);
   const [evidenceOpen,setEvidenceOpen]=useState(false);
   const ai = getAiSettings();
@@ -589,13 +596,37 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
             <button onClick={()=> setTelemetryConsent(true)} className="btn btn-primary min-h-9 rounded-xl px-3 text-xs">Allow local measurements</button>
             <button onClick={()=> setTelemetryConsent(false)} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Keep private</button>
           </div>
+          {store.preferences?.telemetryEnabled === true && (
+            <div className="space-y-1.5 pt-1">
+              <ToggleRow bare label="Error diagnostics" hint="Keeps the last 50 crash reports locally (message + stack head, nothing else). Never in exports."
+                checked={store.preferences?.telemetryOptions?.errorDiagnostics === true}
+                onChange={(v)=> setStore({ ...store, preferences:{ ...store.preferences, telemetryOptions:{ ...(store.preferences?.telemetryOptions||{}), errorDiagnostics: v } } })} />
+              <ToggleRow bare label="Set logging times" hint="Adds how long each set takes to log to the timing metric. Excluded when off."
+                checked={store.preferences?.telemetryOptions?.sessionTimings === true}
+                onChange={(v)=> setStore({ ...store, preferences:{ ...store.preferences, telemetryOptions:{ ...(store.preferences?.telemetryOptions||{}), sessionTimings: v } } })} />
+              <ToggleRow bare label="Quarterly consent review reminder" hint="A local reminder to re-read these choices. Stored on this device only."
+                checked={store.preferences?.consentReview?.remind === true}
+                onChange={(v)=> setStore({ ...store, preferences:{ ...store.preferences, consentReview: { ...(store.preferences?.consentReview||{}), remind: v, lastReviewedAt: store.preferences?.consentReview?.lastReviewedAt || null } } })} />
+              {store.preferences?.consentReview?.remind === true && consentReviewDue && (
+                <div className="rounded-lg border border-review/30 bg-reviewsoft px-2.5 py-2 text-[11px]">
+                  <p className="font-bold">Consent review due</p>
+                  <p className="text-ink3 mt-0.5">You last reviewed these choices {Math.round((Date.now() - Date.parse(store.preferences.consentReview.lastReviewedAt)) / 86400000)} days ago.</p>
+                  <button onClick={()=> setStore({ ...store, preferences:{ ...store.preferences, consentReview: { ...store.preferences.consentReview, lastReviewedAt: new Date().toISOString() } } })} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px] mt-1">Mark reviewed</button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={()=> setShowTelemetry(v=>!v)} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">{showTelemetry?'Hide':'Show'} local telemetry</button>
-          <button onClick={()=> { clearTelemetry(); setMsg('Local telemetry cleared.'); setTimeout(()=> setMsg(null), 2000); }} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Clear telemetry</button>
+          <button onClick={()=> setShowTelemetry(v=>!v)} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">{showTelemetry?'Hide':'Show'} local telemetry</button>          <button onClick={()=> { clearTelemetry(); clearErrorEvents(); setMsg('Local telemetry and crash logs cleared.'); setTimeout(()=> setMsg(null), 2000); }} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Clear telemetry</button>
+          <button onClick={()=> setShowErrors(v=>!v)} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">{showErrors?'Hide':'Show'} crash logs</button>
+          <button onClick={()=> { clearErrorEvents(); setMsg('Crash logs cleared.'); setTimeout(()=> setMsg(null), 2000); }} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Clear crash logs</button>
         </div>
         {showTelemetry && (
           <pre className="text-[11px] overflow-auto rounded-xl bg-surface2 border border-line p-3">{JSON.stringify(telemetrySummary(), null, 2)}</pre>
+        )}
+        {showErrors && (
+          <pre className="text-[11px] overflow-auto rounded-xl bg-surface2 border border-line p-3">{getErrorEvents().length ? JSON.stringify(getErrorEvents(), null, 2) : 'No crash logs recorded.'}</pre>
         )}
         <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
           <div className="flex items-center gap-2"><p className="text-xs font-bold">Optional health-platform summary</p><span className="ml-auto text-[11px] text-ink3">{store.preferences?.healthSummaryEnabled?'enabled':'disabled'}</span></div>
@@ -608,7 +639,33 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
           {store.healthSummary && <p className="text-[11px]">Latest: {Object.entries(store.healthSummary).filter(([k])=> !['version','source','asOf','importedAt'].includes(k)).map(([k,v])=> `${k} ${v}`).join(' · ')} <span className="text-ink3">({store.healthSummary.source})</span></p>}
           {healthMsg && <p role="status" className="text-xs border border-line rounded-xl px-3 py-2">{healthMsg}</p>}
         </div>
+
         <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <summary className="text-sm font-semibold cursor-pointer">What is stored on this device?</summary>
+          <div className="text-xs text-ink3 mt-2 space-y-1.5">
+            <p><span className="font-semibold text-ink">Always:</span> your training history, programs, templates, readiness log, preferences and the event ledger — all local, all in your backups, all deleted by "Delete all data".</p>
+            <p><span className="font-semibold text-ink">Never:</span> health summaries and study identity travel nowhere on their own — they exist only inside exports you create.</p>
+            <p><span className="font-semibold text-ink">Excluded from every export:</span> error diagnostics and the granular telemetry options (device-local by design).</p>
+            <p>Telemetry (opt-in) records recommendation acceptance and logging timings with free-text fields stripped by the sanitizer before write.</p>
+          </div>
+        </details>
+        <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <summary className="text-sm font-semibold cursor-pointer">What is shared?</summary>
+          <div className="text-xs text-ink3 mt-2 space-y-1.5">
+            <p><span className="font-semibold text-ink">By default: nothing.</span> No account, no analytics service, no trackers (enforced by this app's Content-Security-Policy, not just a promise).</p>
+            <p>Each channel is separately consented: Pulse sharing, the optional health-platform summary import, and local telemetry. Each shows its current state here and can be switched off at any time.</p>
+            <p>Exercise illustrations load from one static host (bryllim.github.io). That request carries no identity beyond your IP — the browser sends nothing else.</p>
+          </div>
+        </details>
+        <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <summary className="text-sm font-semibold cursor-pointer">Privacy, ownership & disclaimers</summary>
+          <div className="text-xs text-ink3 mt-2 space-y-2">
+            <p><span className="font-semibold text-ink">Data ownership.</span> Everything Arise stores is yours: it lives on your device, exports are plain files, and deleting the data removes it everywhere. There is no server copy and no account.</p>
+            <p><span className="font-semibold text-ink">Not medical advice.</span> Arise is a training-log tool with heuristic recommendations. It does not diagnose, treat or prevent any condition. Consult a qualified health professional before starting or changing an exercise program, especially with pre-existing conditions, injuries or during pregnancy.</p>
+            <p><span className="font-semibold text-ink">High-intensity caution.</span> Aggressive progression policies and proximity-to-failure targets raise injury risk when misapplied. Treat every recommendation as a suggestion — reduce load or stop entirely if you feel sharp pain, dizziness or unusual discomfort.</p>
+            <p><span className="font-semibold text-ink">Privacy policy (short form).</span> Arise is local-first: data stays on this device unless you export it or explicitly enable a sharing integration. Telemetry is opt-in and device-local. No third-party trackers, ads or analytics are included. Crash logs (opt-in) stay local, are capped at 50 and are excluded from exports.</p>
+          </div>
+        </details>        <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
           <summary className="text-sm font-semibold cursor-pointer">Pulse connector</summary>
           <p className="text-xs text-ink3 mt-2">When enabled, completed sessions and weekly volume can be pushed to Pulse. Requires a Pulse adapter — configure via <code>window.__PULSE_ADAPTER__</code> (see <code>src/lib/pulse.js</code>). Data is only sent when you allow it.</p>
           <p className="text-xs text-ink3 mt-1">Current: {store.preferences?.pulseEnabled ? 'enabled' : 'disabled'}.</p>

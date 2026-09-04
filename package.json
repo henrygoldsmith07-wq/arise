@@ -24,7 +24,8 @@
     "test:storage": "node --test tests/idb-storage.test.js",
     "e2e": "playwright test",
     "e2e:ci": "playwright test --reporter=list",
-    "bundle:budget": "node scripts/bundle-budget.cjs"
+    "bundle:budget": "node scripts/bundle-budget.cjs",
+    "audit:deps": "npm audit --omit=dev --audit-level=high"
   },
   "dependencies": {
     "react": "^18.3.1",

@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)" />
+    <!-- CSP mirrors vercel.json for non-Vercel hosts. 'unsafe-inline' script is
+         the boot theme/a11y snippet below; style inline covers the boot splash.
+         Only the illustration host is allowlisted for images/connect; no
+         third-party trackers, fonts or analytics anywhere. -->
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https://bryllim.github.io data:; font-src 'self' data:; connect-src 'self' https://bryllim.github.io https://api.github.com https://integrate.api.nvidia.com; worker-src 'self' blob:; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" />
     <script>
       try {
         var raw = localStorage.getItem('arise.store.v1');

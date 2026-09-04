@@ -119,9 +119,48 @@ export async function parseBackupFile(textOrEnvelope){
 // preserved so repeated exports fold into ONE field-study participant.
 const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','preferences','readinessLog','programHistory','evaluationLedger','customTemplates','studyParticipantId','studyEnrollment','tombstones'];
 
-export function parseImportFile(text){
+// ── Import hardening (malicious/hostile JSON) ───────────────────────────────
+// Imports are untrusted input. Beyond schema validation, three structural
+// attacks are neutralised before any value is read:
+//   1. Prototype pollution — a "__proto__": {...} key in parsed JSON hijacks
+//      Object.prototype for the whole session. Keys are stripped everywhere
+//      (own + nested) and rebuilt into null-prototype objects.
+//   2. Depth bombs — parser-stack exhaustion via 100k-deep nesting. Capped.
+//   3. Size bombs — a 500 MB string freezes the tab before validation runs.
+const MAX_IMPORT_BYTES = 5 * 1024 * 1024; // 5 MB is ~15 years of daily sessions
+const MAX_IMPORT_DEPTH = 64;
+
+function stripDangerousKeys(value, depth = 0){
+  if(depth > MAX_IMPORT_DEPTH) throw new Error('Import file nests more than ' + MAX_IMPORT_DEPTH + ' levels deep.');
+  if(Array.isArray(value)) return value.map((v)=> stripDangerousKeys(v, depth + 1));
+  if(value && typeof value === 'object'){
+    const out = Object.create(null);
+    for(const key of Object.keys(value)){
+      if(key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+      out[key] = stripDangerousKeys(value[key], depth + 1);
+    }
+    return out;
+  }
+  return value;
+}
+
+function enforceImportSize(text){
+  // Rough UTF-16 ceiling: 2 bytes per char. The 5 MB file cap catches the rest.
+  if(typeof text === 'string' && text.length > MAX_IMPORT_BYTES / 2){
+    throw new Error('Import file is too large (limit 5 MB of JSON).');
+  }
+}
+
+function sanitiseImportText(text){
+  enforceImportSize(text);
   let parsed;
-  try{ parsed = JSON.parse(text); } catch { throw new Error('Not valid JSON.'); }
+  try{ parsed = JSON.parse(text); }
+  catch { throw new Error('Not valid JSON.'); }
+  return stripDangerousKeys(parsed);
+}
+
+export function parseImportFile(text){
+  const parsed = sanitiseImportText(text);
   const data = parsed?.data ? parsed.data : parsed;
   if(!data || typeof data !== 'object') throw new Error('Import file is empty or malformed.');
   if(parsed?.app && parsed.app !== 'arise') throw new Error('This backup is not for Arise.');
@@ -159,7 +198,26 @@ export function validateStoreData(data){
     // off it, so an entry without a parseable date would poison analytics.
     if(typeof session.dateISO !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(session.dateISO) || Number.isNaN(Date.parse(session.dateISO))) errors.push(`History item ${i+1} has an invalid or missing dateISO.`);
     if(session.blocks!=null && !Array.isArray(session.blocks)) errors.push(`History item ${i+1} blocks must be an array.`);
-    for(const block of session.blocks||[]) if(!block?.exerciseId || !Array.isArray(block.sets)) errors.push(`History item ${i+1} contains an invalid exercise block.`);
+    for(const block of session.blocks||[]){
+      if(!block?.exerciseId || !Array.isArray(block.sets)){ errors.push(`History item ${i+1} contains an invalid exercise block.`); continue; }
+      for(const [si,set] of block.sets.entries()){
+        if(!set || typeof set!=='object') continue;
+        // Impossible values would corrupt e1RM, volume and progression priors.
+        // Numeric fields legitimately arrive as numeric strings (the app's own
+        // normalisation accepts both); '' means unset. Coerce, then bound-check
+        // — reject only true garbage, negatives and implausible magnitudes.
+        for(const [field,label] of [['weightKg','weight'],['reps','reps'],['rpe','RPE'],['assistedKg','assistance']]){
+          const raw = set[field];
+          if(raw == null || raw === '') continue;
+          const v = typeof raw === 'number' ? raw : Number(raw);
+          if(!Number.isFinite(v)){ errors.push(`History item ${i+1} set ${si+1} has a non-numeric ${label}.`); continue; }
+          if(v < 0){ errors.push(`History item ${i+1} set ${si+1} has negative ${label}.`); }
+          if(field==='reps' && v > 1000) errors.push(`History item ${i+1} set ${si+1} has implausible reps (>1000).`);
+          if((field==='weightKg'||field==='assistedKg') && v > 1000) errors.push(`History item ${i+1} set ${si+1} has implausible ${label} (>1000 kg).`);
+          if(field==='rpe' && (v < 1 || v > 10)) errors.push(`History item ${i+1} set ${si+1} has RPE outside 1-10.`);
+        }
+      }
+    }
   }
   if(data.activeSchedule!=null && typeof data.activeSchedule!=='object') errors.push('Active schedule must be an object or null.');
   if(data.eventHistory!=null && !Array.isArray(data.eventHistory)) errors.push('Event history must be an array.');
