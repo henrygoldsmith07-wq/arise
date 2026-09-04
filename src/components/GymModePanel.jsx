@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { quickJumps, applyQuickJump, adjacentLoad, REST_PRESET_CHOICES, restPresetFor } from '../lib/gymMode.js';
 import { speak, voiceSupported } from '../lib/voiceCoach.js';
 import { fmtRest } from '../lib/guidedMode.js';
+import { announce } from '../lib/a11y.js';
 
 // ── Row gestures ────────────────────────────────────────────────────────────
 // One-thumb set handling on the touch rows:
@@ -171,15 +172,23 @@ export function RestDock({ endsAt, clock, label, onChange, exerciseId, exerciseN
     speak(`${phrase}. ${label ? `Next: ${label}.` : ''}`, voiceRate);
   };
 
-  // Minute markers, spoken once each: "2 minutes remaining… 1 minute…".
-  // Keyed off the whole remaining value so pausing/adjusting the clock can't
-  // double-speak the same mark.
+  // Minute markers: spoken once each when voice announcements are on, and
+  // always mirrored to the app's polite live region when they are OFF —
+  // screen-reader users get the same "2 minutes remaining…" cadence without
+  // the countdown's per-second ticks (the announcer dedupes and throttles;
+  // voice-on users skip the SR copy so the two channels never double-speak).
   useEffect(()=>{
-    if(!endsAt || !voiceRest){ spokenMinuteRef.current = null; return; }
+    if(!endsAt){ spokenMinuteRef.current = null; return; }
     const mark = Math.ceil(left / 60);
     if(left > 0 && left % 60 === 0 && spokenMinuteRef.current !== mark){
       spokenMinuteRef.current = mark;
-      say();
+      const m = Math.floor(left / 60);
+      const phrase = m === 1 ? '1 minute remaining' : `${m} minutes remaining`;
+      if(voiceRest){
+        say();
+      } else {
+        announce(`${phrase}. ${label ? `Next: ${label}.` : ''}`, { key: 'rest-timer' });
+      }
     }
   }, [clock, endsAt, voiceRest, left]);
 

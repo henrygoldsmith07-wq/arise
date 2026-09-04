@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useDialogA11y } from '../lib/a11y.js';
 import { PROGRAMS, PROGRAM_BY_ID, PROGRAM_TEMPLATES, programHistory as programVersionHistory, availablePrograms, EXERCISE_BY_ID, EXERCISES, plannedVsCompleted, GOALS, LEVELS, scheduleProgram } from '../lib/data.js';
 import { markSoftDeleted, unDelete, makeTombstone } from '../lib/domain.js';
 import { startProgram } from '../lib/schedule.js';
@@ -44,6 +45,8 @@ function buildCustomTemplate({ name, description, level, goal, days }, existing 
 export default function TrainView({ store, setStore, onStartSession, availableEquipment }){
   const [programId,setProgramId]=useState(store.activeSchedule?.programId || PROGRAMS[0].id);
   const [builderOpen,setBuilderOpen]=useState(false);
+  // Modal focus capture/trap/restore for the template builder.
+  const builderA11y = useDialogA11y({ active: builderOpen });
   const [editingId,setEditingId]=useState(null);
   const [form,setForm]=useState({ name:'', description:'', level:'Beginner', goal:'general', days:[{ ...EMPTY_DAY }] });
   const customTemplates = useMemo(
@@ -266,11 +269,11 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
       </div>
 
       {builderOpen && (
-        <div className="fixed inset-0 z-40 bg-black/40 p-4 overflow-auto" role="dialog" aria-modal="true" aria-label="Template builder">
+        <div ref={builderA11y.rootRef} onKeyDown={builderA11y.trapTab} className="fixed inset-0 z-40 bg-black/40 p-4 overflow-auto" role="dialog" aria-modal="true" aria-label="Template builder">
           <div className="max-w-xl mx-auto my-6 rounded-3xl bg-surface border border-line p-4 space-y-4">
             <div className="flex items-center gap-2">
               <p className="text-base font-bold">{editingId ? 'Edit template' : 'New template'}</p>
-              <button onClick={()=> setBuilderOpen(false)} aria-label="Close builder" className="ml-auto w-9 h-9 grid place-items-center rounded-full border border-line">✕</button>
+              <button ref={builderA11y.closeRef} onClick={()=> setBuilderOpen(false)} aria-label="Close builder" className="ml-auto w-9 h-9 grid place-items-center rounded-full border border-line">✕</button>
             </div>
             <label className="block">
               <span className="text-[11px] font-bold uppercase tracking-widest text-ink3">Name</span>
