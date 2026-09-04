@@ -189,6 +189,7 @@ export default function App(){
         history: hist,
         readinessLog: next.readinessLog || [],
         availableEquipment: next.onboarding?.equipment || [],
+        policy: next.preferences?.progressionPolicy || 'standard',
       });
       if(review.ready && review.directives.some(d => d.kind !== 'hold')){
         const applied = applyWeeklyReview(activeSchedule, review);

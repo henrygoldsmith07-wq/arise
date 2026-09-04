@@ -27,6 +27,7 @@ import { PROGRAM_BY_ID, EXERCISE_BY_ID, exerciseAvailable } from './data.js';
 import { recommendNext, recommendSets } from './progression.js';
 import { rankedSubstitutions } from './substitutions.js';
 import { deloadReadinessAssessment } from './sessionQuality.js';
+import { resolvePolicy, sustainedDeloadCheck } from './progressionPolicies.js';
 import { classifyReadiness } from './readinessClassifier.js';
 
 function mondayKey(dateISO){
@@ -48,7 +49,7 @@ function addDaysISO(dateISO, days){
 
 // Reviews the most recently COMPLETED scheduled week and returns directives
 // for the following week's sessions. Pure: reads only, never mutates.
-export function reviewCompletedWeek({ schedule, history = [], readinessLog = [], availableEquipment = null, config = null, todayISO = null } = {}){
+export function reviewCompletedWeek({ schedule, history = [], readinessLog = [], availableEquipment = null, config = null, todayISO = null, policy = 'standard' } = {}){
   const cfg = resolveArisePriors(config);
   if(!schedule?.sessions?.length) return { ready: false, reason: 'No active schedule.' };
   const todayStr = todayISO || new Date().toISOString().slice(0, 10);
@@ -113,6 +114,21 @@ export function reviewCompletedWeek({ schedule, history = [], readinessLog = [],
   // response) and picks as-planned / small-adjustment / recovery-session /
   // genuine-deload.
   const deload = deloadReadinessAssessment({ logs, recentRpes, weeklyVolumeTrend, readinessHistory: readinessLog, history: weekHistory, config: cfg });
+  // Policy layer: under the conservative policy, a sustained multi-week decline
+  // (3-week AND 6-week windows down, corroborated by readiness) can also open a
+  // deload — the engine's single-week classifier alone is the standard bar.
+  // Other policies keep the engine verdicts as-is. Single bad sessions never
+  // trigger anything here — that stays the noisy-session hold.
+  let deloadYes = deload.yes;
+  let sustainedReason = null;
+  const pol = resolvePolicy(policy, { config: cfg });
+  if(!pol.passthrough && pol.deloadSensitivity === 'high'){
+    try{
+      const weekLogs = (weekHistory||[]).flatMap(h => (h.blocks||[]).flatMap(b => (b.sets||[]).map(s => ({ ...s, dateISO: h.dateISO }))));
+      const sustained = sustainedDeloadCheck({ logs: weekLogs, readinessLog: readinessLog||[], policy: pol, config: cfg });
+      if(sustained?.yes){ deloadYes = true; sustainedReason = sustained.reason; }
+    }catch{}
+  }
   const readiness = classifyReadiness({
     history, readinessLog, logs, recentRpes, weeklyVolumeTrend,
     schedule, todayISO: todayStr, deloadAssessment: deload, config: cfg,
@@ -140,21 +156,23 @@ export function reviewCompletedWeek({ schedule, history = [], readinessLog = [],
       seenExercises.add(exerciseId);
 
       // Tier 1: genuine deload — classifier graduation or the legacy verdict.
-      if(readiness.recommendation === 'genuine-deload' || deload.yes || mesoDeloadDue){
+      if(readiness.recommendation === 'genuine-deload' || deloadYes || mesoDeloadDue){
         const originalSets = Math.max(1, Number(block.sets) || 1);
         const nextSets = Math.max(1, Math.round(originalSets * cfg.recovery.deloadVolumeCut));
         if(nextSets < originalSets){
           directives.push({
             exerciseId, kind: 'deload',
             sets: nextSets,
-            reason: readiness.recommendation === 'genuine-deload' && !deload.yes
+            reason: readiness.recommendation === 'genuine-deload' && !deloadYes
               ? `Graduated readiness (${readiness.score} pts, ${readiness.confidence} confidence): ${readiness.reason}`
-              : deload.yes
-                ? `Fatigue signals (${deload.signals.join('; ')}) — volume cut ~${Math.round((1 - cfg.recovery.deloadVolumeCut) * 100)}%.`
-                : `Programmed deload week ${upcomingWeekNumber} — planned volume reduction.`,
-            evidence: readiness.recommendation === 'genuine-deload' && !deload.yes
+              : sustainedReason
+                ? sustainedReason
+                : deloadYes
+                  ? `Fatigue signals (${deload.signals.join('; ')}) — volume cut ~${Math.round((1 - cfg.recovery.deloadVolumeCut) * 100)}%.`
+                  : `Programmed deload week ${upcomingWeekNumber} — planned volume reduction.`,
+            evidence: readiness.recommendation === 'genuine-deload' && !deloadYes
               ? readiness.factors.filter(f => f.points >= 1).map(f => f.label)
-              : deload.yes ? deload.signals : [`mesocycle deloadWeek ${meso.deloadWeek}`],
+              : sustainedReason ? ['sustained 3-week decline', ...(deload.signals||[])] : deloadYes ? deload.signals : [`mesocycle deloadWeek ${meso.deloadWeek}`],
           });
         }
         continue;

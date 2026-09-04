@@ -475,7 +475,9 @@ function logsFor(history, exerciseId){
 // One row per session: the best-e1RM set for this exercise. Plateau, trend and
 // learned-rate logic need exposures (sessions), not raw sets — a single workout
 // with 4 sets would otherwise count as 4 data points.
-function sessionBestSummaries(history, exerciseId){
+// Exported: the policy layer (progressionPolicies.js) builds its confidence
+// and trend windows from the same best-set summaries the engine uses.
+export function sessionBestSummaries(history, exerciseId){
   const out=[];
   for(const session of orderedHistory(history)){
     let best=null;
@@ -517,7 +519,9 @@ function sessionSetSummaries(history, exerciseId){
   }
   return out;
 }
-function noisyFlagsForLastSession(history, exerciseId, config = null){
+// Exported for the policy layer's overshoot guard (progressionPolicies.js):
+// pain/noise flags matter even when the engine's own decision is to progress.
+export function noisyFlagsForLastSession(history, exerciseId, config = null){
   const cfg = resolveArisePriors(config).programming.noisySession;
   const last = history && history.length ? history[history.length - 1] : null;
   if(!last) return [];
@@ -552,7 +556,9 @@ function noisyFlagsForLastSession(history, exerciseId, config = null){
 
 function parseLow(s, config = null){ const m=String(s).match(/\d+/); return m? Number(m[0]) : resolveArisePriors(config).progression.defaultLowReps; }
 function parseRange(s, config = null){ const nums = (String(s).match(/\d+/g)||[]).map(Number); if(nums.length>=2) return [nums[0], nums[1]]; if(nums.length===1) return [nums[0], nums[0]]; const defaults = (String(resolveArisePriors(config).progression.defaultTargetReps).match(/\d+/g)||[]).map(Number); return defaults.length>=2 ? [defaults[0], defaults[1]] : [8,12]; }
-function snapLoad(v, config = null){
+// Exported: the policy layer snaps policy-scaled loads back onto the
+// increment grid so a scaled jump never lands between achievable loads.
+export function snapLoad(v, config = null){
   if(v<=0) return 0;
   const cfg = resolveArisePriors(config).progression.loadRounding;
   const step = v < 20 ? cfg.under20KgStep : v < 60 ? cfg.under60KgStep : cfg.defaultStep;
