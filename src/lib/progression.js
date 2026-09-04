@@ -25,11 +25,12 @@ export function strategyForExercise(exerciseId, { config = null } = {}){
 
 // Personalised progression rate: learned weekly rep/load deltas per exercise.
 // Returns { weeklyLoadPct, weeklyRepGain, n, spanDays } or null if insufficient data.
-export function personalisedRate(history, exerciseId, { config = null } = {}){
+export function personalisedRate(history, exerciseId, { config = null, asOfDateISO = null } = {}){
   const cfg = resolveArisePriors(config).progression.personalisedRate;
   // Per-session best e1RM: judging progress off individual sets lets one
-  // drop-set or a varying set count fake a trend.
-  const logs = sessionBestSummaries(history, exerciseId);
+  // drop-set or a varying set count fake a trend. Prior-only: the cut applies
+  // here too, so a learned rate can never be fitted on future sessions.
+  const logs = sessionBestSummaries(history, exerciseId, asOfDateISO);
   if(logs.length < cfg.minSessions) return null;
   const pts = logs.map(l=> ({ t: Date.parse(l.dateISO || '2026-01-01'), y: e1rm(l.weightKg||0,l.reps)||l.reps }));
   pts.sort((a,b)=> a.t - b.t);
@@ -190,7 +191,9 @@ export function validateProgression(history, { config = null } = {}){
 export function recommendNext({ exerciseId, history, targetReps = null, conservative = true, strategy, config = null, asOfDateISO = null, calibration = null, plateConfig = null }){
   const cfg = resolveArisePriors(config);
   targetReps = targetReps || cfg.progression.defaultTargetReps;
-  const logs = logsFor(history, exerciseId).slice(-cfg.progression.historyWindow);
+  // PRIOR-ONLY INVARIANT: with asOfDateISO set, every decision input is sliced
+  // to sessions on or before that date. The engine never sees the future.
+  const logs = logsFor(history, exerciseId, asOfDateISO).slice(-cfg.progression.historyWindow);
   if(!logs.length) {
     const strat = strategy || strategyForExercise(exerciseId, { config: cfg });
     return { load: null, reps: parseLow(targetReps, cfg), reason: "No history — use program prescription.", strategy: strat, trainingAge: trainingAgeInfo(history, { asOfDateISO, config: cfg }), priorsVersion: cfg.version };
@@ -200,7 +203,7 @@ export function recommendNext({ exerciseId, history, targetReps = null, conserva
   const [lo, hi] = parseRange(targetReps);
   const strat = strategy || strategyForExercise(exerciseId, { config: cfg });
   const sCfg = cfg.progression.strategies[strat] || cfg.progression.strategies.hypertrophy;
-  const prate = personalisedRate(history, exerciseId, { config: cfg });
+  const prate = personalisedRate(history, exerciseId, { config: cfg, asOfDateISO });
   const trainingAge = trainingAgeInfo(history, { asOfDateISO, config: cfg });
   const trainingBreak = trainingBreakInfo(history, { asOfDateISO, config: cfg });
   if(trainingBreak.hasBreak){
@@ -238,7 +241,7 @@ export function recommendNext({ exerciseId, history, targetReps = null, conserva
   }
   // Plateau v2 check (real vs noise) — if true, hold. Fed session-level best
   // sets: set-level logs mistake two sets of one workout for two exposures.
-  const sessions = sessionBestSummaries(history, exerciseId).slice(-cfg.progression.historyWindow);
+  const sessions = sessionBestSummaries(history, exerciseId, asOfDateISO).slice(-cfg.progression.historyWindow);
   const plat = isPlateauV2(sessions, { config: cfg });
   if(plat.isPlateau) return plateAware({ load, reps, reason: plat.reason, plateau: plat, strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version }, plateConfig, exerciseId);
   // also keep original 3-session plateau as conservative fallback
@@ -247,7 +250,7 @@ export function recommendNext({ exerciseId, history, targetReps = null, conserva
   // sets, unusual drop, kit/order change) holds the prescription. Holding is
   // deliberately the mildest response — heavier changes (deload, programme
   // rewrite) still require multiple independent signals elsewhere.
-  const noisy = noisyFlagsForLastSession(history, exerciseId, cfg);
+  const noisy = noisyFlagsForLastSession(history, exerciseId, cfg, asOfDateISO);
   if(noisy.length >= 2 || noisy.includes('unusualPerformance') || noisy.includes('pain')){
     return plateAware({ load, reps, reason: `Hold load because last session had noisy context (${noisy.join(', ')}) — need a clean exposure before progressing.`, noisy, strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version }, plateConfig, exerciseId);
   }
@@ -463,13 +466,15 @@ function lastSessionSetCount(history, exerciseId, fallback = 3){
   }
   return fallback;
 }
-function logsFor(history, exerciseId){
+function logsFor(history, exerciseId, asOfDateISO = null){
   const out=[];
   for(const h of history||[]) for(const b of h.blocks||[]) if(b.exerciseId===exerciseId) for(const s of b.sets||[]){
     const reps = Number(String(s.reps).match(/\d+/)?.[0] || s.reps)||0; const w = Number(s.weightKg)||0; const rpe = s.rpe ?? null;
-    if(reps) out.push({ reps, weightKg: w, rpe, dateISO: h.dateISO, side: s.side||null, rom: s.rom||null, assistedKg: s.assistedKg ?? null });
+    // Impossible values (negative weight) never inform a prescription — the
+    // boot-time audit repairs them, but the engine also refuses them here.
+    if(reps && w >= 0) out.push({ reps, weightKg: w, rpe, dateISO: h.dateISO, side: s.side||null, rom: s.rom||null, assistedKg: s.assistedKg ?? null });
   }
-  return out;
+  return asOfDateISO ? out.filter(l=> String(l.dateISO || '') <= String(asOfDateISO)) : out;
 }
 
 // One row per session: the best-e1RM set for this exercise. Plateau, trend and
@@ -477,9 +482,13 @@ function logsFor(history, exerciseId){
 // with 4 sets would otherwise count as 4 data points.
 // Exported: the policy layer (progressionPolicies.js) builds its confidence
 // and trend windows from the same best-set summaries the engine uses.
-export function sessionBestSummaries(history, exerciseId){
+// Best set per session for an exercise. With asOfDateISO, sessions after the
+// cut are invisible — every consumer (plateau checks, learned rates, policy
+// confidence) must be able to ask for the prior-only view.
+export function sessionBestSummaries(history, exerciseId, asOfDateISO = null){
   const out=[];
   for(const session of orderedHistory(history)){
+    if(asOfDateISO && String(session?.dateISO || '') > String(asOfDateISO)) continue;
     let best=null;
     for(const block of (session.blocks||[])){
       if(block.exerciseId!==exerciseId) continue;
@@ -521,10 +530,15 @@ function sessionSetSummaries(history, exerciseId){
 }
 // Exported for the policy layer's overshoot guard (progressionPolicies.js):
 // pain/noise flags matter even when the engine's own decision is to progress.
-export function noisyFlagsForLastSession(history, exerciseId, config = null){
+export function noisyFlagsForLastSession(history, exerciseId, config = null, asOfDateISO = null){
   const cfg = resolveArisePriors(config).programming.noisySession;
-  const last = history && history.length ? history[history.length - 1] : null;
+  // Prior-only: evaluate the last session AS OF a date, never the true last
+  // entry, when the caller supplies an as-of cut. The slice becomes the
+  // "history" the rest of the classifier sees.
+  const slice = asOfDateISO ? (history||[]).filter(h=> String(h?.dateISO || '') <= String(asOfDateISO)) : (history||[]);
+  const last = slice.length ? slice[slice.length - 1] : null;
   if(!last) return [];
+  history = slice;
   const flags = [];
   if(last.durationMinutes != null && Number(last.durationMinutes) < cfg.shortDurationMinutes) flags.push('shortSession');
   if(last.painDiscomfort) flags.push('pain');
