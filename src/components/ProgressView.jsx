@@ -30,6 +30,27 @@ export default function ProgressView({ store }){
   const [selectedExerciseId, setSelectedExerciseId] = useState('');
   const exerciseId = exerciseOptions.includes(selectedExerciseId) ? selectedExerciseId : exerciseOptions[0];
   const exerciseSummary = useMemo(()=> exerciseId ? exerciseHistorySummary(history, exerciseId) : null, [history, exerciseId]);
+  // Trend chart with a 95% prediction band: the shaded region is the honest
+  // read of the series — a tight band says the trend is real, a wide one says
+  // "don't over-read three sessions".
+  const trendBand = useMemo(()=> {
+    if(!exerciseId) return null;
+    const series = strengthSeriesWithConfidence(history, exerciseId);
+    const pts = series.pts || [];
+    if(pts.length < 2) return null;
+    const ys = pts.map(p=> p.e1rm);
+    const n = ys.length;
+    const mean = ys.reduce((a,b)=> a + b, 0) / n;
+    const sd = n > 1 ? Math.sqrt(ys.reduce((a,y)=> a + (y - mean) ** 2, 0) / (n - 1)) : 0;
+    const half = 1.96 * sd / Math.sqrt(Math.max(1, n));
+    const W = 320, H = 84, pad = 4;
+    const min = Math.min(...ys) - 1, max = Math.max(...ys) + 1;
+    const xAt = i=> pad + (i / Math.max(1, n - 1)) * (W - 2 * pad);
+    const yAt = v=> pad + (1 - (v - min) / Math.max(0.001, max - min)) * (H - 2 * pad);
+    const line = pts.map((p,i)=> `${i ? 'L' : 'M'}${xAt(i).toFixed(1)},${yAt(p.e1rm).toFixed(1)}`).join(' ');
+    const band = `M${xAt(0).toFixed(1)},${yAt(mean + half).toFixed(1)} L${xAt(n - 1).toFixed(1)},${yAt(mean + half).toFixed(1)} L${xAt(n - 1).toFixed(1)},${yAt(Math.max(min, mean - half)).toFixed(1)} L${xAt(0).toFixed(1)},${yAt(Math.max(min, mean - half)).toFixed(1)} Z`;
+    return { line, band, last: ys[ys.length - 1], mean, half, n };
+  }, [history, exerciseId]);
   const plateau = useMemo(()=> exerciseId ? plateauDetection(history, exerciseId, { readinessLog: store.readinessLog || [] }) : null, [history, exerciseId, store.readinessLog]);
   const deloadValidation = useMemo(()=> validateDeloadLogic({ history, readinessLog: store.readinessLog || [] }), [history, store.readinessLog]);
   const calibration = useMemo(()=> recommendationCalibration(history, {
@@ -218,6 +239,17 @@ export default function ProgressView({ store }){
               <span className={plateau?.detected ? 'font-bold text-review' : ''}>{plateau?.detected ? 'Plateau detected' : plateau?.status === 'fatigue' ? 'Fatigue signal' : 'No plateau'}</span>
             </div>
             <p className="text-xs text-ink3">{plateau?.reason || 'Keep logging consistent sets before judging a plateau.'}</p>
+            {trendBand && (
+              <figure className="rounded-xl border border-line bg-surface2 px-3 py-2" aria-label="Estimated 1RM trend with 95% confidence band">
+                <svg viewBox="0 0 320 84" className="w-full h-20" role="img">
+                  <path d={trendBand.band} fill="currentColor" className="text-ink3/20" />
+                  <path d={trendBand.line} fill="none" stroke="currentColor" strokeWidth="2" className="text-ink" strokeLinejoin="round" strokeLinecap="round" />
+                </svg>
+                <figcaption className="text-[10px] text-ink3 mt-1">
+                  e1RM per session (last {trendBand.n}), shaded ±95% band around the mean — a wide band means the trend is not yet settled ({trendBand.half < 1.5 ? 'tight' : 'wide'} here).
+                </figcaption>
+              </figure>
+            )}
             <div className="rounded-xl border border-line bg-surface2 px-3 py-2">
               <p className="text-xs font-bold">Next step: {exerciseSummary.recommendation.reason}</p>
               <details className="mt-1">

@@ -1,0 +1,21 @@
+{
+  "schema": "arise.benchmark.artifact.v1",
+  "generatedAtISO": "2026-09-04T11:26:26.657Z",
+  "corpus": {
+    "fixture": "synthetic-history.json",
+    "sha256": "1ef8e40eba98d6a971f36e10148689c4b1bbccdfe106acd39bd260e3c40d865d"
+  },
+  "versions": {
+    "priors": 1,
+    "progressionModel": 1,
+    "policy": 1
+  },
+  "metricsText": "Arise point-in-time backtest (synthetic)\n  status: calibrated\n  comparisons: 8\n  leakage-safe replay: true\n  load MAE: 0.625kg (0.026 relative)\n  rep MAE: 1.125\n  completion Brier: 0.24\n  plateau accuracy: 0\n  fatigue Brier: 0.257\n  deload observed cuts: 0\n  missed-session recovery: 0\n  empirical replacements: 6\n",
+  "metrics": {
+    "loadMAE": 0.625,
+    "repMAE": 1.125,
+    "completionBrier": 0.24,
+    "fatigueBrier": 0.257,
+    "comparisons": null
+  }
+}

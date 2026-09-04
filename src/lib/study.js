@@ -124,13 +124,17 @@ export function simpleRulesRec({ history, exerciseId, targetReps = '8–12' }){
 
 // Compute every arm's prescription from the SAME prior-only slice.
 export function computeArms({ exerciseId, history, targetReps = '8–12', asOfDateISO = null, config = null }){
-  const arise = recommendNext({ exerciseId, history, targetReps, asOfDateISO, config });
+  // Prior-only: every arm — engine AND baselines — prescribes from the same
+  // visible slice. A baseline that saw the future would win for the wrong
+  // reasons in any replay.
+  const visible = asOfDateISO ? (history||[]).filter(h=> String(h?.dateISO || '') <= String(asOfDateISO)) : (history||[]);
+  const arise = recommendNext({ exerciseId, history: visible, targetReps, asOfDateISO, config });
   return {
     arise: { load: arise.load, reps: arise.reps, assistKg: arise.assistKg ?? null, reason: arise.reason || '', noisy: arise.noisy || [], held: /hold|plateau/i.test(arise.reason || '') },
-    'double-progression': doubleProgressionRec({ history, exerciseId, targetReps }),
-    'linear-progression': linearProgressionRec({ history, exerciseId, targetReps }),
-    'fixed-rules': simpleRulesRec({ history, exerciseId, targetReps }),
-    flat: flatPrescriptionRec({ history, exerciseId, targetReps }),
+    'double-progression': doubleProgressionRec({ history: visible, exerciseId, targetReps }),
+    'linear-progression': linearProgressionRec({ history: visible, exerciseId, targetReps }),
+    'fixed-rules': simpleRulesRec({ history: visible, exerciseId, targetReps }),
+    flat: flatPrescriptionRec({ history: visible, exerciseId, targetReps }),
   };
 }
 

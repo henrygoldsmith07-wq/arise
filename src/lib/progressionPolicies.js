@@ -177,9 +177,10 @@ function evidenceCount({ logs, trend }){
 // exercise is a pattern, not noise — hold load regardless of policy. Scans the
 // raw history blocks (set rows carry `failed`/`skipped`; best-set summaries
 // deliberately do not).
-export function repeatedFailureGuard(history, exerciseId, { minSessions = 2 } = {}){
+export function repeatedFailureGuard(history, exerciseId, { minSessions = 2, asOfDateISO = null } = {}){
   const sessions = [];
   for(const entry of history || []){
+    if(asOfDateISO && String(entry?.dateISO || '') > String(asOfDateISO)) continue;
     const rows = (entry.blocks||[]).filter(b=> b.exerciseId === exerciseId).flatMap(b=> b.sets||[]);
     if(rows.length) sessions.push(rows);
   }
@@ -362,7 +363,11 @@ export function recommendNextWithPolicy({
   if(!base) return null;
 
   const cfg = resolveArisePriors(config);
-  const logs = sessionBestSummaries(history, exerciseId).slice(-cfg.progression.historyWindow);
+  // PRIOR-ONLY INVARIANT: every graded input is sliced to sessions on or
+  // before asOfDateISO, matching the engine's own cut underneath.
+  const logs = sessionBestSummaries(history, exerciseId)
+    .filter(s=> !asOfDateISO || String(s.dateISO || '') <= String(asOfDateISO))
+    .slice(-cfg.progression.historyWindow);
   const trends = multiWindowTrend(logs, { asOfDateISO });
   const confidence = recommendationConfidence({ logs, trend: trends });
   const uncertainty = uncertaintyEstimate({ confidence, logs });
@@ -424,10 +429,10 @@ export function recommendNextWithPolicy({
 
   // Guardrails (any policy, aggressive most exposed). Pain/noise flags come
   // from the engine's own classifier so both layers agree on what "noisy" means.
-  const noisy = noisyFlagsForLastSession(history, exerciseId, config);
+  const noisy = noisyFlagsForLastSession(history, exerciseId, config, asOfDateISO);
   const guard = overshootGuard({ rec, lastLog, noisy, policy: pol });
   if(guard.clamped){ rec.load = guard.load; rec.guard = rec.guard || 'overshoot'; rec.reason = `${rec.reason} ${guard.reason}`; }
-  const failGuard = repeatedFailureGuard(history, exerciseId, { config });
+  const failGuard = repeatedFailureGuard(history, exerciseId, { asOfDateISO });
   if(failGuard.trip && rec.load != null && rec.__prevLoad != null && rec.load > rec.__prevLoad){
     rec.load = rec.__prevLoad;
     rec.guard = 'repeated-failure';

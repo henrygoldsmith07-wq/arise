@@ -37,6 +37,12 @@ jobs:
         run: npm run verify
       - name: Smoke gate - validate + backtest
         run: npm run benchmark
+      # Cross-commit reproducibility: the artifact comparator fails on metric
+      # drift over an unchanged corpus + unchanged priors/policy versions.
+      # The baseline artifact is committed; a deliberate re-baseline updates it
+      # in the same PR with the reason.
+      - name: Smoke gate - benchmark artifact comparison
+        run: node benchmark/artifact.js compare
       - name: Smoke gate - comparative study harness
         run: npm run benchmark:study
       - name: Smoke gate - field-study pipeline (fixture mode, synthetic data)

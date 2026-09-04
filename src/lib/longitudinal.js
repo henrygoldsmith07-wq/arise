@@ -188,6 +188,17 @@ export function recordRecommendation({ exerciseId, recommendation, history = [],
       reason: recommendation.reason || '',
       strategy: recommendation.strategy || null,
     },
+    // Decision audit trail (PR #20 policy layer): the full graded context at
+    // decision time, frozen. Legacy rows predate this field — rollups treat
+    // missing audit blocks as unknown, never as zero.
+    audit: {
+      policy: recommendation.policy ?? null,
+      policyVersion: recommendation.policyVersion ?? null,
+      guard: recommendation.guard ?? null,
+      confidence: recommendation.confidence ?? null,
+      uncertainty: recommendation.uncertainty ?? null,
+      evidence: recommendation.evidence ?? null,
+    },
     // ── Randomised trial fields (immutable once written) ──
     // participantId: pseudonymous study id (studyIdentity.js)
     // assignedArm:    which policy the product actually enforced
@@ -232,8 +243,31 @@ export function recordRecommendation({ exerciseId, recommendation, history = [],
   const dropIds = new Set(openForExercise.slice(0, excess).map(row=> row.id));
   const next = [...ledger.filter(row=> !dropIds.has(row.id)), stamped];
   const retention = resolveArisePriors(config).longitudinal.retentionLimit;
-  saveEvaluationLedger(next.slice(-retention), storage);
+  const archived = next.slice(0, Math.max(0, next.length - retention)).filter(row=> row.outcome); // only RESOLVED rows archive; open decisions are never dropped
+  const trimmed = next.slice(-retention);
+  if(archived.length) appendArchivedEvaluationRecords(archived, storage);
+  saveEvaluationLedger(trimmed, storage);
   return stamped;
+}
+
+// ── Ledger archive ─────────────────────────────────────────────────────
+// Resolved records beyond the retention limit move to a separate archive key
+// instead of being destroyed: longitudinal history stays auditable without
+// loading unbounded data at boot. Open (unresolved) decisions are NEVER
+// archived — they are still waiting for their outcome.
+export function appendArchivedEvaluationRecords(records, storage = defaultStorage()){
+  if(!records?.length) return 0;
+  try{
+    const key = `${EVALUATION_KEY}.archive`;
+    const prior = JSON.parse(storage?.getItem?.(key) || '[]');
+    const merged = [...(Array.isArray(prior) ? prior : []), ...records];
+    storage?.setItem?.(key, JSON.stringify(merged));
+    return records.length;
+  }catch{ return 0; }
+}
+
+export function loadArchivedEvaluationCount(storage = defaultStorage()){
+  try{ return (JSON.parse(storage?.getItem?.(`${EVALUATION_KEY}.archive`) || '[]')).length; }catch{ return 0; }
 }
 
 // Attach the real outcome once the following workout completes. The outcome is

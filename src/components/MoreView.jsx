@@ -8,13 +8,14 @@ import { cryptoAvailable, encryptBackup, decryptBackup, looksEncrypted } from '.
 import { clearTelemetry, telemetrySummary, getEventHistory, mergeEventHistory, replaceEventHistory, recordEvent } from '../lib/telemetry.js';
 import { mergeHealthSummary, pullHealthSummary } from '../lib/health.js';
 import { LOCATIONS, GOALS } from '../lib/data.js';
-import { loadEvaluationLedger } from '../lib/longitudinal.js';
+import { loadEvaluationLedger, loadArchivedEvaluationCount } from '../lib/longitudinal.js';
 import { deriveProgressionModel } from '../lib/progressionModel.js';
 import { getAiSettings, saveAiSettings, clearAiSettings, buildTrainingContext, requestCoachInsight, DEFAULT_MODEL } from '../lib/aiCoach.js';
 import { STUDY_ARMS, studyCoverage, runComparativeStudy, collectDeloadDecisions, validateDeloadDecisions } from '../lib/study.js';
 import { voiceSupported } from '../lib/voiceCoach.js';
 import { PROGRESSION_POLICIES, POLICY_ORDER } from '../lib/progressionPolicies.js';
 import StorageDiagnostics from './StorageDiagnostics.jsx';
+import EvidenceDashboard from './EvidenceDashboard.jsx';
 
 export default function MoreView({ store, setStore, setTab, onboardingOpen, setOnboardingOpen }){
   const [importStrategy,setImportStrategy]=useState('merge');
@@ -46,7 +47,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
       if(pair?.pairs){
         pairedLine = `Paired vs double progression on ${pair.pairs} shared sessions: Arise met target where it didn't ${pair.ariseWins}×; baseline won ${pair.baselineWins}× (both met ${pair.bothMetTarget}, neither ${pair.neitherMetTarget}).`;
       }
-      evidenceData = { coverage, comparative, deloads, model };
+      evidenceData = { coverage, comparative, deloads, model, ledger: loadEvaluationLedger(), archivedCount: loadArchivedEvaluationCount() };
     }catch{ evidenceSummary = 'unavailable'; }
   }
 
@@ -557,6 +558,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
             <summary className="text-sm font-semibold cursor-pointer">Study status{evidenceSummary ? ` — ${evidenceSummary}` : ''}</summary>
             {evidenceData && (
               <div className="mt-3 space-y-3">
+                <EvidenceDashboard records={evidenceData.ledger || []} archivedCount={evidenceData.archivedCount} />
                 <div>
                   <p className="text-xs font-bold">Coverage</p>
                   <p className="text-[11px] text-ink3 mt-1">{evidenceData.coverage.totalResolved} resolved pairs · {evidenceData.coverage.openRecords} awaiting their workout · {evidenceData.coverage.exercisesTracked} exercises tracked. Segments need {evidenceData.coverage.minimumSamples}+ pairs to conclude.</p>

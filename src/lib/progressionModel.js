@@ -64,12 +64,13 @@ function uniqueExercises(history){
 
 // ── Estimators (pure, history-only) ─────────────────────────────────────
 
-export function exerciseResponseEstimates(history, { config = null } = {}){
+export function exerciseResponseEstimates(history, { config = null, asOfDateISO = null } = {}){
   const cfg = resolveArisePriors(config);
   const gate = cfg.progressionModel.minExposuresPerExercise;
   const out = {};
   for(const exerciseId of uniqueExercises(history)){
-    const rate = personalisedRate(history, exerciseId, { config });
+    // Prior-only: point-in-time model derivations fit on the visible slice.
+    const rate = personalisedRate(history, exerciseId, { config, asOfDateISO });
     if(rate && rate.n >= gate){
       out[exerciseId] = { weeklyLoadPct: rate.weeklyLoadPct, n: rate.n, spanDays: rate.spanDays };
     }
@@ -467,11 +468,15 @@ export function assessCapabilities({ history, study = null, estimates, config = 
 
 // ── Overlay construction (the only place the model touches the engine) ──
 
-export function deriveProgressionModel({ history, study = null, readinessLog = [], config = null } = {}){
+export function deriveProgressionModel({ history, study = null, readinessLog = [], config = null, asOfDateISO = null } = {}){
   const cfg = resolveArisePriors(config);
+  // PRIOR-ONLY INVARIANT: when an as-of cut is supplied, every estimator fits
+  // on the visible slice only. Point-in-time replays and ledger snapshots
+  // therefore derive the same model a real-time user would have had.
+  const slice = asOfDateISO ? (history||[]).filter(h=> String(h?.dateISO || '') <= String(asOfDateISO)) : (history||[]);
   const estimates = {};
   const safe = fn => { try{ return fn(); }catch{ return null; } };
-  estimates.exercises = safe(() => exerciseResponseEstimates(history, { config })) || {};
+  estimates.exercises = safe(() => exerciseResponseEstimates(slice, { config })) || {};
   estimates.movements = safe(() => movementResponseEstimates(history, estimates.exercises, { config })) || {};
   estimates.repRanges = safe(() => repRangeResponseEstimates(history, estimates.exercises, { config })) || {};
   estimates.volumeTolerance = safe(() => volumeToleranceEstimate(history, { config }));
@@ -566,8 +571,8 @@ export function deriveProgressionModel({ history, study = null, readinessLog = [
 
 // Convenience wrapper used by callers that want recommendations shaped by the
 // model when — and only when — evidence opened a capability.
-export function recommendNextWithModel({ exerciseId, history, study = null, readinessLog = [], config = null, ...rest } = {}){
-  const model = deriveProgressionModel({ history, study, readinessLog, config });
+export function recommendNextWithModel({ exerciseId, history, study = null, readinessLog = [], config = null, asOfDateISO = null, ...rest } = {}){
+  const model = deriveProgressionModel({ history, study, readinessLog, config, asOfDateISO });
   const merged = resolveArisePriors(config);
   merged.progression.strategies = { ...merged.progression.strategies, ...(model.overlayConfig.progression.strategies || {}) };
   merged.progression.strategyByExercise = { ...(merged.progression.strategyByExercise || {}), ...(model.overlayConfig.progression.strategyByExercise || {}) };
@@ -577,7 +582,9 @@ export function recommendNextWithModel({ exerciseId, history, study = null, read
   if(model.overlayConfig.progression.shortBreakPolicy){
     merged.progression.shortBreakPolicy = model.overlayConfig.progression.shortBreakPolicy;
   }
-  const recommendation = recommendNext({ exerciseId, history, config: merged, ...rest });
+  // Forward the prior-only cut explicitly: it is destructured out of ...rest
+  // above and must reach the engine (which also slices its own inputs).
+  const recommendation = recommendNext({ exerciseId, history, config: merged, ...rest, asOfDateISO });
   if(recommendation) recommendation.__progressionModel = { version: model.modelVersion, applied: model.activeOverrideCount > 0 || model.autoregulationApplied || model.readinessApplied || model.shortBreakEasing, activeOverrideCount: model.activeOverrideCount };
   return recommendation;
 }
