@@ -4,6 +4,12 @@
 /* Arise borrows the Le Studio design system for consistency across the monorepo. */
 html, body, #root { height: 100%; }
 
+/* Reserve the sticky chrome (top header + bottom tab bar) in every programmatic
+   scroll-into-view, so targets never land hidden behind it — on touch devices
+   the tab bar overlays the last viewport band, and a control scrolled there
+   cannot be tapped. */
+html { scroll-padding-block: calc(4rem + 1px) calc(4.5rem + 1px); }
+
 /* Progress bar shimmer + card polish */
 @keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
 .shimmer{ position:relative; overflow:hidden }
