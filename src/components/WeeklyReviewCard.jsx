@@ -16,7 +16,7 @@ export default function WeeklyReviewCard({ store, setStore }){
 
   const data = useMemo(()=>{
     try{
-      const review = reviewCompletedWeek({ schedule: store.activeSchedule, history: store.history||[], readinessLog: store.readinessLog||[], availableEquipment: store.onboarding?.equipment||[] });
+      const review = reviewCompletedWeek({ schedule: store.activeSchedule, history: store.history||[], readinessLog: store.readinessLog||[], availableEquipment: store.onboarding?.equipment||[], policy: store.preferences?.progressionPolicy || 'standard' });
       if(!review.ready) return null;
       const ackKey = `week:${review.reviewedWeekKey}`;
       if((store.lastWeeklyReviewAck||'') === ackKey && !review.directives.some(d=>d.kind!=='hold')) return null;

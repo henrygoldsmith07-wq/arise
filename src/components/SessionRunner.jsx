@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { lastExerciseSets } from '../lib/store.js';
 import { recommendNext } from '../lib/progression.js';
+import { recommendNextWithPolicy, POLICY_ORDER } from '../lib/progressionPolicies.js';
 import { runComparativeStudy, doubleProgressionRec } from '../lib/study.js';
 import { assignmentFor } from '../lib/studyEnrollment.js';
 import { recommendNextWithModel } from '../lib/progressionModel.js';
@@ -112,7 +113,7 @@ function transitionChip(rec, prevSummary){
   return null;
 }
 
-function getRecommendation(block, history, asOfDateISO, plateConfig = null, study = null, assignedArm = null){
+function getRecommendation(block, history, asOfDateISO, plateConfig = null, study = null, assignedArm = null, policy = 'standard', explanationMode = 'standard'){
   try{
     // ── Randomised trial enforcement ──
     // A double-progression assignment IS the treatment: the product displays
@@ -139,8 +140,9 @@ function getRecommendation(block, history, asOfDateISO, plateConfig = null, stud
     }
     // plateConfig is safe for every equipment type: the engine dispatches
     // barbells through plates and dumbbells/machines through their own
-    // achievable increments.
-    return recommendNext({ exerciseId:block.exerciseId, history, targetReps:block.reps || '8–12', asOfDateISO, plateConfig });
+    // achievable increments. The policy layer wraps the modelled/plain engine
+    // with the user's chosen policy, confidence scoring and explanations.
+    return recommendNextWithPolicy({ exerciseId:block.exerciseId, history, targetReps:block.reps || '8–12', asOfDateISO, plateConfig, study, policy });
   }catch{ return null; }
 }
 
@@ -296,6 +298,12 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     setRestAnnouncement(`Rest started for ${label}: ${fmtRest(sec)}.`);
   };
 
+  // Policy + explanation mode flow from user preferences (More → Training).
+  // The standard policy is a passthrough, so users who never touch the setting
+  // get exactly the engine behaviour this component has always had.
+  const policy = POLICY_ORDER.includes(preferences?.progressionPolicy) ? preferences.progressionPolicy : 'standard';
+  const explanationMode = ['simple', 'standard', 'advanced'].includes(preferences?.explanationMode) ? preferences.explanationMode : 'standard';
+
   // Recommendations and previous-performance lookups scan the full history;
   // compute them once per change instead of once per block per keystroke.
   const blockMeta = useMemo(()=>{
@@ -305,11 +313,11 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       // Randomised trial: the assigned arm decides which policy runs.
       const arm = assignmentFor(studyEnrollment, b.exerciseId);
       assigned.set(b.exerciseId, arm);
-      recs.set(b.exerciseId, getRecommendation(b,history,session.dateISO,plateConfig,study,arm));
+      recs.set(b.exerciseId, getRecommendation(b,history,session.dateISO,plateConfig,study,arm, policy, explanationMode));
       prevs.set(b.exerciseId, lastExerciseSets(history,b.exerciseId));
     }
     return { recs, prevs, assigned };
-  },[blocks,history,session.dateISO,plateConfig,studyEnrollment]);
+  },[blocks,history,session.dateISO,plateConfig,studyEnrollment,policy,explanationMode]);
 
   const volume = useMemo(()=>{
     let total=0;
@@ -555,7 +563,12 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                   {(changeChip || recommendation?.reason) && (
                     <p className="text-[11px] mt-1 leading-snug">
                       {changeChip && <span className="font-bold text-success">{changeChip}</span>}
-                      {recommendation?.reason ? <span className="text-ink2">{changeChip ? ` — ${recommendation.reason}` : recommendation.reason}</span> : null}
+                      {recommendation ? <span className="text-ink2">{changeChip ? ' — ' : ''}{recommendation.explanation?.[explanationMode] || recommendation.reason}</span> : null}
+                    </p>
+                  )}
+                  {recommendation?.confidence && (
+                    <p className="text-[10px] mt-0.5 text-ink3">
+                      Confidence {recommendation.confidence.band} ({Math.round((recommendation.confidence.score || 0) * 100)}%) · uncertainty {recommendation.uncertainty?.label || '—'} · {recommendation.evidence?.sessions ?? 0} logged sessions{recommendation.guard ? ` · ${recommendation.guard} guard active` : ''}
                     </p>
                   )}
                   <p className="text-[11px] text-ink3 mt-1.5">
