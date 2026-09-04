@@ -5,6 +5,7 @@ import { clearStore } from '../lib/store.js';
 import { clearAllStoredData, getIntegrityNotice, clearIntegrityNotice, whenPersisted } from '../lib/storage.js';
 import { buildPartialExportPayload } from '../lib/export.js';
 import { buildCoachExport, renderCoachMarkdown } from '../lib/coachExport.js';
+import { shareTextAsFile } from '../lib/nativeShare.js';
 const SyncPanel = lazy(() => import('./SyncPanel.jsx'));
 import { storageHealth, requestPersistentStorage } from '../lib/storageQuota.js';
 import { cryptoAvailable, encryptBackup, decryptBackup, looksEncrypted } from '../lib/cryptoBackup.js';
@@ -189,6 +190,14 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   // Coach export: consent-gated, human-readable summary. Nothing identity- or
   // health-bearing unless explicitly ticked; never credentials, never telemetry.
   const [coachSections, setCoachSections] = useState({ performance: true, weekly: true, readiness: false, detail: false });
+  const shareCoach = async ()=>{
+    const data = buildCoachExport(store, { sections: coachSections, weeks: 8 });
+    const md = renderCoachMarkdown(data);
+    const outcome = await shareTextAsFile({ text: md, filename: `arise-coach-${new Date().toISOString().slice(0,10)}.md`, mimeType: 'text/markdown', title: 'Training summary' });
+    setMsg(outcome === 'shared' ? "Shared via your device's share sheet." : outcome === 'copied' ? 'Share sheet unavailable — summary copied to clipboard.' : 'Sharing cancelled.');
+    setTimeout(()=> setMsg(null), 4000);
+  };
+
   const exportCoach = ()=>{
     const data = buildCoachExport(store, { sections: coachSections, weeks: 8 });
     const md = renderCoachMarkdown(data);
@@ -456,6 +465,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
             <label className="flex items-center gap-1.5"><input type="checkbox" checked={coachSections.detail} onChange={(e)=> setCoachSections({ ...coachSections, detail: e.target.checked })} /> Full set detail</label>
           </div>
           <button onClick={exportCoach} className="btn btn-primary min-h-8 rounded-lg px-2.5 text-[11px] mt-2">Download coach summary (.md)</button>
+          <button onClick={shareCoach} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px] mt-2">Share…</button>
         </details>
         {storageInfo && (
           <div className="rounded-xl border border-line bg-surface2 px-3 py-2 text-xs space-y-1">
@@ -571,6 +581,13 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
           hint="Starts the countdown as soon as you mark a set done. The per-exercise “Start rest” button stays available either way."
           checked={prefs.autoRest !== false}
           onChange={value=> setPreference({ autoRest: value })}
+        />
+
+        <ToggleRow
+          label="Haptic feedback"
+          hint="Short vibration pulses when a set is logged, rest ends, or a guided step advances. Android and most non-iOS browsers; iOS Safari does not expose vibration to web apps."
+          checked={prefs.haptics !== false}
+          onChange={value=> setPreference({ haptics: value })}
         />
 
         <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2.5">

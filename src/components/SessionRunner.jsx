@@ -20,6 +20,7 @@ import { LoadNumpad, RestDock, swipeRowHandlers } from './GymModePanel.jsx';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
 import StepperButton from './StepperButton.jsx';
 import { tracePhase, traceStart, traceEnd } from '../lib/perfTrace.js';
+import { haptic } from '../lib/haptics.js';
 
 const NOTE_PROMPTS = [
   { id: 'felt-strong', label: 'Felt strong' },
@@ -259,7 +260,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       setRestEndsAt(null);
       setRestAnnouncement('Rest complete — next set.');
       announce('Rest complete — next set.', { key: 'rest-timer', spoken: preferences?.voiceCoach === true });
-      try{ navigator.vibrate?.(180); }catch{}
+      haptic('restComplete');
       if(appPrefs?.soundCues !== false) restCompleteCue();
     }
   }, [restEndsAt, clock, appPrefs?.soundCues]);
@@ -337,7 +338,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     // screen readers (a11y baseline: live regions announce without flooding).
     setRestAnnouncement(`Rest started for ${label}: ${fmtRest(sec)}.`);
     if(appPrefs?.soundCues !== false) restStartCue();
-    try{ navigator.vibrate?.(60); }catch{}
+    haptic('setComplete');
     if(appPrefs?.voiceCoach === true) speak(`Rest ${fmtRest(sec)} for ${label}.`, Number(appPrefs?.voiceRate) || 1);
   };
 
@@ -461,7 +462,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   const markFailed = (bi,si)=>{
     if(!blocks[bi]?.sets?.[si]) return;
     updateSet(bi,si,{ failed: true, completed: false });
-    try{ navigator.vibrate?.([80, 40, 80]); }catch{}
+    haptic('failedSet');
   };
 
   // Focus mode navigation: next block with an unfinished set, wrapping once.

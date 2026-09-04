@@ -16,6 +16,7 @@ import { quickJumps, applyQuickJump, adjacentLoad, REST_PRESET_CHOICES, restPres
 import { speak, voiceSupported } from '../lib/voiceCoach.js';
 import { fmtRest } from '../lib/guidedMode.js';
 import { announce } from '../lib/a11y.js';
+import { haptic } from '../lib/haptics.js';
 
 // ── Row gestures ────────────────────────────────────────────────────────────
 // One-thumb set handling on the touch rows:
@@ -58,7 +59,7 @@ export function swipeRowHandlers({ onComplete, onFail, onLongPress, enabled = tr
       gestureTimers.set(el, setTimeout(()=>{
         if(el.dataset.swipeFired) return;
         el.dataset.swipeFired = 'long';
-        try{ navigator.vibrate?.(40); }catch{}
+        haptic('tap');
         onLongPress?.();
       }, 550));
     },
@@ -71,7 +72,7 @@ export function swipeRowHandlers({ onComplete, onFail, onLongPress, enabled = tr
       clearTimer(el);
       if(Math.abs(dy) > Math.abs(dx)){ el.dataset.swipeX = ''; el.style.transform = ''; return; }
       el.style.transform = `translateX(${Math.max(-110, Math.min(110, dx))}px)`;
-      if(!el.dataset.swipeFired && Math.abs(dx) >= 72){ el.dataset.swipeFired = 'drag'; try{ navigator.vibrate?.(20); }catch{} }
+      if(!el.dataset.swipeFired && Math.abs(dx) >= 72){ el.dataset.swipeFired = 'drag'; haptic('swipe') }
     },
     onPointerUp: (e)=> finish(e, true),
     onPointerLeave: (e)=> finish(e, false),

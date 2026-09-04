@@ -43,6 +43,10 @@ function warmLazyViews(){
 import { loadStore, saveStore, upsertHistory } from './lib/store.js';
 import { recommendExercises } from './lib/data.js';
 import { recordEvent, recordErrorEvent } from './lib/telemetry.js';
+import { ensureStandaloneBodyClass, consumeShortcut } from './lib/pwa.js';
+import { setHapticsSource } from './lib/haptics.js';
+import OfflineBanner from './components/OfflineBanner.jsx';
+const InstallCard = lazy(() => import('./components/InstallCard.jsx'));
 import { pushToPulse } from './lib/pulse.js';
 import { adaptActiveSchedule } from './lib/programming.js';
 import { reviewCompletedWeek, applyWeeklyReview } from './lib/mesocycle.js';
@@ -364,6 +368,14 @@ export default function App(){
     }
   };
 
+  // PWA shell: standalone body class (CSS hooks: status-bar padding), and
+  // home-screen shortcut landing (?shortcut=start-workout / quick-log).
+  // Haptics read the live preference; the module holds the platform check.
+  setHapticsSource(() => store.preferences?.haptics !== false);
+
+  useEffect(() => { ensureStandaloneBodyClass(); }, []);
+  useEffect(() => { consumeShortcut(setTab); }, []);
+
   // A deferred update applies automatically the moment the workout ends
   // (save or discard both clear activeSession).
   useEffect(()=>{
@@ -372,7 +384,9 @@ export default function App(){
 
   return (
     <AppShell tab={tab} setTab={setTab} storeVersion={store.version} theme={theme} onCycleTheme={cycleTheme}>
+      <OfflineBanner />
       <LiveAnnouncer />
+      {tab==='today' && <Suspense fallback={null}><InstallCard /></Suspense>}
       {updateReady && (
         <div className="mx-4 mt-2 rounded-xl border border-review/30 bg-reviewsoft px-3 py-2 flex items-center gap-2 text-xs">
           <span className="font-bold text-review">Update available</span>

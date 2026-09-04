@@ -14,6 +14,7 @@ import {
 import { recordEvent } from '../lib/telemetry.js';
 import { restStartCue, restTickCue, restCompleteCue } from '../lib/audioCues.js';
 import { speak, cancelSpeech, voiceSupported } from '../lib/voiceCoach.js';
+import { haptic } from '../lib/haptics.js';
 import { announce } from '../lib/a11y.js';
 import { createWakeLock } from '../lib/wakeLock.js';
 import { restPresetFor } from '../lib/gymMode.js';
@@ -98,7 +99,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
     if(left >= 1 && left <= 3 && restTickRef.current !== left){
       restTickRef.current = left;
       if(soundOn) restTickCue();
-      try{ navigator.vibrate?.(30); }catch{}
+      haptic('guidedStep');
     }
   },[clock, restEndsAt, soundOn]);
 
@@ -109,7 +110,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
       setRestEndsAt(null);
       setAnnouncement('Rest complete — next set.');
       if(soundOn) restCompleteCue();
-      try{ navigator.vibrate?.([140, 60, 140]); }catch{}
+      haptic('guidedFinish');
     }
   },[restEndsAt, clock, soundOn]);
 
@@ -211,7 +212,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
     setRestEndsAt(Date.now() + sec*1000);
     setClock(Date.now());
     if(soundOn) restStartCue();
-    try{ navigator.vibrate?.(60); }catch{}
+    haptic('setComplete');
   };
 
   // Complete the current step, auto-chain the rest timer, then announce.
@@ -235,7 +236,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
       } catch {}
     }
     if(!skipped && block.restSec && nextGuidedStep(blocks)) startRest(restPresetFor(gymPrefs, block.exerciseId, block.restSec) || block.restSec, EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId, block.exerciseId);
-    try{ navigator.vibrate?.(skipped ? 60 : 180); }catch{}
+    haptic(skipped ? 'failedSet' : 'restComplete');
   };
 
   const toggleNoteTag=(id)=> setNoteTags(prev=> prev.includes(id) ? prev.filter(x=>x!==id) : [...prev,id]);
