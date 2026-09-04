@@ -36,6 +36,12 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
+  // Strict same-origin enforcement: the SW only ever answers for the app's own
+  // origin. The single sanctioned cross-origin fetch is the exercise
+  // illustration host — handled by its dedicated cache below and never by the
+  // generic strategies. (Also matches the CSP connect-src allowlist.)
+  const isIllustrationHost = url.origin === ILLUSTRATION_ORIGIN && url.hostname === 'bryllim.github.io' && url.pathname.includes('/frames');
+  if (url.origin !== location.origin && !isIllustrationHost) return;
   if (req.mode === 'navigate') {
     // Network-first: fresh HTML when online, cached shell when offline.
     // (Cache-first navigations pinned stale HTML after every deploy.)
@@ -49,7 +55,7 @@ self.addEventListener('fetch', (e) => {
     return;
   }
   const isAsset = url.origin === location.origin && url.pathname.includes('/assets/');
-  const isIllustration = url.origin === ILLUSTRATION_ORIGIN && url.hostname === 'bryllim.github.io';
+  const isIllustration = isIllustrationHost;
   if (isAsset || isIllustration) {
     // Cache-first + refresh-behind: content-hashed (or effectively immutable
     // SVG frames), so the cached copy is authoritative; the network copy

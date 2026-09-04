@@ -42,7 +42,7 @@ function warmLazyViews(){
 }
 import { loadStore, saveStore, upsertHistory } from './lib/store.js';
 import { recommendExercises } from './lib/data.js';
-import { recordEvent } from './lib/telemetry.js';
+import { recordEvent, recordErrorEvent } from './lib/telemetry.js';
 import { pushToPulse } from './lib/pulse.js';
 import { adaptActiveSchedule } from './lib/programming.js';
 import { reviewCompletedWeek, applyWeeklyReview } from './lib/mesocycle.js';
@@ -162,10 +162,12 @@ export default function App(){
     return ()=> clearTimeout(id);
   },[toast]);
 
-  // Global error telemetry (privacy-gated, local only)
+  // Global error capture (privacy-gated, local only): structured events go to
+  // the isolated error store (capped at 50, sanitizer-only fields) — never the
+  // product ledger — and only when error diagnostics are explicitly opted in.
   useEffect(()=>{
     const onError = (e)=>{
-      try { recordEvent('error', { message: String(e.message||e.error||e), at: new Date().toISOString() }); } catch {}
+      try { recordErrorEvent(e.error || e.reason || e, 'window'); } catch {}
     };
     window.addEventListener('error', onError);
     window.addEventListener('unhandledrejection', (e)=> onError(e.reason||e));

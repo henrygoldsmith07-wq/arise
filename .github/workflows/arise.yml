@@ -37,6 +37,8 @@ jobs:
         run: npm run verify
       - name: Smoke gate - bundle size budget
         run: npm run bundle:budget
+      - name: Smoke gate - dependency vulnerabilities (prod, high+)
+        run: npm run audit:deps
       - name: Smoke gate - validate + backtest
         run: npm run benchmark
       # Cross-commit reproducibility: the artifact comparator fails on metric
