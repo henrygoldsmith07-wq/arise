@@ -49,7 +49,18 @@ export default function ProgressView({ store }){
     const yAt = v=> pad + (1 - (v - min) / Math.max(0.001, max - min)) * (H - 2 * pad);
     const line = pts.map((p,i)=> `${i ? 'L' : 'M'}${xAt(i).toFixed(1)},${yAt(p.e1rm).toFixed(1)}`).join(' ');
     const band = `M${xAt(0).toFixed(1)},${yAt(mean + half).toFixed(1)} L${xAt(n - 1).toFixed(1)},${yAt(mean + half).toFixed(1)} L${xAt(n - 1).toFixed(1)},${yAt(Math.max(min, mean - half)).toFixed(1)} L${xAt(0).toFixed(1)},${yAt(Math.max(min, mean - half)).toFixed(1)} Z`;
-    return { line, band, last: ys[ys.length - 1], mean, half, n };
+    const r1 = Math.round(ys[0] * 10) / 10, rN = Math.round(ys[n - 1] * 10) / 10;
+    const direction = rN - r1 > 0.5 ? 'upward' : rN - r1 < -0.5 ? 'downward' : 'roughly flat';
+    return {
+      line, band, last: ys[ys.length - 1], mean, half, n,
+      // Text alternative for the chart: a one-line read plus a real data
+      // table (rendered sr-only) so screen readers get the numbers the SVG
+      // shows sighted users.
+      first: r1,
+      direction,
+      summary: `Estimated 1RM moved ${direction} from ${r1} to ${rN} kilograms over ${n} sessions. Mean ${Math.round(mean * 10) / 10}, ±95% band ±${Math.round(half * 10) / 10} — ${half < 1.5 ? 'tight' : 'wide'}.`,
+      rows: pts.map((p,i)=> ({ session: i + 1, date: p.dateISO || '', e1rm: Math.round(p.e1rm * 10) / 10 })),
+    };
   }, [history, exerciseId]);
   const plateau = useMemo(()=> exerciseId ? plateauDetection(history, exerciseId, { readinessLog: store.readinessLog || [] }) : null, [history, exerciseId, store.readinessLog]);
   const deloadValidation = useMemo(()=> validateDeloadLogic({ history, readinessLog: store.readinessLog || [] }), [history, store.readinessLog]);
@@ -241,10 +252,20 @@ export default function ProgressView({ store }){
             <p className="text-xs text-ink3">{plateau?.reason || 'Keep logging consistent sets before judging a plateau.'}</p>
             {trendBand && (
               <figure className="rounded-xl border border-line bg-surface2 px-3 py-2" aria-label="Estimated 1RM trend with 95% confidence band">
-                <svg viewBox="0 0 320 84" className="w-full h-20" role="img">
+                <svg viewBox="0 0 320 84" className="w-full h-20" role="img" aria-hidden="true" focusable="false">
                   <path d={trendBand.band} fill="currentColor" className="text-ink3/20" />
                   <path d={trendBand.line} fill="none" stroke="currentColor" strokeWidth="2" className="text-ink" strokeLinejoin="round" strokeLinecap="round" />
                 </svg>
+                <span className="sr-only">{trendBand.summary}</span>
+                <table className="sr-only">
+                  <caption>Estimated 1RM per session</caption>
+                  <thead><tr><th scope="col">Session</th><th scope="col">Date</th><th scope="col">e1RM (kg)</th></tr></thead>
+                  <tbody>
+                    {trendBand.rows.map(row=> (
+                      <tr key={row.session}><th scope="row">{row.session}</th><td>{row.date}</td><td>{row.e1rm}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
                 <figcaption className="text-[10px] text-ink3 mt-1">
                   e1RM per session (last {trendBand.n}), shaded ±95% band around the mean — a wide band means the trend is not yet settled ({trendBand.half < 1.5 ? 'tight' : 'wide'} here).
                 </figcaption>

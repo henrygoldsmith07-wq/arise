@@ -14,6 +14,7 @@ import {
 import { recordEvent } from '../lib/telemetry.js';
 import { restStartCue, restTickCue, restCompleteCue } from '../lib/audioCues.js';
 import { speak, cancelSpeech, voiceSupported } from '../lib/voiceCoach.js';
+import { announce } from '../lib/a11y.js';
 import { createWakeLock } from '../lib/wakeLock.js';
 import { restPresetFor } from '../lib/gymMode.js';
 import { RestDock } from './GymModePanel.jsx';
@@ -122,9 +123,11 @@ export default function GuidedRunner({ session, history = [], availableEquipment
 
   // Voice coach: speaks the exercise name, set number and rep target when a
   // new step starts. Toggling it on announces the current step immediately.
+  // The same text is mirrored to the app's polite live region (marked spoken
+  // so the SR doesn't double-read what TTS just said) when voice is OFF it is
+  // a plain announcement — screen-reader users get step changes either way.
   const speakCurrentStep = (stepArg, blocksArg, on)=>{
-    if(!on || !stepArg) return;
-    const block = blocksArg[stepArg.blockIndex];
+    const block = stepArg ? blocksArg[stepArg.blockIndex] : null;
     if(!block) return;
     const set = block.sets[stepArg.setIndex];
     const name = EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId;
@@ -133,7 +136,12 @@ export default function GuidedRunner({ session, history = [], availableEquipment
     const parts = [`${name}.`, `Set ${stepArg.setIndex + 1} of ${block.sets.length}.`];
     if(reps) parts.push(`${reps} reps`);
     if(load) parts.push(`at ${load} kilograms`);
-    speak(parts.join(' '), voiceRate);
+    if(on){
+      speak(parts.join(' '), voiceRate);
+      announce(parts.join(' '), { key: 'guided-step', spoken: true });
+    } else {
+      announce(parts.join(' '), { key: 'guided-step' });
+    }
   };
 
   const toggleVoice = ()=>{
@@ -257,7 +265,11 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   return (
     <div ref={rootRef} onKeyDown={trapTab} className="fixed inset-0 z-40 bg-bg flex flex-col" role="dialog" aria-modal="true" aria-label={`Guided session — ${session.title}`}>
       <span className="sr-only" role="status" aria-live="polite">
-        {announcement || (restLeft!==null ? `Rest: ${fmtRest(restLeft)} remaining.` : step ? `Step ${progress.completed + progress.skipped + 1} of ${progress.total}: ${currentExercise?.name || currentBlock?.exerciseId}, set ${step.setIndex + 1}.` : 'All sets resolved. Ready to save.')}
+        {/* Never interpolate the running countdown here — a per-second value in
+            a live region queues every tick on screen readers. Rest progress is
+            conveyed by the minute-mark announcer instead; this region carries
+            step changes and completion. */}
+        {announcement || (restLeft!==null ? `Rest started, ${restLabel || 'next exercise'} is next.` : step ? `Step ${progress.completed + progress.skipped + 1} of ${progress.total}: ${currentExercise?.name || currentBlock?.exerciseId}, set ${step.setIndex + 1}.` : 'All sets resolved. Ready to save.')}
       </span>
 
       {/* Header: session identity + live elapsed timer + overall progress bar */}

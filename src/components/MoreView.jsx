@@ -742,6 +742,20 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
       <section id="sec-help" className="rounded-2xl border border-line bg-surface p-4 space-y-2">
         <h3 className="text-sm font-bold">Help & testing</h3>
         <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <summary className="text-sm font-semibold cursor-pointer">Accessibility statement</summary>
+          <div className="text-xs text-ink2 mt-2 space-y-2">
+            <p>Arise aims to conform to <strong>WCAG 2.1 AA</strong>. What that means in the app today:</p>
+            <ul className="list-disc pl-4 space-y-1">
+              <li><strong>Keyboard</strong> — every control is reachable by Tab; modal dialogs (sessions, onboarding, template builder) trap Tab inside and restore focus to the opener on close; a visible focus ring is shown for keyboard input only.</li>
+              <li><strong>Screen readers</strong> — controls carry programmatic labels; status changes (rest minute marks, rest completion, guided step changes, set progress) go through one throttled, deduplicated polite live region so the countdown never spams; the e1RM chart ships a text summary plus a full data table.</li>
+              <li><strong>Motion</strong> — Reduce motion (in-app or your OS setting) disables animations and smooth scrolling. Voice coach and screen-reader announcements never fight: TTS-spoken text is excluded from the live region.</li>
+              <li><strong>Vision</strong> — Large-text mode scales type; high-contrast mode strengthens ink/lines; the layout survives Windows High Contrast (forced-colors). Status is never color alone — chips carry text or icons; gestures (swipe to complete/fail, long-press) all have button equivalents.</li>
+              <li><strong>Timing</strong> — rest timers are wall-clock based and pause-safe; nothing expires mid-interaction.</li>
+            </ul>
+            <p>Known gaps: VoiceOver/TalkBack behaviour is verified by manual testing only (the checklist below), not automated; some third-party illustration labels are decorative. Report anything you hit via the feedback link — fixes land fast.</p>
+          </div>
+        </details>
+        <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
           <summary className="text-sm font-semibold cursor-pointer">Test on a real phone (30-second checklist)</summary>
           <ol className="list-decimal pl-5 text-xs text-ink2 mt-2 space-y-1">
             <li>Open this app on your phone (same Wi-Fi → use the dev URL, or deploy preview).</li>

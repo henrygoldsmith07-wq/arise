@@ -13,6 +13,7 @@ import { recordRecommendation, markRecommendationOverride } from '../lib/longitu
 import { quickJumps, applyQuickJump, skipTo, restPresetFor } from '../lib/gymMode.js';
 import { SESSION_QUALITY_OPTIONS, sessionQualityLabel } from '../lib/gymMode.js';
 import { createWakeLock } from '../lib/wakeLock.js';
+import { announce } from '../lib/a11y.js';
 import { restStartCue, restCompleteCue } from '../lib/audioCues.js';
 import { speak, cancelSpeech } from '../lib/voiceCoach.js';
 import { LoadNumpad, RestDock, swipeRowHandlers } from './GymModePanel.jsx';
@@ -228,7 +229,6 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     if(e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
     else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
   };
-
   useEffect(()=>{
     if(discardConfirmOpen) keepEditingRef.current?.focus();
   },[discardConfirmOpen]);
@@ -256,6 +256,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     if(restEndsAt && restEndsAt <= Date.now()){
       setRestEndsAt(null);
       setRestAnnouncement('Rest complete — next set.');
+      announce('Rest complete — next set.', { key: 'rest-timer', spoken: preferences?.voiceCoach === true });
       try{ navigator.vibrate?.(180); }catch{}
       if(appPrefs?.soundCues !== false) restCompleteCue();
     }
@@ -594,6 +595,9 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   return (
     <div ref={rootRef} onKeyDown={trapTab} className="fixed inset-0 z-40 bg-bg flex flex-col" role="dialog" aria-modal="true" aria-label={`Session — ${session.title}`}>
       <span className="sr-only" role="status" aria-live="polite">{restAnnouncement || `${completedSets} of ${totalSets} sets completed`}</span>
+      {/* App-level announcer output lives in App's <LiveAnnouncer/>; this
+          span keeps the in-runner completion notice. Rest minute marks are
+          routed through the throttled announcer instead of per-second state. */}
       <div className="relative shrink-0 flex items-center gap-3 px-4 py-3 border-b border-line bg-surface">
         <button ref={closeRef} onClick={onCancel} className="w-11 h-11 grid place-items-center rounded-full border border-line bg-surface2" aria-label="Close session">✕</button>
         <div className="min-w-0">
@@ -777,7 +781,19 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     {b.unilateral ? (
                       <select value={s.side||'L'} onChange={e=> updateSet(bi,si,{side:e.target.value})} aria-label={`Side set ${si+1}`} className="min-w-0 rounded-xl border border-line bg-surface2 px-1 py-3 text-xs font-bold"><option value="L">L</option><option value="R">R</option></select>
                     ) : <span />}
-                    <button onClick={()=> completeSet(bi,si)} aria-pressed={s.completed} className={`min-h-12 px-2.5 rounded-xl border text-[11px] font-bold whitespace-nowrap ${s.completed?'bg-success text-bg border-success':'bg-surface2 border-line'}`}>{s.completed?'✓':'Done'}</button>
+                    <span className="flex items-center gap-1">
+                      <button onClick={()=> completeSet(bi,si)} aria-pressed={s.completed} className={`min-h-12 px-2.5 rounded-xl border text-[11px] font-bold whitespace-nowrap ${s.completed?'bg-success text-bg border-success':'bg-surface2 border-line'}`}>{s.completed?'✓':'Done'}</button>
+                      {/* Gesture parity: the swipe-left "failed" action and the
+                          long-press keypad both exist as buttons, so touch-only
+                          gestures never gate an action (WCAG 2.5.6 / 2.1.1). */}
+                      {gymMode && !s.completed && (
+                        <button
+                          onClick={()=> s.failed ? updateSet(bi,si,{ failed:false }) : markFailed(bi,si)}
+                          aria-pressed={s.failed}
+                          aria-label={s.failed ? `Unmark set ${si+1} failed` : `Mark set ${si+1} failed`}
+                          className={`min-h-12 w-9 grid place-items-center rounded-xl border text-[11px] font-bold ${s.failed?'bg-review text-bg border-review':'bg-surface2 border-line'}`}>{s.failed?'↺':'✗'}</button>
+                      )}
+                    </span>
                     <button onClick={()=> removeSet(bi,si)} aria-label={`Remove set ${si+1}`} className="relative w-9 h-9 grid place-items-center rounded-full border border-line text-ink3 before:absolute before:-inset-1.5 before:rounded-full before:content-['']">×</button>
                   </div>
                   );

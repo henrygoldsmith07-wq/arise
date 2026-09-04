@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useDialogA11y } from '../lib/a11y.js';
 import { EQUIPMENT, LOCATIONS, GOALS, LEVELS, EXERCISES, exerciseAvailable } from '../lib/data.js';
 import { DEFAULT_PLATE_DENOMINATIONS_KG } from '../lib/plates.js';
 
@@ -45,6 +46,9 @@ export default function Onboarding({ open, onClose, onComplete, initial }){
     requestAnimationFrame(()=> dialogRef.current?.querySelector('button[aria-label="Close"]')?.focus());
     return ()=> window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
+
+  // Focus capture/trap/restore for the modal, active only while open.
+  const { rootRef, trapTab } = useDialogA11y({ active: open });
 
   if(!open) return null;
 
@@ -256,7 +260,7 @@ export default function Onboarding({ open, onClose, onComplete, initial }){
   const cur = steps[step];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm grid place-items-center p-4" role="dialog" aria-modal="true" aria-label="Onboarding" onClick={(e)=>{ if(e.target===e.currentTarget) onClose(); }}>
+    <div ref={rootRef} onKeyDown={trapTab} className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm grid place-items-center p-4" role="dialog" aria-modal="true" aria-label="Onboarding" onClick={(e)=>{ if(e.target===e.currentTarget) onClose(); }}>
       <div ref={dialogRef} className="w-full max-w-lg rounded-3xl bg-surface border border-line overflow-hidden max-h-[90dvh] flex flex-col">
         <div className="px-6 pt-6 pb-3 border-b border-line">
           <div className="flex items-center justify-between gap-3">

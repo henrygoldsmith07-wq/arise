@@ -8,6 +8,7 @@ import MoreView from './components/MoreView.jsx';
 import SessionRunner from './components/SessionRunner.jsx';
 import GuidedRunner from './components/GuidedRunner.jsx';
 import Onboarding from './components/Onboarding.jsx';
+import LiveAnnouncer from './components/LiveAnnouncer.jsx';
 import { loadStore, saveStore, upsertHistory } from './lib/store.js';
 import { recommendExercises } from './lib/data.js';
 import { recordEvent } from './lib/telemetry.js';
@@ -296,6 +297,7 @@ export default function App(){
 
   return (
     <AppShell tab={tab} setTab={setTab} storeVersion={store.version} theme={theme} onCycleTheme={cycleTheme}>
+      <LiveAnnouncer />
       {updateReady && (
         <div className="mx-4 mt-2 rounded-xl border border-review/30 bg-reviewsoft px-3 py-2 flex items-center gap-2 text-xs">
           <span className="font-bold text-review">Update available</span>

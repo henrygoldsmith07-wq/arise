@@ -27,3 +27,50 @@ html:not(.dark) .exercise-illustration { filter: invert(1); }
 @keyframes settingsFlash { 0%,100%{ box-shadow:0 0 0 0 rgba(0,0,0,0) } 30%{ box-shadow:0 0 0 3px var(--accent, #6366f1) } }
 .settings-flash { animation: settingsFlash 1.6s ease }
 html.reduce-motion .settings-flash { animation: none }
+
+/* ── Accessibility layer ───────────────────────────────────────────────
+   Visible keyboard focus. Tailwind utilities set `outline-style: none` on
+   focus in places, so the ring lives on :focus-visible with two separators
+   (light ink on dark chrome, dark ink on light chrome) — visible on every
+   surface, both themes, and skipped for pointer/touch input. */
+:focus-visible {
+  outline: 2px solid var(--ink) !important;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.dark :focus-visible, :root[data-theme="dark"] :focus-visible {
+  outline-color: var(--ink);
+}
+
+/* Reduced motion: the app-level preference (any animation/transition off,
+   regardless of OS) and the OS setting itself (for users who never open
+   settings). scroll-behavior stays auto — smooth scrolling is motion too. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Windows High Contrast / forced-colors: system colors replace the palette,
+   so transparent borders vanish and SVG drawings lose their strokes. Give
+   every interactive element a real border and put text back on ink. */
+@media (forced-colors: active) {
+  button, a, input, select, textarea, [role="button"] {
+    border: 1px solid ButtonBorder;
+  }
+  svg { forced-color-adjust: auto; }
+}
+
+/* Large-text mode also bumps the smallest annotation type, which reads as
+   decorative at 10px but carries real numbers (CI bands, audit trails). */
+:root.large-text .text-\[10px\] { font-size: 0.75rem; }
+:root.large-text .text-\[11px\] { font-size: 0.78125rem; }
