@@ -3,6 +3,9 @@ import { buildExportPayload, downloadJson, parseImportFile, mergeStores, portabl
 import { buildImportPreview } from '../lib/exportPolicy.js';
 import { clearStore } from '../lib/store.js';
 import { clearAllStoredData, getIntegrityNotice, clearIntegrityNotice, whenPersisted } from '../lib/storage.js';
+import { buildPartialExportPayload } from '../lib/export.js';
+import { buildCoachExport, renderCoachMarkdown } from '../lib/coachExport.js';
+const SyncPanel = lazy(() => import('./SyncPanel.jsx'));
 import { storageHealth, requestPersistentStorage } from '../lib/storageQuota.js';
 import { cryptoAvailable, encryptBackup, decryptBackup, looksEncrypted } from '../lib/cryptoBackup.js';
 import { clearTelemetry, telemetrySummary, getEventHistory, mergeEventHistory, replaceEventHistory, recordEvent, getErrorEvents, clearErrorEvents } from '../lib/telemetry.js';
@@ -98,7 +101,10 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
 
   const healthAdapter = typeof window !== 'undefined' ? window.__ARISE_HEALTH_ADAPTER__ : null;
 
+  const markExported = ()=>{ try{ localStorage.setItem('arise.lastExportAt', new Date().toISOString()); }catch{} };
+
   const exportNow = ()=>{
+    markExported();
     const payload = buildExportPayload(store);
     const date = new Date().toISOString().slice(0,10);
     // Compressed when the browser supports it; plain JSON otherwise — both
@@ -109,6 +115,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   };
 
   const exportEncrypted = async ()=>{
+    markExported();
     if(!cryptoAvailable()){ setMsg('Encrypted backups need a newer browser — plain export still works.'); setTimeout(()=> setMsg(null), 4000); return; }
     const pass = prompt('Choose a passphrase for this backup.\n\nIf you lose it, the backup cannot be recovered — there is no reset.', '');
     if(pass == null) return;
@@ -152,6 +159,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
     location.reload();
   };
   const exportCsv = ()=>{
+    markExported();
     const csv = portableCsv(store.history||[]);
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -165,6 +173,42 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
     setMsg('Event history exported — it stays on your device unless you share the file.');
     setTimeout(()=> setMsg(null), 3000);
   };
+
+  // Partial exports: one slice, same versioned envelope — a coach, a new
+  // device or the study tooling each need only part of the store.
+  const exportPartial = (kind)=>{
+    try{
+      const payload = buildPartialExportPayload(store, kind);
+      const date = new Date().toISOString().slice(0,10);
+      downloadJson(`arise-${kind}-${date}.json`, payload);
+      setMsg(`${kind[0].toUpperCase()+kind.slice(1)} export downloaded.`);
+    }catch(err){ setMsg(String(err.message || err)); }
+    setTimeout(()=> setMsg(null), 4000);
+  };
+
+  // Coach export: consent-gated, human-readable summary. Nothing identity- or
+  // health-bearing unless explicitly ticked; never credentials, never telemetry.
+  const [coachSections, setCoachSections] = useState({ performance: true, weekly: true, readiness: false, detail: false });
+  const exportCoach = ()=>{
+    const data = buildCoachExport(store, { sections: coachSections, weeks: 8 });
+    const md = renderCoachMarkdown(data);
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `arise-coach-${new Date().toISOString().slice(0,10)}.md`; a.click();
+    setTimeout(()=> URL.revokeObjectURL(url), 2000);
+    setMsg('Coach summary downloaded — it contains only the sections ticked below.');
+    setTimeout(()=> setMsg(null), 5000);
+  };
+
+  // Backup reminder: a gentle weekly nudge, dismissed until next week.
+  const lastExportAt = (()=>{ try{ return localStorage.getItem('arise.lastExportAt'); }catch{ return null; } })();
+  const [backupReminderDismissed, setBackupReminderDismissed] = useState(()=>{ try{ return localStorage.getItem('arise.backupReminderDismissedAt'); }catch{ return null; } });
+  const WEEK_MS = 7 * 86400000;
+  const newestSessionISO = (store.history||[]).length ? (store.history||[])[(store.history||[]).length-1].dateISO : null;
+  const referenceAt = lastExportAt || (newestSessionISO ? Date.parse(newestSessionISO) : null);
+  const backupReminderDue = referenceAt != null && (Date.now() - (lastExportAt ? Date.parse(lastExportAt) : referenceAt)) > WEEK_MS
+    && (!backupReminderDismissed || (Date.now() - Date.parse(backupReminderDismissed)) > WEEK_MS);
+  const dismissBackupReminder = ()=>{ const at = new Date().toISOString(); try{ localStorage.setItem('arise.backupReminderDismissedAt', at); }catch{} setBackupReminderDismissed(at); };
 
   // Import is a two-step, reviewable flow: the file is parsed and previewed
   // (counts, conflicts, denied fields, origin metadata) and NOTHING is applied
@@ -364,6 +408,16 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
 
       <section id="sec-backup" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
         <h3 className="text-sm font-bold">Backup & portability</h3>
+        {backupReminderDue && (
+          <div role="status" className="rounded-xl border border-review/40 bg-reviewsoft px-3 py-2 text-xs space-y-1">
+            <p className="font-bold">Time for a backup</p>
+            <p className="text-ink3">It&apos;s been over a week since your last export. A local file is the only copy of your training history.</p>
+            <div className="flex gap-2">
+              <button onClick={exportNow} className="btn btn-primary min-h-8 rounded-lg px-2.5 text-[11px]">Export now</button>
+              <button onClick={dismissBackupReminder} className="underline font-semibold">Remind me next week</button>
+            </div>
+          </div>
+        )}
         {integrity && (
           <div role="alert" className="rounded-xl border border-danger/40 bg-dangersoft px-3 py-2 text-xs space-y-1">
             <p className="font-bold">Stored data needed repair on startup.</p>
@@ -386,6 +440,23 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
             <input type="file" accept=".arisebak,application/octet-stream" className="hidden" onChange={onPickEncrypted} />
           </label>
         </div>
+        <div className="flex flex-wrap gap-2 text-xs">
+          <span className="self-center text-[11px] text-ink3">Partial export:</span>
+          <button onClick={()=> exportPartial('history')} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px]">History only</button>
+          <button onClick={()=> exportPartial('settings')} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px]">Settings only</button>
+          <button onClick={()=> exportPartial('events')} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px]">Events only</button>
+        </div>
+        <details className="rounded-xl border border-line bg-surface2 px-3 py-2 text-xs">
+          <summary className="font-semibold cursor-pointer">Coach export — share a summary with a human coach</summary>
+          <p className="text-ink3 mt-1.5">Aggregates only by default: best sets and weekly volume. Tick extra sections; nothing identity-bearing is included, and a coach export never contains your backups, events or credentials.</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+            <label className="flex items-center gap-1.5"><input type="checkbox" checked={coachSections.performance} onChange={(e)=> setCoachSections({ ...coachSections, performance: e.target.checked })} /> Per-exercise bests</label>
+            <label className="flex items-center gap-1.5"><input type="checkbox" checked={coachSections.weekly} onChange={(e)=> setCoachSections({ ...coachSections, weekly: e.target.checked })} /> Weekly volume</label>
+            <label className="flex items-center gap-1.5"><input type="checkbox" checked={coachSections.readiness} onChange={(e)=> setCoachSections({ ...coachSections, readiness: e.target.checked })} /> Readiness scores</label>
+            <label className="flex items-center gap-1.5"><input type="checkbox" checked={coachSections.detail} onChange={(e)=> setCoachSections({ ...coachSections, detail: e.target.checked })} /> Full set detail</label>
+          </div>
+          <button onClick={exportCoach} className="btn btn-primary min-h-8 rounded-lg px-2.5 text-[11px] mt-2">Download coach summary (.md)</button>
+        </details>
         {storageInfo && (
           <div className="rounded-xl border border-line bg-surface2 px-3 py-2 text-xs space-y-1">
             {storageInfo.estimate
@@ -445,15 +516,30 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
               <p className="text-ink3">Ignored for your safety (device-local settings): {importPreview.deniedFields.join(', ')}</p>
             )}
             <div className="flex gap-2">
-              <button onClick={applyImportPreview} className="btn btn-primary min-h-9 rounded-xl px-4">Apply {importStrategy}</button>
+              <button onClick={()=> { if(importStrategy==='replace' && !confirm('Replace overwrites ALL data on this device with the backup — your current history, programs and settings are gone. Export a backup first if in doubt. Continue?')) return; applyImportPreview(); }} className="btn btn-primary min-h-9 rounded-xl px-4">Apply {importStrategy}</button>
               <button onClick={()=> setImportPreview(null)} className="btn btn-secondary min-h-9 rounded-xl px-4">Cancel</button>
             </div>
           </div>
         )}
         <p className="text-xs text-ink3">Cross-device sync is Merge with last-write-wins per session (via savedAt). Conflicts resolve without losing either device's work.</p>
+        <Suspense fallback={<p className="text-xs text-ink3">Loading sync settings…</p>}>
+          <SyncPanel store={store} setStore={setStore} setMsg={setMsg} />
+        </Suspense>
         {msg && <p role="status" className="text-xs bg-surface2 border border-line rounded-xl px-3 py-2">{msg}</p>}
         <details className="text-xs">
           <summary className="font-semibold cursor-pointer">What’s in the backup?</summary>
+          <div className="mt-2 rounded-xl border border-line bg-surface2 px-3 py-2">
+            <p className="font-semibold">This export would contain:</p>
+            <p className="text-ink3 mt-0.5">
+              {(store.history||[]).length} session(s) ·
+              {(store.history||[]).reduce((n,h)=> n + (h.blocks||[]).reduce((m,b)=> m + (b.sets||[]).length, 0), 0)} set(s) ·
+              {(store.customTemplates||[]).length} template(s) ·
+              {(store.readinessLog||[]).length} readiness entr{(store.readinessLog||[]).length === 1 ? 'y' : 'ies'} ·
+              {getEventHistory().length} event(s)
+              {store.studyParticipantId ? ' · your pseudonymous study id' : ''}
+            </p>
+            <p className="text-[11px] text-ink3 mt-1">Excluded by design: crash logs, telemetry granular options, sync credentials, consent toggles.</p>
+          </div>
           <pre className="mt-2 overflow-auto rounded-xl bg-surface2 border border-line p-3 text-[11px] leading-relaxed">{JSON.stringify({ app:'arise', version:3, schemaVersion:4, exportedAt:'…', data:{ onboarding:'{goal,equipment,location,level,daysPerWeek,availableMinutes,preferredExerciseIds,dislikedExerciseIds,plateConfig}', activeSchedule:'{programId,sessions}', activeWorkout:'recoverable draft or null', history:'[{id,date,blocks:[{exerciseId,sets:[{reps,weightKg,rpe,side,rom}]}]}]', preferences:'{units,theme,telemetryEnabled,pulseEnabled,healthSummaryEnabled}', eventHistory:'[{id,type,at,payload}]', healthSummary:'optional summary or null' }}, null, 2)}</pre>
         </details>
       </section>

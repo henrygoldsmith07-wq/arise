@@ -255,6 +255,13 @@ export default function App(){
     }catch{}
     next = { ...next, history: hist, activeSchedule, activeWorkout: null };
     setStore(next);
+    // Auto-sync: when enabled and configured, converge with the remote in the
+    // background after every saved session. Fire-and-forget — failures surface
+    // in the sync status screen, never as workout-blocking errors. Loaded via
+    // dynamic import so the whole sync stack stays out of the boot chunk.
+    void import('./lib/autoSync.js')
+      .then(({ autoSyncAfterSave }) => autoSyncAfterSave({ store: next, setStore }))
+      .catch(() => {});
     setActiveSession(null);
     setRecoveryOpen(false);
     setTab('progress');

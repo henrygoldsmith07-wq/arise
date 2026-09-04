@@ -168,6 +168,7 @@ export const DENY_FIELDS = [
   'preferences.pulseEnabled',
   'preferences.healthSummaryEnabled',
   'preferences.syncEnabled',
+  'preferences.sync',                     // WebDAV credentials + passphrase: device-local
   '__proto__', 'constructor', 'prototype', // pollution vectors
 ];
 
