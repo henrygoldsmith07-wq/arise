@@ -878,7 +878,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           )}
           {saveBlocker && <p className="text-xs text-review bg-reviewsoft border border-review/30 rounded-xl px-3 py-2">{saveBlocker}</p>}
           <div className="flex gap-2">
-            <button onClick={onCancel} className="btn btn-secondary min-h-11 rounded-xl px-4">Cancel</button>
+            {/* Cancel routes through the in-app discard confirm once any set is
+                logged — window.confirm is a jarring dead-end on mobile and the
+                dialog below already exists for the Escape path. */}
+            <button onClick={()=> blocks.some(b=> b.sets.some(s=> s.completed || String(s.reps).trim()!=='')) ? setDiscardConfirmOpen(true) : onCancel()} className="btn btn-secondary min-h-11 rounded-xl px-4">Cancel</button>
             <button onClick={save} disabled={!canSave} className="btn btn-primary flex-1 min-h-11 rounded-xl disabled:opacity-40">Save session</button>
           </div>
         </div>

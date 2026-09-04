@@ -71,7 +71,10 @@ export function decompose(store){
   const { history: canonicalHistory } = normalizeHistoryForWrite(historyOf(store), { source: 'manual' });
   const tombstones = (store.tombstones || []).map((t) => ({ ...makeTombstone(t.entity, t.refId, { at: t.deletedAt, deviceId: t.deviceId }), id: t.id || makeTombstone(t.entity, t.refId, { at: t.deletedAt, deviceId: t.deviceId }).id }));
   return {
-    profile: { id: PROFILE_ID, version: store.version || 6, onboarding: store.onboarding || null, preferences: store.preferences || {}, healthSummary: store.healthSummary || null, studyParticipantId: store.studyParticipantId || null, studyEnrollment: store.studyEnrollment || null },
+    // activeWorkout rides on the profile row: the crashed-session draft must
+    // survive restart or the recovery dialog can never be offered (it is the
+    // whole point of the draft — losing it on a save defeats crash recovery).
+    profile: { id: PROFILE_ID, version: store.version || 6, onboarding: store.onboarding || null, preferences: store.preferences || {}, healthSummary: store.healthSummary || null, studyParticipantId: store.studyParticipantId || null, studyEnrollment: store.studyEnrollment || null, activeWorkout: store.activeWorkout ?? null },
     sessions: canonicalHistory,
     sets: splitSets(canonicalHistory),
     programme: { id: PROGRAMME_ID, activeSchedule: schedule, programHistory: store.programHistory || [] },
@@ -164,6 +167,7 @@ export async function loadStoreFromIdb(){
     healthSummary: profile?.healthSummary ?? null,
     studyParticipantId: profile?.studyParticipantId ?? null,
     studyEnrollment: profile?.studyEnrollment ?? null,
+    activeWorkout: profile?.activeWorkout ?? null,
     history: sessions || [],
     activeSchedule: schedule,
     programHistory: programme?.programHistory || [],

@@ -1,4 +1,4 @@
-// longitudinalCore.js � shared constants and helpers for the evaluation
+// longitudinalCore.js � shared constants and helpers for the evaluation
 // ledger (ADR 0007). Split from longitudinal.js so the pure aggregation in
 // evaluation.js can import these without touching storage or consent logic.
 
@@ -14,7 +14,11 @@ export function wilsonInterval(successes, n, z = 1.96){
   const z2 = z * z;
   const denom = 1 + z2 / total;
   const centre = (p + z2 / (2 * total)) / denom;
-  const spread = z * Math.sqrt((p * (1 - p) + z2 / (4 * total)) / denom) / denom;
+  // The variance term divides by n, not by the (1+z²/n) denominator — the
+  // textbook Wilson interval. Dividing by the denominator too makes intervals
+  // materially too wide (100/100 reported low≈0.81 instead of ≈0.97), which
+  // read as "we know nothing" exactly when the evidence was strongest.
+  const spread = z * Math.sqrt((p * (1 - p) + z2 / (4 * total)) / total) / denom;
   return {
     low: round(Math.max(0, centre - spread), 3),
     high: round(Math.min(1, centre + spread), 3),

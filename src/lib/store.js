@@ -165,10 +165,11 @@ export function normaliseHistoryEntry(entry){
 
 export function normaliseHistory(history = []){
   // Per-entry resilience: one malformed row (e.g. a null block from an edited
-  // backup) must cost that row only â€” not the whole history. The raw payload is
+  // backup) must cost that row only — not the whole history. The raw payload is
   // quarantined by the caller before normalisation ever runs.
   const normalised = [];
-  for(const entry of history || []){
+  for(const entry of Array.isArray(history) ? history : []){
+    if(!entry || typeof entry !== 'object') continue; // null rows cost nothing
     try{ normalised.push(normaliseHistoryEntry(entry)); }
     catch{ /* drop the unreadable entry, keep the rest */ }
   }
@@ -201,6 +202,9 @@ export async function clearStore(){
 }
 
 export function runMigrations(raw){
+  // Hostile/empty input (null, primitives, an evicted or hand-mangled payload)
+  // migrates to a valid default store rather than crashing the boot path.
+  if(!raw || typeof raw !== 'object' || Array.isArray(raw)) raw = {};
   let j=raw;
   if(!j.version || j.version < 1) j = { ...j, version: 1 };
   if(j.version === 1){
@@ -350,7 +354,7 @@ export function prsHitBySession(session, priorHistory){
 // Helpers for history-derived stats
 export function totalVolumeKg(history){
   let total=0;
-  for(const sess of history) for(const b of (sess.blocks||[])) for(const set of (b.sets||[])){
+  for(const sess of history||[]) for(const b of (sess?.blocks||[])) for(const set of (b?.sets||[])){
     const reps = Number(set.reps)||0;
     const w = Number(set.weightKg)||0;
     // assisted reduces effective load (e.g. pull-up with -10kg assist)
@@ -362,8 +366,8 @@ export function totalVolumeKg(history){
 }
 
 export function streakDays(history){
-  if(!history.length) return 0;
-  const dates = [...new Set(history.map(h=>h.dateISO))].sort();
+  if(!history?.length) return 0;
+  const dates = [...new Set(history.map(h=>h?.dateISO).filter(Boolean))].sort();
   let streak=1;
   for(let i=dates.length-1;i>0;i--){
     // Parse as UTC calendar dates: local parsing breaks day diffs across DST

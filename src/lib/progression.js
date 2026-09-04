@@ -472,8 +472,15 @@ function logsFor(history, exerciseId, asOfDateISO = null){
     const reps = Number(String(s.reps).match(/\d+/)?.[0] || s.reps)||0; const w = Number(s.weightKg)||0; const rpe = s.rpe ?? null;
     // Impossible values (negative weight) never inform a prescription — the
     // boot-time audit repairs them, but the engine also refuses them here.
-    if(reps && w >= 0) out.push({ reps, weightKg: w, rpe, dateISO: h.dateISO, side: s.side||null, rom: s.rom||null, assistedKg: s.assistedKg ?? null });
+    if(reps && w >= 0) out.push({ reps, weightKg: w, rpe, dateISO: h.dateISO, savedAt: h.savedAt || null, side: s.side||null, rom: s.rom||null, assistedKg: s.assistedKg ?? null });
   }
+  // Chronological order: "the last log" must mean the most recent session,
+  // not whatever row happened to come last in the array. Every caller passes
+  // store-normalised (sorted) history today, but this is a public engine
+  // contract — an unsorted import must not change the prescription.
+  // Same-day ties resolve on savedAt (the store's own recency convention),
+  // so an edited session re-save correctly becomes the reference exposure.
+  out.sort((a,b)=> String(a.dateISO||'').localeCompare(String(b.dateISO||'')) || String(a.savedAt||'').localeCompare(String(b.savedAt||'')));
   return asOfDateISO ? out.filter(l=> String(l.dateISO || '') <= String(asOfDateISO)) : out;
 }
 
@@ -534,8 +541,15 @@ export function noisyFlagsForLastSession(history, exerciseId, config = null, asO
   const cfg = resolveArisePriors(config).programming.noisySession;
   // Prior-only: evaluate the last session AS OF a date, never the true last
   // entry, when the caller supplies an as-of cut. The slice becomes the
-  // "history" the rest of the classifier sees.
-  const slice = asOfDateISO ? (history||[]).filter(h=> String(h?.dateISO || '') <= String(asOfDateISO)) : (history||[]);
+  // "history" the rest of the classifier sees. "Last" means the most recent
+  // session (date, then savedAt) — never whichever row the caller's array
+  // happened to end with.
+  const slice = (asOfDateISO ? (history||[]).filter(h=> String(h?.dateISO || '') <= String(asOfDateISO)) : (history||[]))
+    .map((session, originalIndex)=> ({ session, originalIndex }))
+    .sort((a, b)=> String(a.session?.dateISO || '').localeCompare(String(b.session?.dateISO || ''))
+      || String(a.session?.savedAt || '').localeCompare(String(b.session?.savedAt || ''))
+      || a.originalIndex - b.originalIndex)
+    .map(item=> item.session);
   const last = slice.length ? slice[slice.length - 1] : null;
   if(!last) return [];
   history = slice;
@@ -620,6 +634,8 @@ function isBodyweight(id, config = null){
 // later record on the same date can never become prior knowledge accidentally.
 function orderedHistory(history){
   return (history || []).map((session, originalIndex)=> ({ session, originalIndex }))
-    .sort((a, b)=> String(a.session?.dateISO || '').localeCompare(String(b.session?.dateISO || '')) || a.originalIndex - b.originalIndex)
+    .sort((a, b)=> String(a.session?.dateISO || '').localeCompare(String(b.session?.dateISO || ''))
+      || String(a.session?.savedAt || '').localeCompare(String(b.session?.savedAt || ''))
+      || a.originalIndex - b.originalIndex)
     .map(item=> item.session);
 }
