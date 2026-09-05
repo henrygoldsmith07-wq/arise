@@ -28,6 +28,7 @@
     "bundle:diff": "node scripts/bundle-diff.cjs --check 10",
     "format:check": "node scripts/format-check.cjs",
     "format:fix": "node scripts/format-check.cjs --fix",
+    "screenshots": "node scripts/screenshots.mjs",
     "license:check": "node scripts/license-check.cjs",
     "audit:deps": "npm audit --omit=dev --audit-level=high",
     "e2e:pwa": "npm run build && playwright test --config playwright.pwa.config.js"
