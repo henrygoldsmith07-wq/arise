@@ -20,6 +20,11 @@ jobs:
     defaults:
       run:
         working-directory: .
+    # Least privilege, job-scoped: the only write this pipeline needs is the
+    # bundle-diff PR comment; everything else is read-only over contents.
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
