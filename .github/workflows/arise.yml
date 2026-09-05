@@ -20,21 +20,42 @@ jobs:
     defaults:
       run:
         working-directory: .
+    # Least privilege, job-scoped: the only write this pipeline needs is the
+    # bundle-diff PR comment; everything else is read-only over contents.
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # bundle-diff builds origin/main in a worktree; a shallow clone
+          # (fetch-depth 1) has no base to diff against.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
+      # Workflow files that GitHub can't parse fail invisibly (a run named
+      # after the file, no logs). Lint them here so it fails at PR time.
+      - name: Lint workflow YAML
+        run: npx --yes yaml-lint .github/workflows/*.yml
+      # -- Verify pipeline ----------------------------------------------------
+      # lint:content + type-check + unit tests + build, exactly as PR-local
+      # verify runs them. Formatting is checked with a zero-config grep gate
+      # (see scripts/format-check.cjs) — no prettier dependency, no churn.
+      - name: Verify (lint, types, tests, build)
+        run: npm run verify
+      - name: Formatting check
+        run: npm run format:check
+      - name: License compliance (production deps)
+        run: npm run license:check
       # -- Evidence smoke gate ------------------------------------------------
       # The benchmarks are the only thing that exercises the study/evidence
       # code paths (type-check covers only src/** and scripts/**, with checkJs
       # off). Run every deterministic one on every push so a broken line in
       # benchmark/ fails CI instead of rotting until real data arrives.
-      - name: Smoke gate - verify (lint, types, tests, build)
-        run: npm run verify
       - name: Smoke gate - bundle size budget
         run: npm run bundle:budget
       - name: Smoke gate - dependency vulnerabilities (prod, high+)
@@ -53,12 +74,36 @@ jobs:
         run: npm run benchmark:field:fixture
       - name: Smoke gate - logging-time metric
         run: npm run benchmark:logging
+      # -- Bundle size diff reporting -----------------------------------------
+      # Advisory (10 kB allowance): posts the per-chunk gzip delta vs main as
+      # a PR comment so growth is a conversation, not a surprise.
+      - name: Bundle size diff vs main
+        if: github.event_name == 'pull_request'
+        run: node scripts/bundle-diff.cjs --check 10 | tee bundle-diff.md
+      - name: Comment bundle diff on the PR
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: bundle-diff
+          path: bundle-diff.md
+      # -- E2E + visual regression --------------------------------------------
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
       - name: Run Playwright E2E
         run: npx playwright test --reporter=list
       - name: Run Playwright E2E (PWA, production build)
         run: npm run e2e:pwa -- --reporter=list
+      # Visual regression: the resilience suite writes light/dark screenshots
+      # per tab. They upload on EVERY run (not just failure) so a reviewer can
+      # eyeball theme changes straight from the run artifacts.
+      - name: Upload visual regression screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: theme-screenshots
+          path: test-results/theme-*.png
+          retention-days: 14
+          if-no-files-found: ignore
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v4
@@ -66,3 +111,19 @@ jobs:
           name: playwright-report
           path: playwright-report
           retention-days: 7
+
+  # -- Required-check aggregation ---------------------------------------------
+  # Branch protection points at ONE check ("ci-summary"); this job passes
+  # only when every gate above passed. Adding a gate = adding it to `needs`
+  # here, and protection never needs re-configuring.
+  ci-summary:
+    if: always()
+    needs: [verify]
+    runs-on: ubuntu-latest
+    steps:
+      - name: All gates green
+        run: |
+          if [ "${{ contains(needs.verify.result, 'failure') }}" = "true" ] || [ "${{ contains(needs.verify.result, 'cancelled') }}" = "true" ]; then
+            echo "verify failed"; exit 1
+          fi
+          echo "all gates green"
