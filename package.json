@@ -25,6 +25,10 @@
     "e2e": "playwright test",
     "e2e:ci": "playwright test --reporter=list",
     "bundle:budget": "node scripts/bundle-budget.cjs",
+    "bundle:diff": "node scripts/bundle-diff.cjs --check 10",
+    "format:check": "node scripts/format-check.cjs",
+    "format:fix": "node scripts/format-check.cjs --fix",
+    "license:check": "node scripts/license-check.cjs",
     "audit:deps": "npm audit --omit=dev --audit-level=high",
     "e2e:pwa": "npm run build && playwright test --config playwright.pwa.config.js"
   },

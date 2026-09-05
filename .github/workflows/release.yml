@@ -1,0 +1,104 @@
+name: Release
+
+# Release automation: cutting a version is one tag push. Semantic version,
+# changelog, artifacts and a GitHub Release fall out of the tag — no local
+# ceremony, no forgotten changelog entries.
+#
+#   git tag v0.2.0 && git push origin v0.2.0
+#
+# Version discipline: the tag MUST match package.json's version (the gate
+# below enforces it), so a release is always exactly what was verified in CI
+# on the tagged commit.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches package.json version (semver gate)
+        id: v
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::tag v$TAG != package.json $PKG — bump package.json in the tagged commit"
+            exit 1
+          fi
+          if ! echo "$TAG" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::$TAG is not valid semver"
+            exit 1
+          fi
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
+
+  license-compliance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      # Every production dependency's license must be on the allowlist — the
+      # app ships to end users; copyleft-or-worse in the bundle is a legal
+      # problem discovered far too late otherwise.
+      - name: Production license allowlist
+        run: node scripts/license-check.cjs
+
+  build-and-release:
+    needs: [validate-tag, license-compliance]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      # Production deploy gate: a tag never ships on an unverified commit.
+      # The same verify pipeline PRs run, re-run on the tagged ref.
+      - name: Verify (lint, types, tests, build)
+        run: npm run verify
+      - name: Benchmark gates
+        run: npm run benchmark
+      - name: Dependency audit (prod, high+)
+        run: npm run audit:deps
+
+      - name: Build production bundle
+        run: npm run build
+      - name: Bundle manifest
+        run: node scripts/bundle-diff.cjs --base dist/assets > release-notes-bundle.md || true
+
+      - name: Generate changelog section for this tag
+        run: node scripts/changelog.cjs --tag "${{ github.ref_name }}" > release-notes.md
+
+      - name: Zip the bundle
+        run: |
+          cd dist
+          zip -r "../arise-${{ github.ref_name }}-dist.zip" .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body_path: release-notes.md
+          files: |
+            arise-${{ github.ref_name }}-dist.zip
+          fail_on_unmatched_files: true

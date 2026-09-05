@@ -54,4 +54,3 @@ describe('equipment profiles from onboarding', ()=>{
     assert.ok(Math.abs(result.loadKg - 31) <= 1.25);
   });
 });
-

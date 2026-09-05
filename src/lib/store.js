@@ -289,7 +289,7 @@ export function runMigrations(raw){
   if(j.preferences.autoRest==null) j.preferences.autoRest=true;
   if(j.preferences.soundCues==null) j.preferences.soundCues=true;
   if(j.preferences.voiceCoach==null) j.preferences.voiceCoach=false;
-  { 
+  {
     // Clamp the speech rate to the same range the player enforces, so a
     // hand-edited backup can't produce absurd speech.
     const r = Number(j.preferences.voiceRate);

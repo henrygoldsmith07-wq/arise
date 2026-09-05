@@ -1,0 +1,9 @@
+# Normalize line endings: the repo is LF everywhere; Windows checkouts keep
+# LF in the working tree too (scripts, YAML parsers and grep gates all
+# assume it). Binaries are never touched.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary
+*.zip binary

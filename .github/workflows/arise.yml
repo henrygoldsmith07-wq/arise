@@ -1,68 +1,121 @@
-name: Arise
-
-on:
-  push:
-    paths:
-      - "**"
-      - ".github/workflows/arise.yml"
-  pull_request:
-    paths:
-      - "**"
-      - ".github/workflows/arise.yml"
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-jobs:
-  verify:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: .
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm ci
-      # -- Evidence smoke gate ------------------------------------------------
-      # The benchmarks are the only thing that exercises the study/evidence
-      # code paths (type-check covers only src/** and scripts/**, with checkJs
-      # off). Run every deterministic one on every push so a broken line in
-      # benchmark/ fails CI instead of rotting until real data arrives.
-      - name: Smoke gate - verify (lint, types, tests, build)
-        run: npm run verify
-      - name: Smoke gate - bundle size budget
-        run: npm run bundle:budget
-      - name: Smoke gate - dependency vulnerabilities (prod, high+)
-        run: npm run audit:deps
-      - name: Smoke gate - validate + backtest
-        run: npm run benchmark
-      # Cross-commit reproducibility: the artifact comparator fails on metric
-      # drift over an unchanged corpus + unchanged priors/policy versions.
-      # The baseline artifact is committed; a deliberate re-baseline updates it
-      # in the same PR with the reason.
-      - name: Smoke gate - benchmark artifact comparison
-        run: node benchmark/artifact.js compare
-      - name: Smoke gate - comparative study harness
-        run: npm run benchmark:study
-      - name: Smoke gate - field-study pipeline (fixture mode, synthetic data)
-        run: npm run benchmark:field:fixture
-      - name: Smoke gate - logging-time metric
-        run: npm run benchmark:logging
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps
-      - name: Run Playwright E2E
-        run: npx playwright test --reporter=list
-      - name: Run Playwright E2E (PWA, production build)
-        run: npm run e2e:pwa -- --reporter=list
-      - name: Upload Playwright report
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report
-          retention-days: 7
+name: Arise\r
+\r
+on:\r
+  push:\r
+    paths:\r
+      - "**"\r
+      - ".github/workflows/arise.yml"\r
+  pull_request:\r
+    paths:\r
+      - "**"\r
+      - ".github/workflows/arise.yml"\r
+\r
+concurrency:\r
+  group: ${{ github.workflow }}-${{ github.ref }}\r
+  cancel-in-progress: true\r
+\r
+jobs:\r
+  verify:\r
+    runs-on: ubuntu-latest\r
+    defaults:\r
+      run:\r
+        working-directory: .\r
+    steps:\r
+      - uses: actions/checkout@v4\r
+        with:\r
+          # bundle-diff builds origin/main in a worktree; a shallow clone\r
+          # (fetch-depth 1) has no base to diff against.\r
+          fetch-depth: 0\r
+      - uses: actions/setup-node@v4\r
+        with:\r
+          node-version: 22\r
+          cache: npm\r
+          cache-dependency-path: package-lock.json\r
+      - run: npm ci\r
+      # -- Verify pipeline ----------------------------------------------------\r
+      # lint:content + type-check + unit tests + build, exactly as PR-local\r
+      # verify runs them. Formatting is checked with a zero-config grep gate\r
+      # (see scripts/format-check.cjs) — no prettier dependency, no churn.\r
+      - name: Verify (lint, types, tests, build)\r
+        run: npm run verify\r
+      - name: Formatting check\r
+        run: npm run format:check\r
+      - name: License compliance (production deps)\r
+        run: npm run license:check\r
+      # -- Evidence smoke gate ------------------------------------------------\r
+      # The benchmarks are the only thing that exercises the study/evidence\r
+      # code paths (type-check covers only src/** and scripts/**, with checkJs\r
+      # off). Run every deterministic one on every push so a broken line in\r
+      # benchmark/ fails CI instead of rotting until real data arrives.\r
+      - name: Smoke gate - bundle size budget\r
+        run: npm run bundle:budget\r
+      - name: Smoke gate - dependency vulnerabilities (prod, high+)\r
+        run: npm run audit:deps\r
+      - name: Smoke gate - validate + backtest\r
+        run: npm run benchmark\r
+      # Cross-commit reproducibility: the artifact comparator fails on metric\r
+      # drift over an unchanged corpus + unchanged priors/policy versions.\r
+      # The baseline artifact is committed; a deliberate re-baseline updates it\r
+      # in the same PR with the reason.\r
+      - name: Smoke gate - benchmark artifact comparison\r
+        run: node benchmark/artifact.js compare\r
+      - name: Smoke gate - comparative study harness\r
+        run: npm run benchmark:study\r
+      - name: Smoke gate - field-study pipeline (fixture mode, synthetic data)\r
+        run: npm run benchmark:field:fixture\r
+      - name: Smoke gate - logging-time metric\r
+        run: npm run benchmark:logging\r
+      # -- Bundle size diff reporting -----------------------------------------\r
+      # Advisory (10 kB allowance): posts the per-chunk gzip delta vs main as\r
+      # a PR comment so growth is a conversation, not a surprise.\r
+      - name: Bundle size diff vs main\r
+        if: github.event_name == 'pull_request'\r
+        run: |\r
+          node scripts/bundle-diff.cjs --check 10 | tee bundle-diff.md\r
+      - name: Comment bundle diff on the PR\r
+        if: github.event_name == 'pull_request'\r
+        uses: marocchino/sticky-pull-request-comment@v2\r
+        with:\r
+          header: bundle-diff\r
+          path: bundle-diff.md\r
+      # -- E2E + visual regression --------------------------------------------\r
+      - name: Install Playwright browsers\r
+        run: npx playwright install --with-deps\r
+      - name: Run Playwright E2E\r
+        run: npx playwright test --reporter=list\r
+      - name: Run Playwright E2E (PWA, production build)\r
+        run: npm run e2e:pwa -- --reporter=list\r
+      # Visual regression: the resilience suite writes light/dark screenshots\r
+      # per tab. They upload on EVERY run (not just failure) so a reviewer can\r
+      # eyeball theme changes straight from the run artifacts.\r
+      - name: Upload visual regression screenshots\r
+        if: always()\r
+        uses: actions/upload-artifact@v4\r
+        with:\r
+          name: theme-screenshots\r
+          path: test-results/theme-*.png\r
+          retention-days: 14\r
+          if-no-files-found: ignore\r
+      - name: Upload Playwright report\r
+        if: failure()\r
+        uses: actions/upload-artifact@v4\r
+        with:\r
+          name: playwright-report\r
+          path: playwright-report\r
+          retention-days: 7\r
+\r
+  # -- Required-check aggregation ---------------------------------------------\r
+  # Branch protection points at ONE check ("ci-summary"); this job passes\r
+  # only when every gate above passed. Adding a gate = adding it to `needs`\r
+  # here, and protection never needs re-configuring.\r
+  ci-summary:\r
+    if: always()\r
+    needs: [verify]\r
+    runs-on: ubuntu-latest\r
+    steps:\r
+      - name: All gates green\r
+        run: |\r
+          if [ "${{ contains(needs.verify.result, 'failure') }}" = "true" ] || [ "${{ contains(needs.verify.result, 'cancelled') }}" = "true" ]; then\r
+            echo "verify failed"; exit 1\r
+          fi\r
+          echo "all gates green"\r
