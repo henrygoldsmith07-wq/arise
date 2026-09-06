@@ -22,6 +22,7 @@ import StepperButton from './StepperButton.jsx';
 import { tracePhase, traceStart, traceEnd } from '../lib/perfTrace.js';
 import { haptic } from '../lib/haptics.js';
 import { painAftercareFor, techniquePromptFor, maxEffortWarning } from '../lib/safety.js';
+import { createVoiceInput, parseSetPhrase } from '../lib/voiceInput.js';
 
 const NOTE_PROMPTS = [
   { id: 'felt-strong', label: 'Felt strong' },
@@ -183,6 +184,39 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   // numpad is open (null = closed) — long-press or the field's ✛ opens it.
   // Persisted choice wins (resume), else the More → Gym mode default.
   const [gymMode,setGymMode]=useState(()=> draft?.gymMode != null ? draft.gymMode === true : appPrefs?.focusDefault === true);
+  // Voice dictation (hands-free logging): one shared recognizer; the block it
+  // targets lives in a ref so results apply to the set being logged.
+  const [dictating,setDictating]=useState(null);
+  const dictatingRef=useRef(null);
+  const voiceCtlRef=useRef(null);
+  const blocksRef=useRef(blocks); blocksRef.current = blocks;
+  const voiceSupportedInput = typeof window !== 'undefined' && Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
+  const toggleDictation = (bi)=>{
+    if(!voiceSupportedInput) return;
+    if(!voiceCtlRef.current){
+      voiceCtlRef.current = createVoiceInput({
+        onResult: (parsed)=>{
+          const target = dictatingRef.current;
+          const b = target != null ? blocksRef.current[target] : null;
+          if(!b) return;
+          if(!parsed){ announce('Could not read that. Say the load, then the reps — for example: sixty for eight.'); return; }
+          const si = b.sets.findIndex(x=> !x.completed);
+          const idx = si === -1 ? b.sets.length - 1 : si;
+          const patch = {};
+          if(parsed.weightKg != null) patch.weightKg = String(parsed.weightKg);
+          if(parsed.reps != null) patch.reps = String(parsed.reps);
+          if(Object.keys(patch).length) updateSet(target, idx, patch);
+          announce(`Set ${idx + 1} ${patch.weightKg != null ? `${patch.weightKg} kilograms ` : ''}${patch.reps != null ? `${patch.reps} reps` : ''}`.trim());
+        },
+        onEnd: ()=> { dictatingRef.current = null; setDictating(null); },
+        onError: ()=> { dictatingRef.current = null; setDictating(null); },
+      });
+    }
+    if(dictatingRef.current === bi){ voiceCtlRef.current.stop(); dictatingRef.current = null; setDictating(null); return; }
+    dictatingRef.current = bi;
+    setDictating(bi);
+    voiceCtlRef.current.start();
+  };
   const [focusIdx,setFocusIdx]=useState(0);
   const [keypadOpen,setKeypadOpen]=useState(null);
   const wakeLockRef=useRef(null);
@@ -769,6 +803,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                 </div>
                 <div className="flex gap-1.5 shrink-0 flex-wrap justify-end max-w-[190px]">
                   {b.restSec ? <button onClick={()=> startRest(restPresetFor(gymPrefs, b.exerciseId, b.restSec) || b.restSec, ex?.name || b.exerciseId, b.exerciseId)} className="relative text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">Start rest</button> : null}
+                  {voiceSupportedInput && (
+                    <button onClick={()=> toggleDictation(bi)} aria-pressed={dictating===bi} title="Dictate a set — say the load, then the reps"
+                      className={`relative text-xs font-bold px-3 py-1.5 rounded-full border before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-[''] ${dictating===bi ? 'bg-ink text-bg border-ink' : 'border-line bg-surface2'}`}>🎙️</button>
+                  )}
                   <button onClick={()=> setSwapOpen(swapOpen===bi ? null : bi)} aria-expanded={swapOpen===bi} className="relative text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">Swap</button>
                   <button onClick={()=> addSet(bi)} className="relative min-h-[32px] text-xs font-bold px-3 py-1.5 rounded-full bg-ink text-bg before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">+ Set</button>
                   {b.unilateral ? <button onClick={()=> duplicateUnilateral(bi)} className="relative text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">+ other side</button> : null}

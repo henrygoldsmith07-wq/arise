@@ -77,6 +77,11 @@ export default function App(){
   const [updateReady,setUpdateReady]=useState(false);
   const [updateDeferred,setUpdateDeferred]=useState(false);
   const [persistFailed,setPersistFailed]=useState(false);
+  // Quota guard: one backup prompt per escalation level per session. At
+  // critical, a best-effort snapshot is captured automatically so the last
+  // healthy state is recoverable even if the prompt is dismissed.
+  const [quotaPrompt,setQuotaPrompt]=useState(null);
+  const quotaPromptedRef=useRef(null);
   const [toast,setToast]=useState(null);
   const applyReloadRef=useRef(false);
 
@@ -119,6 +124,26 @@ export default function App(){
 
   // Warm the lazy route chunks once boot has settled (see warmLazyViews).
   useEffect(()=>{ warmLazyViews(); },[]);
+
+  // Storage-quota watch: evaluate shortly after boot and re-check when the
+  // store grows (every persistence round). Cheap, async, fail-soft.
+  useEffect(()=>{
+    let live = true;
+    import('./lib/quotaGuard.js').then(({ evaluateQuotaPrompt, snapshotIfCritical }) =>
+      import('./lib/storageQuota.js').then(({ storageHealth }) => storageHealth())
+    ).then(health => {
+      if(!live || !health) return;
+      const decision = evaluateQuotaPrompt(health, quotaPromptedRef.current);
+      if(decision.shouldPrompt){
+        quotaPromptedRef.current = decision.level;
+        setQuotaPrompt(decision);
+        if(decision.level === 'critical'){
+          import('./lib/quotaGuard.js').then(({ snapshotIfCritical }) => snapshotIfCritical(health)).catch(()=>{});
+        }
+      }
+    }).catch(()=>{});
+    return ()=> { live = false; };
+  },[store.history?.length, store.readinessLog?.length]);
 
   useEffect(()=>{
     setConsentOpen(store.preferences?.telemetryEnabled == null);
@@ -421,6 +446,16 @@ export default function App(){
           <span className="font-bold text-review">Update available</span>
           <span className="text-ink2">{updateDeferred ? 'Update will apply after this workout — no rush.' : 'New version cached — reload to apply.'}</span>
           <button onClick={applyUpdate} className="ml-auto btn btn-primary min-h-8 rounded-xl px-3 text-xs">Update</button>
+        </div>
+      )}
+      {quotaPrompt && (
+        <div className="mx-4 mt-2 rounded-xl border border-review/30 bg-reviewsoft px-3 py-2 flex flex-wrap items-center gap-2 text-xs" role="alert">
+          <span className="font-bold text-review">{quotaPrompt.level === 'critical' ? 'Storage almost full' : 'Storage filling up'}</span>
+          <span className="text-ink2 flex-1 min-w-40">{quotaPrompt.level === 'critical'
+            ? 'Writes may start failing. Export a backup now — a safety snapshot was taken automatically.'
+            : 'Past 80% of this browser’s storage quota. An export now keeps you safe.'}</span>
+          <button onClick={()=> setTab('more')} className="btn btn-primary min-h-8 rounded-xl px-3 text-xs">Back up now</button>
+          <button onClick={()=> setQuotaPrompt(null)} className="btn btn-secondary min-h-8 rounded-xl px-2.5 text-xs" aria-label="Dismiss storage prompt">✕</button>
         </div>
       )}
       {recoveryOpen && store.activeWorkout && !activeSession && (
