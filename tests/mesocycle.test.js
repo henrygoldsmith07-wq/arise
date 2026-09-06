@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { reviewCompletedWeek, applyWeeklyReview, weekOf } from '../src/lib/mesocycle.js';
+import { reviewCompletedWeek, applyWeeklyReview, weekOf, weekPhaseFor } from '../src/lib/mesocycle.js';
 
 const TODAY = '2026-01-11'; // Sunday of week 1 — week 2 is next.
 
@@ -132,5 +132,61 @@ describe('applyWeeklyReview', ()=>{
     const result = applyWeeklyReview(schedule, review);
     const hasStructural = (review.directives || []).some(d => d.kind !== 'hold');
     assert.equal(result.changed, hasStructural);
+  });
+});
+
+describe('weekPhaseFor — deload as a first-class state', ()=>{
+  const mondayOf = '2026-01-12'; // Monday of week 2 in the fixture above.
+
+  it('returns null with no schedule', ()=>{
+    assert.equal(weekPhaseFor(null, mondayOf), null);
+    assert.equal(weekPhaseFor({ sessions: [] }, mondayOf), null);
+  });
+
+  it('names a build week when no cuts are stamped', ()=>{
+    const schedule = buildSchedule();
+    const phase = weekPhaseFor(schedule, mondayOf);
+    assert.ok(phase, 'expected a phase for a scheduled week');
+    assert.equal(phase.kind, 'build');
+  });
+
+  it('names a deload week when the weekly review stamped cuts on most blocks', ()=>{
+    const schedule = buildSchedule();
+    // Stamp every block of the target week as a weekly-deload adaptation.
+    schedule.sessions = schedule.sessions.map(s => ({
+      ...s,
+      blocks: (s.blocks || []).map(b => ({ ...b, adaptation: { kind: 'weekly-deload', reason: 'test' } })),
+    }));
+    const phase = weekPhaseFor(schedule, mondayOf);
+    assert.equal(phase.kind, 'deload');
+  });
+
+  it('names a deload week when the mesocycle deload week is due', ()=>{
+    const schedule = buildSchedule({ deloadWeek: 2 });
+    const phase = weekPhaseFor(schedule, mondayOf);
+    assert.equal(phase.kind, 'deload');
+  });
+
+  it('falls through to the nearest upcoming week on rest days', ()=>{
+    const schedule = buildSchedule({ deloadWeek: 3 });
+    // Move the week-2 session to week 3 so week 2 is a genuine gap week.
+    schedule.sessions = schedule.sessions.map(s => s.id === 'w2d1'
+      ? { ...s, week: 3, dateISO: '2026-01-19' }
+      : s);
+    // Thursday of the empty week 2 — no sessions that week.
+    const phase = weekPhaseFor(schedule, '2026-01-15');
+    assert.ok(phase, 'expected the upcoming week to be classified');
+    assert.equal(phase.kind, 'deload');
+    assert.equal(phase.week, 3);
+  });
+
+  it('names a recovery week when recovery-session stamps dominate', ()=>{
+    const schedule = buildSchedule();
+    schedule.sessions = schedule.sessions.map(s => ({
+      ...s,
+      blocks: (s.blocks || []).map(b => ({ ...b, adaptation: { kind: 'weekly-recovery-session', reason: 'test' } })),
+    }));
+    const phase = weekPhaseFor(schedule, mondayOf);
+    assert.equal(phase.kind, 'recovery');
   });
 });

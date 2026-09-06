@@ -167,6 +167,8 @@ function hasUnfinishedSet(blocks, bi, si){
 
 export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, appPrefs = null, gymPrefs = null, onSetRestPreset = null, studyEnrollment = null, participantId = null, onDraftChange, onSave, onCancel }){
   const [blocks,setBlocks]=useState(()=> session.blocks.map((b,i)=> normaliseBlock(b, history, draft?.blocks?.[i])));
+  // Transient confirmation for the one-tap "apply all" fast-log path.
+  const [applyAllNote,setApplyAllNote]=useState(null);
   const [note,setNote]=useState(()=> draft?.note || '');
   const [noteTags,setNoteTags]=useState(()=> draft?.noteTags || []);
   const [restEndsAt,setRestEndsAt]=useState(()=> draft?.restEndsAt || null);
@@ -446,6 +448,15 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   // Gym Mode skip-to: index into the full block list for the first match.
   const skipTarget = useMemo(()=> skipTo(blocks, skipQuery), [blocks, skipQuery]);
 
+  // "Apply all" is offered while at least one block is still un-started and
+  // carries a usable engine prescription. Applying fills reps/loads, so the
+  // strip retires itself — the confirmation note lives on its own line.
+  const applyAllAvailable = useMemo(()=> blocks.some(b=>{
+    if(b.sets.some(s=> s.completed || s.failed || String(s.reps).trim() !== '')) return false;
+    const r = blockMeta.recs.get(b.exerciseId);
+    return Boolean(r && ((r.load != null && r.load > 0) || (r.reps != null && String(r.reps).trim() !== '')));
+  }), [blocks, blockMeta]);
+
   const updateSet = (bi, si, patch)=>{
     // Guard against the rare stale-closure path (gesture completion after a
     // reorder): a set row that no longer exists must not resurrect as an edit
@@ -585,6 +596,41 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     recordEvent('recommendation:accepted', { sessionId:session.id, exerciseId:block.exerciseId, target });
   };
 
+  // One-tap "apply all": stamp every un-started block with its engine
+  // prescription so the <20s logging path is zero extra taps. Deliberately
+  // explicit rather than silent prefill — each acceptance still reaches the
+  // recommendation ledger (same event shape as the per-block Use button),
+  // so acceptance metrics stay honest. Blocks with sets already completed
+  // or manually edited keep their values; blocks with no recommendation
+  // (bodyweight baselines, insufficient evidence) are left untouched.
+  const applyAllRecommendations=()=>{
+    let applied=0;
+    setBlocks(prev=> prev.map((b,i)=>{
+      if(b.sets.some(s=> s.completed || s.failed || String(s.reps).trim()!=='')) return b;
+      const recommendation=blockMeta.recs.get(b.exerciseId);
+      if(!recommendation) return b;
+      const hasTarget = recommendation.load != null && recommendation.load > 0;
+      const hasReps = recommendation.reps != null && String(recommendation.reps).trim() !== '';
+      if(!hasTarget && !hasReps) return b;
+      applied++;
+      dismissedRecommendationRef.current.add(i);
+      recordEvent('recommendation:accepted', { sessionId:session.id, exerciseId:b.exerciseId, target:suggestedTarget(recommendation,b) });
+      return {
+        ...b,
+        sets:b.sets.map(s=> ({
+          ...s,
+          reps: hasReps ? String(recommendation.reps) : s.reps,
+          weightKg: hasTarget ? String(recommendation.load) : s.weightKg,
+          assistedKg: recommendation.assistKg != null ? String(recommendation.assistKg) : s.assistedKg,
+        })),
+      };
+    }));
+    if(applied>0){
+      setApplyAllNote(`Applied to ${applied} exercise${applied===1?'':'s'} — targets are a starting point, adjust freely.`);
+      window.setTimeout(()=> setApplyAllNote(null), 6000);
+    }
+  };
+
   const toggleNoteTag=(id)=> setNoteTags(prev=> prev.includes(id) ? prev.filter(x=>x!==id) : [...prev,id]);
   const canSave = blocks.length>0 && blocks.every(b=> b.sets.length>0 && b.sets.every(s=> String(s.reps).trim()!=='')) && completedSets > 0;
   const pendingSets = totalSets-completedSets;
@@ -698,6 +744,18 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           <span><strong>Fast logging:</strong> previous reps and load are prefilled. Edit them directly, then tap <strong>Done</strong> once the set is complete.</span>
         </div>
         )}
+
+        {/* One-tap engine targets: the <20s logging path — one tap stamps the
+            whole session with the prescription, still counted as explicit
+            acceptances in the evidence ledger. Hidden once any set is logged. */}
+        {applyAllAvailable && (
+          <div className="rounded-2xl border border-line bg-surface px-3 py-2 flex items-center gap-2">
+            <span className="text-base" aria-hidden>🎯</span>
+            <span className="text-xs flex-1 min-w-0"><strong>Engine targets ready</strong> — one tap fills every un-started exercise with this week's prescription.</span>
+            <button onClick={applyAllRecommendations} className="btn btn-primary shrink-0 min-h-9 rounded-xl px-3 text-xs font-bold">Apply all</button>
+          </div>
+        )}
+        {applyAllNote && <p role="status" className="text-[11px] font-semibold text-success px-1 -mt-2">✓ {applyAllNote}</p>}
 
         {gymMode && (
           <div role="search">

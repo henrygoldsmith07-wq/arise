@@ -500,6 +500,7 @@ export default function App(){
           setStore={setStore}
           onStartSession={handleStartSession}
           onOpenTrain={()=> setTab('train')}
+          onOpenProgress={()=> setTab('progress')}
           plateConfig={store.onboarding?.plateConfig || null}
         />
       )}
