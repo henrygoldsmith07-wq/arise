@@ -5,8 +5,12 @@
 //   boot (index + vendor, gzip): 160.8 kB → budget 190 kB
 //   single lazy chunk (gzip):     37 kB   → budget 45 kB (largest is the
 //                                            analytics worker, on-demand)
-//   total JS (gzip):             266 kB   → budget 300 kB (worker included;
+//   total JS (gzip):             305.3 kB → budget 310 kB (worker included;
 //                                            it never blocks the main thread)
+//
+// Re-baseline history: 300 → 310 kB with the resilience/expansion round
+// (support diagnostics, salvage export, share codes, voice input, CSV
+// importers, print report) — all lazy-route code, boot budget unchanged.
 //
 // The budgets are regression bounds with headroom, not aspirations: a change
 // that crosses one must either undo the bloat or consciously re-baseline here
@@ -24,7 +28,7 @@ if(!fs.existsSync(dist)){
 
 const BOOT_BUDGET_KB = 190;
 const CHUNK_BUDGET_KB = 45;
-const TOTAL_BUDGET_KB = 300;
+const TOTAL_BUDGET_KB = 310;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;
