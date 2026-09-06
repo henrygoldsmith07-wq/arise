@@ -3,6 +3,11 @@
 // When history is supplied, prefers variants user has progressed on.
 
 import { EXERCISES, EXERCISE_BY_ID } from "./data.js";
+import { isDeprecated } from "./exerciseTaxonomy.js";
+// Derived pattern fallbacks: the curated PATTERN map stays authoritative for
+// the exercises it names; the taxonomy fills every remaining exercise so the
+// pattern term of the score never silently reads 0 for an unmapped row.
+import { patternFor } from "./exerciseTaxonomy.js";
 
 const PATTERN = {
   "push-up": "horizontal-push", "bench-press-barbell": "horizontal-push", "bench-press-dumbbell": "horizontal-push", "chest-press-machine": "horizontal-push", "incline-push-up": "horizontal-push", "incline-dumbbell-press": "horizontal-push",
@@ -19,7 +24,7 @@ const DIFF = { Beginner: 1, Intermediate: 2, Advanced: 3 };
 // Public read-only access to the movement-pattern map (e.g. for longitudinal
 // segmentation). Returns null for unknown exercises.
 export function movementPatternFor(exerciseId){
-  return PATTERN[exerciseId] || null;
+  return patternFor(exerciseId);
 }
 
 // Exported so the real-world validation layer can audit pattern preservation
@@ -28,7 +33,6 @@ export const MOVEMENT_PATTERNS = PATTERN;
 
 function patternScore(a, b){
   if(!a || !b) return 0;
-  if(a===b) return 3;
   const near = new Set(["squat|lunge","horizontal-push|vertical-push","horizontal-pull|vertical-pull","hinge|hip-extension","core-isometric|core-control"]);
   const key = [a,b].sort().join("|");
   if(near.has(key)) return 1.5;
@@ -81,7 +85,8 @@ export function rankedSubstitutions(targetId, availableEquipment=null, limit=4, 
   }
   const target = EXERCISE_BY_ID[targetId]; if(!target) return [];
   const has = availableEquipment ? new Set(availableEquipment) : null;
-  let pool = EXERCISES.filter(e=> e.id!==targetId);
+  // Deprecated rows resolve for historical data but never surface as swaps.
+  let pool = EXERCISES.filter(e=> e.id!==targetId && !isDeprecated(e));
   if(has) pool = pool.filter(e=> e.equipment.every(eq=> has.has(eq)) || (e.equipment.length===1 && e.equipment[0]==="bodyweight"));
   let historyCounts=null;
   if(history){
@@ -109,7 +114,7 @@ export function rankedSubstitutions(targetId, availableEquipment=null, limit=4, 
     .filter(candidate=> !(disliked && disliked.has(candidate.id)))
     .map(c=> ({ ex: c, score: scoreSubstitution(target, c, { historyCounts, preferred, disliked, loadability, shortSession, progressionAchievable }) }))
     .sort((a,b)=> b.score - a.score).map(r=> r.ex);
-  const declaredRaw = (target.substitution||[]).map(id=> EXERCISE_BY_ID[id]).filter(Boolean)
+  const declaredRaw = (target.substitution||[]).filter(id => EXERCISE_BY_ID[id] && !isDeprecated(EXERCISE_BY_ID[id])).map(id=> EXERCISE_BY_ID[id])
     .filter(c=> !has || c.equipment.every(eq=> has.has(eq)) || (c.equipment.length===1 && c.equipment[0]==="bodyweight"))
     .filter(c=> !(disliked && disliked.has(c.id)));
   // Prefer declared that matches user preference
@@ -138,10 +143,12 @@ export function rankedSubstitutions(targetId, availableEquipment=null, limit=4, 
 export function substitutionOptions(targetId, { availableEquipment = null, history = null, limit = 4, preferredExerciseIds = [], dislikedExerciseIds = [], plateConfig = null, targetMinutes = null } = {}){
   const target = EXERCISE_BY_ID[targetId]; if(!target) return [];
   const has = availableEquipment ? new Set(availableEquipment) : null;
+  // Never offer deprecated rows (declared edges included).
+  const declaredAlive = ids => (ids||[]).filter(id => EXERCISE_BY_ID[id] && !isDeprecated(EXERCISE_BY_ID[id]));
   const fits = ex => !has || ex.equipment.every(eq=> has.has(eq)) || (ex.equipment.length===1 && ex.equipment[0]==='bodyweight');
   const historyCounts = {};
   for(const h of history||[]) for(const b of h.blocks||[]) historyCounts[b.exerciseId]=(historyCounts[b.exerciseId]||0)+1;
-  const declared = new Set(target.substitution||[]);
+  const declared = new Set((target.substitution||[]).filter(id => EXERCISE_BY_ID[id] && !isDeprecated(EXERCISE_BY_ID[id])));
   const preferred = new Set(preferredExerciseIds || []);
   const disliked = new Set(dislikedExerciseIds || []);
   const shortSession = targetMinutes != null && Number(targetMinutes) < 20;

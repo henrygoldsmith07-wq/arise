@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { deriveAttributes, levelFromAttributes } from '../lib/attributes.js';
 import { totalVolumeKg } from '../lib/store.js';
+import { fmtWeight } from '../lib/units.js';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { weeklyVolume, frequencyByMuscleSync, volumeLandmarks, volumeDistribution, strengthSeriesWithConfidence, extractNoteRecommendations, plannedVsCompletedStats } from '../lib/analytics.js';
 import { strengthTrendWithConfidence, classifyPR } from '../lib/progression.js';
@@ -16,6 +17,8 @@ export default function ProgressView({ store }){
   const attrs = useMemo(()=> deriveAttributes(store.history), [store.history]);
   const lvl = useMemo(()=> levelFromAttributes(attrs), [attrs]);
   const history = store.history || [];
+  // Display-unit preference (kg|lb). Storage/engine stay kg — see units.js.
+  const unitsPref = store.preferences?.units === 'lb' ? 'lb' : 'kg';
   const vol = totalVolumeKg(history);
   // Experience gate: display-only — simple hides advanced analytics, expert
   // reveals them; the data underneath is identical and always exportable.
@@ -303,7 +306,7 @@ export default function ProgressView({ store }){
               return (
                 <li key={r.exerciseId} className="flex items-center gap-3 text-sm border border-line rounded-xl px-3 py-2 bg-surface2">
                   <span className="font-bold truncate">{EXERCISE_BY_ID[r.exerciseId]?.name || r.exerciseId}</span>
-                  <span className="ml-auto tabular-nums font-black">{Math.round(r.e1rm)} kg</span>
+                  <span className="ml-auto tabular-nums font-black">{fmtWeight(r.e1rm, unitsPref)}</span>
                   <span className="text-xs text-ink3 tabular-nums">{r.weight}×{r.reps} on {r.dateISO}</span>
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${conf.confidence==='high'?'bg-successsoft border-success/30 text-success':conf.confidence==='medium'?'bg-reviewsoft border-review/30 text-review':'bg-surface border-line text-ink3'}`}>{conf.confidence} trend</span>
                 </li>
@@ -328,7 +331,7 @@ export default function ProgressView({ store }){
           <>
             <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink3">
               <span><strong className="text-ink">{exerciseSummary.sessions}</strong> exposures</span>
-              <span><strong className="text-ink">{exerciseSummary.best?.e1rm ? `${exerciseSummary.best.e1rm}kg` : '—'}</strong> best e1RM</span>
+              <span><strong className="text-ink">{exerciseSummary.best?.e1rm ? fmtWeight(exerciseSummary.best.e1rm, unitsPref) : '—'}</strong> best e1RM</span>
               <span><strong className="text-ink">{exerciseSummary.trend.confidence}</strong> trend confidence</span>
               <span className={plateau?.detected ? 'font-bold text-review' : ''}>{plateau?.detected ? 'Plateau detected' : plateau?.status === 'fatigue' ? 'Fatigue signal' : 'No plateau'}</span>
             </div>

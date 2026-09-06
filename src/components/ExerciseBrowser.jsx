@@ -1,7 +1,49 @@
 import { useMemo, useState } from 'react';
 import { MUSCLES, LEVELS, EQUIPMENT, EXERCISE_TAGS, searchExercises, EXERCISE_BY_ID } from '../lib/data.js';
 import { hasExerciseImage, getExerciseMeta } from '../lib/exerciseImages.js';
+import { ALTERNATIVE_KINDS, alternativesFor, classifyExercise, isDeprecated } from '../lib/exerciseTaxonomy.js';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
+
+// Instruction sentence: the row's own steps when present, otherwise derived
+// from cues so every exercise has a usable "how to do it" line.
+function instructionsFor(ex){
+  if(Array.isArray(ex.instructions) && ex.instructions.length) return ex.instructions.join(' ');
+  return `Set up for the ${ex.name.toLowerCase()}, then: ${ex.cues.join('; ')}.`;
+}
+
+// Derived training-science chips: pattern, stability demand, fatigue cost,
+// joint stress. Small, factual, and color-safe (text labels, not color).
+function ClassificationChips({ exercise }){
+  const c = classifyExercise(exercise);
+  if(!c) return null;
+  return (
+    <div className="flex flex-wrap gap-1 mt-2">
+      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-line text-ink3 bg-surface">{c.pattern || 'unclassified'}</span>
+      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-line text-ink3 bg-surface">stability {c.stability}</span>
+      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-line text-ink3 bg-surface">fatigue {c.fatigue}</span>
+      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-line text-ink3 bg-surface">joints {c.jointStress}</span>
+    </div>
+  );
+}
+
+// Grouped alternatives over the substitution graph — only non-empty groups
+// render, so the section never shows empty promises.
+function AlternativeGroups({ exercise }){
+  const groups = ALTERNATIVE_KINDS
+    .map(k => ({ ...k, items: alternativesFor(exercise, k.id) }))
+    .filter(g => g.items.length > 0);
+  if(!groups.length) return null;
+  return (
+    <div className="mt-2 space-y-1">
+      <p className="text-xs font-semibold">Alternatives by need</p>
+      {groups.map(g => (
+        <p key={g.id} className="text-[11px] text-ink3">
+          <span className="font-bold text-ink2">{g.label}:</span> {g.items.map(e => e.name).join(', ')}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 export default function ExerciseBrowser({ availableEquipment }){
   const [q,setQ]=useState('');
@@ -17,7 +59,7 @@ export default function ExerciseBrowser({ availableEquipment }){
   const results = useMemo(()=> searchExercises({
     q, muscle, level, tag: tags, equipment: equip || undefined,
     availableEquipment: onlyAvailable ? availableEquipment : null
-  }), [q,muscle,level,tags,equip,onlyAvailable,availableEquipment]);
+  }).filter(e => !isDeprecated(e)), [q,muscle,level,tags,equip,onlyAvailable,availableEquipment]);
 
   return (
     <div className="px-4 py-5 space-y-4">
@@ -98,8 +140,16 @@ export default function ExerciseBrowser({ availableEquipment }){
                 <div className="flex items-start gap-3">
                   {hasExerciseImage(ex.id) && <ExerciseIllustration exerciseId={ex.id} size="lg" />}
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold">Cues</p>
+                  <p className="text-xs font-semibold">How to do it</p>
+                  <p className="text-xs text-ink2">{instructionsFor(ex)}</p>
+                  <p className="text-xs font-semibold mt-2">Coaching cues</p>
                   <ul className="list-disc pl-5 text-xs text-ink2 space-y-1">{ex.cues.map((c,i)=> <li key={i}>{c}</li>)}</ul>
+                  {ex.mistakes?.length > 0 && (
+                    <>
+                      <p className="text-xs font-semibold mt-2">Common mistakes</p>
+                      <ul className="list-disc pl-5 text-xs text-ink2 space-y-1">{ex.mistakes.map((m,i)=> <li key={i}>{m}</li>)}</ul>
+                    </>
+                  )}
                   {(() => {
                     const meta = getExerciseMeta(ex.id);
                     if(!meta) return null;
@@ -110,8 +160,10 @@ export default function ExerciseBrowser({ availableEquipment }){
                       </div>
                     );
                   })()}
+                  <ClassificationChips exercise={ex} />
                   <p className="text-xs font-semibold mt-2">If you don’t have the kit</p>
                   <p className="text-xs text-ink3">{ex.substitution.map(id=> EXERCISE_BY_ID[id]?.name || id).join(' • ')}</p>
+                  <AlternativeGroups exercise={ex} />
                 </div>
                 </div>
               </div>

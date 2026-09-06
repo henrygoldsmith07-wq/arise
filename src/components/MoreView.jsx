@@ -81,7 +81,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   const settingsIndex = [
     { id: 'sec-gym', title: 'Gym mode', keywords: 'gym focus wake screen stay awake rest timer presets keypad swipe one thumb' },
     { id: 'sec-backup', title: 'Backup & portability', keywords: 'backup export import csv encrypt data file' },
-    { id: 'sec-appearance', title: 'Appearance & accessibility', keywords: 'theme dark light text contrast motion auto rest experience simple expert mode' },
+    { id: 'sec-appearance', title: 'Appearance & accessibility', keywords: 'theme dark light text contrast motion units kg lb pounds kilograms weight experience simple expert mode' },
     { id: 'sec-guided', title: 'Guided mode', keywords: 'guided sound cues voice coach speech rate' },
     { id: 'sec-policy', title: 'Training policy', keywords: 'policy conservative standard aggressive maintenance explanation confidence' },
     { id: 'sec-personalise', title: 'Personalise', keywords: 'onboarding goal kit location level equipment plates' },
@@ -567,6 +567,19 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
       <section id="sec-appearance" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
         <h3 className="text-sm font-bold">Appearance & accessibility</h3>
         <p className="text-xs text-ink3">Applies to every screen on this device, including the session runner. Stored with your other preferences and included in a backup.</p>
+
+        <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
+          <p className="text-xs font-bold">Weight units</p>
+          <p className="text-[11px] text-ink3">Display only — your logs, engine math and backups stay in kilograms so history never breaks. (lb shows kg × 2.205.)</p>
+          <div className="flex gap-1.5" role="group" aria-label="Weight units">
+            {[['kg','Kilograms'],['lb','Pounds']].map(([value, label]) => (
+              <button key={value} onClick={()=> setPreference({ units: value })} aria-pressed={(prefs.units || 'kg') === value}
+                className={`flex-1 min-h-10 rounded-xl border px-2 py-1.5 text-xs font-bold ${(prefs.units || 'kg') === value ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink3'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
           <p className="text-xs font-bold">Experience level</p>
