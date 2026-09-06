@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDialogA11y } from '../lib/a11y.js';
-import { EQUIPMENT, LOCATIONS, GOALS, LEVELS, EXERCISES, exerciseAvailable } from '../lib/data.js';
+import { EQUIPMENT, EQUIPMENT_PRESETS, LOCATIONS, GOALS, LEVELS, EXERCISES, exerciseAvailable } from '../lib/data.js';
 import { DEFAULT_PLATE_DENOMINATIONS_KG } from '../lib/plates.js';
 
 export default function Onboarding({ open, onClose, onComplete, initial, onLoadDemo = null }){
@@ -155,6 +155,14 @@ export default function Onboarding({ open, onClose, onComplete, initial, onLoadD
       body: (
         <div className="space-y-2">
           <p className="text-xs text-ink3">Pick everything you can use today. We’ll only recommend exercises you can actually do, and surface substitutions otherwise. You can change this anytime in More.</p>
+          <div className="flex flex-wrap gap-1.5">
+            {EQUIPMENT_PRESETS.map(preset=> (
+              <button key={preset.id} onClick={()=> setEquipment([...preset.equipment])} type="button"
+                className="rounded-full border border-line bg-surface2 px-2.5 py-1 text-[11px] font-bold text-ink3 hover:border-ink3 hover:text-ink min-h-8">
+                <span aria-hidden>{preset.icon}</span> {preset.label}
+              </button>
+            ))}
+          </div>
           <div className="grid grid-cols-2 gap-2">
             {EQUIPMENT.map(eq=> (
               <label key={eq.id} className={`flex items-center gap-2 rounded-2xl border p-3 cursor-pointer ${equipment.includes(eq.id) ? 'bg-ink text-bg border-ink' : 'bg-surface border-line'}`}>

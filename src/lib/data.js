@@ -14,6 +14,19 @@ export const EQUIPMENT = [
   { id: 'machine', label: 'Machines', icon: '⚙️' },
 ];
 
+// One-tap equipment profiles for the onboarding kit step. Each preset maps to
+// real EQUIPMENT ids (lint-checked) and stays editable afterwards — it fills
+// the checkboxes, it does not replace the user's judgment.
+export const EQUIPMENT_PRESETS = [
+  { id: 'home-starter',   label: 'Home starter',   icon: '🏠', hint: 'Bodyweight + dumbbells', equipment: ['bodyweight', 'dumbbells'] },
+  { id: 'home-gym',       label: 'Home gym',       icon: '🛠️', hint: 'Barbell, bench, pull-up bar, dumbbells', equipment: ['bodyweight', 'dumbbells', 'barbell', 'bench', 'pullup-bar'] },
+  { id: 'bodyweight-only',label: 'Bodyweight only',icon: '🤸', hint: 'No equipment at all', equipment: ['bodyweight'] },
+  { id: 'barbell-only',   label: 'Barbell only',   icon: '🏗️', hint: 'Barbell & rack, no bench', equipment: ['bodyweight', 'barbell'] },
+  { id: 'dumbbell-only',  label: 'Dumbbells only', icon: '🏋️', hint: 'A pair of adjustable dumbbells', equipment: ['bodyweight', 'dumbbells'] },
+  { id: 'machine-floor',  label: 'Machine floor',  icon: '⚙️', hint: 'Machines + cables, minimal free weight', equipment: ['bodyweight', 'machine', 'cable'] },
+  { id: 'full-gym',       label: 'Full gym',       icon: '🏢', hint: 'Everything: racks, cables, machines, bench', equipment: ['bodyweight', 'dumbbells', 'barbell', 'bench', 'pullup-bar', 'cable', 'machine', 'kettlebell'] },
+];
+
 export const LOCATIONS = [
   { id: 'home', label: 'Home', hint: 'No commute, minimal kit' },
   { id: 'gym', label: 'Gym', hint: 'Full equipment access' },
@@ -54,7 +67,7 @@ export const EXERCISE_TAG_IDS = EXERCISE_TAGS.map(t => t.id);
 // Substitution edges must stay reciprocal (A lists B ⇒ B lists A) — enforced by validateContent().
 export const EXERCISES = [
   // ── Chest
-  { id: 'push-up', name: 'Push-up', muscle: 'Chest', equipment: ['bodyweight'], level: 'Beginner', tags: ['compound','push'], cues: ['Hands under shoulders','Body in a straight line','Chest to floor'], substitution: ['bench-press-dumbbell', 'chest-press-machine', 'bench-press-barbell', 'incline-push-up', 'overhead-press-dumbbell', 'tricep-dip-bench', 'incline-dumbbell-press', 'decline-push-up', 'close-grip-push-up', 'tricep-pushdown','weighted-push-up','chest-dip','knee-push-up','wide-push-up','archer-push-up','typewriter-push-up','explosive-push-up','hindu-push-up','seal-jack'], unilateral: false, supportsWeighted: true, supportsAssisted: false, progression: 'reps', rom: true },
+  { id: 'push-up', name: 'Push-up', muscle: 'Chest', equipment: ['bodyweight'], level: 'Beginner', tags: ['compound','push'], instructions: ['Start in a straight line, hands under your shoulders.', 'Lower your chest toward the floor with your elbows around 45°.', 'Press back up until your arms are straight.'], mistakes: ['Hips sagging or piking — squeeze your glutes to stay straight.', 'Flaring elbows out to a T — keep them closer to the body.', 'Rushing the bottom — touch the floor with control.'], cues: ['Hands under shoulders','Body in a straight line','Chest to floor'], substitution: ['bench-press-dumbbell', 'chest-press-machine', 'bench-press-barbell', 'incline-push-up', 'overhead-press-dumbbell', 'tricep-dip-bench', 'incline-dumbbell-press', 'decline-push-up', 'close-grip-push-up', 'tricep-pushdown','weighted-push-up','chest-dip','knee-push-up','wide-push-up','archer-push-up','typewriter-push-up','explosive-push-up','hindu-push-up','seal-jack'], unilateral: false, supportsWeighted: true, supportsAssisted: false, progression: 'reps', rom: true },
   { id: 'bench-press-barbell', name: 'Barbell Bench Press', muscle: 'Chest', equipment: ['barbell','bench'], level: 'Intermediate', tags: ['compound','push'], cues: ['Feet planted','Retract shoulder blades','Bar to chest, press to lockout'], substitution: ['push-up', 'bench-press-dumbbell'], unilateral: false, progression: 'load', rom: true },
   { id: 'bench-press-dumbbell', name: 'Dumbbell Bench Press', muscle: 'Chest', equipment: ['dumbbells','bench'], level: 'Beginner', tags: ['compound','push'], cues: ['Neutral wrists','Control the descent'], substitution: ['push-up', 'bench-press-barbell', 'incline-dumbbell-press', 'dumbbell-fly','decline-dumbbell-press'], unilateral: false, progression: 'load', rom: true },
   { id: 'incline-push-up', name: 'Incline Push-up', muscle: 'Chest', equipment: ['bodyweight','bench'], level: 'Beginner', tags: ['compound','push','low-impact'], cues: ['Hands elevated','Easier than floor push-ups'], substitution: ['push-up'], unilateral: false, supportsWeighted: true, progression: 'reps' },
@@ -79,11 +92,11 @@ export const EXERCISES = [
   { id: 'chest-supported-row', name: 'Chest-Supported Dumbbell Row', muscle: 'Back', equipment: ['dumbbells','bench'], level: 'Beginner', tags: ['compound','pull','low-impact'], cues: ['Chest stays on the bench','Row with the elbows','No momentum'], substitution: ['dumbbell-row', 'cable-row','t-bar-row','machine-row'], unilateral: true, progression: 'load', rom: true },
 
   // ── Legs / Glutes
-  { id: 'bodyweight-squat', name: 'Bodyweight Squat', muscle: 'Legs', equipment: ['bodyweight'], level: 'Beginner', tags: ['compound'], cues: ['Knees track toes','Depth to hip below knee if comfortable'], substitution: ['goblet-squat', 'barbell-squat', 'split-squat', 'burpee', 'wall-sit','jump-squat'], supportsWeighted: true, progression: 'reps', rom: true },
-  { id: 'goblet-squat', name: 'Goblet Squat', muscle: 'Legs', equipment: ['dumbbells','kettlebell'], level: 'Beginner', tags: ['compound'], cues: ['Elbows inside knees','Chest tall'], substitution: ['bodyweight-squat', 'barbell-squat', 'bulgarian-split-squat', 'step-up', 'front-squat', 'leg-press', 'cable-goblet-squat'], progression: 'load', rom: true },
+  { id: 'bodyweight-squat', name: 'Bodyweight Squat', muscle: 'Legs', equipment: ['bodyweight'], level: 'Beginner', tags: ['compound'], instructions: ['Stand with feet about shoulder-width, toes slightly out.', 'Sit back and down as if reaching for a chair behind you.', 'Drive through your whole foot to stand back up tall.'], mistakes: ['Knees caving inward — think knees over little toes.', 'Heels lifting off the floor.', 'Rounding your lower back at the bottom.'], cues: ['Knees track toes','Depth to hip below knee if comfortable'], substitution: ['goblet-squat', 'barbell-squat', 'split-squat', 'burpee', 'wall-sit','jump-squat'], supportsWeighted: true, progression: 'reps', rom: true },
+  { id: 'goblet-squat', name: 'Goblet Squat', muscle: 'Legs', equipment: ['dumbbells','kettlebell'], level: 'Beginner', tags: ['compound'], instructions: ['Hold one dumbbell (or a kettlebell) at chest height with both hands.', 'Squat down between your knees, keeping the weight close.', 'Drive up, keeping your chest tall and the weight against you.'], mistakes: ['Letting the weight drift away from your chest.', 'Stopping short of a comfortable depth.', 'Rising onto the toes at the bottom.'], cues: ['Elbows inside knees','Chest tall'], substitution: ['bodyweight-squat', 'barbell-squat', 'bulgarian-split-squat', 'step-up', 'front-squat', 'leg-press', 'cable-goblet-squat'], progression: 'load', rom: true },
   { id: 'barbell-squat', name: 'Barbell Back Squat', muscle: 'Legs', equipment: ['barbell'], level: 'Advanced', tags: ['compound'], cues: ['Brace hard','Hip hinge then knee bend'], substitution: ['goblet-squat', 'bodyweight-squat', 'front-squat', 'leg-press'], progression: 'load', rom: true },
   { id: 'front-squat', name: 'Barbell Front Squat', muscle: 'Legs', equipment: ['barbell'], level: 'Advanced', tags: ['compound'], cues: ['Elbows high','Upright torso','Wrists under the bar'], substitution: ['barbell-squat', 'goblet-squat','squat','landmine-squat'], unilateral: false, progression: 'load', rom: true },
-  { id: 'romanian-deadlift', name: 'Romanian Deadlift', muscle: 'Glutes', equipment: ['dumbbells','barbell'], level: 'Intermediate', tags: ['compound'], cues: ['Soft knee','Hinge, hamstrings stretch','Neutral spine'], substitution: ['glute-bridge', 'kettlebell-swing', 'good-morning', 'sumo-deadlift', 'nordic-curl', 'cable-pull-through','leg-curl','seated-leg-curl','single-leg-romanian-deadlift','smith-machine-romanian-deadlift','dumbbell-romanian-deadlift','kettlebell-romanian-deadlift','landmine-romanian-deadlift','lying-hamstring-walkout','towel-hamstring-curl','stability-ball-hamstring-curl','hamstring-stretch','seated-forward-fold-stretch'], progression: 'load', rom: true },
+  { id: 'romanian-deadlift', name: 'Romanian Deadlift', muscle: 'Glutes', equipment: ['dumbbells','barbell'], level: 'Intermediate', tags: ['compound'], instructions: ['Hold the weight in front of your thighs, feet hip-width.', 'Push your hips back, letting the weight slide down your legs.', 'Feel the hamstring stretch, then drive your hips forward to stand.'], mistakes: ['Bending the knees into a squat instead of hinging.', 'Letting the bar drift forward from the legs.', 'Rounding the lower back at the bottom.'], cues: ['Soft knee','Hinge, hamstrings stretch','Neutral spine'], substitution: ['glute-bridge', 'kettlebell-swing', 'good-morning', 'sumo-deadlift', 'nordic-curl', 'cable-pull-through','leg-curl','seated-leg-curl','single-leg-romanian-deadlift','smith-machine-romanian-deadlift','dumbbell-romanian-deadlift','kettlebell-romanian-deadlift','landmine-romanian-deadlift','lying-hamstring-walkout','towel-hamstring-curl','stability-ball-hamstring-curl','hamstring-stretch','seated-forward-fold-stretch'], progression: 'load', rom: true },
   { id: 'sumo-deadlift', name: 'Sumo Deadlift', muscle: 'Glutes', equipment: ['barbell'], level: 'Advanced', tags: ['compound'], cues: ['Wide stance','Knees track over toes','Lock hips and knees together'], substitution: ['romanian-deadlift', 'good-morning','deadlift','trap-bar-deadlift'], unilateral: false, progression: 'load', rom: true },
   { id: 'good-morning', name: 'Good Morning', muscle: 'Glutes', equipment: ['barbell'], level: 'Intermediate', tags: ['compound'], cues: ['Bar on upper traps','Hinge back','Stop when hamstrings stop you'], substitution: ['romanian-deadlift', 'sumo-deadlift','landmine-romanian-deadlift'], unilateral: false, progression: 'load', rom: true },
   { id: 'nordic-curl', name: 'Nordic Hamstring Curl', muscle: 'Glutes', equipment: ['bodyweight'], level: 'Advanced', tags: ['compound'], cues: ['Anchor ankles','Lower as slowly as possible','Push back up from the floor'], substitution: ['romanian-deadlift', 'glute-bridge', 'cable-leg-curl', 'lying-leg-curl', 'lying-hamstring-walkout', 'hamstring-stretch', 'seated-forward-fold-stretch'], unilateral: false, progression: 'reps', rom: true },
@@ -116,7 +129,7 @@ export const EXERCISES = [
   { id: 'overhead-tricep-extension', name: 'Overhead Tricep Extension', muscle: 'Arms', equipment: ['dumbbells'], level: 'Beginner', tags: ['isolation','push'], cues: ['Elbows narrow','Deep stretch','Extend fully'], substitution: ['tricep-pushdown', 'skullcrusher','rope-tricep-pushdown'], unilateral: false, progression: 'load' },
 
   // ── Core
-  { id: 'plank', name: 'Plank', muscle: 'Core', equipment: ['bodyweight'], level: 'Beginner', tags: ['core-stability'], cues: ['Forearms & toes','Hips level'], substitution: ['dead-bug', 'hanging-knee-raise', 'leg-raise', 'farmer-carry', 'side-plank', 'wall-sit', 'pallof-press','cable-crunch','ab-wheel','crunch','reverse-crunch','russian-twist','bicycle-crunch','mountain-climber','cable-woodchop','half-kneeling-pallof-press','cable-pallof-hold','captains-chair-knee-raise','decline-sit-up','weighted-crunch','weighted-russian-twist','dumbbell-side-bend','push-up-shoulder-tap','banded-pallof-press','banded-woodchop','banded-dead-bug','hollow-body-hold','hollow-rock','v-up','flutter-kick','lying-leg-raise','toe-touch','heel-tap','plank-shoulder-tap','plank-jack','bear-plank','inchworm','l-sit-hold','seated-knee-tuck','side-plank-hip-dip','copenhagen-plank','dragon-flag','half-burpee','squat-thrust'], progression: 'time' },
+  { id: 'plank', name: 'Plank', muscle: 'Core', equipment: ['bodyweight'], level: 'Beginner', tags: ['core-stability'], instructions: ['Set up on your forearms and toes, elbows under shoulders.', 'Level your hips so your body forms one straight line.', 'Breathe steadily and hold — stop when the hips drop.'], mistakes: ['Hips sagging toward the floor or spiking upward.', 'Holding your breath.', 'Chin craned up — keep the neck long.'], cues: ['Forearms & toes','Hips level'], substitution: ['dead-bug', 'hanging-knee-raise', 'leg-raise', 'farmer-carry', 'side-plank', 'wall-sit', 'pallof-press','cable-crunch','ab-wheel','crunch','reverse-crunch','russian-twist','bicycle-crunch','mountain-climber','cable-woodchop','half-kneeling-pallof-press','cable-pallof-hold','captains-chair-knee-raise','decline-sit-up','weighted-crunch','weighted-russian-twist','dumbbell-side-bend','push-up-shoulder-tap','banded-pallof-press','banded-woodchop','banded-dead-bug','hollow-body-hold','hollow-rock','v-up','flutter-kick','lying-leg-raise','toe-touch','heel-tap','plank-shoulder-tap','plank-jack','bear-plank','inchworm','l-sit-hold','seated-knee-tuck','side-plank-hip-dip','copenhagen-plank','dragon-flag','half-burpee','squat-thrust'], progression: 'time' },
   { id: 'side-plank', name: 'Side Plank', muscle: 'Core', equipment: ['bodyweight'], level: 'Beginner', tags: ['core-stability','low-impact'], cues: ['Stack the shoulders','Hips high','Breathe steadily'], substitution: ['plank', 'bird-dog', 'barbell-side-bend','ab-wheel','crunch','reverse-crunch','russian-twist','bicycle-crunch','mountain-climber','push-up-shoulder-tap','hollow-body-hold','hollow-rock','v-up','flutter-kick','lying-leg-raise','toe-touch','heel-tap','plank-shoulder-tap','plank-jack','bear-plank','inchworm','l-sit-hold','seated-knee-tuck','side-plank-hip-dip','copenhagen-plank','dragon-flag','half-burpee','squat-thrust'], unilateral: true, progression: 'time' },
   { id: 'dead-bug', name: 'Dead Bug', muscle: 'Core', equipment: ['bodyweight'], level: 'Beginner', tags: ['core-stability','low-impact'], cues: ['Lower back pressed to floor','Opposite arm/leg'], substitution: ['plank', 'hanging-knee-raise', 'bird-dog', 'pallof-press'], progression: 'reps' },
   { id: 'bird-dog', name: 'Bird Dog', muscle: 'Core', equipment: ['bodyweight'], level: 'Beginner', tags: ['core-stability','low-impact'], cues: ['Long spine','Reach opposite arm and leg','No hip tilt'], substitution: ['dead-bug', 'side-plank', 'superman'], unilateral: true, progression: 'reps' },
@@ -153,7 +166,8 @@ export const EXERCISES = [
   { id:'skullcrusher', name:'Barbell Skullcrusher', muscle:'Arms', equipment:['barbell'], level:'Intermediate', tags:['isolation','push'], cues:['Upper arms vertical','Lower behind the head','Protect the elbows'], substitution: ['tricep-pushdown', 'overhead-tricep-extension'], unilateral:false, progression:'load' },
   { id:'machine-dip', name:'Machine Dip', muscle:'Arms', equipment:['machine'], level:'Beginner', tags:['compound','push'], cues:['Slight forward lean','Elbows track back','Full lockout'], substitution: ['tricep-dip-bench', 'tricep-pushdown'], unilateral:false, progression:'load' },
   { id:'barbell-side-bend', name:'Barbell Side Bend', muscle:'Core', equipment:['barbell'], level:'Beginner', tags:['core-stability'], cues:['Bar on traps or at side','Bend purely sideways','No forward lean'], substitution: ['farmer-carry', 'side-plank'], unilateral:true, progression:'load' },
-  { id: 'bench-press', name: 'Bench Press', muscle: 'Chest', equipment: ['barbell'], level: 'Intermediate', tags: ['compound','push'], imageSlug: 'bench-press', cues: ["Retract shoulder blades","Control the descent","Full stretch at bottom"], substitution: ['incline-bench-press', 'decline-bench-press', 'incline-dumbbell-press', 'machine-chest-press', 'pec-deck', 'weighted-push-up', 'incline-cable-fly', 'decline-dumbbell-press', 'smith-machine-bench-press', 'chest-dip', 'knee-push-up', 'wide-push-up', 'archer-push-up', 'typewriter-push-up', 'explosive-push-up', 'hindu-push-up', 'wall-push-up', 'seal-jack', 'doorway-chest-stretch'], unilateral: false, supportsWeighted: /weighted/i.test('bench-press'), supportsAssisted: /assisted/i.test('bench-press'), progression: 'load' },
+  // Deprecated near-duplicate of bench-press-barbell (kept so historical ids resolve; see exerciseTaxonomy.resolveExerciseId).
+  { id: 'bench-press', name: 'Bench Press', muscle: 'Chest', equipment: ['barbell'], level: 'Intermediate', tags: ['compound','push'], aliases: ['flat bench press'], supersededBy: 'bench-press-barbell', cues: ["Retract shoulder blades","Control the descent","Full stretch at bottom"], substitution: ['incline-bench-press', 'decline-bench-press', 'incline-dumbbell-press', 'machine-chest-press', 'pec-deck', 'weighted-push-up', 'incline-cable-fly', 'decline-dumbbell-press', 'smith-machine-bench-press', 'chest-dip', 'knee-push-up', 'wide-push-up', 'archer-push-up', 'typewriter-push-up', 'explosive-push-up', 'hindu-push-up', 'wall-push-up', 'seal-jack', 'doorway-chest-stretch'], unilateral: false, supportsWeighted: /weighted/i.test('bench-press'), supportsAssisted: /assisted/i.test('bench-press'), progression: 'load' },
   { id: 'incline-bench-press', name: 'Incline Bench Press', muscle: 'Chest', equipment: ['barbell'], level: 'Beginner', tags: ['compound','push'], imageSlug: 'incline-bench-press', cues: ["Retract shoulder blades","Control the descent","Full stretch at bottom"], substitution: ['bench-press', 'decline-bench-press', 'incline-dumbbell-press'], unilateral: false, supportsWeighted: /weighted/i.test('incline-bench-press'), supportsAssisted: /assisted/i.test('incline-bench-press'), progression: 'load' },
   { id: 'decline-bench-press', name: 'Decline Bench Press', muscle: 'Chest', equipment: ['barbell'], level: 'Intermediate', tags: ['compound','push'], imageSlug: 'decline-bench-press', cues: ["Retract shoulder blades","Control the descent","Full stretch at bottom"], substitution: ['bench-press', 'incline-bench-press', 'incline-dumbbell-press'], unilateral: false, supportsWeighted: /weighted/i.test('decline-bench-press'), supportsAssisted: /assisted/i.test('decline-bench-press'), progression: 'load' },
   { id: 'machine-chest-press', name: 'Machine Chest Press', muscle: 'Chest', equipment: ['machine'], level: 'Beginner', tags: ['compound','push','pull'], imageSlug: 'machine-chest-press', cues: ["Retract shoulder blades","Control the descent","Full stretch at bottom"], substitution: ['pec-deck', 'smith-machine-bench-press', 'bench-press'], unilateral: false, supportsWeighted: /weighted/i.test('machine-chest-press'), supportsAssisted: /assisted/i.test('machine-chest-press'), progression: 'load' },
@@ -185,7 +199,8 @@ export const EXERCISES = [
   { id: 'cable-curl', name: 'Cable Curl', muscle: 'Arms', equipment: ['cable'], level: 'Intermediate', tags: ['isolation'], imageSlug: 'cable-curl', cues: ["Elbows pinned","No swinging","Squeeze at the top"], substitution: ['rope-hammer-curl', 'chin-up'], unilateral: false, supportsWeighted: /weighted/i.test('cable-curl'), supportsAssisted: /assisted/i.test('cable-curl'), progression: 'load' },
   { id: 'reverse-curl', name: 'Reverse Curl', muscle: 'Arms', equipment: ['barbell'], level: 'Intermediate', tags: ['isolation'], imageSlug: 'reverse-curl', cues: ["Wrist alignment","Slow controlled movement","Feel forearm tension"], substitution: ['wrist-curl', 'wrist-extension', 'dead-hang'], unilateral: false, supportsWeighted: /weighted/i.test('reverse-curl'), supportsAssisted: /assisted/i.test('reverse-curl'), progression: 'load' },
   { id: 'wrist-curl', name: 'Wrist Curl', muscle: 'Arms', equipment: ['barbell'], level: 'Intermediate', tags: ['isolation'], imageSlug: 'wrist-curl', cues: ["Wrist alignment","Slow controlled movement","Feel forearm tension"], substitution: ['reverse-curl', 'wrist-extension'], unilateral: false, supportsWeighted: /weighted/i.test('wrist-curl'), supportsAssisted: /assisted/i.test('wrist-curl'), progression: 'load' },
-  { id: 'skull-crusher', name: 'Skull Crusher', muscle: 'Arms', equipment: ['barbell'], level: 'Intermediate', tags: ['compound'], imageSlug: 'skull-crusher', cues: ["Elbows narrow","Full extension","Slow negative"], substitution: ['close-grip-bench-press', 'tricep-pushdown', 'rope-tricep-pushdown'], unilateral: false, supportsWeighted: /weighted/i.test('skull-crusher'), supportsAssisted: /assisted/i.test('skull-crusher'), progression: 'load' },
+  // Deprecated near-duplicate of skullcrusher (Barbell Skullcrusher).
+  { id: 'skull-crusher', name: 'Skull Crusher', muscle: 'Arms', equipment: ['barbell'], level: 'Intermediate', tags: ['compound'], aliases: ['skull crusher'], supersededBy: 'skullcrusher', cues: ["Elbows narrow","Full extension","Slow negative"], substitution: ['close-grip-bench-press', 'tricep-pushdown', 'rope-tricep-pushdown'], unilateral: false, supportsWeighted: /weighted/i.test('skull-crusher'), supportsAssisted: /assisted/i.test('skull-crusher'), progression: 'load' },
   { id: 'close-grip-bench-press', name: 'Close-Grip Bench Press', muscle: 'Arms', equipment: ['barbell'], level: 'Intermediate', tags: ['compound','push'], imageSlug: 'close-grip-bench-press', cues: ["Elbows narrow","Full extension","Slow negative"], substitution: ['skull-crusher', 'tricep-pushdown'], unilateral: false, supportsWeighted: /weighted/i.test('close-grip-bench-press'), supportsAssisted: /assisted/i.test('close-grip-bench-press'), progression: 'load' },
   { id: 'dip', name: 'Dip', muscle: 'Arms', equipment: ['bodyweight'], level: 'Intermediate', tags: ['isolation','push'], imageSlug: 'dip', cues: ["Elbows narrow","Full extension","Slow negative"], substitution: ['weighted-dip', 'tricep-dip-bench', 'tricep-pushdown', 'diamond-push-up', 'crab-walk'], unilateral: false, supportsWeighted: /weighted/i.test('dip'), supportsAssisted: /assisted/i.test('dip'), progression: 'reps' },
   { id: 'assisted-dip', name: 'Assisted Dip', muscle: 'Arms', equipment: ['machine'], level: 'Beginner', tags: ['isolation','push'], imageSlug: 'assisted-dip', cues: ["Elbows narrow","Full extension","Slow negative"], substitution: ['tricep-pushdown'], unilateral: false, supportsWeighted: /weighted/i.test('assisted-dip'), supportsAssisted: /assisted/i.test('assisted-dip'), progression: 'reps' },
@@ -269,7 +284,8 @@ export const EXERCISES = [
   { id: 'reverse-crunch', name: 'Reverse Crunch', muscle: 'Core', equipment: ['bodyweight'], level: 'Intermediate', tags: ['isolation'], imageSlug: 'reverse-crunch', cues: ["Ribcage down","Breathe steadily","No lower-back sag"], substitution: ['plank', 'side-plank', 'cable-crunch'], unilateral: false, supportsWeighted: /weighted/i.test('reverse-crunch'), supportsAssisted: /assisted/i.test('reverse-crunch'), progression: 'reps' },
   { id: 'russian-twist', name: 'Russian Twist', muscle: 'Core', equipment: ['bodyweight'], level: 'Intermediate', tags: ['isolation'], imageSlug: 'russian-twist', cues: ["Ribcage down","Breathe steadily","No lower-back sag"], substitution: ['plank', 'side-plank', 'cable-crunch'], unilateral: false, supportsWeighted: /weighted/i.test('russian-twist'), supportsAssisted: /assisted/i.test('russian-twist'), progression: 'reps' },
   { id: 'bicycle-crunch', name: 'Bicycle Crunch', muscle: 'Core', equipment: ['bodyweight'], level: 'Intermediate', tags: ['isolation'], imageSlug: 'bicycle-crunch', cues: ["Ribcage down","Breathe steadily","No lower-back sag"], substitution: ['plank', 'side-plank', 'cable-crunch'], unilateral: false, supportsWeighted: /weighted/i.test('bicycle-crunch'), supportsAssisted: /assisted/i.test('bicycle-crunch'), progression: 'reps' },
-  { id: 'mountain-climber', name: 'Mountain Climber', muscle: 'Core', equipment: ['bodyweight'], level: 'Intermediate', tags: ['isolation','explosive','conditioning'], imageSlug: 'mountain-climber', cues: ["Ribcage down","Breathe steadily","No lower-back sag"], substitution: ['plank', 'side-plank', 'cable-crunch'], unilateral: false, supportsWeighted: /weighted/i.test('mountain-climber'), supportsAssisted: /assisted/i.test('mountain-climber'), progression: 'time' },
+  // Deprecated singular of mountain-climbers.
+  { id: 'mountain-climber', name: 'Mountain Climber', muscle: 'Core', equipment: ['bodyweight'], level: 'Intermediate', tags: ['isolation','explosive','conditioning'], aliases: ['mountain climbers'], supersededBy: 'mountain-climbers', cues: ["Ribcage down","Breathe steadily","No lower-back sag"], substitution: ['plank', 'side-plank', 'cable-crunch'], unilateral: false, supportsWeighted: /weighted/i.test('mountain-climber'), supportsAssisted: /assisted/i.test('mountain-climber'), progression: 'time' },
   { id: 'cable-woodchop', name: 'Cable Woodchop', muscle: 'Core', equipment: ['cable'], level: 'Intermediate', tags: ['compound'], imageSlug: 'cable-woodchop', cues: ["Ribcage down","Breathe steadily","No lower-back sag"], substitution: ['cable-crunch', 'pallof-press', 'plank'], unilateral: false, supportsWeighted: /weighted/i.test('cable-woodchop'), supportsAssisted: /assisted/i.test('cable-woodchop'), progression: 'load' },
   { id: 'half-kneeling-pallof-press', name: 'Half-Kneeling Pallof Press', muscle: 'Core', equipment: ['cable'], level: 'Beginner', tags: ['compound','push','core-stability'], imageSlug: 'half-kneeling-pallof-press', cues: ["Ribcage down","Breathe steadily","No lower-back sag"], substitution: ['cable-crunch', 'pallof-press', 'plank'], unilateral: false, supportsWeighted: /weighted/i.test('half-kneeling-pallof-press'), supportsAssisted: /assisted/i.test('half-kneeling-pallof-press'), progression: 'load' },
   { id: 'cable-pallof-hold', name: 'Cable Pallof Hold', muscle: 'Core', equipment: ['cable'], level: 'Intermediate', tags: ['isolation','core-stability'], imageSlug: 'cable-pallof-hold', cues: ["Ribcage down","Breathe steadily","No lower-back sag"], substitution: ['cable-crunch', 'pallof-press', 'plank'], unilateral: false, supportsWeighted: /weighted/i.test('cable-pallof-hold'), supportsAssisted: /assisted/i.test('cable-pallof-hold'), progression: 'time' },
@@ -435,7 +451,9 @@ export function searchExercises({ q = '', muscle = '', equipment = '', level = '
   const qq = q.trim().toLowerCase();
   const tagList = Array.isArray(tag) ? tag : (tag ? [tag] : []);
   return EXERCISES.filter(e => {
-    if (qq && !(e.name.toLowerCase().includes(qq) || e.muscle.toLowerCase().includes(qq) || e.id.includes(qq))) return false;
+    // Query matches name, id, muscle — or any registered alias, so a user
+    // typing what they call the lift still finds it.
+    if (qq && !(e.name.toLowerCase().includes(qq) || e.muscle.toLowerCase().includes(qq) || e.id.includes(qq) || (e.aliases || []).some(a => a.toLowerCase().includes(qq)))) return false;
     if (muscle && e.muscle !== muscle) return false;
     if (level && e.level !== level) return false;
     // AND semantics: every selected tag must be present (chips narrow the set).
@@ -894,6 +912,30 @@ export function validateContent(){
     }
     if(e.videoUrl && !/^https:\/\//.test(e.videoUrl)) errors.push(`Exercise ${e.id} has non-https videoUrl`);
     if(!Array.isArray(e.substitution) || e.substitution.length===0) errors.push(`Exercise ${e.id} declares no substitutions — every exercise needs an alternative chain`);
+    // Aliases: alternate display names for search/history imports. They must
+    // be non-empty strings and must not collide with a real exercise name
+    // (a colliding alias makes name→id resolution ambiguous).
+    if(e.aliases !== undefined){
+      if(!Array.isArray(e.aliases) || e.aliases.some(a => typeof a !== 'string' || !a.trim())) errors.push(`Exercise ${e.id} has a malformed aliases array`);
+      else for(const alias of e.aliases){ if(names.has(alias)) errors.push(`Alias "${alias}" on ${e.id} collides with the name of ${names.get(alias)}`); }
+    }
+    // Instruction and mistake lists: optional but strictly shaped — the
+    // detail view renders them as sentences, so free-form junk would show.
+    for(const [field, min] of [['instructions', 2], ['mistakes', 1]]){
+      if(e[field] !== undefined){
+        if(!Array.isArray(e[field]) || e[field].length < min || e[field].some(s => typeof s !== 'string' || s.trim().length < 8)){
+          errors.push(`Exercise ${e.id} has a malformed ${field} array (need ${min}+ meaningful sentences)`);
+        }
+      }
+    }
+    // Deprecation: supersededBy must point at a DIFFERENT, existing, active
+    // exercise; chains must terminate (a cycle would make resolveExerciseId
+    // loop) and deprecated rows must stay out of program definitions.
+    if(e.supersededBy !== undefined){
+      if(e.supersededBy === e.id) errors.push(`Exercise ${e.id} supersedes itself`);
+      else if(!EXERCISE_BY_ID[e.supersededBy]) errors.push(`Exercise ${e.id} supersededBy unknown exercise ${e.supersededBy}`);
+      else if(EXERCISE_BY_ID[e.supersededBy].supersededBy === e.id) errors.push(`Deprecation cycle: ${e.id} ↔ ${e.supersededBy}`);
+    }
   }
   // Substitution graph integrity: every target must exist, and the relation is
   // reciprocal (A lists B ⇒ B lists A). A dangling or one-way edge silently
@@ -903,11 +945,24 @@ export function validateContent(){
       const target = EXERCISE_BY_ID[targetId];
       if(!target){ errors.push(`Exercise ${e.id} substitutes unknown exercise ${targetId}`); continue; }
       if(!(target.substitution||[]).includes(e.id)) errors.push(`Substitution not reciprocal: ${e.id} → ${targetId}, but ${targetId} does not list ${e.id}`);
+      // Note: edges deliberately span equipment families ("no kit? use the
+      // machine version") — cross-equipment edges are the point of the graph;
+      // availability is filtered per-user at ranking time, so requiring the
+      // target's kit to overlap the source's would be wrong here.
     }
+  }
+  // Equipment presets must reference real EQUIPMENT ids — a typo in a preset
+  // silently deselects half the library at onboarding.
+  for(const preset of EQUIPMENT_PRESETS){
+    for(const eq of preset.equipment){
+      if(!EQUIPMENT.some(x => x.id === eq)) errors.push(`Equipment preset ${preset.id} references unknown equipment ${eq}`);
+    }
+    if(!preset.equipment.includes('bodyweight')) errors.push(`Equipment preset ${preset.id} does not include bodyweight`);
   }
   for(const p of PROGRAMS){
     for(const w of p.weeks) for(const wk of w.workouts) for(const b of wk.blocks){
       if(!EXERCISE_BY_ID[b.exerciseId]) errors.push(`Program ${p.id} references unknown exercise ${b.exerciseId}`);
+      else if(EXERCISE_BY_ID[b.exerciseId].supersededBy) errors.push(`Program ${p.id} schedules deprecated exercise ${b.exerciseId} — use ${EXERCISE_BY_ID[b.exerciseId].supersededBy}`);
     }
   }
   for(const t of PROGRAM_TEMPLATES){
@@ -916,6 +971,24 @@ export function validateContent(){
     if(!GOALS.some(g=> g.id===t.goal)) errors.push(`Template ${t.id} has unknown goal ${t.goal}`);
   }
   return errors;
+}
+
+// Soft findings: the substitution graph should give every exercise at least
+// one fallback doable with the exercise's OWN equipment (+ bodyweight). Rows
+// flagged here still work — rankedSubstitutions falls back to the wider pool
+// — but a user owning exactly that kit gets cross-equipment suggestions that
+// may be useless to them. Genuinely missing edges are added over time; this
+// list is the work queue, exported separately so it never blocks CI.
+export function validateContentWarnings(){
+  const warnings = [];
+  for(const e of EXERCISES){
+    const reachable = (e.substitution||[]).some(id => {
+      const t = EXERCISE_BY_ID[id];
+      return t && t.equipment.every(eq => eq === 'bodyweight' || (e.equipment||[]).includes(eq));
+    });
+    if(!reachable) warnings.push(`Exercise ${e.id} has no substitution reachable with its own equipment`);
+  }
+  return warnings;
 }
 
 export const PROGRAM_BY_ID = Object.fromEntries(PROGRAMS.map(p => [p.id, p]));
