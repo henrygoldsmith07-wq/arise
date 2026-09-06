@@ -129,6 +129,14 @@ export default function Onboarding({ open, onClose, onComplete, initial, onLoadD
             <span className="block font-bold">🌱 New to training? Start here</span>
             <span className="block text-xs text-ink3 mt-0.5">Pre-fills a gentle starter: bodyweight at home, 3×30 min. Every answer stays editable on the following screens.</span>
           </button>
+          {/* Medical/safety disclaimer: shown before any training decision so
+              the app's nature is clear from the first screen. Full text lives
+              in docs/DISCLAIMERS.md; the Legal section in More links to it. */}
+          <p role="note" className="rounded-xl border border-line bg-surface2 px-3 py-2 text-[11px] text-ink3 leading-snug">
+            <span aria-hidden>⚕️</span> Arise is a training log and coach — <span className="font-bold text-ink">not a medical device</span>.
+            It does not diagnose, treat, or prevent injury or illness. Check with a qualified professional
+            before starting a new program, and stop and seek care if exercise causes pain.
+          </p>
           <p className="text-[11px] font-bold uppercase tracking-widest text-ink3 pt-1">Or choose a goal</p>
           {GOALS.map(g=> (
             <button key={g.id} onClick={()=> setGoal(g.id)} className={`text-left rounded-2xl border p-4 ${goal===g.id ? 'bg-ink text-bg border-ink' : 'bg-surface border-line hover:border-ink3'}`}>

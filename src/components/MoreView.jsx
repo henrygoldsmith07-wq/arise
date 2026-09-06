@@ -79,10 +79,10 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   // settings the query happened not to name.
   const [searchQuery, setSearchQuery] = useState('');
   const settingsIndex = [
-    { id: 'sec-gym', title: 'Gym mode', keywords: 'gym focus wake screen stay awake rest timer presets keypad swipe one thumb' },
+    { id: 'sec-gym', title: 'Gym mode', keywords: 'gym focus wake screen stay awake rest timer presets keypad swipe one thumb cautious mode safety pain' },
     { id: 'sec-backup', title: 'Backup & portability', keywords: 'backup export import csv encrypt data file' },
     { id: 'sec-appearance', title: 'Appearance & accessibility', keywords: 'theme dark light text contrast motion units kg lb pounds kilograms weight experience simple expert mode' },
-    { id: 'sec-guided', title: 'Guided mode', keywords: 'guided sound cues voice coach speech rate' },
+    { id: 'sec-guided', title: 'Guided mode', keywords: 'guided sound cues voice coach speech rate maximum effort warnings' },
     { id: 'sec-policy', title: 'Training policy', keywords: 'policy conservative standard aggressive maintenance explanation confidence' },
     { id: 'sec-personalise', title: 'Personalise', keywords: 'onboarding goal kit location level equipment plates' },
     { id: 'sec-privacy', title: 'Privacy & data', keywords: 'privacy telemetry consent measurements delete storage diagnostics demo sample data' },
@@ -400,6 +400,13 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
           onChange={value=> setPreference({ wakeLock: value })}
         />
 
+        <ToggleRow
+          label="Cautious mode"
+          hint="Training-safety checks use earlier, gentler thresholds: volume and load jumps, implausible PRs and repeated pain are flagged sooner. Advice only — the engine already clamps itself."
+          checked={prefs.cautiousMode === true}
+          onChange={value=> setPreference({ cautiousMode: value })}
+        />
+
         <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5">
           <p className="text-xs font-bold">Rest presets by exercise</p>
           {restPresetEntries.length ? (
@@ -653,6 +660,13 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
           hint="Speaks the exercise name, set number and rep target as each new step starts. Uses your device's built-in speech — nothing is sent anywhere."
           checked={prefs.voiceCoach === true}
           onChange={value=> setPreference({ voiceCoach: value })}
+        />
+
+        <ToggleRow
+          label="Maximum effort warnings"
+          hint="Notes when a prescribed target sits close to failure (from your last logged RPE) and reminds you to set safeties and watch bar speed."
+          checked={prefs.maxEffortWarnings === true}
+          onChange={value=> setPreference({ maxEffortWarnings: value })}
         />
 
         <div className={`rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2 ${prefs.voiceCoach === true ? '' : 'opacity-60'}`}>

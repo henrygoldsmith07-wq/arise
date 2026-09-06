@@ -15,6 +15,7 @@ import {
 } from '../lib/programming.js';
 import { nextBestAction, whatChangedSummary } from '../lib/product.js';
 import { isSimpleView } from '../lib/experienceMode.js';
+import { safetyPanel } from '../lib/safety.js';
 
 function estimatedMinutes(session, config = null){
   if(session?.estimatedDurationMin != null) return session.estimatedDurationMin;
@@ -33,6 +34,13 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
   const progProgress = progress(sched, store.history);
   const adherence = useMemo(()=> programAdherence(sched, store.history || [], { today: isoToday() }), [sched, store.history]);
   const recovery = useMemo(()=> missedWorkoutRecovery(sched, store.history || [], { today: isoToday() }), [sched, store.history]);
+  // Safety signals: pain trends, volume/load jumps, implausible PRs, failed-rep
+  // patterns, recovery deficit, fatigue stacking. Cautious mode lowers the
+  // thresholds so cautious users see signals earlier (see safety.js).
+  const safety = useMemo(
+    ()=> safetyPanel(store.history || [], store.readinessLog || [], { today: isoToday(), cautious: store.preferences?.cautiousMode === true }),
+    [store.history, store.readinessLog, store.preferences?.cautiousMode]
+  );
   const simple = isSimpleView(store.preferences);
   const nba = useMemo(()=> nextBestAction({ store, today: isoToday(), todaySession: today, nextSess: nxt, recovery }), [store, today, nxt, recovery]);
   const changes = useMemo(()=> whatChangedSummary({ schedule: sched, history: store.history || [] }), [sched, store.history]);
@@ -135,6 +143,10 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
         </div>
       </section>
 
+      {(safety.warnings.length > 0 || safety.deloadPrompt || safety.restart) && (
+        <SafetyPanelCard safety={safety} byId={EXERCISE_BY_ID} />
+      )}
+
       <WeeklyReviewCard store={store} setStore={setStore} />
 
       {/* ── Secondary: programme progress & audit trail ── */}
@@ -199,5 +211,43 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
       <p className="text-[11px] text-ink3 px-1">Attributes are derived from your logged history — volume, loads, variety and consistency — not from program names.</p>
     </div>
     </>
+  );
+}
+
+const SAFETY_STYLES = {
+  stop: 'border-review/40 bg-reviewsoft',
+  caution: 'border-review/40 bg-reviewsoft',
+  info: 'border-line bg-surface2',
+};
+
+/** Renders safety.js signals verbatim: title, detail and one actionable step. */
+function SafetyPanelCard({ safety, byId }){
+  return (
+    <section aria-label="Training safety" className="space-y-2">
+      {safety.warnings.map(w => (
+        <div key={w.id} className={`rounded-2xl border px-3 py-3 space-y-1 ${SAFETY_STYLES[w.severity] || SAFETY_STYLES.info}`}>
+          <p className="text-xs font-bold">
+            <span aria-hidden className="mr-1">{w.severity === 'stop' ? '🛑' : w.severity === 'caution' ? '⚠️' : 'ℹ️'}</span>{w.title}
+          </p>
+          <p className="text-xs text-ink2 leading-snug">{w.detail}</p>
+          {w.action && <p className="text-[11px] text-ink3"><span className="font-bold text-ink">Try:</span> {w.action}</p>}
+          {w.exerciseId && byId[w.exerciseId] && <p className="text-[10px] text-ink3">Exercise: {byId[w.exerciseId].name}</p>}
+        </div>
+      ))}
+      {safety.deloadPrompt && (
+        <div className="rounded-2xl border border-line bg-surface2 px-3 py-3 space-y-1">
+          <p className="text-xs font-bold"><span aria-hidden className="mr-1">ℹ️</span>{safety.deloadPrompt.title}</p>
+          <p className="text-xs text-ink2 leading-snug">{safety.deloadPrompt.detail}</p>
+          {safety.deloadPrompt.action && <p className="text-[11px] text-ink3"><span className="font-bold text-ink">Try:</span> {safety.deloadPrompt.action}</p>}
+        </div>
+      )}
+      {safety.restart && (
+        <div className="rounded-2xl border border-line bg-surface2 px-3 py-3 space-y-1">
+          <p className="text-xs font-bold"><span aria-hidden className="mr-1">🏃</span>{safety.restart.title}</p>
+          <p className="text-xs text-ink2 leading-snug">{safety.restart.detail}</p>
+          {safety.restart.action && <p className="text-[11px] text-ink3"><span className="font-bold text-ink">Try:</span> {safety.restart.action}</p>}
+        </div>
+      )}
+    </section>
   );
 }
