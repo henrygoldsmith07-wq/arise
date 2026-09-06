@@ -141,12 +141,17 @@ function usingFallback(){ return typeof indexedDB === 'undefined'; }
 // and fallback instance instead of opening its own — one upgrade path, one
 // 'versionchange' owner, one shared in-memory backend for tests. The promise
 // resolves even when no DB exists, so the binding learns the real outcome.
-import { bindTransactionSources } from './idb-tx.js';
-openDb().then((db)=> {
-  bindTransactionSources({ db, fallback: db ? null : fallback() });
-}).catch(()=> {
-  bindTransactionSources({ db: null, fallback: fallback() });
-});
+import { bindTransactionSources, transactionSourcesBound } from './idb-tx.js';
+const openPromise = openDb()
+  .then((db)=> {
+    bindTransactionSources({ db, fallback: db ? null : fallback() });
+  })
+  .catch(()=> {
+    bindTransactionSources({ db: null, fallback: fallback() });
+  });
+// Callers that reach the transaction layer before the shared open settles
+// (demo exit racing boot) wait for this instead of throwing unbound.
+export { openPromise as idbOpenPromise };
 
 export async function idbGet(store, key){
   if(usingFallback()) return fallback().get(store, key);

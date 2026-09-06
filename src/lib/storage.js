@@ -190,6 +190,7 @@ async function migrateLegacy(){
   try{ localStorage.setItem(POINTER_KEY, JSON.stringify({ migrated: true, at: new Date().toISOString() })); }catch{}
 }
 
+
 // Hydrate the process-wide cache exactly once, before first render.
 export function hydrateStorage(){
   if(hydratePromise) return hydratePromise;
@@ -259,6 +260,12 @@ export async function clearAllStoredData(){
   }catch{
     for(const s of STORES){ try{ await idbClearStore(s); }catch{} }
   }
+  // The legacy localStorage payload is a live import source at every boot
+  // until the pointer marks the migration done — leaving it here would
+  // resurrect the wiped data on the very next boot (the demo-exit bug).
+  try{ localStorage.removeItem(LS_KEY); }catch{}
+  try{ localStorage.removeItem('arise.store.v1.pre-idb-backup'); }catch{}
+  try{ localStorage.removeItem('arise.store.v1.corrupt'); }catch{}
   try{ localStorage.removeItem(POINTER_KEY); }catch{}
 }
 

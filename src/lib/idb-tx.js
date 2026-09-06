@@ -19,11 +19,28 @@ const SUPPORTED_STORES = new Set([
 
 let dbRef = null;          // shared open handle, set by idb.js on first use
 let fallbackRef = null;    // shared in-memory backend, same lifecycle
+let pendingBinding = null; // resolves when the shared open settles
 
 /** Wired up by idb.js so this module never opens its own connection. */
 export function bindTransactionSources({ db, fallback }){
   dbRef = db || null;
   fallbackRef = fallback || null;
+  if(pendingBinding){ pendingBinding.resolve(); pendingBinding = null; }
+}
+
+/**
+ * Awaitable handle for callers that might race the shared open.
+ */
+export function transactionSourcesBound(){
+  if(!pendingBinding){
+    let resolve;
+    const promise = new Promise((r)=> { resolve = r; });
+    pendingBinding = { promise, resolve };
+    // Already bound (tests bind synchronously): retire the wait immediately.
+    if(dbRef || fallbackRef){ pendingBinding.resolve(); pendingBinding = null; }
+    return promise;
+  }
+  return pendingBinding.promise;
 }
 
 /**
@@ -49,7 +66,18 @@ export async function idbTransaction(storeNames, fn){
   // throw — real IndexedDB aborts the WHOLE transaction. Snapshot every
   // touched store first and roll back on any throw so the fallback matches
   // production abort semantics exactly.
+  //
+  // The fallback is only "final" once the shared open has settled; if the
+  // caller races that open, wait for it instead of throwing unbound.
   if(typeof indexedDB === 'undefined' || !dbRef){
+    if(pendingBinding){ await transactionSourcesBound(); }
+    else if(!fallbackRef && typeof indexedDB !== 'undefined'){
+      // Racing the shared open (idb.js binds async at module load): wait for
+      // the real outcome instead of throwing "No storage backend bound".
+      try{ const { idbOpenPromise } = await import('./idb.js'); await idbOpenPromise; }catch{}
+    }
+  }
+  if(!dbRef){
     const fb = fallbackRef;
     if(!fb) throw new Error('No storage backend bound.');
     const snapshot = new Map();

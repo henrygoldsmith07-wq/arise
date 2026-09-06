@@ -20,6 +20,9 @@ import { voiceSupported } from '../lib/voiceCoach.js';
 import { setRestPreset } from '../lib/gymMode.js';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { PROGRESSION_POLICIES, POLICY_ORDER } from '../lib/progressionPolicies.js';
+import { EXPERIENCE_LEVELS, EXPERIENCE_INFO, experiencePatch, resolveExperience } from '../lib/experienceMode.js';
+import { makeDemoStore } from '../lib/demoData.js';
+import { captureSnapshot } from '../lib/snapshots.js';
 const StorageDiagnostics = lazy(()=> import('./StorageDiagnostics.jsx'));
 const EvidenceDashboard = lazy(()=> import('./EvidenceDashboard.jsx'));
 
@@ -78,11 +81,11 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   const settingsIndex = [
     { id: 'sec-gym', title: 'Gym mode', keywords: 'gym focus wake screen stay awake rest timer presets keypad swipe one thumb' },
     { id: 'sec-backup', title: 'Backup & portability', keywords: 'backup export import csv encrypt data file' },
-    { id: 'sec-appearance', title: 'Appearance & accessibility', keywords: 'theme dark light text contrast motion auto rest' },
+    { id: 'sec-appearance', title: 'Appearance & accessibility', keywords: 'theme dark light text contrast motion auto rest experience simple expert mode' },
     { id: 'sec-guided', title: 'Guided mode', keywords: 'guided sound cues voice coach speech rate' },
     { id: 'sec-policy', title: 'Training policy', keywords: 'policy conservative standard aggressive maintenance explanation confidence' },
     { id: 'sec-personalise', title: 'Personalise', keywords: 'onboarding goal kit location level equipment plates' },
-    { id: 'sec-privacy', title: 'Privacy & data', keywords: 'privacy telemetry consent measurements delete storage diagnostics' },
+    { id: 'sec-privacy', title: 'Privacy & data', keywords: 'privacy telemetry consent measurements delete storage diagnostics demo sample data' },
     { id: 'sec-ai', title: 'AI coach', keywords: 'ai coach model api key insight' },
     { id: 'sec-evidence', title: 'Progression evidence', keywords: 'evidence study ledger metrics calibration dashboard' },
     { id: 'sec-help', title: 'Help & testing', keywords: 'help testing diagnostics about version' },
@@ -435,9 +438,14 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
           </div>
         )}
         <p className="text-xs text-ink3">Local-first — your history lives on this device. Export JSON (full, versioned), an encrypted backup, or CSV (history only) and restore/merge on another device. No account required.</p>
+        {store.demo && (
+          <p className="text-xs text-ink2 bg-reviewsoft border border-review/30 rounded-xl px-3 py-2" role="note">
+            <strong>Demo mode:</strong> export is disabled — this is sample data, not yours. Exit demo to start your real log.
+          </p>
+        )}
         <div className="flex flex-wrap gap-2">
-          <button onClick={exportNow} className="btn btn-primary min-h-10 rounded-xl px-4">Export JSON</button>
-          <button onClick={exportEncrypted} className="btn btn-primary min-h-10 rounded-xl px-4">Export encrypted</button>
+          <button onClick={exportNow} disabled={store.demo === true} className="btn btn-primary min-h-10 rounded-xl px-4 disabled:opacity-40">Export JSON</button>
+          <button onClick={exportEncrypted} disabled={store.demo === true} className="btn btn-primary min-h-10 rounded-xl px-4 disabled:opacity-40">Export encrypted</button>
           <button onClick={exportCsv} className="btn btn-secondary min-h-10 rounded-xl px-4">Export CSV</button>
           <button onClick={exportEvents} className="btn btn-secondary min-h-10 rounded-xl px-4">Export events</button>
           <label className="btn btn-secondary min-h-10 rounded-xl px-4 cursor-pointer">
@@ -559,6 +567,24 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
       <section id="sec-appearance" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
         <h3 className="text-sm font-bold">Appearance & accessibility</h3>
         <p className="text-xs text-ink3">Applies to every screen on this device, including the session runner. Stored with your other preferences and included in a backup.</p>
+
+        <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
+          <p className="text-xs font-bold">Experience level</p>
+          <p className="text-[11px] text-ink3">Controls how much detail the app shows — never what it computes or stores. Everything stays in your export either way.</p>
+          <div className="flex gap-1.5" role="group" aria-label="Experience level">
+            {EXPERIENCE_LEVELS.map((level) => (
+              <button
+                key={level}
+                onClick={()=> setPreference(experiencePatch(level))}
+                aria-pressed={resolveExperience(prefs) === level}
+                className={`flex-1 min-h-10 rounded-xl border px-2 py-1.5 text-xs ${resolveExperience(prefs) === level ? 'bg-ink text-bg border-ink font-bold' : 'bg-surface border-line text-ink3'}`}
+              >
+                <span className="block font-bold">{EXPERIENCE_INFO[level].label}</span>
+                <span className={`block text-[10px] leading-snug ${resolveExperience(prefs) === level ? 'text-bg/80' : 'text-ink3'}`}>{EXPERIENCE_INFO[level].hint}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
           <p className="text-xs font-bold">Theme</p>
@@ -692,6 +718,35 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
       <section id="sec-privacy" className="rounded-2xl border border-line bg-surface p-4 space-y-2">
         <h3 className="text-sm font-bold">Privacy & data</h3>
         <p className="text-xs text-ink3">Local-first. Event measurements stay on this device. Nothing is sent to Pulse or a health platform unless you explicitly enable that separate integration.</p>
+
+        {/* ── Demo mode: clearly labeled sample data, one-tap honest exit ── */}
+        <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-bold">Demo mode</p>
+            <span className="ml-auto text-[11px] text-ink3">{store.demo ? 'active — sample data' : 'off'}</span>
+          </div>
+          {store.demo ? (
+            <>
+              <p className="text-[11px] text-ink3">Sample data is labeled everywhere (banner + demo- prefixed sessions). “Start fresh” in the banner wipes it and boots an empty app — export is disabled by design so demo data can never masquerade as yours.</p>
+            </>
+          ) : (
+            <>
+              <p className="text-[11px] text-ink3">Loads a clearly labeled, fully populated sample (a month of training on a live schedule). Your current data — if any — is snapshotted first; exiting demo erases the sample and restores an empty start.</p>
+              <button
+                onClick={async ()=> {
+                  try{ await captureSnapshot({ force: true, reason: 'pre-demo' }); }catch{}
+                  try{ const { clearAllStoredData } = await import('../lib/storage.js'); await clearAllStoredData(); }catch{}
+                  setStore(makeDemoStore());
+                  setTab('today');
+                }}
+                className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs"
+              >
+                Load demo data
+              </button>
+            </>
+          )}
+        </div>
+
         <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
           <div className="flex items-center gap-2"><p className="text-xs font-bold">Local measurements</p><span className="ml-auto text-[11px] text-ink3">{store.preferences?.telemetryEnabled===true?'enabled':store.preferences?.telemetryEnabled===false?'disabled':'choice needed'}</span></div>
           <p className="text-[11px] text-ink3">Measures set logging time, session abandonment and recommendation acceptance. It never leaves this device.</p>

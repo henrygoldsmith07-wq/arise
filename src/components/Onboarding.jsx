@@ -3,7 +3,7 @@ import { useDialogA11y } from '../lib/a11y.js';
 import { EQUIPMENT, LOCATIONS, GOALS, LEVELS, EXERCISES, exerciseAvailable } from '../lib/data.js';
 import { DEFAULT_PLATE_DENOMINATIONS_KG } from '../lib/plates.js';
 
-export default function Onboarding({ open, onClose, onComplete, initial }){
+export default function Onboarding({ open, onClose, onComplete, initial, onLoadDemo = null }){
   const [step,setStep]=useState(0);
   const [goal,setGoal]=useState(initial?.goal || 'general');
   const [equipment,setEquipment]=useState(initial?.equipment || ['bodyweight']);
@@ -114,6 +114,22 @@ export default function Onboarding({ open, onClose, onComplete, initial }){
       title: 'What’s the goal?',
       body: (
         <div className="grid gap-2">
+          {/* Beginner quick start: pre-selects a proven starter configuration.
+              The remaining steps still walk through with these defaults, so
+              the user sees and can change every choice — nothing is decided
+              invisibly on their behalf. */}
+          <button
+            onClick={()=> {
+              setGoal('general'); setLocation('home'); setEquipment(['bodyweight']);
+              setLevel('Beginner'); setDays(3); setMinutes(30);
+              setStep(1);
+            }}
+            className="text-left rounded-2xl border border-line bg-surface2 p-4 hover:border-ink3"
+          >
+            <span className="block font-bold">🌱 New to training? Start here</span>
+            <span className="block text-xs text-ink3 mt-0.5">Pre-fills a gentle starter: bodyweight at home, 3×30 min. You can change every answer on the next screens.</span>
+          </button>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3 pt-1">Or choose a goal</p>
           {GOALS.map(g=> (
             <button key={g.id} onClick={()=> setGoal(g.id)} className={`text-left rounded-2xl border p-4 ${goal===g.id ? 'bg-ink text-bg border-ink' : 'bg-surface border-line hover:border-ink3'}`}>
               <span className="block font-bold">{g.label}</span><span className={`block text-xs ${goal===g.id ? 'text-bg/80' : 'text-ink3'}`}>{g.hint}</span>
@@ -271,6 +287,13 @@ export default function Onboarding({ open, onClose, onComplete, initial }){
             {steps.map((_,i)=> <span key={i} className={`h-1.5 flex-1 rounded-full ${i<=step ? 'bg-ink' : 'bg-line'}`} />)}
           </div>
           <p className="text-[11px] text-ink3 mt-2">Step {step+1} of {steps.length}</p>
+          {step === 0 && onLoadDemo && (
+            <p className="text-[11px] text-ink3 mt-1">
+              Just looking?{' '}
+              <button onClick={onLoadDemo} className="underline font-bold text-ink">Explore with sample data</button> — a
+              fully populated demo you can exit any time.
+            </p>
+          )}
         </div>
         <div className="flex-1 overflow-auto p-6">{cur.body}</div>
         <div className="p-4 border-t border-line flex gap-2 bg-surface2">

@@ -13,6 +13,8 @@ import {
   replanSchedule,
   shortWorkoutMode,
 } from '../lib/programming.js';
+import { nextBestAction, whatChangedSummary } from '../lib/product.js';
+import { isSimpleView } from '../lib/experienceMode.js';
 
 function estimatedMinutes(session, config = null){
   if(session?.estimatedDurationMin != null) return session.estimatedDurationMin;
@@ -31,6 +33,9 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
   const progProgress = progress(sched, store.history);
   const adherence = useMemo(()=> programAdherence(sched, store.history || [], { today: isoToday() }), [sched, store.history]);
   const recovery = useMemo(()=> missedWorkoutRecovery(sched, store.history || [], { today: isoToday() }), [sched, store.history]);
+  const simple = isSimpleView(store.preferences);
+  const nba = useMemo(()=> nextBestAction({ store, today: isoToday(), todaySession: today, nextSess: nxt, recovery }), [store, today, nxt, recovery]);
+  const changes = useMemo(()=> whatChangedSummary({ schedule: sched, history: store.history || [] }), [sched, store.history]);
   const explanations = useMemo(()=> heroSession ? heroSession.blocks.map(block=> progressionExplanation({ exerciseId: block.exerciseId, targetReps: block.reps, asOfDateISO: heroSession.dateISO, history: store.history || [], plateConfig })) : [], [heroSession, store.history, plateConfig]);
 
   const applyReplan = ()=>{
@@ -113,11 +118,22 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
       {/* ── Actionable recovery notice stays near the top ── */}
       {recovery.needed && (
         <div className="rounded-2xl border border-review/30 bg-reviewsoft px-3 py-3 space-y-2">
-          <p className="text-xs font-bold text-review">Missed-workout recovery</p>
+          <p className="text-xs font-bold text-review">Life happened — the schedule adapts</p>
           <p className="text-xs text-ink2">{recovery.recommendation}</p>
+          <p className="text-[11px] text-ink3">Missing sessions is data, not failure. Re-planning folds them forward in order — nothing doubles up, nothing is “made up” with a brutal workout.</p>
           <button onClick={applyReplan} className="btn btn-primary min-h-10 rounded-xl px-3 text-xs">Re-plan schedule</button>
         </div>
       )}
+
+      {/* ── Next best action: one guidance line, never a countdown ── */}
+      <section className="rounded-2xl border border-line bg-surface p-4 flex items-center gap-3" aria-label="Suggested next step">
+        <span aria-hidden className="text-base">🧭</span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Next best action</p>
+          <p className="text-sm font-bold truncate">{nba.title}</p>
+          <p className="text-xs text-ink3">{nba.detail}</p>
+        </div>
+      </section>
 
       <WeeklyReviewCard store={store} setStore={setStore} />
 
@@ -133,6 +149,15 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
         {sched && (
           <p className="text-[11px] text-ink3">{adherence.toDateRate == null ? 'No sessions due yet' : `${Math.round(adherence.toDateRate * 100)}% adherence so far`} • {adherence.missed} missed • {adherence.upcoming} upcoming</p>
         )}
+        {/* ── What changed and why: the audit trail, in plain language ── */}
+        {!simple && !!changes.length && changes.map((c) => (
+          <details key={`${c.kind}-${c.when}`} className="rounded-xl border border-line bg-surface2 px-3 py-2">
+            <summary className="text-xs font-bold cursor-pointer">What changed &amp; why — {c.when} ({c.kind})</summary>
+            <ul className="mt-2 space-y-1">
+              {c.lines.map((line, i) => <li key={i} className="text-[11px] text-ink3">• {line}</li>)}
+            </ul>
+          </details>
+        ))}
         {sched?.lastAdaptation?.changes?.length ? (
           <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
             <summary className="text-xs font-bold cursor-pointer">Programme adjusted from your last session ({sched.lastAdaptation.changes.length})</summary>
