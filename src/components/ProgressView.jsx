@@ -1,19 +1,36 @@
 import { useEffect, useMemo, useState } from 'react';
 import { deriveAttributes, levelFromAttributes } from '../lib/attributes.js';
-import { totalVolumeKg, streakDays } from '../lib/store.js';
+import { totalVolumeKg } from '../lib/store.js';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { weeklyVolume, frequencyByMuscleSync, volumeLandmarks, volumeDistribution, strengthSeriesWithConfidence, extractNoteRecommendations, plannedVsCompletedStats } from '../lib/analytics.js';
 import { strengthTrendWithConfidence, classifyPR } from '../lib/progression.js';
 import { exerciseHistorySummary, plateauDetection, programAdherence, recommendationCalibration, validateDeloadLogic } from '../lib/programming.js';
 import { badSessionAttribution, plateauAttribution } from '../lib/sessionQuality.js';
 import { longitudinalSummaryAsync } from '../lib/analyticsWorker.js';
+import { isSimpleView, isExpertView } from '../lib/experienceMode.js';
+import { milestoneState, trainingAgeDisplay, consistencyInsights, healthyStreak, monthlyDigest, nextBestAction } from '../lib/product.js';
+import { todayISO, sessionForToday, nextSession } from '../lib/schedule.js';
+import { missedWorkoutRecovery } from '../lib/programming.js';
 
 export default function ProgressView({ store }){
   const attrs = useMemo(()=> deriveAttributes(store.history), [store.history]);
   const lvl = useMemo(()=> levelFromAttributes(attrs), [attrs]);
   const history = store.history || [];
   const vol = totalVolumeKg(history);
-  const streak = streakDays(history);
+  // Experience gate: display-only — simple hides advanced analytics, expert
+  // reveals them; the data underneath is identical and always exportable.
+  const simple = isSimpleView(store.preferences);
+  const expert = isExpertView(store.preferences);
+  const today = todayISO();
+  const milestones = useMemo(()=> milestoneState(history), [history]);
+  const age = useMemo(()=> trainingAgeDisplay(history, { today }), [history, today]);
+  const consistency = useMemo(()=> consistencyInsights(history, { today }), [history, today]);
+  const hs = useMemo(()=> healthyStreak(history, { today }), [history, today]);
+  const digest = useMemo(()=> monthlyDigest(history, { today, byId: EXERCISE_BY_ID }), [history, today]);
+  const todaySess = useMemo(()=> sessionForToday(store.activeSchedule), [store.activeSchedule]);
+  const nextSess = useMemo(()=> nextSession(store.activeSchedule), [store.activeSchedule]);
+  const recoveryState = useMemo(()=> missedWorkoutRecovery(store.activeSchedule, history, { today }), [store.activeSchedule, history, today]);
+  const nba = useMemo(()=> nextBestAction({ store, today, todaySession: todaySess, nextSess, recovery: recoveryState }), [store, today, todaySess, nextSess, recoveryState]);
   const prs = useMemo(()=> computePRs(history), [history]);
   const wv = useMemo(()=> weeklyVolume(history), [history]);
   const freq = useMemo(()=> frequencyByMuscleSync(history, EXERCISE_BY_ID), [history]);
@@ -99,7 +116,12 @@ export default function ProgressView({ store }){
     <div className="px-4 py-5 space-y-4">
       <div>
         <h2 className="text-lg font-extrabold tracking-tight">Progress</h2>
-        <p className="text-xs text-ink3">Derived from logged history — not from what you <em>planned</em> to do. Volume landmarks are rough context, not targets.</p>
+        <p className="text-xs text-ink3">
+          {age.months != null
+            ? <>Training age <strong className="text-ink">{age.months} months</strong> ({age.phase}) — training since {age.started}. </>
+            : 'Your training age starts at the first logged session. '}
+          Derived from logged history, not from what you <em>planned</em> to do.
+        </p>
       </div>
 
       <div className="rounded-2xl border border-line bg-surface p-4 flex items-center gap-4">
@@ -115,11 +137,55 @@ export default function ProgressView({ store }){
             <p className="text-ink3">volume</p>
           </div>
           <div className="pl-4 border-l border-line">
-            <p className="font-bold tabular-nums">{streak}<span className="font-semibold text-ink3"> days</span></p>
-            <p className="text-ink3">streak</p>
+            <p className="font-bold">{hs.framing}</p>
+            <p className="text-ink3">training run{hs.lapsed ? ' — fresh start' : ''}</p>
           </div>
         </div>
       </div>
+
+      {/* ── Next best action: one piece of guidance, never a nag ── */}
+      <section className="rounded-2xl border border-line bg-surface p-4 flex items-center gap-3" aria-label="Suggested next step">
+        <span aria-hidden className="text-base">🧭</span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Next best action</p>
+          <p className="text-sm font-bold truncate">{nba.title}</p>
+          <p className="text-xs text-ink3">{nba.detail}</p>
+        </div>
+      </section>
+
+      {/* ── Milestones: session-count ladder — the number that never lies ── */}
+      <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-bold">Milestones</h3>
+          <span className="text-xs font-bold tabular-nums px-2 py-1 rounded-full bg-surface2 border border-line">{milestones.count} sessions</span>
+        </div>
+        {milestones.next ? (
+          <>
+            <div className="h-1.5 rounded-full bg-surface2 overflow-hidden"><div className="h-full bg-ink transition-all" style={{ width: `${milestones.pctToNext}%` }} /></div>
+            <p className="text-xs text-ink3">{milestones.toNext} more to “{milestones.next.emoji} {milestones.next.label}”</p>
+          </>
+        ) : <p className="text-xs text-ink3">Every milestone on the ladder — remarkable consistency.</p>}
+        {!!milestones.reached.length && (
+          <ul className="flex flex-wrap gap-1.5 pt-1">
+            {milestones.reached.slice(-4).map((m) => (
+              <li key={m.id} className="text-[11px] font-semibold rounded-full border border-success/40 bg-success/10 px-2 py-1">{m.emoji} {m.label}</li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* ── Consistency: weeks-with-training, never a guilt score ── */}
+      <section className="rounded-2xl border border-line bg-surface p-4">
+        <h3 className="text-sm font-bold">Consistency</h3>
+        {consistency.rate == null ? (
+          <p className="text-xs text-ink3 mt-2">Log your first session and this fills in — weeks with any training, counted kindly.</p>
+        ) : (
+          <p className="text-xs text-ink3 mt-2">
+            Trained in <strong className="text-ink">{consistency.weeksActive} of the last {consistency.weeksElapsed}</strong> week{consistency.weeksElapsed === 1 ? '' : 's'}
+            {hs.lapsed ? ' — and any week is a fine week to begin again.' : '.'}
+          </p>
+        )}
+      </section>
 
       {store.activeSchedule && (
         <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
@@ -129,6 +195,19 @@ export default function ProgressView({ store }){
           </div>
           <p className="text-xs text-ink3">{programmeAdherence.completed} completed • {programmeAdherence.missed} missed • {programmeAdherence.upcoming} upcoming. Future sessions do not lower the rate yet.</p>
           {programmeAdherence.missed > 0 && <p className="text-xs text-ink2 bg-reviewsoft border border-review/30 rounded-xl px-3 py-2">Missed sessions are recoverable in order. Open Today to re-plan the schedule rather than doubling the next workout.</p>}
+        </section>
+      )}
+
+      {/* ── Monthly digest: last month, facts only ── */}
+      {digest && digest.sessions > 0 && (
+        <section className="rounded-2xl border border-line bg-surface p-4 space-y-1">
+          <h3 className="text-sm font-bold">{digest.month} digest</h3>
+          <p className="text-xs text-ink3">
+            {digest.sessions} session{digest.sessions === 1 ? '' : 's'} · {digest.sets} sets · {digest.volume.toLocaleString()} kg volume
+            {digest.minutes ? ` · ~${Math.round(digest.minutes / 60 * 10) / 10} h under the bar` : ''}
+            {digest.topMuscle ? ` · most-trained: ${digest.topMuscle}` : ''}.
+          </p>
+          <p className="text-[11px] text-ink3">A month at a glance — no rankings, no streak pressure. Next month is unwritten.</p>
         </section>
       )}
 
@@ -158,12 +237,16 @@ export default function ProgressView({ store }){
           <h3 className="text-sm font-bold">Training feedback</h3>
           <p className="text-xs text-ink3">Separates a genuine plateau from fatigue or an isolated bad session.</p>
         </div>
+        {expert ? (
         <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5">
           <p className="text-xs font-bold">Recent session attribution <span className="font-normal text-ink3">({badAttribution.confidence} confidence)</span></p>
           <p className="text-xs mt-1">{badAttribution.reason}</p>
           {!!badAttribution.evidence?.length && <p className="text-[11px] text-ink3 mt-1">Evidence: {badAttribution.evidence.join(' · ')}</p>}
           <p className="text-[11px] text-ink3 mt-1">Next: {badAttribution.action}</p>
         </div>
+        ) : (
+          <p className="text-xs text-ink3">{badAttribution.reason} <span className="text-ink3">({badAttribution.confidence} confidence)</span></p>
+        )}
         {!!plateauRows.length && <div className="space-y-2">
           {plateauRows.map(row=> {
             const ex=EXERCISE_BY_ID[row.exerciseId];
@@ -177,7 +260,7 @@ export default function ProgressView({ store }){
         </div>}
       </section>
 
-      {!!Object.keys(landmarks).length && (
+      {expert && !!Object.keys(landmarks).length && (
         <section className="rounded-2xl border border-line bg-surface p-4">
           <h3 className="text-sm font-bold">Volume landmarks (sets/week)</h3>
           <p className="text-xs text-ink3">Cautious, rough context — individual needs vary. Not a prescription.</p>
@@ -308,6 +391,7 @@ export default function ProgressView({ store }){
         </section>
       )}
 
+      {expert && (
       <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-bold">Deload logic check</h3>
@@ -316,7 +400,9 @@ export default function ProgressView({ store }){
         <p className="text-xs text-ink3">{deloadValidation.decision.reason}</p>
         <p className="text-[11px] text-ink3">Signals: {deloadValidation.decision.signals.length ? deloadValidation.decision.signals.join(' • ') : 'none'} • {deloadValidation.note}</p>
       </section>
+      )}
 
+      {expert && (
       <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-bold">Historical recommendation backtest</h3>
@@ -336,6 +422,7 @@ export default function ProgressView({ store }){
           <p>{calibration.backtest?.calibration?.note || calibration.note}</p>
         </div>
       </section>
+      )}
 
       {evaluation && evaluation.totalRecords > 0 && (
         <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">

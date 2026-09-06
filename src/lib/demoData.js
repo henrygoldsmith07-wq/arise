@@ -1,21 +1,24 @@
-// test-data.js — deterministic, seeded generators for tests and demo seeds.
+// demoData.js — deterministic, seeded generators for demo/sample data.
 //
 // One seeded RNG drives every generator, so a given seed always yields the
-// byte-identical dataset: journey fixtures used by e2e and unit tests are
-// reproducible across machines and commits (the same discipline as the
-// benchmark determinism checks). Zero runtime dependencies.
+// byte-identical dataset: the demo mode renders the same "month of use" on
+// every device, and the test journey fixtures are reproducible across
+// machines and commits (the same discipline as the benchmark determinism
+// checks). Zero runtime dependencies beyond the shared data module.
 //
 //   mulberry32(seed)  — the RNG every generator shares
+import { scheduleProgram } from './data.js';
 //   makeUserContext   — seeded user profile + preferences
 //   makeHistory       — plausible multi-week multi-exercise training log
 //   makeJourneyStore  — a complete store shaped like a real month of use
+//   makeDemoStore     — a demo store with a live, dated schedule attached
 //   JOURNEY_SEEDS     — the canonical seeds CI pins (rename = re-baseline)
 export function mulberry32(seed){
   let a = seed >>> 0;
   return function(){
     a |= 0; a = (a + 0x6D2B79F5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    t = Math.imul(t ^ (t >>> 7), 61 | t);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
@@ -46,12 +49,22 @@ const EXERCISE_ROTATION = [
   { exerciseId: 'push-up', baseLoad: 0, progression: 'reps' },
 ];
 
+/** Local-calendar date N days before today, as YYYY-MM-DD. */
+export function isoDaysAgo(days){
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  const pad = (v) => String(v).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 /**
  * A month of realistic training. Deterministic per seed; `profile` tweaks:
  *   adherence   — probability a scheduled day actually happens (0..1)
  *   noise       — probability of a "noisy" session (pain/skipped/short)
  *   layoffAfter — session index after which the user disappears for N days
  *   layoffDays  — length of that layoff
+ *   startDaysAgo— first session N days before today (demo mode keeps the
+ *                 log alive relative to the real calendar)
  */
 export function makeHistory(seed, {
   sessions = 16,
@@ -60,10 +73,13 @@ export function makeHistory(seed, {
   layoffAfter = null,
   layoffDays = 10,
   startDate = '2026-01-05',
+  startDaysAgo = null,
 } = {}){
   const { int, pick, chance } = makeRng(seed);
   const history = [];
-  let day = Date.parse(`${startDate}T09:00:00Z`);
+  let day = startDaysAgo != null
+    ? Date.parse(`${isoDaysAgo(startDaysAgo)}T09:00:00Z`)
+    : Date.parse(`${startDate}T09:00:00Z`);
   let laidOff = false;
   for(let i = 0; i < sessions; i++){
     if(chance(1 - adherence)) continue;                 // missed day
@@ -141,5 +157,38 @@ export function makeJourneyStore(seed, opts = {}){
     customTemplates: [],
     activeWorkout: null,
     history,
+  };
+}
+
+/**
+ * The demo-mode store: a believable month of training on a LIVE schedule.
+ *
+ * Honesty rules, enforced here so no UI can accidentally violate them:
+ *   - every session id is prefixed `demo-` so merges are collision-free;
+ *   - `demo: true` marks the store itself (the demo banner + exit flow read
+ *     this flag, and regular saves keep it);
+ *   - the schedule starts ~5 weeks ago with the starter program, so the
+ *     generated log aligns with its dated sessions and "today" still has a
+ *     session to run — the demo is a living app, not a screenshot.
+ */
+export function makeDemoStore(seed = JOURNEY_SEEDS.consistent){
+  const DEMO_PROGRAM = 'starter-3x';
+  // History spans ~5 weeks up to the last few days (so training age,
+  // consistency weeks and the monthly digest all have something to say);
+  // the schedule is anchored 2 days back so the starter program's 6 sessions
+  // land as: one done, one TODAY, four ahead — the demo is a living app
+  // mid-program, not a finished archive.
+  const base = makeJourneyStore(seed, { goal: 'strength', startDaysAgo: 38, sessions: 22 });
+  const history = (base.history || []).map((h) => ({ ...h, id: `demo-${h.id}` }));
+  const sched = scheduleProgram({ programId: DEMO_PROGRAM, startDateISO: isoDaysAgo(2) });
+  const todayIso = isoDaysAgo(0);
+  const marked = { ...sched, sessions: sched.sessions.map((s) => s.dateISO < todayIso ? { ...s, status: 'done' } : s) };
+  return {
+    ...base,
+    demo: true,
+    onboarding: { goal: 'strength', equipment: ['dumbbells', 'bench'], location: 'home', level: 'Beginner', daysPerWeek: 3, availableMinutes: 45 },
+    preferences: { ...base.preferences, theme: base.preferences.theme, telemetryEnabled: false },
+    history,
+    activeSchedule: marked,
   };
 }

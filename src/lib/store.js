@@ -1,4 +1,4 @@
-﻿import { getCachedStore, setCachedStore } from './storage.js';
+﻿import { getCachedStore, setCachedStore, isCleared } from './storage.js';
 import { ensureStudyParticipantId, generateStudyParticipantId } from './studyIdentity.js';
 
 const KEY = 'arise.store.v1';
@@ -16,7 +16,7 @@ const DEFAULT = {
   // theme null follows OS; telemetry null = prompt. `accessibility` drives the
   // opt-in root classes le-studio.css already defines (large-text, high-contrast,
   // reduce-motion) — independent of the OS-level media queries.
-  preferences: { units: 'kg', theme: null, syncEnabled: false, telemetryEnabled: null, pulseEnabled: false, healthSummaryEnabled: false, autoRest: true, soundCues: true, voiceCoach: false, voiceRate: 1, accessibility: { largeText: false, highContrast: false, reduceMotion: false } },
+  preferences: { units: 'kg', theme: null, syncEnabled: false, telemetryEnabled: null, pulseEnabled: false, healthSummaryEnabled: false, autoRest: true, soundCues: true, voiceCoach: false, voiceRate: 1, experience: 'standard', accessibility: { largeText: false, highContrast: false, reduceMotion: false } },
   readinessLog: [], // [{ dateISO, score, sleep, soreness, motivation }]
   programHistory: [], // [{ programId, version, startDateISO, endDateISO }]
   customTemplates: [], // user-created templates: { id, isCustom:true, version, program:{...}, deletedAt? , ... }
@@ -79,6 +79,10 @@ export function loadStore(){
 }
 
 export function saveStore(s){
+  // A completed wipe (demo exit, account deletion) wins over any in-flight
+  // app save: once `cleared` is set, nothing may resurrect the old payload
+  // through the legacy localStorage fallback below.
+  if(isCleared()) return true;
   // Once hydrated, IndexedDB is canonical: cache + async persist. The legacy
   // localStorage copy is demoted to a pointer + paint-critical preferences.
   if(getCachedStore()){
@@ -286,9 +290,9 @@ export function runMigrations(raw){
   if(j.preferences.telemetryEnabled==null) j.preferences.telemetryEnabled=null;
   if(j.preferences.pulseEnabled==null) j.preferences.pulseEnabled=false;
   if(j.preferences.healthSummaryEnabled==null) j.preferences.healthSummaryEnabled=false;
-  if(j.preferences.autoRest==null) j.preferences.autoRest=true;
-  if(j.preferences.soundCues==null) j.preferences.soundCues=true;
+  if(j.preferences.autoRest==null) j.preferences.autoRest=true;  if(j.preferences.soundCues==null) j.preferences.soundCues=true;
   if(j.preferences.voiceCoach==null) j.preferences.voiceCoach=false;
+  if(j.preferences.experience==null) j.preferences.experience='standard';
   {
     // Clamp the speech rate to the same range the player enforces, so a
     // hand-edited backup can't produce absurd speech.

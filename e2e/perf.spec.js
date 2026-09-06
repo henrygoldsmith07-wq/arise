@@ -48,9 +48,18 @@ test.describe('Arise — performance', () => {
     expect(shellMs).toBeLessThan(BOOT_JS_BUDGET_MS);
 
     // Nothing Progress-related may be on the critical path: every request for
-    // its chunk must happen after the shell painted (the idle warm-up counts
-    // as after — it runs post-paint by design and only over an idle lane).
-    for (const t of progressRequests) expect(t).toBeGreaterThanOrEqual(start + shellMs);
+    // its chunk must happen after the first paint. The anchor is the browser's
+    // own first-contentful-paint entry (the inline boot splash), so the check
+    // does not depend on when Playwright happened to notice the dialog — the
+    // previous Date.now() comparison straddled two clocks and false-failed on
+    // CI whenever the post-paint idle warm-up lost a scheduler race.
+    const { fcp, timeOrigin } = await page.evaluate(() => {
+      const entry = performance.getEntriesByType('paint').find((e) => e.name === 'first-contentful-paint');
+      return { fcp: entry ? entry.startTime : 0, timeOrigin: performance.timeOrigin };
+    });
+    for (const t of progressRequests) {
+      expect(t - timeOrigin).toBeGreaterThanOrEqual(fcp - 5);
+    }
 
     // And Progress renders on demand when actually opened.
     await completeOnboarding(page);

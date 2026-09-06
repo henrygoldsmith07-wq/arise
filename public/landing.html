@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Arise — Training, levelled up</title>
+<meta name="description" content="The offline-first training companion that shows its work. No account, no server, your data on your device. Explainable progression, honest evidence." />
+<meta property="og:title" content="Arise — Training, levelled up" />
+<meta property="og:description" content="An offline-first training companion that shows its work: explainable progression, honest evidence, your data on your device." />
+<link rel="icon" href="/icons/icon-192.png" />
+<style>
+  :root{
+    --bg:#f6f5f2; --surface:#ffffff; --ink:#17181a; --ink2:#45484d; --ink3:#74787e;
+    --line:#e4e2dd; --accent:#17181a;
+    --radius:20px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#121316; --surface:#1b1d21; --ink:#f0efec; --ink2:#c2c4c8; --ink3:#8f9298; --line:#2c2f34; --accent:#f0efec; }
+  }
+  *{ box-sizing:border-box; margin:0; }
+  html{ scroll-behavior:smooth; }
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    line-height:1.55; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{ max-width:980px; margin:0 auto; padding:0 20px; }
+  header{ padding:28px 0; display:flex; align-items:center; gap:12px; }
+  .logo{ width:38px; height:38px; border-radius:12px; background:var(--accent); color:var(--bg); display:grid; place-items:center; font-weight:900; font-size:20px; }
+  .brand{ font-weight:800; letter-spacing:-0.02em; }
+  nav{ margin-left:auto; display:flex; gap:18px; font-size:14px; }
+  nav a{ color:var(--ink2); text-decoration:none; }
+  nav a:hover{ color:var(--ink); }
+  .hero{ padding:44px 0 26px; }
+  .hero h1{ font-size:clamp(34px,6vw,56px); line-height:1.04; letter-spacing:-0.03em; font-weight:900; max-width:15ch; }
+  .hero h1 em{ font-style:normal; color:var(--ink3); }
+  .hero p.lede{ margin-top:18px; font-size:clamp(16px,2.4vw,19px); color:var(--ink2); max-width:52ch; }
+  .cta{ margin-top:26px; display:flex; gap:12px; flex-wrap:wrap; }
+  .btn{ display:inline-flex; align-items:center; gap:8px; min-height:48px; padding:0 22px; border-radius:14px; font-weight:700; font-size:15px; text-decoration:none; border:1px solid var(--line); color:var(--ink); background:var(--surface); }
+  .btn.primary{ background:var(--accent); color:var(--bg); border-color:var(--accent); }
+  .btn:hover{ filter:brightness(0.96); }
+  .proof{ margin-top:14px; font-size:13px; color:var(--ink3); }
+  .shot{ margin:34px 0 10px; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; background:var(--surface); box-shadow:0 20px 50px -30px rgba(0,0,0,0.35); }
+  .shot img{ display:block; width:100%; height:auto; }
+  .shot figcaption{ padding:10px 16px; font-size:12.5px; color:var(--ink3); border-top:1px solid var(--line); }
+  .grid{ display:grid; gap:16px; grid-template-columns:1fr; margin:40px 0; }
+  @media(min-width:760px){ .grid.three{ grid-template-columns:repeat(3,1fr); } .grid.two{ grid-template-columns:repeat(2,1fr); } }
+  .card{ border:1px solid var(--line); background:var(--surface); border-radius:var(--radius); padding:22px; }
+  .card h3{ font-size:15.5px; margin-bottom:6px; letter-spacing:-0.01em; }
+  .card p{ font-size:14px; color:var(--ink2); }
+  .card .k{ display:inline-block; font-size:11px; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink3); margin-bottom:10px; }
+  section{ padding:34px 0; }
+  h2{ font-size:clamp(24px,4vw,34px); letter-spacing:-0.02em; font-weight:900; }
+  .sub{ color:var(--ink2); margin-top:8px; max-width:60ch; font-size:15.5px; }
+  ul.checks{ list-style:none; padding:0; margin:14px 0 0; }
+  ul.checks li{ padding:7px 0 7px 30px; position:relative; font-size:14.5px; color:var(--ink2); }
+  ul.checks li::before{ content:"✓"; position:absolute; left:4px; font-weight:900; color:var(--ink); }
+  ul.checks li strong{ color:var(--ink); }
+  blockquote{ border-left:3px solid var(--line); padding:6px 0 6px 18px; margin:18px 0; color:var(--ink2); font-size:15px; max-width:64ch; }
+  footer{ border-top:1px solid var(--line); padding:26px 0 44px; font-size:13px; color:var(--ink3); }
+  footer a{ color:var(--ink2); }
+  .pill{ display:inline-block; font-size:12px; font-weight:700; border:1px solid var(--line); background:var(--surface); border-radius:999px; padding:5px 12px; color:var(--ink2); margin:0 6px 8px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo" aria-hidden="true">A</div>
+    <span class="brand">Arise</span>
+    <nav aria-label="Site">
+      <a href="#how">How it thinks</a>
+      <a href="#trust">Trust</a>
+      <a href="#install">Install</a>
+      <a href="/#today">Open app</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <h1>Training, levelled up. <em>A coach that shows its work.</em></h1>
+    <p class="lede">
+      Arise is an offline-first training companion: a dated plan, a one-thumb
+      gym runner, and a progression engine that explains every number —
+      confidence, evidence and reasons included. Your logs never leave your
+      device.
+    </p>
+    <div class="cta">
+      <a class="btn primary" href="/#today">Open the app — free</a>
+      <a class="btn" href="https://github.com/henrygoldsmith07-wq/arise/blob/main/docs/INSTALL.md">Install as an app</a>
+    </div>
+    <p class="proof">No account · Works offline · MIT-licensed · Your data stays yours</p>
+  </div>
+
+  <figure class="shot">
+    <img src="/screenshots/today-scheduled.png" alt="Arise Today screen: the scheduled session with exercise blocks, duration estimate and a start button." loading="lazy" />
+    <figcaption>Today — the session that matters now. Why each prescription was chosen is one tap away.</figcaption>
+  </figure>
+
+  <section id="how">
+    <h2>A logger, a coach, and an evidence engine — in that order</h2>
+    <p class="sub">
+      First, logging must be effortless between sets. Second, the coach must
+      prescribe the next session with a stated reason. Third — only ever
+      third — the evidence engine tells you how much to trust that coach.
+      The order is the product.
+    </p>
+    <div class="grid three" style="margin-top:22px">
+      <div class="card">
+        <span class="k">Logger</span>
+        <h3>One thumb, sweaty hands</h3>
+        <p>Gym Mode: large targets, swipe to complete or fail, equipment-aware
+        quick-add, rest timer with sound and haptics. Logging never gets in
+        the way of training.</p>
+      </div>
+      <div class="card">
+        <span class="k">Coach</span>
+        <h3>Every number carries a reason</h3>
+        <p>Double progression with conservative defaults, plate-math honesty,
+        sustained-trend deloads, guardrails against overshoot. Tap any
+        prescription to see the rule and the evidence.</p>
+      </div>
+      <div class="card">
+        <span class="k">Evidence engine</span>
+        <h3>Honest about uncertainty</h3>
+        <p>Recommendations frozen before each workout, scored against what
+        actually happened. Confidence bands on charts. Conclusions withheld
+        until sample sizes earn them.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="trust">
+    <h2>Trust is a feature</h2>
+    <div class="grid two" style="margin-top:22px">
+      <div>
+        <ul class="checks">
+          <li><strong>No account, no server.</strong> Local-first: your history lives in your browser, on your device.</li>
+          <li><strong>Export everything, any time.</strong> Open formats, optional encryption, no lock-in mechanism exists.</li>
+          <li><strong>Telemetry off by default.</strong> Optional local measurements are consent-gated and never leave the device.</li>
+          <li><strong>Open source, MIT.</strong> Audit the engine, not just the copy.</li>
+          <li><strong>Sync only if you want it.</strong> Bring your own WebDAV storage, end-to-end encrypted. No Arise server exists.</li>
+        </ul>
+        <blockquote>
+          “What Arise cannot prove” is a page in the docs, not a fine print:
+          training logs cannot measure muscle growth, and this app will not
+          pretend otherwise.
+        </blockquote>
+      </div>
+      <figure class="shot" style="margin:0">
+        <img src="/screenshots/progress.png" alt="Arise Progress screen: level, training age, milestones, consistency and volume insights with confidence labels." loading="lazy" />
+        <figcaption>Progress — trends with confidence, milestones that count showing up, no guilt anywhere.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="install">
+    <h2>Install in under a minute</h2>
+    <p class="sub">Arise is a PWA: install it and it runs standalone, offline,
+    with its own icon. Android and desktop install in one tap from the app;
+    iPhone uses Safari’s Add to Home Screen.</p>
+    <div class="grid three" style="margin-top:22px">
+      <div class="card"><span class="k">Beginner</span><h3>Start gently</h3><p>A beginner path pre-fills a proven starter setup — every answer stays editable.</p></div>
+      <div class="card"><span class="k">Curious</span><h3>Explore the demo</h3><p>Load a clearly labeled month of sample data on a live schedule. One tap exits to a clean slate.</p></div>
+      <div class="card"><span class="k">Advanced</span><h3>Expert mode</h3><p>Backtests, calibration, evidence segments — progressive disclosure keeps simple mode simple.</p></div>
+    </div>
+    <div class="cta" style="margin-top:8px">
+      <a class="btn primary" href="/#today">Open Arise</a>
+      <a class="btn" href="https://github.com/henrygoldsmith07-wq/arise/blob/main/docs/USER_GUIDE.md">Read the user guide</a>
+    </div>
+    <p style="margin-top:10px">
+      <span class="pill">Free</span><span class="pill">MIT license</span><span class="pill">No ads</span><span class="pill">No trackers</span><span class="pill">Works offline</span>
+    </p>
+  </section>
+
+  <footer>
+    <p><strong>Arise</strong> — training, levelled up. Code licensed MIT; exercise illustrations CC BY-SA 4.0.
+    Docs: <a href="https://github.com/henrygoldsmith07-wq/arise/blob/main/docs/USER_GUIDE.md">user guide</a> · <a href="https://github.com/henrygoldsmith07-wq/arise/blob/main/docs/METHODOLOGY.md">methodology</a> · <a href="https://github.com/henrygoldsmith07-wq/arise/blob/main/docs/PRIVACY.md">privacy</a> · <a href="https://github.com/henrygoldsmith07-wq/arise/blob/main/docs/CANNOT_PROVE.md">what it cannot prove</a> · <a href="https://github.com/henrygoldsmith07-wq/arise/blob/main/docs/ROADMAP.md">roadmap</a>.</p>
+  </footer>
+</div>
+</body>
+</html>

@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 
 import {
   JOURNEY_SEEDS, makeRng, makeHistory, makeUserContext, makeJourneyStore,
-} from './helpers/test-data.js';
+} from '../src/lib/demoData.js';
 import { validateStoreData } from '../src/lib/export.js';
 import { normaliseHistory, totalVolumeKg, streakDays, prsHitBySession } from '../src/lib/store.js';
 import { recommendNext } from '../src/lib/progression.js';
