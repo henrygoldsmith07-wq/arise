@@ -127,7 +127,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, onLoadD
             className="text-left rounded-2xl border border-line bg-surface2 p-4 hover:border-ink3"
           >
             <span className="block font-bold">🌱 New to training? Start here</span>
-            <span className="block text-xs text-ink3 mt-0.5">Pre-fills a gentle starter: bodyweight at home, 3×30 min. You can change every answer on the next screens.</span>
+            <span className="block text-xs text-ink3 mt-0.5">Pre-fills a gentle starter: bodyweight at home, 3×30 min. Every answer stays editable on the following screens.</span>
           </button>
           <p className="text-[11px] font-bold uppercase tracking-widest text-ink3 pt-1">Or choose a goal</p>
           {GOALS.map(g=> (

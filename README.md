@@ -26,7 +26,8 @@ Full walkthrough: [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) · Screenshots: [`d
 | **How it thinks** | [Methodology](docs/METHODOLOGY.md) · [Evidence tiers](docs/EVIDENCE.md) · [What Arise cannot prove](docs/CANNOT_PROVE.md) |
 | **Your data** | [Data dictionary](docs/DATA_DICTIONARY.md) · [Storage schema](docs/STORAGE_SCHEMA.md) · [Import & export](docs/IMPORT_EXPORT.md) · [Backup & recovery](docs/BACKUP_RECOVERY.md) · [Sync guide](docs/SYNC_GUIDE.md) |
 | **Trust** | [Privacy guide](docs/PRIVACY.md) · [Threat model](docs/THREAT_MODEL.md) · [Accessibility statement](docs/ACCESSIBILITY.md) · [Support](docs/SUPPORT.md) |
-| **Project** | [Roadmap & backlog](docs/ROADMAP.md) · [Testing](docs/TESTING.md) · [Mobile testing checklist](docs/mobile-testing.md) · [Contributing](CONTRIBUTING.md) · [License (MIT)](LICENSE) |
+| **Legal** | [Terms of use](docs/TERMS.md) · [Privacy policy (hosted)](docs/PRIVACY_POLICY.md) · [Disclaimers (medical/safety/age/ownership)](docs/DISCLAIMERS.md) · [Branding audit](docs/BRANDING.md) |
+| **Project** | [Roadmap & backlog](docs/ROADMAP.md) · [Product strategy](docs/PRODUCT.md) · [Testing](docs/TESTING.md) · [Mobile testing checklist](docs/mobile-testing.md) · [Contributing](CONTRIBUTING.md) · [License (MIT)](LICENSE) |
 | **Architecture** | [Architecture map](docs/architecture-map.md) · [ADRs](docs/adr/) · [Native wrapper (optional)](docs/capacitor-wrapper.md) · [Device test matrix](docs/device-test-matrix.md) |
 
 Your training data is yours: export is always available in open formats,

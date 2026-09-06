@@ -123,6 +123,20 @@ Never: ads, data monetization (there is no data to sell), paywalled
 features computed from data the user already owns locally, or subscription
 gates on export formats.
 
+### Monetization stance (business/legal audit, 2026-09)
+
+- **Open-core is not a fit.** The value here is the local computation over
+  the user's own data; there is no server-side “pro” tier to sell without
+  becoming the hosted-account product the charter forbids.
+- **One-time purchase beats subscription for trust** if a paid artifact
+  ever exists (store wrapper, supporter license key). Recurring billing on
+  a local-first tool reads as rent on something the user already owns.
+- **Paid sync or “pro analytics” only if values-aligned:** sync must remain
+  the user's own storage with E2E keys the user holds (a paid relay may
+  never see plaintext); analytics are derived on-device from data the user
+  owns, so charging for them would violate the “never paywall computation
+  over your own data” rule above. Current call: don't.
+
 ## Success metrics (local, honest)
 
 Because telemetry is opt-in and local, product success is measured by

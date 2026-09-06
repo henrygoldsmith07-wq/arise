@@ -1,7 +1,7 @@
 {
-  "name": "Arise — Training, levelled up",
+  "name": "Arise — Training log and coach",
   "short_name": "Arise",
-  "description": "Game-like training: scheduled programs, load tracking, and attributes that grow from real history. Offline-first.",
+  "description": "Training log with scheduled programs, load tracking, and progress derived from your real history. Offline-first.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

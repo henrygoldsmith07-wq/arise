@@ -47,7 +47,6 @@ import { ensureStandaloneBodyClass, consumeShortcut } from './lib/pwa.js';
 import { setHapticsSource } from './lib/haptics.js';
 import OfflineBanner from './components/OfflineBanner.jsx';
 import DemoBanner from './components/DemoBanner.jsx';
-import { makeDemoStore } from './lib/demoData.js';
 import { captureSnapshot } from './lib/snapshots.js';
 const InstallCard = lazy(() => import('./components/InstallCard.jsx'));
 import { pushToPulse } from './lib/pulse.js';
@@ -91,6 +90,8 @@ export default function App(){
   const loadDemo = useCallback(async () => {
     try{ await captureSnapshot({ force: true, reason: 'pre-demo' }); }catch{}
     try{ const { clearAllStoredData } = await import('./lib/storage.js'); await clearAllStoredData(); }catch{}
+    // Lazy: the seeded generator is demo-only and never belongs in the boot chunk.
+    const { makeDemoStore } = await import('./lib/demoData.js');
     const demo = makeDemoStore();
     setStoreState(demo);
     saveStore(demo);

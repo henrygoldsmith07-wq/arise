@@ -88,7 +88,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
     { id: 'sec-privacy', title: 'Privacy & data', keywords: 'privacy telemetry consent measurements delete storage diagnostics demo sample data' },
     { id: 'sec-ai', title: 'AI coach', keywords: 'ai coach model api key insight' },
     { id: 'sec-evidence', title: 'Progression evidence', keywords: 'evidence study ledger metrics calibration dashboard' },
-    { id: 'sec-help', title: 'Help & testing', keywords: 'help testing diagnostics about version' },
+    { id: 'sec-help', title: 'Help & testing', keywords: 'help testing diagnostics about version legal disclaimers terms privacy license medical' },
   ];
   const searchMatches = (()=>{
     const q = searchQuery.trim().toLowerCase();
@@ -984,7 +984,16 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
         </details>
         <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
           <summary className="text-sm font-semibold cursor-pointer">What this app is (and isn’t)</summary>
-          <p className="text-xs text-ink3 mt-2">A game-like training companion: scheduled programs, honest load tracking, and attributes that derive from what you actually log. <span className="font-semibold text-ink">No nutrition system</span> — that would recreate Forq and dilute the training proposition.</p>
+          <p className="text-xs text-ink3 mt-2">A training log and coach: scheduled programs, honest load tracking, and progress derived from what you actually log — with the reasoning shown. <span className="font-semibold text-ink">No nutrition system</span> — that would recreate Forq and dilute the training proposition.</p>
+        </details>
+        <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <summary className="text-sm font-semibold cursor-pointer">Legal &amp; disclaimers</summary>
+          <div className="text-xs text-ink2 mt-2 space-y-2">
+            <p><span className="font-semibold text-ink">Not medical advice.</span> Arise is not a medical device and does not diagnose, treat, or predict anything about your health. Suggestions are arithmetic over your own logs. Consult a qualified health professional before starting or changing an exercise program.</p>
+            <p><span className="font-semibold text-ink">Train at your own risk.</span> High-intensity suggestions raise injury risk when misapplied — reduce load or stop if you feel sharp pain, dizziness or unusual discomfort.</p>
+            <p><span className="font-semibold text-ink">Your data is yours.</span> It lives in this browser on this device; Arise claims no license over it and cannot read it. Export or erase it any time from More → Data. Full statements: <a className="underline" href="https://github.com/henrygoldsmith07-wq/arise/blob/main/docs/TERMS.md" target="_blank" rel="noreferrer">Terms</a> · <a className="underline" href="https://github.com/henrygoldsmith07-wq/arise/blob/main/docs/PRIVACY_POLICY.md" target="_blank" rel="noreferrer">Privacy policy</a> · <a className="underline" href="https://github.com/henrygoldsmith07-wq/arise/blob/main/docs/DISCLAIMERS.md" target="_blank" rel="noreferrer">Disclaimers</a>.</p>
+            <p><span className="font-semibold text-ink">License.</span> Code: MIT. Exercise illustrations: CC BY-SA 4.0 (attributed per illustration).</p>
+          </div>
         </details>
       </section>
     </div>
