@@ -21,6 +21,7 @@ import ExerciseIllustration from './ExerciseIllustration.jsx';
 import StepperButton from './StepperButton.jsx';
 import { tracePhase, traceStart, traceEnd } from '../lib/perfTrace.js';
 import { haptic } from '../lib/haptics.js';
+import { painAftercareFor, techniquePromptFor, maxEffortWarning } from '../lib/safety.js';
 
 const NOTE_PROMPTS = [
   { id: 'felt-strong', label: 'Felt strong' },
@@ -371,6 +372,32 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     return { recs, prevs, assigned };
   },[blocks,history,session.dateISO,plateConfig,studyEnrollment,appPolicy,appExplanationMode]);
 
+  // Safety: aftercare after a painful exposure and technique/ROM cues read
+  // from the last logged sets of each exercise. One memo for all blocks.
+  // The max-effort check derives the target's proximity to failure from the
+  // last logged RPE of that exercise (same prescription ≈ same proximity),
+  // and only fires when the user opted in (maxEffortWarnings).
+  const safetyMeta = useMemo(()=>{
+    const aftercare=new Map(), technique=new Map(), maxEffort=new Map();
+    for(const b of blocks){
+      if(aftercare.has(b.exerciseId)) continue;
+      const ac = painAftercareFor(b.exerciseId, history, { today: session.dateISO });
+      const tp = techniquePromptFor(b.exerciseId, history);
+      if(ac) aftercare.set(b.exerciseId, ac);
+      if(tp) technique.set(b.exerciseId, tp);
+      if(appPrefs?.maxEffortWarnings === true){
+        const prev = lastExerciseSets(history, b.exerciseId);
+        const rpes = (prev?.sets || []).map(s => Number(s.rpe)).filter(n => Number.isFinite(n) && n > 0);
+        if(rpes.length){
+          const targetRir = 10 - Math.max(...rpes);
+          const warn = maxEffortWarning(targetRir, { enabled: true });
+          if(warn) maxEffort.set(b.exerciseId, warn);
+        }
+      }
+    }
+    return { aftercare, technique, maxEffort };
+  },[blocks,history,session.dateISO,appPrefs?.maxEffortWarnings]);
+
   const volume = useMemo(()=>{
     let total=0;
     for(const b of blocks) for(const s of b.sets){
@@ -705,6 +732,21 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                   {recommendation?.confidence && (
                     <p className="text-[10px] mt-0.5 text-ink3">
                       Confidence {recommendation.confidence.band} ({Math.round((recommendation.confidence.score || 0) * 100)}%) · uncertainty {recommendation.uncertainty?.label || '—'} · {recommendation.evidence?.sessions ?? 0} logged sessions{recommendation.guard ? ` · ${recommendation.guard} guard active` : ''}
+                    </p>
+                  )}
+                  {safetyMeta.aftercare.get(b.exerciseId) && (
+                    <p role="status" className="text-[11px] mt-1 rounded-lg border border-review/40 bg-reviewsoft px-2 py-1.5 text-ink2 leading-snug">
+                      ⚠️ {safetyMeta.aftercare.get(b.exerciseId).message}
+                    </p>
+                  )}
+                  {!safetyMeta.aftercare.get(b.exerciseId) && safetyMeta.technique.get(b.exerciseId) && (
+                    <p className="text-[11px] mt-1 text-ink3 leading-snug">
+                      🎯 {safetyMeta.technique.get(b.exerciseId).message}
+                    </p>
+                  )}
+                  {safetyMeta.maxEffort.get(b.exerciseId) && (
+                    <p role="status" className="text-[11px] mt-1 rounded-lg border border-line bg-surface2 px-2 py-1.5 text-ink2 leading-snug">
+                      💪 {safetyMeta.maxEffort.get(b.exerciseId).title}. {safetyMeta.maxEffort.get(b.exerciseId).action}
                     </p>
                   )}
                   <p className="text-[11px] text-ink3 mt-1.5">
