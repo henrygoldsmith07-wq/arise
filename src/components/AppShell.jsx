@@ -34,7 +34,7 @@ export default function AppShell({ children, tab, setTab, storeVersion, theme = 
       <main id="main" className="flex-1 min-w-0 flex flex-col max-w-3xl w-full mx-auto">
         {children}
       </main>
-      <nav className="sticky bottom-0 z-50 flex border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]" aria-label="Primary">
+      <nav className="sticky bottom-0 z-20 flex border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]" aria-label="Primary">
         {TABS.map(([id,label,icon])=> (
           <button key={id} onClick={()=> setTab(id)} aria-current={tab===id ? 'page' : undefined}
             className={`flex-1 flex flex-col items-center gap-1 py-2.5 min-h-14 text-[11px] font-semibold ${tab===id ? 'text-ink' : 'text-ink3 hover:text-ink2'}`}>
