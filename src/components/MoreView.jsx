@@ -351,7 +351,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   const exerciseName = (id)=> EXERCISE_BY_ID[id]?.name || id;
 
   return (
-    <div className="px-4 py-5 space-y-4 max-w-3xl mx-auto">
+    <div className="px-4 pt-5 pb-2 space-y-4 max-w-3xl mx-auto">
       <div>
         <h2 className="text-lg font-extrabold tracking-tight">More</h2>
         <p className="text-xs text-ink3">Backup, portability, privacy and help.</p>
