@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { deriveAttributes, levelFromAttributes } from '../lib/attributes.js';
 import { totalVolumeKg } from '../lib/store.js';
-import { fmtWeight } from '../lib/units.js';
+import { fmtWeight } from '../lib/units.ts';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { weeklyVolume, frequencyByMuscleSync, volumeLandmarks, volumeDistribution, strengthSeriesWithConfidence, extractNoteRecommendations, plannedVsCompletedStats } from '../lib/analytics.js';
 import { strengthTrendWithConfidence, classifyPR } from '../lib/progression.js';

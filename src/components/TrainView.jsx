@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useDialogA11y } from '../lib/a11y.js';
 import { PROGRAMS, PROGRAM_BY_ID, PROGRAM_TEMPLATES, programHistory as programVersionHistory, availablePrograms, EXERCISE_BY_ID, EXERCISES, plannedVsCompleted, GOALS, LEVELS, scheduleProgram } from '../lib/data.js';
 import { markSoftDeleted, unDelete, makeTombstone } from '../lib/domain.js';
+import { encodeShareCode, decodeShareCode } from '../lib/shareCodes.js';
 import { startProgram } from '../lib/schedule.js';
 import { adaptScheduleForEquipment, programAdherence, recordProgramStart, userProgramHistory } from '../lib/programming.js';
 import { generateProgramme } from '../lib/programmeGenerator.js';
@@ -147,6 +148,37 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
     });
   };
 
+  // Program sharing: a custom template becomes a copy-paste code (URI-safe,
+  // checksummed) the recipient installs from Train — no file, no server.
+  const [shareMsg,setShareMsg]=useState(null);
+  const [importOpen,setImportOpen]=useState(false);
+  const [importCode,setImportCode]=useState('');
+  const shareTemplate = (t)=>{
+    try{
+      const code = encodeShareCode(t);
+      navigator.clipboard?.writeText(code).then(
+        ()=> setShareMsg(`Share code for “${t.name}” copied — paste it to a friend.`),
+        ()=> setShareMsg(code.slice(0, 60) + '…')
+      );
+    }catch(e){ setShareMsg(e.message || 'Could not build a share code for this template.'); }
+    setTimeout(()=> setShareMsg(null), 5000);
+  };
+  const installShared = ()=>{
+    try{
+      const template = decodeShareCode(importCode);
+      if((store.customTemplates || []).some(t => t.name === template.name && !t.deletedAt)){
+        setShareMsg(`A template named “${template.name}” already exists — rename it first to install this one.`);
+        setTimeout(()=> setShareMsg(null), 5000);
+        return;
+      }
+      setStore({ ...store, customTemplates: [...(store.customTemplates || []), template] });
+      setProgramId(template.id);
+      setImportCode(''); setImportOpen(false);
+      setShareMsg(`Installed “${template.name}” — it is selected now.`);
+    }catch(e){ setShareMsg(e.message || 'That code could not be read.'); }
+    setTimeout(()=> setShareMsg(null), 5000);
+  };
+
   const applyEquipmentChanges = ()=>{
     if(adaptation?.changed) setStore({ ...store, activeSchedule: adaptation.schedule });
   };
@@ -184,11 +216,25 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
             <span key={t.id} className="inline-flex items-center gap-1">
               <button onClick={()=> setProgramId(t.id)} className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${programId===t.id?'bg-ink text-bg border-ink':'bg-surface border-line'}`}>{t.name} ★</button>
               <button onClick={()=> openBuilder(t)} aria-label={`Edit ${t.name}`} className="text-[10px] text-ink3 underline">edit</button>
+              <button onClick={()=> shareTemplate(t)} aria-label={`Share ${t.name}`} className="text-[10px] text-ink3 underline">share</button>
               <button onClick={()=> deleteCustom(t.id)} aria-label={`Delete ${t.name}`} className="text-[10px] text-danger underline">del</button>
             </span>
           ))}
         </div>
         <p className="text-[11px] text-ink3 mt-1">{PROGRAM_TEMPLATES.find(t=> t.programId===programId)?.description || customTemplates.find(t=> t.id===programId)?.description || ''}</p>
+        {shareMsg && <p role="status" className="text-[11px] text-ink2 mt-1">{shareMsg}</p>}
+        <div className="mt-1.5">
+          {!importOpen ? (
+            <button onClick={()=> setImportOpen(true)} className="text-[11px] text-ink3 underline">Have a share code? Install a shared program</button>
+          ) : (
+            <div className="flex gap-1.5 items-center">
+              <input value={importCode} onChange={e=> setImportCode(e.target.value)} placeholder="ARISE1.…"
+                aria-label="Program share code" className="flex-1 min-w-0 min-h-9 rounded-lg border border-line bg-surface px-2.5 text-xs font-mono" />
+              <button onClick={installShared} disabled={!importCode.trim()} className="btn btn-primary min-h-9 rounded-lg px-3 text-xs disabled:opacity-40">Install</button>
+              <button onClick={()=> { setImportOpen(false); setImportCode(''); }} className="text-[11px] text-ink3 underline">Cancel</button>
+            </div>
+          )}
+        </div>
         {lastDeleted && (
           <p className="text-[11px] text-ink3">
             Deleted “{lastDeleted.program?.name || lastDeleted.id}” — <button onClick={()=> undoDelete(lastDeleted.id)} className="underline font-semibold">Undo</button>

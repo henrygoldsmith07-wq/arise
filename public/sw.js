@@ -17,9 +17,9 @@
 // 'SKIP_WAITING' message, clients.claim on activate; the app defers that
 // activation while a workout is running.
 
-const CACHE = 'arise-v5';
+const CACHE = 'arise-v6';
 const ILLUSTRATION_CACHE = 'arise-illustrations-v1';
-const SHELL = ['./', './index.html', './manifest.webmanifest'];
+const SHELL = ['./', './index.html', './manifest.webmanifest', './offline.html'];
 const ILLUSTRATION_ORIGIN = 'https://bryllim.github.io';
 
 self.addEventListener('install', (e) => {
@@ -50,7 +50,7 @@ self.addEventListener('fetch', (e) => {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(req, copy)).catch(()=>{});
         return res;
-      }).catch(async ()=> (await caches.match(req)) || (await caches.match('./index.html')) || Response.error())
+      }).catch(async ()=> (await caches.match(req)) || (await caches.match('./index.html')) || (await caches.match('./offline.html')) || Response.error())
     );
     return;
   }

@@ -14,7 +14,7 @@ import {
   aliasesOf, isDeprecated, resolveExerciseId, activeExercises,
 } from '../src/lib/exerciseTaxonomy.js';
 import { movementPatternFor, rankedSubstitutions } from '../src/lib/substitutions.js';
-import { fmtWeight, kgToLb, lbToKg } from '../src/lib/units.js';
+import { fmtWeight, kgToLb, lbToKg } from '../src/lib/units.ts';
 
 describe('exercise taxonomy — derived classification', () => {
   it('classifies EVERY exercise with pattern, stability, fatigue and joint stress', () => {

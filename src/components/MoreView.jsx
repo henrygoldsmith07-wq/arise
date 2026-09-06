@@ -23,6 +23,9 @@ import { PROGRESSION_POLICIES, POLICY_ORDER } from '../lib/progressionPolicies.j
 import { EXPERIENCE_LEVELS, EXPERIENCE_INFO, experiencePatch, resolveExperience } from '../lib/experienceMode.js';
 import { makeDemoStore } from '../lib/demoData.js';
 import { captureSnapshot } from '../lib/snapshots.js';
+import { buildSupportBundle } from '../lib/supportDiagnostics.js';
+import { buildSalvagePayload } from '../lib/salvageExport.js';
+import { normaliseHistoryEntry } from '../lib/store.js';
 const StorageDiagnostics = lazy(()=> import('./StorageDiagnostics.jsx'));
 const EvidenceDashboard = lazy(()=> import('./EvidenceDashboard.jsx'));
 
@@ -252,6 +255,32 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
     }
   };
 
+  // Import from other apps: their documented CSV exports, mapped into Arise's
+  // portable schema. Rows become sessions through the same merge as any
+  // import; unmapped exercise names are reported, never dropped silently.
+  const onPickAppCsv = async (e)=>{
+    const file = e.target.files?.[0];
+    if(!file) return;
+    const text = await file.text();
+    e.target.value='';
+    try{
+      const { parseAppCsv, rowsToHistory } = await import('../lib/appCsvImport.js');
+      const parsed = parseAppCsv(text, { byId: EXERCISE_BY_ID });
+      if(!parsed.rows.length){
+        setMsg(`No usable rows found (${parsed.skipped} skipped${parsed.unmappedExercises.length ? `; unknown exercises: ${parsed.unmappedExercises.slice(0, 5).join(', ')}` : ''}).`);
+        setTimeout(()=> setMsg(null), 6000);
+        return;
+      }
+      const entries = rowsToHistory(parsed.rows, { byId: EXERCISE_BY_ID }).map(en => normaliseHistoryEntry(en));
+      const merged = mergeStores(store, { history: entries, eventHistory: [] }, 'merge');
+      setStore({ ...merged });
+      setMsg(`Imported ${parsed.rows.length} rows into ${entries.length} sessions${parsed.unmappedExercises.length ? ` · skipped unknown exercises: ${parsed.unmappedExercises.slice(0, 5).join(', ')}` : ''}.`);
+    }catch(err){
+      setMsg(String(err.message || err));
+    }
+    setTimeout(()=> setMsg(null), 6000);
+  };
+
   const applyImportPreview = ()=>{
     if(!importPreview) return;
     try{
@@ -298,6 +327,28 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
     setTimeout(()=> setMsg(null), 5000);
   };
   const integrity = !noticeDismissed ? getIntegrityNotice() : null;
+
+  // Support bundle: environment + shape summary only, never training data.
+  const exportSupportBundle = async ()=>{
+    try{
+      const bundle = await buildSupportBundle({ store });
+      downloadJson(`arise-support-${new Date().toISOString().slice(0, 10)}.json`, bundle);
+      setMsg('Support bundle downloaded — attach it when reporting a problem. It contains no training data.');
+    }catch{ setMsg('Could not build the support bundle in this browser.'); }
+    setTimeout(()=> setMsg(null), 5000);
+  };
+  // Recovery salvage: every intact history row from the current (possibly
+  // repaired) store, before the user chooses rollback or a fresh start.
+  const exportSalvage = ()=>{
+    const payload = buildSalvagePayload(store);
+    if(!payload){
+      setMsg('Nothing salvageable was found — a snapshot rollback or backup import is the better path.');
+    } else {
+      downloadJson(`arise-salvage-${new Date().toISOString().slice(0, 10)}.json`, payload);
+      setMsg(`Salvaged ${payload.data.history.length} sessions (${payload.droppedMalformed} unreadable rows skipped).`);
+    }
+    setTimeout(()=> setMsg(null), 5000);
+  };
 
   const setTelemetryConsent=(enabled)=>{
     setStore({ ...store, preferences:{ ...(store.preferences||{}), telemetryEnabled:enabled } });
@@ -441,7 +492,10 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
           <div role="alert" className="rounded-xl border border-danger/40 bg-dangersoft px-3 py-2 text-xs space-y-1">
             <p className="font-bold">Stored data needed repair on startup.</p>
             <p className="text-ink3">A broken copy was kept in quarantine and the readable parts were restored. Nothing was lost silently. Details: {integrity.errors.join(' ')}</p>
-            <button onClick={()=> { clearIntegrityNotice(); setNoticeDismissed(true); }} className="underline font-semibold">Dismiss</button>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              <button onClick={exportSalvage} className="underline font-semibold">Export salvaged history</button>
+              <button onClick={()=> { clearIntegrityNotice(); setNoticeDismissed(true); }} className="underline font-semibold">Dismiss</button>
+            </div>
           </div>
         )}
         <p className="text-xs text-ink3">Local-first — your history lives on this device. Export JSON (full, versioned), an encrypted backup, or CSV (history only) and restore/merge on another device. No account required.</p>
@@ -463,6 +517,11 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
             Import encrypted
             <input type="file" accept=".arisebak,application/octet-stream" className="hidden" onChange={onPickEncrypted} />
           </label>
+          <label className="btn btn-secondary min-h-10 rounded-xl px-4 cursor-pointer" title="Import a CSV exported from another gym app">
+            Import from other apps (CSV)
+            <input type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={onPickAppCsv} />
+          </label>
+          <button onClick={exportSupportBundle} className="btn btn-secondary min-h-10 rounded-xl px-4">Support diagnostics</button>
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
           <span className="self-center text-[11px] text-ink3">Partial export:</span>
@@ -480,6 +539,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
             <label className="flex items-center gap-1.5"><input type="checkbox" checked={coachSections.detail} onChange={(e)=> setCoachSections({ ...coachSections, detail: e.target.checked })} /> Full set detail</label>
           </div>
           <button onClick={exportCoach} className="btn btn-primary min-h-8 rounded-lg px-2.5 text-[11px] mt-2">Download coach summary (.md)</button>
+          <button onClick={()=> { import('../lib/printReport.js').then(({ printProgressReport }) => printProgressReport(store, { units: store.preferences?.units === 'lb' ? 'lb' : 'kg' })); }} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px] mt-2">Print / save as PDF</button>
           <button onClick={shareCoach} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px] mt-2">Share…</button>
         </details>
         {storageInfo && (
