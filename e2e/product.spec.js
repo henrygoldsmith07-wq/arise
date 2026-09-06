@@ -4,6 +4,16 @@ import { test, expect } from '@playwright/test';
 // one-tap exit to a genuinely empty app) and the experience-level gate
 // (expert reveals advanced analytics, simple hides them, data never changes).
 
+async function tapTab(page, name){
+  // On slow CI runners the sticky bottom nav can transiently lose a
+  // hit-test race with content that is mid-relayout (the click retries
+  // until the layout settles — the same reason resilience specs set
+  // retries). Plain .click() times out instead of retrying through it.
+  await expect(async () => {
+    await page.getByRole('button', { name, exact: true }).click();
+  }).toPass({ timeout: 10_000 });
+}
+
 async function completeOnboarding(page){
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
@@ -83,7 +93,7 @@ test.describe('Experience levels', () => {
     });
     await page.reload();
 
-    await page.getByRole('button', { name: 'Progress', exact: true }).click();
+    await tapTab(page, 'Progress');
     await expect(page.getByRole('heading', { name: 'Progress' })).toBeVisible();
 
     // Standard (default): advanced gates closed.
@@ -95,14 +105,14 @@ test.describe('Experience levels', () => {
     // Expert: the advanced sections appear.
     await page.getByRole('button', { name: 'More' }).click();
     await page.getByRole('button', { name: /Expert Everything/i }).click();
-    await page.getByRole('button', { name: 'Progress', exact: true }).click();
+    await tapTab(page, 'Progress');
     await expect(page.getByText('Deload logic check')).toBeVisible();
     await expect(page.getByText('Historical recommendation backtest')).toBeVisible();
 
     // Simple: condensed attribution, advanced sections gone, core stays.
     await page.getByRole('button', { name: 'More' }).click();
     await page.getByRole('button', { name: /Simple The essentials/i }).click();
-    await page.getByRole('button', { name: 'Progress', exact: true }).click();
+    await tapTab(page, 'Progress');
     await expect(page.getByText('Deload logic check')).toHaveCount(0);
     await expect(page.getByText('Historical recommendation backtest')).toHaveCount(0);
     await expect(page.getByText(/Next best action/)).toBeVisible();
