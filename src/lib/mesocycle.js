@@ -334,6 +334,52 @@ export function applyWeeklyReview(schedule, review, { config = null } = {}){
   return { schedule: nextSchedule, changed: true, changes, entry };
 }
 
+// ── Week phase: deload as a first-class state ─────────────────────────────
+// The engine already cuts volume for deload weeks (weekly-deload directives,
+// mesocycle deloadWeek, fatigue signals); this derives the *week-level*
+// phase from those same prescriptions so the UI can name the week plainly
+// instead of leaving the user to infer it from per-block reason strings.
+// Pure read over schedule data — no persisted phase, no drift possible.
+//
+// Returns { kind: 'deload'|'recovery'|'build', week, detail } for the week
+// containing todayISO, or null when there is no schedule/no week match.
+export function weekPhaseFor(schedule, todayISO = null){
+  const sessions = schedule?.sessions || [];
+  if(!sessions.length) return null;
+  const mesoDeloadWeek = schedule.mesocycle?.deloadWeek ?? null;
+  const today = String(todayISO || isoTodaySafe());
+  const weekSessions = sessions.filter(s => mondayKey(s.dateISO) === mondayKey(today));
+  if(!weekSessions.length){
+    // Fall through to the nearest upcoming week so the banner stays truthful
+    // on rest days rather than disappearing.
+    const upcoming = sessions
+      .filter(s => String(s.dateISO) >= today)
+      .sort((a, b) => String(a.dateISO).localeCompare(String(b.dateISO)))[0];
+    if(!upcoming) return null;
+    return phaseFromWeekSessions(sessions.filter(s => mondayKey(s.dateISO) === mondayKey(upcoming.dateISO)), upcoming.week, mesoDeloadWeek);
+  }
+  return phaseFromWeekSessions(weekSessions, weekSessions[0]?.week, mesoDeloadWeek);
+}
+
+function phaseFromWeekSessions(weekSessions, weekNumber, mesoDeloadWeek = null){
+  const blocks = weekSessions.flatMap(s => s.blocks || []);
+  const prescribed = blocks.filter(b => Number(b.sets) > 0);
+  if(!prescribed.length) return { kind: 'build', week: weekNumber, detail: null };
+  // A week is a deload when the weekly review stamped its prescriptions as
+  // cuts, or the programme declares this the mesocycle deload week.
+  const deloadBlocks = prescribed.filter(b => b.adaptation?.kind === 'weekly-deload');
+  const deload = deloadBlocks.length >= Math.ceil(prescribed.length / 2)
+    || Boolean(mesoDeloadWeek != null && weekNumber != null && weekNumber >= mesoDeloadWeek);
+  if(deload) return { kind: 'deload', week: weekNumber, detail: null };
+  const recovery = prescribed.filter(b => b.adaptation?.kind === 'weekly-recovery-session').length;
+  if(recovery >= Math.ceil(prescribed.length / 2)) return { kind: 'recovery', week: weekNumber, detail: null };
+  return { kind: 'build', week: weekNumber, detail: null };
+}
+
+function isoTodaySafe(){
+  try{ return new Date().toISOString().slice(0, 10); }catch{ return ''; }
+}
+
 function doneIdsOf(schedule){
   return new Set((schedule.sessions || []).filter(s => s.status === 'done').map(s => s.id));
 }

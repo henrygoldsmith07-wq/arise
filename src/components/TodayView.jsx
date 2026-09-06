@@ -1,7 +1,6 @@
 import WeeklyReviewCard from './WeeklyReviewCard.jsx';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { PROGRAM_BY_ID } from '../lib/data.js';
-import { deriveAttributes, levelFromAttributes } from '../lib/attributes.js';
 import { sessionForToday, nextSession, progress } from '../lib/schedule.js';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import {
@@ -13,6 +12,7 @@ import {
   replanSchedule,
   shortWorkoutMode,
 } from '../lib/programming.js';
+import { weekPhaseFor } from '../lib/mesocycle.js';
 import { nextBestAction, whatChangedSummary } from '../lib/product.js';
 import { isSimpleView } from '../lib/experienceMode.js';
 import { safetyPanel } from '../lib/safety.js';
@@ -23,9 +23,7 @@ function estimatedMinutes(session, config = null){
   return Math.max(1, Math.ceil(total));
 }
 
-export default function TodayView({ store, setStore, onStartSession, onOpenTrain, plateConfig = null }){
-  const attrs = useMemo(()=> deriveAttributes(store.history||[]), [store.history]);
-  const lvl = useMemo(()=> levelFromAttributes(attrs), [attrs]);
+export default function TodayView({ store, setStore, onStartSession, onOpenTrain, onOpenProgress, plateConfig = null }){
   const sched = store.activeSchedule;
   const prog = sched ? PROGRAM_BY_ID[sched.programId] : null;
   const today = sessionForToday(sched);
@@ -42,6 +40,10 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
     [store.history, store.readinessLog, store.preferences?.cautiousMode]
   );
   const simple = isSimpleView(store.preferences);
+  // Week phase (ADR: deload as a first-class state). Derived from the schedule's
+  // own adaptation stamps — no new persisted state. Week 1 of a fresh program is
+  // naturally a 'build' week.
+  const weekPhase = useMemo(()=> weekPhaseFor(sched, isoToday()), [sched]);
   const nba = useMemo(()=> nextBestAction({ store, today: isoToday(), todaySession: today, nextSess: nxt, recovery }), [store, today, nxt, recovery]);
   const changes = useMemo(()=> whatChangedSummary({ schedule: sched, history: store.history || [] }), [sched, store.history]);
   const explanations = useMemo(()=> heroSession ? heroSession.blocks.map(block=> progressionExplanation({ exerciseId: block.exerciseId, targetReps: block.reps, asOfDateISO: heroSession.dateISO, history: store.history || [], plateConfig })) : [], [heroSession, store.history, plateConfig]);
@@ -76,6 +78,19 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
             </div>
             <span className="shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-full bg-surface2 border border-line tabular-nums">≈{estimatedMinutes(heroSession)} min</span>
           </div>
+
+          {/* Deload as a first-class state: when the week's prescriptions are
+              cuts, the whole week is named as one — no guessing from block
+              reason strings. Build/recovery weeks are stated plainly too. */}
+          {weekPhase && (
+            <div className={`rounded-xl px-3 py-2 text-xs font-bold ${weekPhase.kind === 'deload' ? 'bg-reviewsoft text-review' : weekPhase.kind === 'recovery' ? 'bg-surface2 text-ink2' : 'bg-surface2 text-ink2'}`} role="status">
+              {weekPhase.kind === 'deload'
+                ? `🔄 Deload week — planned volume reduction${weekPhase.detail ? ` · ${weekPhase.detail}` : ''}`
+                : weekPhase.kind === 'recovery'
+                  ? `🧘 Recovery week — lighter prescriptions${weekPhase.detail ? ` · ${weekPhase.detail}` : ''}`
+                  : `Build week ${weekPhase.week ?? ''} — full prescriptions`.trim()}
+            </div>
+          )}
 
           <ul className="divide-y divide-line/60 rounded-xl border border-line bg-surface2 overflow-hidden">
             {heroSession.blocks.map((b,i)=>{
@@ -185,28 +200,16 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
         ) : null}
       </section>
 
-      {/* ── Secondary: attributes ── */}
+      {/* ── Secondary: attributes one tap back — the full breakdown lives in Progress. */}
       <section className="rounded-2xl border border-line bg-surface p-4 flex items-center gap-4">
-        <div className="w-14 h-14 rounded-2xl bg-ink text-bg grid place-items-center font-black text-lg">{lvl.level}</div>
-        <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Level {lvl.level} — {lvl.title}</p>
-          <p className="text-sm font-semibold truncate">Avg attribute {lvl.avg}/100</p>
-          <div className="mt-2 h-1.5 rounded-full bg-surface2 overflow-hidden w-40">
-            <div className="h-full bg-ink transition-all" style={{width: `${Math.min(100,lvl.avg)}%`}} />
-          </div>
-        </div>
-        <div className="ml-auto hidden sm:block text-right text-xs text-ink3">{store.history.length} sessions • {store.history.length? 'Keep going' : 'Start your first session'}</div>
-      </section>
-
-      <section className="grid grid-cols-2 gap-2">
-        {attrs.map(a=> (
-          <div key={a.id} className="rounded-2xl border border-line bg-surface p-3">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">{a.label}</p>
-            <p className="text-lg font-black tabular-nums">{a.value}<span className="text-xs font-semibold text-ink3">/100</span></p>
-            <div className="mt-1 h-1 rounded-full bg-surface2 overflow-hidden"><div className="h-full bg-ink" style={{width: `${a.value}%`}} /></div>
-            <p className="text-[11px] text-ink3 mt-1.5 leading-snug">{a.blurb}</p>
-          </div>
-        ))}
+        <button onClick={onOpenProgress} className="flex items-center gap-4 text-left flex-1 min-w-0" aria-label="View attributes and level in Progress">
+          <span aria-hidden className="text-xl">📊</span>
+          <span className="min-w-0">
+            <span className="block text-[11px] font-bold uppercase tracking-widest text-ink3">Attributes</span>
+            <span className="block text-sm font-semibold">Strength · Conditioning · Mobility · Consistency</span>
+            <span className="block text-[11px] text-ink3">See your levels and how they move — one tap away in Progress.</span>
+          </span>
+        </button>
       </section>
       <p className="text-[11px] text-ink3 px-1">Attributes are derived from your logged history — volume, loads, variety and consistency — not from program names.</p>
     </div>

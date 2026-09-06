@@ -102,6 +102,14 @@ export default function WeeklyReviewCard({ store, setStore }){
         <p className="text-sm font-extrabold tracking-tight">WEEK {data.weekNumber ?? ''} REVIEW</p>
         <span className={`ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full border ${structural.length?'border-success text-success':'border-line text-ink3'}`}>{structural.length?`${structural.length} change${structural.length===1?'':'s'} queued`:'no changes'}</span>
       </div>
+      {/* Deload as a first-class state: when the week's decision is a deload,
+          the review says so in one line — not just via per-exercise set cuts. */}
+      {review.deloadDecision?.yes && (
+        <div className="rounded-xl bg-reviewsoft border border-review/30 px-3 py-2" role="status">
+          <p className="text-xs font-bold text-review">🔄 Deload week ahead</p>
+          <p className="text-[11px] text-ink2 leading-snug">Next week's volume is reduced on purpose — the plan is the deload. Keep the loads honest, let the fatigue clear.</p>
+        </div>
+      )}
       {!!data.narrative.length && (
         <ul className="space-y-1">
           {data.narrative.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}
