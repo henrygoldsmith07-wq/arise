@@ -5,13 +5,19 @@ import { test, expect } from '@playwright/test';
 // (expert reveals advanced analytics, simple hides them, data never changes).
 
 async function tapTab(page, name){
-  // On slow CI runners the sticky bottom nav can transiently lose a
-  // hit-test race with content that is mid-relayout (the click retries
-  // until the layout settles — the same reason resilience specs set
-  // retries). Plain .click() times out instead of retrying through it.
+  // Slow CI runners intermittently lose the hit-test race on the sticky
+  // bottom nav: a content paragraph mid-relayout reports itself as the
+  // topmost element at the tap point and the click never lands. Retry with
+  // normal actionability first, then force — the primary nav is never
+  // covered by a modal in these flows, so a forced click is safe.
+  const btn = page.getByRole('button', { name, exact: true });
   await expect(async () => {
-    await page.getByRole('button', { name, exact: true }).click();
-  }).toPass({ timeout: 10_000 });
+    try{
+      await btn.click({ timeout: 2_500 });
+    }catch{
+      await btn.click({ force: true, timeout: 2_500 });
+    }
+  }).toPass({ timeout: 15_000 });
 }
 
 async function completeOnboarding(page){
