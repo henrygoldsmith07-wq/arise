@@ -40,7 +40,14 @@ async function dismissConsent(page){
 
 async function scheduleProgram(page){
   await page.getByRole('button', { name: 'Train', exact: true }).click();
-  await page.getByRole('button', { name: /Schedule this program/i }).click();
+  // Recommendation-first: one tap starts the recommended programme.
+  const recCard = page.locator('[aria-label="Recommended for you"]');
+  if (await recCard.getByRole('button', { name: 'Start programme' }).isVisible().catch(() => false)) {
+    await recCard.getByRole('button', { name: 'Start programme' }).click();
+  } else {
+    await page.getByRole('button', { name: 'Browse programmes' }).click();
+    await page.getByRole('button', { name: /Schedule this program/i }).click();
+  }
   // Back to Today — the first session of a fresh schedule is today's.
   await page.getByRole('button', { name: 'Today', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Start workout' })).toBeVisible({ timeout: 8_000 });

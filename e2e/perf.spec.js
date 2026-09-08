@@ -74,12 +74,19 @@ test.describe('Arise — performance', () => {
     await page.getByRole('button', { name: 'Train' }).click();
     // Train is a lazy chunk — wait for the view before touching its buttons.
     await expect(page.getByRole('heading', { name: 'Train' })).toBeVisible({ timeout: 8000 });
-    const generateBtn = page.getByRole('button', { name: /Generate from profile/i });
-    if (await generateBtn.isVisible()) await generateBtn.click();
-    const scheduleBtn = page.getByRole('button', { name: /Schedule this program|Restart schedule from today/i });
-    if (await scheduleBtn.isVisible()) await scheduleBtn.click();
+    // Recommendation-first: start the recommended programme (one tap).
+    const recCard = page.locator('[aria-label="Recommended for you"]');
+    if (await recCard.getByRole('button', { name: 'Start programme' }).isVisible().catch(() => false)) {
+      await recCard.getByRole('button', { name: 'Start programme' }).click();
+    } else {
+      await page.getByRole('button', { name: 'Browse programmes' }).click();
+      const generateBtn = page.getByRole('button', { name: /Generate from profile/i });
+      if (await generateBtn.isVisible()) await generateBtn.click();
+      const scheduleBtn = page.getByRole('button', { name: /Schedule this program|Restart schedule from today/i });
+      if (await scheduleBtn.isVisible()) await scheduleBtn.click();
+    }
     // Schedule applied (same gate the main journey uses).
-    await expect(page.getByText(/Start: \d{4}-\d{2}-\d{2}/)).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('[aria-label="Current programme"]')).toBeVisible({ timeout: 5000 });
     await page.getByRole('button', { name: 'Today', exact: true }).click();
     const startBtn = page.getByRole('button', { name: /Start workout|Start this session/ }).first();
     await expect(startBtn).toBeVisible({ timeout: 8000 });

@@ -6,8 +6,18 @@ import { encodeShareCode, decodeShareCode } from '../lib/shareCodes.js';
 import { startProgram } from '../lib/schedule.js';
 import { adaptScheduleForEquipment, programAdherence, recordProgramStart, userProgramHistory } from '../lib/programming.js';
 import { generateProgramme } from '../lib/programmeGenerator.js';
+import { trainRecommendation } from '../lib/trainRecommendation.js';
 
 const EMPTY_DAY = { title: '', exercises: [{ exerciseId: '', sets: 3, reps: '8–12' }] };
+
+// Week number of the first session still due (or the last week when all are
+// done) — the "Week 3 of 6" readout on the current-programme card.
+function currentWeek(adherence){
+  const rows = adherence?.sessions || [];
+  const due = rows.find(row=> !row.completed);
+  const week = due ? due.session.week : rows[rows.length - 1]?.session?.week;
+  return Number(week) || 1;
+}
 
 function makeId(){ return `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`; }
 
@@ -68,6 +78,32 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
   const adaptation = useMemo(()=> active ? adaptScheduleForEquipment(active, availableEquipment, store.history || []) : null, [active, availableEquipment, store.history]);
   const adherence = useMemo(()=> active ? programAdherence(active, store.history || []) : null, [active, store.history]);
   const userHistory = useMemo(()=> userProgramHistory(store.programHistory || [], active, store.history || []), [store.programHistory, active, store.history]);
+
+  // ── Recommendation-first hero ─────────────────────────────────────────
+  // The same deterministic engine the old "Generate from profile" button used
+  // (recommendTemplate via trainRecommendation), surfaced as the primary
+  // experience. Starting it runs the exact same generateProgramme path.
+  const recommendation = useMemo(
+    ()=> trainRecommendation({ onboarding: store.onboarding, customTemplates: store.customTemplates || [], history: store.history || [] }),
+    [store.onboarding, store.customTemplates, store.history]
+  );
+  // Secondary management surfaces start collapsed: the screen answers
+  // "what should I train?" first, programme management second.
+  const [browseOpen, setBrowseOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+
+  const startRecommendation = ()=>{
+    if(!store.onboarding) return;
+    const generated = generateProgramme({
+      ...store.onboarding,
+      availableEquipment: store.onboarding.equipment || [],
+      history: store.history || [],
+      startDateISO: new Date().toISOString().slice(0, 10),
+    });
+    const next = { ...store, activeSchedule: generated, programHistory: recordProgramStart(store.programHistory || [], { programId: generated.programId, version: generated.programVersion || 1, startDateISO: generated.startDateISO }) };
+    setProgramId(generated.programId);
+    setStore(next);
+  };
 
   const start = ()=>{
     const custom = customTemplates.find(t => t.id === programId);
@@ -203,69 +239,189 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
         <p className="text-xs text-ink3">Programs are scheduled training — picking one creates dated sessions you can run from Today. Templates are reusable blueprints; mesocycles periodise load across weeks.</p>
       </div>
 
-      <div className="rounded-xl border border-line bg-surface2 px-3 py-2">
-        <div className="flex items-center gap-2">
-          <p className="text-xs font-bold">Templates</p>
-          <button onClick={()=> openBuilder()} className="ml-auto text-[11px] font-bold px-2.5 py-1 rounded-full bg-ink text-bg min-h-8">+ New template</button>
-        </div>
-        <div className="flex flex-wrap gap-1.5 mt-1.5">
-          {PROGRAM_TEMPLATES.map(t=> (
-            <button key={t.id} onClick={()=> setProgramId(t.programId)} className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${programId===t.programId?'bg-ink text-bg border-ink':'bg-surface border-line'}`}>{t.name}</button>
-          ))}
-          {customTemplates.map(t => (
-            <span key={t.id} className="inline-flex items-center gap-1">
-              <button onClick={()=> setProgramId(t.id)} className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${programId===t.id?'bg-ink text-bg border-ink':'bg-surface border-line'}`}>{t.name} ★</button>
-              <button onClick={()=> openBuilder(t)} aria-label={`Edit ${t.name}`} className="text-[10px] text-ink3 underline">edit</button>
-              <button onClick={()=> shareTemplate(t)} aria-label={`Share ${t.name}`} className="text-[10px] text-ink3 underline">share</button>
-              <button onClick={()=> deleteCustom(t.id)} aria-label={`Delete ${t.name}`} className="text-[10px] text-danger underline">del</button>
-            </span>
-          ))}
-        </div>
-        <p className="text-[11px] text-ink3 mt-1">{PROGRAM_TEMPLATES.find(t=> t.programId===programId)?.description || customTemplates.find(t=> t.id===programId)?.description || ''}</p>
-        {shareMsg && <p role="status" className="text-[11px] text-ink2 mt-1">{shareMsg}</p>}
-        <div className="mt-1.5">
-          {!importOpen ? (
-            <button onClick={()=> setImportOpen(true)} className="text-[11px] text-ink3 underline">Have a share code? Install a shared program</button>
-          ) : (
-            <div className="flex gap-1.5 items-center">
-              <input value={importCode} onChange={e=> setImportCode(e.target.value)} placeholder="ARISE1.…"
-                aria-label="Program share code" className="flex-1 min-w-0 min-h-9 rounded-lg border border-line bg-surface px-2.5 text-xs font-mono" />
-              <button onClick={installShared} disabled={!importCode.trim()} className="btn btn-primary min-h-9 rounded-lg px-3 text-xs disabled:opacity-40">Install</button>
-              <button onClick={()=> { setImportOpen(false); setImportCode(''); }} className="text-[11px] text-ink3 underline">Cancel</button>
+      {/* ── Active programme first: never encourage replacing it ── */}
+      {active && (
+        <section className="rounded-3xl border border-success/30 bg-surface p-4 sm:p-5 space-y-3" aria-label="Current programme">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Current programme</p>
+              <h3 className="text-xl font-black tracking-tight truncate">{programMeta(active.programId)?.name || active.programId}</h3>
+              <p className="text-xs text-ink3">
+                Week {adherence?.sessions ? currentWeek(adherence) : '?'} of {programMeta(active.programId)?.mesocycle?.weeks || '?'} · {adherence?.completed || 0}/{active.sessions.length} sessions
+              </p>
             </div>
-          )}
-        </div>
-        {lastDeleted && (
-          <p className="text-[11px] text-ink3">
-            Deleted “{lastDeleted.program?.name || lastDeleted.id}” — <button onClick={()=> undoDelete(lastDeleted.id)} className="underline font-semibold">Undo</button>
-          </p>
-        )}
-      </div>
-
-      <div className="grid gap-2">
-        {allPrograms.map(p=>{
-          const ok = p.isCustom ? true : availIds.has(p.id);
-          const isActive = active?.programId===p.id;
-          return (
-            <button key={p.id} onClick={()=> setProgramId(p.id)}
-              className={`text-left rounded-2xl border p-4 transition-colors ${programId===p.id ? 'bg-surface2 border-ink ring-1 ring-ink' : 'bg-surface border-line hover:border-ink3'} ${!ok ? 'opacity-90' : ''}`}>
-              <span className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-bold px-2 py-1 rounded-full border bg-surface border-line text-ink3">{p.level} • {p.daysPerWeek}×/week</span>
-                {programId===p.id && <span className="text-xs font-bold px-2 py-1 rounded-full bg-ink text-bg">✓ Selected</span>}
-                {isActive && <span className="text-xs font-bold px-2 py-1 rounded-full bg-success text-bg">Active</span>}
-                {!ok && <span className="text-[11px] font-semibold text-review bg-reviewsoft border border-review/30 rounded-full px-2 py-1">Needs: {p.equipment.join(', ')}</span>}
-                {p.mesocycle && <span className="text-[11px] text-ink3">• {p.mesocycle.weeks}w • {p.mesocycle.progression}</span>}
-              </span>
-              <span className="block mt-2 font-bold text-ink">{p.name} <span className="text-xs font-semibold">v{p.version||1}</span></span>
-              <span className="block text-xs text-ink3">{p.tagline}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {!availIds.has(programId) && (
-        <p className="text-xs bg-reviewsoft border border-review/30 text-ink2 rounded-xl px-3 py-2">This program needs kit you didn’t select in onboarding. You can still start it — exercises show substitutions — but recommendations in Today will bias toward what you actually have. Update kit in More → Onboarding.</p>
+            <span className="shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-full bg-successsoft text-success border border-success/30 tabular-nums">{adherence?.rate != null ? `${Math.round(adherence.rate * 100)}%` : 'active'}</span>
+          </div>
+          <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+            <summary className="text-xs font-bold cursor-pointer">View programme</summary>
+            <p className="text-[11px] text-ink3 mt-1.5">Start: {active.startDateISO} • {active.sessions.length} sessions • {adherence?.missed || 0} missed</p>
+            <ul className="mt-2 space-y-1.5 max-h-60 overflow-auto pr-1">
+              {pvc.map(({ session, completed, delta, actual })=> (
+                <li key={session.id} className="flex items-center gap-2 text-sm border border-line rounded-xl px-3 py-2 bg-surface2">
+                  <span className="text-xs font-mono tabular-nums text-ink3 w-24 shrink-0">{session.dateISO}</span>
+                  <span className="font-medium truncate">{session.title}</span>
+                  <span className={`ml-auto text-[11px] font-bold px-2 py-1 rounded-full border ${completed ? 'bg-success text-bg border-success' : 'bg-surface border-line text-ink3'}`}>{completed?'done':'planned'}</span>
+                  {completed && delta && <span className="text-[11px] text-ink3">{delta.sets>=0?'+':''}{delta.sets} sets{delta.volumeKg!=null ? ` • ${delta.volumeKg>=0?'+':''}${delta.volumeKg}kg vs plan` : ''}</span>}
+                  {!completed && <button onClick={()=> onStartSession(session)} className="text-xs font-bold text-ink underline">Start</button>}
+                </li>
+              ))}
+            </ul>
+          </details>
+          <button onClick={()=> setStore({...store, activeSchedule:null})} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs">Clear schedule</button>
+        </section>
       )}
+
+      {/* ── The recommendation: the primary experience ── */}
+      {recommendation && !active && (
+        <section className="rounded-3xl border border-line bg-surface p-4 sm:p-5 space-y-3" aria-label="Recommended for you">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Recommended for you</p>
+          <div>
+            <h3 className="text-2xl font-black tracking-tight">{recommendation.name} — {recommendation.daysPerWeek || '?'} days</h3>
+            <p className="text-xs text-ink3">Best fit for your goal, equipment and schedule.</p>
+          </div>
+          <p className="text-xs font-semibold text-ink2 tabular-nums">
+            {recommendation.sessionLength ? `${recommendation.sessionLength} · ` : ''}{recommendation.level}
+          </p>
+          <div className="space-y-1.5">
+            <button onClick={startRecommendation} className="btn btn-primary w-full min-h-14 rounded-xl text-base font-extrabold uppercase tracking-wide">Start programme</button>
+            <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+              <summary className="text-xs font-bold cursor-pointer">Why this programme?</summary>
+              <ul className="mt-2 space-y-1.5">
+                {recommendation.factors.map(f=> (
+                  <li key={f.id} className="text-[11px] text-ink3 flex gap-2">
+                    <span className="font-bold text-ink shrink-0">{f.label}:</span>
+                    <span className="min-w-0">{f.value}</span>
+                  </li>
+                ))}
+              </ul>
+              <ul className="mt-2 space-y-1 border-t border-line/60 pt-2">
+                {recommendation.reasons.map((reason, i)=> <li key={`reason-${i}`} className="text-[11px] text-ink3">• {reason}</li>)}
+              </ul>
+            </details>
+          </div>
+        </section>
+      )}
+
+      {/* ── Secondary management, collapsed by default ── */}
+      <nav aria-label="Programme management" className="space-y-2">
+        {!browseOpen ? (
+          <button onClick={()=> setBrowseOpen(true)} aria-expanded={browseOpen} className="btn btn-secondary w-full min-h-11 rounded-xl text-sm font-bold">Browse programmes</button>
+        ) : (
+          <div className="rounded-2xl border border-line bg-surface p-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-bold">Browse programmes</p>
+              <button onClick={()=> setBrowseOpen(false)} aria-label="Collapse browse programmes" className="ml-auto w-11 h-11 grid place-items-center rounded-xl border border-line text-ink3" aria-expanded="true">▴</button>
+            </div>
+            <div className="grid gap-2">
+              {allPrograms.map(p=>{
+                const ok = p.isCustom ? true : availIds.has(p.id);
+                const isActive = active?.programId===p.id;
+                return (
+                  <button key={p.id} onClick={()=> { setProgramId(p.id); setTemplatesOpen(false); }}
+                    className={`text-left rounded-2xl border p-4 transition-colors ${programId===p.id ? 'bg-surface2 border-ink ring-1 ring-ink' : 'bg-surface border-line hover:border-ink3'} ${!ok ? 'opacity-90' : ''}`}>
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-bold px-2 py-1 rounded-full border bg-surface border-line text-ink3">{p.level} • {p.daysPerWeek}×/week</span>
+                      {programId===p.id && <span className="text-xs font-bold px-2 py-1 rounded-full bg-ink text-bg">✓ Selected</span>}
+                      {isActive && <span className="text-xs font-bold px-2 py-1 rounded-full bg-success text-bg">Active</span>}
+                      {!ok && <span className="text-[11px] font-semibold text-review bg-reviewsoft border border-review/30 rounded-full px-2 py-1">Needs: {p.equipment.join(', ')}</span>}
+                      {p.mesocycle && <span className="text-[11px] text-ink3">• {p.mesocycle.weeks}w • {p.mesocycle.progression}</span>}
+                    </span>
+                    <span className="block mt-2 font-bold text-ink">{p.name} <span className="text-xs font-semibold">v{p.version||1}</span></span>
+                    <span className="block text-xs text-ink3">{p.tagline}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {!availIds.has(programId) && (
+              <p className="text-xs bg-reviewsoft border border-review/30 text-ink2 rounded-xl px-3 py-2">This program needs kit you didn’t select in onboarding. You can still start it — exercises show substitutions — but recommendations in Today will bias toward what you actually have. Update kit in More → Onboarding.</p>
+            )}
+            <div className="flex gap-2">
+              {store.onboarding && <button onClick={generateFromProfile} className="btn btn-secondary flex-1 min-h-11 rounded-xl">Generate from profile</button>}
+              <button onClick={start} className="btn btn-primary flex-1 min-h-11 rounded-xl">{active?.programId===programId ? 'Restart schedule from today' : 'Schedule this program'}</button>
+            </div>
+            {program && program.mesocycle && (
+              <p className="text-xs text-ink3">Mesocycle: {program.mesocycle.weeks} weeks • progression {program.mesocycle.progression} {program.mesocycle.deloadWeek?`• deload week ${program.mesocycle.deloadWeek}`:''}</p>
+            )}
+            {program && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-bold">Preview — {program.name} <span className="text-xs text-ink3">v{program.version||1}</span></h3>
+                <details className="text-xs rounded-xl border border-line bg-surface2 px-3 py-2">
+                  <summary className="font-semibold cursor-pointer">Version history</summary>
+                  <ul className="mt-2 space-y-1">
+                    {programVersionHistory(program.id).map(h=> <li key={h.version}><span className="font-bold">v{h.version}</span> {h.date} — {h.changes}</li>)}
+                  </ul>
+                </details>
+                {program.weeks.map(wk=> (
+                  <div key={wk.week} className="rounded-2xl border border-line bg-surface overflow-hidden">
+                    <div className="px-4 py-2 bg-surface2 border-b border-line flex items-center justify-between">
+                      <span className="text-xs font-bold">Week {wk.week}</span>
+                      <span className="text-[11px] text-ink3">{wk.workouts.length} sessions</span>
+                    </div>
+                    <div className="divide-y divide-line">
+                      {wk.workouts.map(w=> (
+                        <div key={w.day} className="px-4 py-3">
+                          <p className="text-sm font-bold">Day {w.day} — {w.title}</p>
+                          <ul className="mt-2 space-y-1.5">
+                            {w.blocks.map((b,i)=>{
+                              const ex = EXERCISE_BY_ID[b.exerciseId];
+                              return <li key={i} className="flex gap-2 text-sm"><span className="text-ink3 tabular-nums w-14 shrink-0">{b.sets}× {b.reps}</span><span className="font-medium">{ex?.name || b.exerciseId}</span><span className="ml-auto text-xs text-ink3 hidden sm:inline">{b.restSec ? `${b.restSec}s rest` : ''} {b.loadHint?`• ${b.loadHint}`:''}</span></li>;
+                            })}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!templatesOpen ? (
+          <button onClick={()=> setTemplatesOpen(true)} aria-expanded={templatesOpen} className="btn btn-secondary w-full min-h-11 rounded-xl text-sm font-bold">Build my own &amp; my templates</button>
+        ) : (
+          <div className="rounded-xl border border-line bg-surface2 px-3 py-2 space-y-2">
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-bold">My templates</p>
+              <button onClick={()=> openBuilder()} className="ml-auto text-[11px] font-bold px-2.5 py-1.5 rounded-full bg-ink text-bg min-h-8">+ New template</button>
+              <button onClick={()=> setTemplatesOpen(false)} aria-label="Collapse my templates" className="w-11 h-11 grid place-items-center rounded-xl border border-line text-ink3">▴</button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {PROGRAM_TEMPLATES.map(t=> (
+                <button key={t.id} onClick={()=> setProgramId(t.programId)} className={`text-xs font-semibold px-2.5 py-1.5 min-h-9 rounded-full border ${programId===t.programId?'bg-ink text-bg border-ink':'bg-surface border-line'}`}>{t.name}</button>
+              ))}
+              {customTemplates.map(t => (
+                <span key={t.id} className="inline-flex items-center gap-1">
+                  <button onClick={()=> setProgramId(t.id)} className={`text-xs font-semibold px-2.5 py-1.5 min-h-9 rounded-full border ${programId===t.id?'bg-ink text-bg border-ink':'bg-surface border-line'}`}>{t.name} ★</button>
+                  <button onClick={()=> openBuilder(t)} aria-label={`Edit ${t.name}`} className="text-[10px] text-ink3 underline">edit</button>
+                  <button onClick={()=> shareTemplate(t)} aria-label={`Share ${t.name}`} className="text-[10px] text-ink3 underline">share</button>
+                  <button onClick={()=> deleteCustom(t.id)} aria-label={`Delete ${t.name}`} className="text-[10px] text-danger underline">del</button>
+                </span>
+              ))}
+            </div>
+            <p className="text-[11px] text-ink3">{PROGRAM_TEMPLATES.find(t=> t.programId===programId)?.description || customTemplates.find(t=> t.id===programId)?.description || ''}</p>
+            {shareMsg && <p role="status" className="text-[11px] text-ink2 mt-1">{shareMsg}</p>}
+            <div>
+              {!importOpen ? (
+                <button onClick={()=> setImportOpen(true)} className="text-[11px] text-ink3 underline min-h-9">Import programme — have a share code?</button>
+              ) : (
+                <div className="flex gap-1.5 items-center">
+                  <input value={importCode} onChange={e=> setImportCode(e.target.value)} placeholder="ARISE1.…"
+                    aria-label="Program share code" className="flex-1 min-w-0 min-h-9 rounded-lg border border-line bg-surface px-2.5 text-xs font-mono" />
+                  <button onClick={installShared} disabled={!importCode.trim()} className="btn btn-primary min-h-9 rounded-lg px-3 text-xs disabled:opacity-40">Install</button>
+                  <button onClick={()=> { setImportOpen(false); setImportCode(''); }} className="text-[11px] text-ink3 underline">Cancel</button>
+                </div>
+              )}
+            </div>
+            {lastDeleted && (
+              <p className="text-[11px] text-ink3">
+                Deleted “{lastDeleted.program?.name || lastDeleted.id}” — <button onClick={()=> undoDelete(lastDeleted.id)} className="underline font-semibold">Undo</button>
+              </p>
+            )}
+            <p className="text-[11px] text-ink3">Templates live on this device, ride along in backups, and scheduling keeps kit-honest swaps.</p>
+          </div>
+        )}
+      </nav>
 
       {active && adaptation?.changed && (
         <div className="rounded-xl border border-review/30 bg-reviewsoft px-3 py-3 space-y-2">
@@ -303,16 +459,6 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
           )}
         </details>
       )}
-
-      {program && program.mesocycle && (
-        <p className="text-xs text-ink3">Mesocycle: {program.mesocycle.weeks} weeks • progression {program.mesocycle.progression} {program.mesocycle.deloadWeek?`• deload week ${program.mesocycle.deloadWeek}`:''}</p>
-      )}
-
-      <div className="flex gap-2">
-        {store.onboarding && <button onClick={generateFromProfile} className="btn btn-secondary flex-1 min-h-11 rounded-xl">Generate from profile</button>}
-        <button onClick={start} className="btn btn-primary flex-1 min-h-11 rounded-xl">{active?.programId===programId ? 'Restart schedule from today' : 'Schedule this program'}</button>
-        {active && <button onClick={()=> setStore({...store, activeSchedule:null})} className="btn btn-secondary min-h-11 rounded-xl px-4">Clear schedule</button>}
-      </div>
 
       {builderOpen && (
         <div ref={builderA11y.rootRef} onKeyDown={builderA11y.trapTab} className="fixed inset-0 z-40 bg-black/40 p-4 overflow-auto" role="dialog" aria-modal="true" aria-label="Template builder">
@@ -369,57 +515,6 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
             </div>
             <p className="text-[11px] text-ink3">One-week blueprint — scheduling repeats it weekly with a 4-week mesocycle and honest kit swaps. Templates live on this device and ride along in backups.</p>
           </div>
-        </div>
-      )}
-
-      {program && (
-        <div className="space-y-3">
-          <h3 className="text-sm font-bold">Preview — {program.name} <span className="text-xs text-ink3">v{program.version||1}</span></h3>
-          <details className="text-xs rounded-xl border border-line bg-surface2 px-3 py-2">
-            <summary className="font-semibold cursor-pointer">Version history</summary>
-            <ul className="mt-2 space-y-1">
-              {programVersionHistory(program.id).map(h=> <li key={h.version}><span className="font-bold">v{h.version}</span> {h.date} — {h.changes}</li>)}
-            </ul>
-          </details>
-          {program.weeks.map(wk=> (
-            <div key={wk.week} className="rounded-2xl border border-line bg-surface overflow-hidden">
-              <div className="px-4 py-2 bg-surface2 border-b border-line flex items-center justify-between">
-                <span className="text-xs font-bold">Week {wk.week}</span>
-                <span className="text-[11px] text-ink3">{wk.workouts.length} sessions</span>
-              </div>
-              <div className="divide-y divide-line">
-                {wk.workouts.map(w=> (
-                  <div key={w.day} className="px-4 py-3">
-                    <p className="text-sm font-bold">Day {w.day} — {w.title}</p>
-                    <ul className="mt-2 space-y-1.5">
-                      {w.blocks.map((b,i)=>{
-                        const ex = EXERCISE_BY_ID[b.exerciseId];
-                        return <li key={i} className="flex gap-2 text-sm"><span className="text-ink3 tabular-nums w-14 shrink-0">{b.sets}× {b.reps}</span><span className="font-medium">{ex?.name || b.exerciseId}</span><span className="ml-auto text-xs text-ink3 hidden sm:inline">{b.restSec ? `${b.restSec}s rest` : ''} {b.loadHint?`• ${b.loadHint}`:''}</span></li>
-                      })}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {active && (
-        <div className="rounded-2xl border border-line bg-surface p-4 space-y-2">
-          <h3 className="text-sm font-bold">Your schedule</h3>
-          <p className="text-xs text-ink3">Start: {active.startDateISO} • {active.sessions.length} sessions • {adherence?.completed || 0} completed • {adherence?.missed || 0} missed</p>
-          <ul className="space-y-1.5 max-h-72 overflow-auto pr-1">
-            {pvc.map(({ session, completed, delta, actual })=> (
-              <li key={session.id} className="flex items-center gap-2 text-sm border border-line rounded-xl px-3 py-2 bg-surface2">
-                <span className="text-xs font-mono tabular-nums text-ink3 w-24 shrink-0">{session.dateISO}</span>
-                <span className="font-medium truncate">{session.title}</span>
-                <span className={`ml-auto text-[11px] font-bold px-2 py-1 rounded-full border ${completed ? 'bg-success text-bg border-success' : 'bg-surface border-line text-ink3'}`}>{completed?'done':'planned'}</span>
-                {completed && delta && <span className="text-[11px] text-ink3">{delta.sets>=0?'+':''}{delta.sets} sets{delta.volumeKg!=null ? ` • ${delta.volumeKg>=0?'+':''}${delta.volumeKg}kg vs plan` : ''}</span>}
-                {!completed && <button onClick={()=> onStartSession(session)} className="text-xs font-bold text-ink underline">Start</button>}
-              </li>
-            ))}
-          </ul>
         </div>
       )}
 

@@ -27,17 +27,22 @@ async function completeOnboarding(page){
 
 async function openRunner(page){
   await page.getByRole('button', { name: 'Train' }).click();
-  const generateBtn = page.getByRole('button', { name: /Generate from profile/i });
-  if (await generateBtn.isVisible()) {
-    await generateBtn.click();
-    await page.waitForTimeout(300); // let the generated programme render
-  }
-  const startText = page.getByText(/Start: \d{4}-\d{2}-\d{2}/);
-  if (!(await startText.isVisible())) {
+  // Recommendation-first: one tap starts the recommended programme.
+  const recCard = page.locator('[aria-label="Recommended for you"]');
+  if (await recCard.getByRole('button', { name: 'Start programme' }).isVisible().catch(() => false)) {
+    await recCard.getByRole('button', { name: 'Start programme' }).click();
+  } else {
+    // Legacy path: browse and schedule the selected program.
+    await page.getByRole('button', { name: 'Browse programmes' }).click();
+    const generateBtn = page.getByRole('button', { name: /Generate from profile/i });
+    if (await generateBtn.isVisible()) {
+      await generateBtn.click();
+      await page.waitForTimeout(300); // let the generated programme render
+    }
     const scheduleBtn = page.getByRole('button', { name: /Schedule this program/i });
     if (await scheduleBtn.isVisible()) await scheduleBtn.click();
   }
-  await expect(startText).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('[aria-label="Current programme"]')).toBeVisible({ timeout: 5000 });
   await page.getByRole('button', { name: 'Today', exact: true }).click();
   const startBtn = page.getByRole('button', { name: /Start workout|Start this session/ }).first();
   if (await startBtn.isVisible()) await startBtn.click();

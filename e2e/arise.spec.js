@@ -34,17 +34,23 @@ test.describe('Arise — new user journey', () => {
     await page.getByRole('button', { name: /Save & continue/i }).click();
     await expect(page.getByRole('dialog', { name: 'Onboarding' })).toBeHidden();
 
-    // Train tab — generate programme
+    // Train tab — recommendation-first: start the recommended programme
     await page.getByRole('button', { name: 'Train' }).click();
     await expect(page.getByRole('heading', { name: 'Train' })).toBeVisible();
-    const generateBtn = page.getByRole('button', { name: /Generate from profile/i });
-    if (await generateBtn.isVisible()) await generateBtn.click();
-    // Or schedule this program if generate not present
-    const scheduleBtn = page.getByRole('button', { name: /Schedule this program/i });
-    if (await scheduleBtn.isVisible()) await scheduleBtn.click();
+    const recCard = page.locator('[aria-label="Recommended for you"]');
+    if (await recCard.getByRole('button', { name: 'Start programme' }).isVisible().catch(() => false)) {
+      await recCard.getByRole('button', { name: 'Start programme' }).click();
+    } else {
+      // Legacy path: open Browse and schedule the selected program
+      await page.getByRole('button', { name: 'Browse programmes' }).click();
+      const generateBtn = page.getByRole('button', { name: /Generate from profile/i });
+      if (await generateBtn.isVisible()) await generateBtn.click();
+      const scheduleBtn = page.getByRole('button', { name: /Schedule this program/i });
+      if (await scheduleBtn.isVisible()) await scheduleBtn.click();
+    }
 
-    // Should have a schedule now
-    await expect(page.getByText(/Start: \d{4}-\d{2}-\d{2}/)).toBeVisible({ timeout: 5000 });
+    // Should have a schedule now — the current-programme card names it
+    await expect(page.locator('[aria-label="Current programme"]')).toBeVisible({ timeout: 5000 });
 
     // Go to Today and start first session
     await page.getByRole('button', { name: 'Today', exact: true }).click();
