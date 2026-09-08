@@ -51,20 +51,35 @@ test.describe('Train — recommendation first', () => {
     await expect(page.getByRole('button', { name: 'Have a share code?' })).toHaveCount(0);
   });
 
-  test('explanation reflects the real profile inputs', async ({ page }) => {
+  test('explanation separates what chose the programme from what adapts sessions', async ({ page }) => {
     await completeOnboarding(page);
     await page.getByRole('button', { name: 'Train', exact: true }).click();
     const rec = page.locator('[aria-label="Recommended for you"]');
     await expect(rec).toBeVisible({ timeout: 8_000 });
 
     await rec.getByText('Why this programme?').click();
-    // The explanation mirrors the real profile: goal, kit, level, days.
-    await expect(rec.getByText('Goal:').first()).toBeVisible();
+
+    // "Used to choose": exactly the scorer inputs (goal, kit, level, days).
+    await expect(rec.getByText('Used to choose this programme')).toBeVisible();
+    await expect(rec.getByText('Goal:')).toBeVisible();
     await expect(rec.getByText('Feel better').first()).toBeVisible();
-    await expect(rec.getByText('Equipment:').first()).toBeVisible();
-    await expect(rec.getByText('Training level:').first()).toBeVisible();
+    await expect(rec.getByText('Available equipment:')).toBeVisible();
+    await expect(rec.getByText('Training level:')).toBeVisible();
     await expect(rec.getByText('Beginner').first()).toBeVisible();
-    await expect(rec.getByText('Available days:').first()).toBeVisible();
+    await expect(rec.getByText('Available days:')).toBeVisible();
+
+    // "Used when building sessions": the onboarding preferred length is
+    // labelled a PREFERENCE, never presented as measured duration.
+    await expect(rec.getByText(/Used when building your sessions/i)).toBeVisible();
+    await expect(rec.getByText('Preferred session length:')).toBeVisible();
+
+    // History never appears as a ranking input on a fresh profile —
+    // and "Relevant history" as a choosing factor is gone entirely.
+    await expect(rec.getByText('Relevant history')).toHaveCount(0);
+
+    // The headline duration is a measured estimate (≈N min), not the
+    // onboarding "45 min" value verbatim.
+    await expect(rec.getByText(/^≈\d+ min/).first()).toBeVisible();
   });
 
   test('starting the recommendation creates the correct schedule', async ({ page }) => {

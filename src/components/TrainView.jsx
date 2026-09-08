@@ -280,23 +280,37 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
             <p className="text-xs text-ink3">Best fit for your goal, equipment and schedule.</p>
           </div>
           <p className="text-xs font-semibold text-ink2 tabular-nums">
-            {recommendation.sessionLength ? `${recommendation.sessionLength} · ` : ''}{recommendation.level}
+            {recommendation.estimatedMinutes != null ? `≈${recommendation.estimatedMinutes} min` : ''}{recommendation.estimatedMinutes != null && recommendation.cappedByPreference ? ' (capped to your preference)' : ''}{(recommendation.estimatedMinutes != null ? ' · ' : '')}{recommendation.level}
           </p>
           <div className="space-y-1.5">
             <button onClick={startRecommendation} className="btn btn-primary w-full min-h-14 rounded-xl text-base font-extrabold uppercase tracking-wide">Start programme</button>
             <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
               <summary className="text-xs font-bold cursor-pointer">Why this programme?</summary>
-              <ul className="mt-2 space-y-1.5">
-                {recommendation.factors.map(f=> (
+              <p className="text-[11px] font-bold text-ink mt-2">Used to choose this programme</p>
+              <ul className="mt-1 space-y-1">
+                {recommendation.selectionInputs.map(f=> (
                   <li key={f.id} className="text-[11px] text-ink3 flex gap-2">
                     <span className="font-bold text-ink shrink-0">{f.label}:</span>
                     <span className="min-w-0">{f.value}</span>
                   </li>
                 ))}
               </ul>
-              <ul className="mt-2 space-y-1 border-t border-line/60 pt-2">
+              <ul className="mt-1.5 space-y-1">
                 {recommendation.reasons.map((reason, i)=> <li key={`reason-${i}`} className="text-[11px] text-ink3">• {reason}</li>)}
               </ul>
+              {recommendation.adaptationInputs.length > 0 && (
+                <>
+                  <p className="text-[11px] font-bold text-ink mt-3 border-t border-line/60 pt-2">Used when building your sessions — not when choosing</p>
+                  <ul className="mt-1 space-y-1">
+                    {recommendation.adaptationInputs.map(f=> (
+                      <li key={f.id} className="text-[11px] text-ink3 flex gap-2">
+                        <span className="font-bold text-ink shrink-0">{f.label}:</span>
+                        <span className="min-w-0">{f.value}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </details>
           </div>
         </section>
