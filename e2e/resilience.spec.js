@@ -39,7 +39,7 @@ async function openRunner(page){
   }
   await expect(startText).toBeVisible({ timeout: 5000 });
   await page.getByRole('button', { name: 'Today', exact: true }).click();
-  const startBtn = page.getByRole('button', { name: /Start today.s session|Start this session/ }).first();
+  const startBtn = page.getByRole('button', { name: /Start workout|Start this session/ }).first();
   if (await startBtn.isVisible()) await startBtn.click();
   const runner = page.getByRole('dialog', { name: /Session —/ });
   await expect(runner).toBeVisible({ timeout: 8000 });

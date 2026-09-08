@@ -53,7 +53,13 @@ async function scheduleProgram(page){
   await page.getByRole('button', { name: /Schedule this program/i }).click();
   // Back to Today — the first session of a fresh schedule is today's.
   await page.getByRole('button', { name: 'Today', exact: true }).click();
-  await expect(page.getByRole('button', { name: /Guided/ })).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByRole('button', { name: /Start workout|Start this session/ })).toBeVisible({ timeout: 8_000 });
+}
+
+/** Open the hero Options disclosure — guided and short live behind it. */
+async function openOptions(page){
+  await page.getByRole('button', { name: 'Options' }).click();
+  await expect(page.getByRole('button', { name: 'Guided mode' })).toBeVisible();
 }
 
 test.describe('Guided mode settings in More', () => {
@@ -95,8 +101,9 @@ test.describe('Full guided workout', () => {
     await dismissConsent(page);
     await scheduleProgram(page);
 
-    // Launch the guided runner.
-    await page.getByRole('button', { name: /Guided/ }).click();
+    // Launch the guided runner (one extra tap: Options reveals the alternates).
+    await openOptions(page);
+    await page.getByRole('button', { name: 'Guided mode' }).click();
     const runner = page.getByRole('dialog', { name: /Guided session/ });
     await expect(runner).toBeVisible({ timeout: 8_000 });
 

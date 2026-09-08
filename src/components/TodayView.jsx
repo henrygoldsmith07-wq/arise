@@ -1,5 +1,5 @@
 import WeeklyReviewCard from './WeeklyReviewCard.jsx';
-import { useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { PROGRAM_BY_ID } from '../lib/data.js';
 import { sessionForToday, nextSession, progress } from '../lib/schedule.js';
 import { EXERCISE_BY_ID } from '../lib/data.js';
@@ -16,6 +16,7 @@ import { weekPhaseFor } from '../lib/mesocycle.js';
 import { nextBestAction, whatChangedSummary } from '../lib/product.js';
 import { isSimpleView } from '../lib/experienceMode.js';
 import { safetyPanel } from '../lib/safety.js';
+import { storedWorkoutMode, workoutModePatch, workoutModeLabel } from '../lib/workoutMode.js';
 
 function estimatedMinutes(session, config = null){
   if(session?.estimatedDurationMin != null) return session.estimatedDurationMin;
@@ -53,14 +54,34 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
     if(result.changed) setStore({ ...store, activeSchedule: result.schedule });
   };
 
+  // ── Hero start actions ────────────────────────────────────────────────
+  // One dominant CTA (standard session) + a collapsed Options disclosure
+  // holding the alternates. The main button never changes mode; Options just
+  // records the pick as the "last used" hint and starts that mode directly.
+  const optionsBtnRef = useRef(null);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const lastMode = storedWorkoutMode(store.preferences);
+
+  const rememberMode = (mode)=>{
+    setStore(prev=> ({ ...prev, preferences: workoutModePatch(prev.preferences, mode) }));
+  };
+
+  const startStandard = ()=>{
+    if(!heroSession) return;
+    rememberMode('standard');
+    onStartSession(heroSession);
+  };
+
   const startShort = ()=>{
     if(!today) return;
     const result = shortWorkoutMode(today, { minutes: 20 });
+    rememberMode('short');
     onStartSession(result.session);
   };
 
   const startGuided = ()=>{
     if(!today) return;
+    rememberMode('guided');
     onStartSession({ ...today, mode: 'guided' });
   };
 
@@ -117,13 +138,46 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
             </ul>
           </details>
 
-          <div className="flex gap-2 pt-1">
-            <button onClick={()=> onStartSession(heroSession)} className="btn btn-primary flex-1 min-h-12 rounded-xl text-base">
-              {today ? "Start today's session" : 'Start this session'}
+          {/* One dominant CTA. The standard session is the default action —
+              short and guided stay one interaction away under Options. */}
+          <div className="space-y-1.5 pt-1">
+            <button onClick={startStandard} className="btn btn-primary w-full min-h-14 rounded-xl text-base font-extrabold uppercase tracking-wide">
+              {today ? 'Start workout' : 'Start this session'}
             </button>
-            {today && <button onClick={startShort} className="btn btn-secondary min-h-12 rounded-xl px-3 text-xs">Short<br/>20 min</button>}
-            {today && <button onClick={startGuided} className="btn btn-secondary min-h-12 rounded-xl px-3 text-xs">Guided<br/>step-by-step</button>}
-            {!today && onOpenTrain && <button onClick={onOpenTrain} className="btn btn-secondary min-h-12 rounded-xl px-4 text-xs">Schedule</button>}
+            {today && (
+              <div>
+                <button
+                  ref={optionsBtnRef}
+                  onClick={()=> setOptionsOpen(v=> !v)}
+                  onKeyDown={(e)=> {
+                    // Escape collapses Options and keeps focus on the toggle,
+                    // so keyboard users are never stranded inside the panel.
+                    if(e.key === 'Escape' && optionsOpen){
+                      e.stopPropagation();
+                      setOptionsOpen(false);
+                      optionsBtnRef.current?.focus();
+                    }
+                  }}
+                  aria-expanded={optionsOpen}
+                  aria-controls="today-workout-options"
+                  className="btn btn-ghost w-full min-h-11 rounded-xl text-xs font-bold"
+                >
+                  Options <span aria-hidden>{optionsOpen ? '▴' : '▾'}</span>
+                </button>
+                {optionsOpen && (
+                  <div id="today-workout-options" className="mt-1.5 rounded-xl border border-line bg-surface2 p-2 space-y-1.5">
+                    <p className="text-[11px] text-ink3 px-1">Last used: {workoutModeLabel(lastMode)}</p>
+                    <button onClick={startShort} className="btn btn-secondary w-full min-h-12 rounded-xl text-sm">
+                      20-minute workout
+                    </button>
+                    <button onClick={startGuided} className="btn btn-secondary w-full min-h-12 rounded-xl text-sm">
+                      Guided mode
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            {!today && onOpenTrain && <button onClick={onOpenTrain} className="btn btn-secondary w-full min-h-12 rounded-xl px-4 text-xs">Schedule</button>}
           </div>
         </div>
       </section>

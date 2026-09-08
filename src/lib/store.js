@@ -5,6 +5,10 @@ const KEY = 'arise.store.v1';
 const CORRUPT_KEY = 'arise.store.v1.corrupt';
 export const STORE_SCHEMA_VERSION = 9;
 
+// Valid Today-hero start modes (see lib/workoutMode.js). Duplicated as a Set
+// here so store.js stays dependency-free in the boot path.
+const WORKOUT_MODES_SET = new Set(['standard', 'short', 'guided']);
+
 const DEFAULT = {
   version: STORE_SCHEMA_VERSION,
   onboarding: null, // { goal, equipment:[], location, level, daysPerWeek, availableMinutes, preferredExerciseIds:[], dislikedExerciseIds:[], plateConfig? }
@@ -306,6 +310,9 @@ export function runMigrations(raw){
       j.preferences.accessibility[key] = j.preferences.accessibility[key] === true;
     }
   }
+  // Today-hero start-mode preference: absent/legacy/invalid falls back to
+  // 'standard' — the hero's dominant CTA never depends on a fresh store.
+  if(!WORKOUT_MODES_SET.has(j.preferences.workoutMode)) j.preferences.workoutMode = 'standard';
   if(!Array.isArray(j.customTemplates)) j.customTemplates=[];
   j.history = normaliseHistory(j.history || []);
   return j;

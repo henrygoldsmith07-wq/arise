@@ -81,7 +81,7 @@ test.describe('Arise — performance', () => {
     // Schedule applied (same gate the main journey uses).
     await expect(page.getByText(/Start: \d{4}-\d{2}-\d{2}/)).toBeVisible({ timeout: 5000 });
     await page.getByRole('button', { name: 'Today', exact: true }).click();
-    const startBtn = page.getByRole('button', { name: /Start today.s session|Start this session/ }).first();
+    const startBtn = page.getByRole('button', { name: /Start workout|Start this session/ }).first();
     await expect(startBtn).toBeVisible({ timeout: 8000 });
     await startBtn.click();
 

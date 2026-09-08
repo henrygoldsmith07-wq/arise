@@ -48,7 +48,7 @@ test.describe('Arise — new user journey', () => {
 
     // Go to Today and start first session
     await page.getByRole('button', { name: 'Today', exact: true }).click();
-    const startBtn = page.getByRole('button', { name: /Start today.s session|Start this session/ }).first();
+    const startBtn = page.getByRole('button', { name: /Start workout|Start this session/ }).first();
     if (await startBtn.isVisible()) await startBtn.click();
 
     // SessionRunner should appear
