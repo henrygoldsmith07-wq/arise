@@ -9,7 +9,7 @@ import { exerciseHistorySummary, plateauDetection, programAdherence, recommendat
 import { badSessionAttribution, plateauAttribution } from '../lib/sessionQuality.js';
 import { longitudinalSummaryAsync } from '../lib/analyticsWorker.js';
 import { isSimpleView, isExpertView } from '../lib/experienceMode.js';
-import { milestoneState, trainingAgeDisplay, consistencyInsights, healthyStreak, monthlyDigest, nextBestAction } from '../lib/product.js';
+import { milestoneState, trainingAgeDisplay, consistencyInsights, healthyStreak, monthlyDigest, nextBestAction, whatChangedSummary } from '../lib/product.js';
 import { todayISO, sessionForToday, nextSession } from '../lib/schedule.js';
 import { missedWorkoutRecovery } from '../lib/programming.js';
 
@@ -34,6 +34,7 @@ export default function ProgressView({ store }){
   const nextSess = useMemo(()=> nextSession(store.activeSchedule), [store.activeSchedule]);
   const recoveryState = useMemo(()=> missedWorkoutRecovery(store.activeSchedule, history, { today }), [store.activeSchedule, history, today]);
   const nba = useMemo(()=> nextBestAction({ store, today, todaySession: todaySess, nextSess, recovery: recoveryState }), [store, today, todaySess, nextSess, recoveryState]);
+  const changes = useMemo(()=> whatChangedSummary({ schedule: store.activeSchedule, history }), [store.activeSchedule, history]);
   const prs = useMemo(()=> computePRs(history), [history]);
   const wv = useMemo(()=> weeklyVolume(history), [history]);
   // "Am I improving?" headline: measured weekly volume + PR movement — the
@@ -192,6 +193,22 @@ export default function ProgressView({ store }){
               </span>
             )}
           </div>
+        </section>
+      )}
+
+      {/* ── What changed? Programme adaptations, newest first ── */}
+      {changes.length > 0 && (
+        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="What changed">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">What changed?</p>
+          {changes.map((c) => (
+            <details key={`${c.kind}-${c.when}`} className="rounded-xl border border-line bg-surface2 px-3 py-2">
+              <summary className="text-xs font-bold cursor-pointer">{c.when} ({c.kind})</summary>
+              <ul className="mt-2 space-y-1">
+                {c.lines.map((line, i) => <li key={i} className="text-[11px] text-ink3">• {line}</li>)}
+              </ul>
+            </details>
+          ))}
+          <p className="text-[11px] text-ink3">Every change is a deterministic rule applied to your logged sessions — the reasons are verbatim from the decision that made it.</p>
         </section>
       )}
 
@@ -460,7 +477,7 @@ export default function ProgressView({ store }){
           <h3 className="text-sm font-bold">Historical recommendation backtest</h3>
           <span className="text-[11px] font-bold px-2 py-1 rounded-full border border-line bg-surface2">{calibration.status}</span>
         </div>
-        <p className="text-xs text-ink3">{calibration.backtest?.comparisons || 0} point-in-time comparisons. Future sessions are hidden while each recommendation is reconstructed; observed outcomes are scored afterward.</p>
+        <p className="text-xs text-ink3">{calibration.backtest?.comparisons || 0} point-in-time comparisons, replayed against <strong className="text-ink">your own logged history</strong>. Future sessions are hidden while each recommendation is reconstructed; observed outcomes are scored afterward.</p>
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
           <span>{calibration.backtest?.metrics?.loadRecommendationError?.meanAbsKg == null ? '—' : `${calibration.backtest.metrics.loadRecommendationError.meanAbsKg}kg load MAE`}</span>
           <span>{calibration.backtest?.metrics?.repRecommendationError?.meanAbsReps == null ? '—' : `${calibration.backtest.metrics.repRecommendationError.meanAbsReps} rep MAE`}</span>

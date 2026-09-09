@@ -202,15 +202,21 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
         </div>
       )}
 
-      {/* ── Next best action: one guidance line, never a countdown ── */}
-      <section className="rounded-2xl border border-line bg-surface p-4 flex items-center gap-3" aria-label="Suggested next step">
-        <span aria-hidden className="text-base">🧭</span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Next best action</p>
-          <p className="text-sm font-bold truncate">{nba.title}</p>
-          <p className="text-xs text-ink3">{nba.detail}</p>
-        </div>
-      </section>
+      {/* ── Next best action: ONLY when the cards above haven't answered it.
+          When today's session exists the hero IS the next best action, and
+          when recovery is needed the recovery card carries the guidance —
+          showing it again here would be duplicated advice. This card earns
+          its place on rest days and programme-complete states only. ── */}
+      {!today && !recovery.needed && (
+        <section className="rounded-2xl border border-line bg-surface p-4 flex items-center gap-3" aria-label="Suggested next step">
+          <span aria-hidden className="text-base">🧭</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Next best action</p>
+            <p className="text-sm font-bold truncate">{nba.title}</p>
+            <p className="text-xs text-ink3">{nba.detail}</p>
+          </div>
+        </section>
+      )}
 
       {(safety.warnings.length > 0 || safety.deloadPrompt || safety.restart) && (
         <SafetyPanelCard safety={safety} byId={EXERCISE_BY_ID} />
@@ -218,41 +224,46 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
 
       <WeeklyReviewCard store={store} setStore={setStore} />
 
-      {/* ── Secondary: programme progress & audit trail ── */}
-      <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Scheduled training</p>
-            {prog && <p className="text-sm font-semibold">{prog.tagline}</p>}
-          </div>
-          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums">{progProgress.done}/{progProgress.total} • {progProgress.pct}%</span>
+      {/* ── Secondary: programme progress & audit trail — collapsed by default.
+          On Today this is reference material, not decision material; the
+          hero card answers the decision. Adherence stays visible in the
+          summary; the audit trail lives one tap in. ── */}
+      <details className="rounded-2xl border border-line bg-surface">
+        <summary className="cursor-pointer p-4 flex items-start justify-between gap-3">
+          <span className="min-w-0">
+            <span className="block text-[11px] font-bold uppercase tracking-widest text-ink3">Scheduled training</span>
+            {prog && <span className="block text-sm font-semibold truncate">{prog.tagline}</span>}
+            {sched && (
+              <span className="block text-[11px] text-ink3 mt-0.5">{adherence.toDateRate == null ? 'No sessions due yet' : `${Math.round(adherence.toDateRate * 100)}% adherence so far`} • {adherence.missed} missed • {adherence.upcoming} upcoming</span>
+            )}
+          </span>
+          <span className="shrink-0 text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums">{progProgress.done}/{progProgress.total} • {progProgress.pct}%</span>
+        </summary>
+        <div className="px-4 pb-4 space-y-3">
+          {/* ── What changed and why: the audit trail, in plain language ── */}
+          {!simple && !!changes.length && changes.map((c) => (
+            <details key={`${c.kind}-${c.when}`} className="rounded-xl border border-line bg-surface2 px-3 py-2">
+              <summary className="text-xs font-bold cursor-pointer">What changed &amp; why — {c.when} ({c.kind})</summary>
+              <ul className="mt-2 space-y-1">
+                {c.lines.map((line, i) => <li key={i} className="text-[11px] text-ink3">• {line}</li>)}
+              </ul>
+            </details>
+          ))}
+          {sched?.lastAdaptation?.changes?.length ? (
+            <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+              <summary className="text-xs font-bold cursor-pointer">Programme adjusted from your last session ({sched.lastAdaptation.changes.length})</summary>
+              <p className="text-[11px] text-ink3 mt-1">{sched.lastAdaptation.dateISO} · deterministic rules, based on repeated performance evidence</p>
+              <ul className="mt-2 space-y-1.5">
+                {sched.lastAdaptation.changes.slice(0, 4).map((change, index)=> (
+                  <li key={`${change.sessionId}-${change.exerciseId}-${index}`} className="text-[11px] text-ink3">
+                    <span className="font-bold text-ink">{change.exerciseId}</span> · {change.reason}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
         </div>
-        {sched && (
-          <p className="text-[11px] text-ink3">{adherence.toDateRate == null ? 'No sessions due yet' : `${Math.round(adherence.toDateRate * 100)}% adherence so far`} • {adherence.missed} missed • {adherence.upcoming} upcoming</p>
-        )}
-        {/* ── What changed and why: the audit trail, in plain language ── */}
-        {!simple && !!changes.length && changes.map((c) => (
-          <details key={`${c.kind}-${c.when}`} className="rounded-xl border border-line bg-surface2 px-3 py-2">
-            <summary className="text-xs font-bold cursor-pointer">What changed &amp; why — {c.when} ({c.kind})</summary>
-            <ul className="mt-2 space-y-1">
-              {c.lines.map((line, i) => <li key={i} className="text-[11px] text-ink3">• {line}</li>)}
-            </ul>
-          </details>
-        ))}
-        {sched?.lastAdaptation?.changes?.length ? (
-          <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
-            <summary className="text-xs font-bold cursor-pointer">Programme adjusted from your last session ({sched.lastAdaptation.changes.length})</summary>
-            <p className="text-[11px] text-ink3 mt-1">{sched.lastAdaptation.dateISO} · deterministic rules, based on repeated performance evidence</p>
-            <ul className="mt-2 space-y-1.5">
-              {sched.lastAdaptation.changes.slice(0, 4).map((change, index)=> (
-                <li key={`${change.sessionId}-${change.exerciseId}-${index}`} className="text-[11px] text-ink3">
-                  <span className="font-bold text-ink">{change.exerciseId}</span> · {change.reason}
-                </li>
-              ))}
-            </ul>
-          </details>
-        ) : null}
-      </section>
+      </details>
 
       {/* ── Secondary: attributes one tap back — the full breakdown lives in Progress. */}
       <section className="rounded-2xl border border-line bg-surface p-4 flex items-center gap-4">

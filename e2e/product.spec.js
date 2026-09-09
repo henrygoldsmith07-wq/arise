@@ -108,12 +108,17 @@ test.describe('Experience levels', () => {
     await expect(page.getByText(/Next best action/)).toBeVisible();
     await expect(page.getByText(/Milestones/)).toBeVisible();
 
+    // What changed? renders only when the schedule/history recorded a
+    // deterministic adaptation — never as invented filler.
+    await expect(page.getByRole('region', { name: 'What changed' })).toHaveCount(0);
+
     // Expert: the advanced sections appear.
     await page.getByRole('button', { name: 'More' }).click();
     await page.getByRole('button', { name: /Expert Everything/i }).click();
     await tapTab(page, 'Progress');
     await expect(page.getByText('Deload logic check')).toBeVisible();
     await expect(page.getByText('Historical recommendation backtest')).toBeVisible();
+    await expect(page.getByText(/replayed against your own logged history/)).toBeVisible();
 
     // Simple: condensed attribution, advanced sections gone, core stays.
     await page.getByRole('button', { name: 'More' }).click();

@@ -67,6 +67,40 @@ test.describe('Today hero — single dominant CTA with Options', () => {
     await scheduleProgram(page);
   });
 
+  test('today’s hero is the only next-best-action advice on a training day', async ({ page }) => {
+    // The hero answers "what should I do now?"; a second Next-best-action
+    // card would duplicate the same advice.
+    await expect(page.getByRole('button', { name: 'Start workout' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Suggested next step' })).toHaveCount(0);
+  });
+
+  test('scheduled-training audit is collapsed and still one tap deep', async ({ page }) => {
+    // Seed one deterministic adaptation so the audit trail has real content;
+    // a fresh schedule legitimately has nothing to disclose yet.
+    await page.evaluate(async () => {
+      const mod = await import('/src/lib/store.js');
+      const store = mod.loadStore();
+      store.activeSchedule.lastAdaptation = {
+        dateISO: new Date().toISOString().slice(0, 10),
+        changes: [{ sessionId: store.activeSchedule.sessions[0].id, exerciseId: 'push-up', reason: 'e2e seeded audit entry' }],
+      };
+      mod.saveStore(store);
+    });
+    await page.reload();
+
+    // Decision material (Start workout) stays visible; reference material
+    // (audit trail) starts collapsed, with the adherence summary still legible.
+    const audit = page.locator('details', { has: page.getByText('Scheduled training') }).first();
+    await expect(audit).toBeVisible();
+    await expect(audit.getByText('Scheduled training')).toBeVisible();
+    await expect(audit.getByText(/adherence so far|upcoming|No sessions due yet/)).toBeVisible();
+    await expect(audit.getByText(/What changed & why/)).toBeHidden();
+
+    await audit.getByText('Scheduled training').click();
+    // Nested audit entries stay collapsed; the section just exposes them.
+    await expect(audit.getByText(/What changed & why/)).toBeVisible();
+  });
+
   test('only one dominant start CTA is initially visible; alternates hidden until Options', async ({ page }) => {
     // The one dominant action.
     await expect(page.getByRole('button', { name: 'Start workout' })).toBeVisible();

@@ -286,13 +286,44 @@ export function replanSchedule(schedule, history = [], { today = isoToday(), spa
   const missed = pending.filter(session=> session.dateISO < today);
   if(!missed.length) return { schedule, changed: false, moved: [], reason: 'No overdue sessions to re-plan.' };
   const step = Math.max(1, Number(spacingDays) || scheduleSpacing(schedule, config));
-  let cursor = today;
+
+  // Smallest useful adjustment: overdue sessions fold forward, but a session
+  // still on its own date (today's workout) keeps that date — the fold finds
+  // the next free slot instead of stealing today's slot and pushing the whole
+  // programme back.
   const moved = [];
   const pendingById = new Map();
+  const taken = new Set();
+  let cursor = today; // earliest date an overdue session can land on
+  // A not-overdue session sitting exactly on the cursor claims it first: the
+  // user's planned "today" outranks a missed session's claim on today.
+  const dueToday = pending.find(session=> session.dateISO === today);
+  if(dueToday && !pendingById.has(dueToday.id)){
+    pendingById.set(dueToday.id, { ...dueToday, status: 'planned', rescheduledFrom: dueToday.rescheduledFrom });
+    taken.add(today);
+    cursor = addDays(today, step);
+  }
   for(const session of pending){
-    const nextDate = cursor;
+    if(pendingById.has(session.id)) continue;
+    const isOverdue = session.dateISO < today;
+    if(!isOverdue){
+      // Upcoming: keep its date if still free; otherwise the minimum shift
+      // that preserves recovery spacing past everything already placed.
+      let nextDate = session.dateISO;
+      while(nextDate < addDays(cursor, 0)) nextDate = addDays(nextDate, step);
+      if(nextDate !== session.dateISO) moved.push({ id: session.id, title: session.title, from: session.dateISO, to: nextDate });
+      pendingById.set(session.id, { ...session, dateISO: nextDate, status: 'planned', rescheduledFrom: session.dateISO === nextDate ? session.rescheduledFrom : session.dateISO });
+      taken.add(nextDate);
+      cursor = nextDate;
+      continue;
+    }
+    // Overdue: fold forward onto the earliest free slot in programme order.
+    let nextDate = cursor;
+    while(taken.has(nextDate) && nextDate < session.dateISO) nextDate = addDays(nextDate, step);
+    if(nextDate < today) nextDate = today;
     if(nextDate !== session.dateISO) moved.push({ id: session.id, title: session.title, from: session.dateISO, to: nextDate });
     pendingById.set(session.id, { ...session, dateISO: nextDate, status: 'planned', rescheduledFrom: session.dateISO === nextDate ? session.rescheduledFrom : session.dateISO });
+    taken.add(nextDate);
     cursor = addDays(cursor, step);
   }
   const nextSessions = original.map(session=> pendingById.get(session.id) || session).sort(sessionDateSort);

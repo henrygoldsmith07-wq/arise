@@ -63,7 +63,25 @@ describe('programming layer', ()=>{
 
     const replanned = replanSchedule(schedule, history, { today: '2026-08-19' });
     assert.equal(replanned.changed, true);
-    assert.deepEqual(Object.fromEntries(replanned.schedule.sessions.map(s=> [s.id, s.dateISO])), { s1: '2026-08-19', s2: '2026-08-17', s3: '2026-08-21' });
+    // Smallest useful adjustment: s3 is due TODAY, not missed, so it keeps its
+    // date; the missed s1 folds forward into the next free slot after today
+    // instead of stealing today's slot and pushing the whole programme back.
+    assert.deepEqual(Object.fromEntries(replanned.schedule.sessions.map(s=> [s.id, s.dateISO])), { s1: '2026-08-21', s2: '2026-08-17', s3: '2026-08-19' });
+  });
+
+  it('re-plan leaves non-colliding future sessions exactly where they were', ()=>{
+    // B missed; C upcoming with comfortable spacing. Only B folds forward —
+    // C must NOT be re-dated (smallest useful adjustment, not a cascade).
+    const schedule = {
+      programId: 'starter-3x',
+      sessions: [
+        { id: 's1', dateISO: '2026-09-01', week: 1, title: 'A', status: 'done', blocks: [] },
+        { id: 's2', dateISO: '2026-09-03', week: 1, title: 'B', blocks: [] },
+        { id: 's3', dateISO: '2026-09-08', week: 2, title: 'C', blocks: [] },
+      ],
+    };
+    const replanned = replanSchedule(schedule, [], { today: '2026-09-06', spacingDays: 2 });
+    assert.deepEqual(Object.fromEntries(replanned.schedule.sessions.map(s=> [s.id, s.dateISO])), { s1: '2026-09-01', s2: '2026-09-06', s3: '2026-09-08' });
   });
 
   it('creates a short workout without mutating the planned session', ()=>{
