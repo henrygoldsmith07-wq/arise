@@ -91,7 +91,11 @@ test('home-screen shortcut URLs route to the right tab and scrub themselves', as
 
 test('offline: cached shell still boots the app', async ({ page, context }) => {
   await page.goto('/');
+  // The app boots from IndexedDB once hydrated — clearing only localStorage
+  // leaves the IDB store alive, so the fresh-start onboarding dialog never
+  // reappears. Clear both (same reset the install-card test uses).
   await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => new Promise(resolve => { try{ const req = indexedDB.deleteDatabase('arise-idb-v1'); req.onsuccess = req.onerror = req.onblocked = () => resolve(); }catch{ resolve(); } }));
   await page.reload();
   await expect(page.getByRole('dialog', { name: 'Onboarding' })).toBeVisible({ timeout: 10_000 });
 

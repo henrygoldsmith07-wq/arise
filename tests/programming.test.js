@@ -84,6 +84,54 @@ describe('programming layer', ()=>{
     assert.equal(planned.blocks.length, 4);
   });
 
+  it('short mode trims the only conditioning block to fit instead of dropping it', ()=>{
+    // A session whose single timed (conditioning) block dwarfs the rest: the
+    // old greedy pass dropped the walk entirely and delivered a strength-only
+    // "short" session. The trimmed walk preserves the session's intent.
+    const planned = {
+      id: 's2',
+      title: 'Move & breathe',
+      blocks: [
+        { exerciseId: 'brisk-walk', sets: 1, reps: '20–30 min', restSec: 0 },
+        { exerciseId: 'glute-bridge', sets: 3, reps: '12–15', restSec: 45 },
+        { exerciseId: 'dead-bug', sets: 3, reps: '8 each', restSec: 45 },
+      ],
+    };
+    // 35-minute cap: the whole session is ~41 min, the walk alone is 30 — a
+    // greedy keep-whole-or-drop pass would omit the walk (leaving 12 min of
+    // isolation). Trimming it to the remaining budget keeps conditioning in.
+    const result = shortWorkoutMode(planned, { minutes: 35 });
+    assert.equal(result.changed, true);
+    const walk = result.session.blocks.find(b => b.exerciseId === 'brisk-walk');
+    assert.ok(walk, 'the conditioning block must survive the cap');
+    assert.ok(/min/.test(walk.reps), 'the walk must be trimmed to a timed prescription');
+    assert.notEqual(walk.reps, planned.blocks[0].reps, 'the trimmed prescription must differ from the original');
+    assert.ok(result.estimatedDurationMin <= 36, 'the capped session should land on the requested budget');
+    assert.equal(planned.blocks[0].reps, '20–30 min');
+  });
+
+  it('short mode uses the time budget — omissions alone must not slash per-block volume twice', ()=>{
+    const planned = {
+      id: 's3',
+      title: 'Move & breathe',
+      blocks: [
+        { exerciseId: 'brisk-walk', sets: 1, reps: '20–30 min', restSec: 0 },
+        { exerciseId: 'glute-bridge', sets: 3, reps: '12–15', restSec: 45 },
+        { exerciseId: 'band-lateral-raise', sets: 3, reps: '12–15', restSec: 45 },
+        { exerciseId: 'dead-bug', sets: 3, reps: '8 each', restSec: 45 },
+      ],
+    };
+    // 15-minute cap: two blocks fit whole. The fit ratio is computed from the
+    // SELECTED blocks, so their sets must stay whole — not be ratio-slashed a
+    // second time because the omitted 30-minute walk used to be in scope.
+    const result = shortWorkoutMode(planned, { minutes: 15 });
+    assert.equal(result.changed, true);
+    assert.ok(result.estimatedDurationMin >= 10, `expected the budget to be used, got ${result.estimatedDurationMin} min`);
+    for(const block of result.session.blocks){
+      if(block.shortOriginalSets) assert.equal(block.sets, block.shortOriginalSets, 'kept blocks should not be slashed again');
+    }
+  });
+
   it('adapts an active schedule when kit changes', ()=>{
     const schedule = { sessions: [{ id: 's1', blocks: [{ exerciseId: 'barbell-squat', sets: 3, reps: '5' }] }] };
     const result = adaptScheduleForEquipment(schedule, ['bodyweight'], []);

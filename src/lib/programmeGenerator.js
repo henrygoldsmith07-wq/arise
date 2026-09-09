@@ -2,7 +2,7 @@
 // The output is still ordinary Arise schedule data: no opaque coach layer,
 // no future history, and every material choice is returned as a reason.
 
-import { EXERCISE_BY_ID, exerciseAvailable } from './data.js';
+import { EXERCISE_BY_ID, exerciseAvailable, PROGRAM_BY_ID } from './data.js';
 import { recommendTemplate, instantiateTemplate } from './templates.js';
 import { rankedSubstitutions } from './substitutions.js';
 import { shortWorkoutMode } from './programming.js';
@@ -114,17 +114,21 @@ export function generateProgramme({
   dislikedExerciseIds = [],
   plateConfig = null,
   history = [],
+  customTemplates = [],
   startDateISO,
 } = {}){
   const start = startDateISO || new Date().toISOString().slice(0, 10);
-  const recommendation = recommendTemplate({ goal, level, availableEquipment, daysPerWeek });
+  // The scorer must see the same pool the Train hero recommends from —
+  // otherwise "Start" could build a DIFFERENT programme than the card showed.
+  const extraTemplates = (customTemplates || []).filter(t => t && !t.deletedAt && t.isCustom && t.program);
+  const recommendation = recommendTemplate({ goal, level, availableEquipment, daysPerWeek, extraTemplates });
   const template = recommendation.top;
   if(!template) throw new Error('No programme template is available for this profile.');
 
   // Start from the template's original exercise IDs and perform one
   // profile-aware substitution pass. This keeps the final log truthful when a
   // missing-equipment fallback is also disliked or collides with another row.
-  const instantiated = instantiateTemplate({ templateId: template.id, startDateISO: start, availableEquipment: null, history });
+  const instantiated = instantiateTemplate({ templateId: template.id, startDateISO: start, availableEquipment: null, history, extraTemplates });
   const preferred = preferenceSubstitutions(instantiated.sessions, { availableEquipment, preferredExerciseIds, dislikedExerciseIds, history });
   const frequency = resampleFrequency(preferred.sessions, start, daysPerWeek || template.program?.daysPerWeek || null);
   const timed = frequency.map(session=> {
@@ -141,7 +145,10 @@ export function generateProgramme({
   return {
     programId: instantiated.programId,
     templateId: instantiated.templateId,
-    name: instantiated.name,
+    // The schedule record carries the PROGRAMME's name — the same name the
+    // Train hero shows. The template's display name ("Anywhere Template")
+    // is builder vocabulary, not what the user picked.
+    name: (template.isCustom ? template.program?.name : PROGRAM_BY_ID[instantiated.programId]?.name) || instantiated.name,
     startDateISO: start,
     sessions: timed,
     substitutions: preferred.substitutions,

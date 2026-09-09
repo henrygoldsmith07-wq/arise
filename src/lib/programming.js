@@ -348,15 +348,48 @@ export function shortWorkoutMode(session, { minutes = null, config = null } = {}
   const selected = [];
   let selectedDuration = 0;
   for(const candidate of ranked){
-    if(!selected.length || selectedDuration + candidate.duration <= target){
-      selected.push(candidate);
-      selectedDuration += candidate.duration;
+    if(selected.length && selectedDuration + candidate.duration > target) continue;
+    selected.push(candidate);
+    selectedDuration += candidate.duration;
+  }
+  // A timed block (cardio/conditioning) can SHRINK to the remaining budget
+  // instead of being dropped entirely: dropping the only conditioning block
+  // to preserve small isolation work is a worse session. Take the
+  // highest-priority such block that still has room for a useful duration.
+  const remaining = target - selectedDuration;
+  const hasTimed = selected.some(item=> parseTimeMinutes(item.block.reps) != null);
+  if(!hasTimed && remaining >= cfg.timedBlockMinimumMinutes){
+    const trimmed = ranked
+      .filter(item=> !selected.includes(item) && parseTimeMinutes(item.block.reps) != null)
+      .sort((a, b)=> b.priority - a.priority || a.index - b.index)[0];
+    if(trimmed){
+      selected.push({ ...trimmed, trimmedMinutes: remaining });
+      selectedDuration = target;
     }
   }
   if(!selected.length) selected.push(ranked[0]);
-  const ratio = Math.min(1, target / Math.max(originalDurationMin, 1));
-  const selectedIds = new Set(selected.map(item=> item.index));
-  const blocks = session.blocks.filter((_, index)=> selectedIds.has(index)).map(block=> shortenBlock(block, ratio, target, config));
+  // Fit ratio is computed from what was SELECTED, not the whole original
+  // session: when omissions already did most of the cutting, per-block volume
+  // must not be slashed a second time (15-min asks kept 3 min of work).
+  const selectedOriginalDuration = selected.reduce((sum, item)=> sum + item.duration, 0);
+  const ratio = Math.min(1, target / Math.max(selectedOriginalDuration, 1));
+  const trimmedTotal = selected.reduce((sum, item)=> sum + (item.trimmedMinutes || 0), 0);
+  const untimedSelectedDuration = selectedOriginalDuration - trimmedTotal;
+  const fitRatio = trimmedTotal > 0
+    ? Math.min(1, Math.max(0, target - trimmedTotal) / Math.max(untimedSelectedDuration, 1))
+    : ratio;
+  const selectedIds = new Map(selected.map(item=> [item.index, item]));
+  const blocks = session.blocks
+    .map((block, index)=> ({ block, index }))
+    .filter(({ index })=> selectedIds.has(index))
+    .map(({ block, index })=> {
+      const trim = selectedIds.get(index)?.trimmedMinutes;
+      if(trim != null){
+        const minutes = Math.max(cfg.timedBlockMinimumMinutes, Math.min(parseTimeMinutes(block.reps), Math.round(trim)));
+        return { ...block, reps: `${minutes} min`, shortOriginalReps: block.reps };
+      }
+      return shortenBlock(block, fitRatio, target, config);
+    });
   const estimatedDurationMin = Math.max(cfg.minimumBlockMinutes, Math.ceil(blocks.reduce((total, block)=> total + blockDurationMinutes(block, config), 0)));
   return {
     session: { ...session, blocks, mode: 'short', targetMinutes: target, estimatedDurationMin, originalDurationMin },
@@ -367,7 +400,6 @@ export function shortWorkoutMode(session, { minutes = null, config = null } = {}
     reason: `Kept ${blocks.length} high-value block${blocks.length === 1 ? '' : 's'} and reduced volume to fit about ${target} minutes.`,
   };
 }
-
 export function adaptScheduleForEquipment(schedule, availableEquipment = [], history = []){
   if(!schedule?.sessions?.length) return { schedule, substitutions: [], changed: false, unavailable: [] };
   if(!availableEquipment?.length) return { schedule, substitutions: [], changed: false, unavailable: [], reason: 'Kit is not set — keeping the original programme until onboarding is complete.' };

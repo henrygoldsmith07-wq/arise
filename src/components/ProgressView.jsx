@@ -36,6 +36,37 @@ export default function ProgressView({ store }){
   const nba = useMemo(()=> nextBestAction({ store, today, todaySession: todaySess, nextSess, recovery: recoveryState }), [store, today, todaySess, nextSess, recoveryState]);
   const prs = useMemo(()=> computePRs(history), [history]);
   const wv = useMemo(()=> weeklyVolume(history), [history]);
+  // "Am I improving?" headline: measured weekly volume + PR movement — the
+  // two honest signals of progression, phrased as a direct answer.
+  const trendHeadline = useMemo(()=> {
+    if(!wv.length) return null;
+    const last = wv[wv.length - 1];
+    const prev = wv[wv.length - 2] || null;
+    // Sessions without logged load contribute 0 kg — a bodyweight-only week
+    // is not a "dip", so only compare when both weeks actually moved weight.
+    const comparable = prev && last.vol > 0 && prev.vol > 0;
+    const pct = comparable ? Math.round((last.vol / prev.vol - 1) * 100) : null;
+    const direction = pct == null ? null : pct > 5 ? 'up' : pct < -5 ? 'down' : 'flat';
+    const prMoved = prs.length && (()=> {
+      const cutoff = prev?.week;
+      return cutoff ? prs.some(pr => pr.dateISO >= cutoff) : prs.length > 0;
+    })();
+    const title = wv.length < 2
+      ? 'First week on the books'
+      : direction === 'up'
+        ? 'Yes — volume is climbing'
+        : direction === 'down'
+          ? 'Volume dipped this week'
+          : 'Holding steady';
+    const detail = wv.length < 2
+      ? 'Log a couple more weeks and this states the trend plainly.'
+      : direction === 'up'
+        ? `Volume is up${pct != null ? ` ${pct}%` : ''} versus last week${prMoved ? ', and a PR moved' : ''} — progressive overload is working.`
+        : direction === 'down'
+          ? 'Fine if it was a planned deload or a busy week; the re-plan keeps you on programme.'
+          : 'Steady weeks build the base — add a rep or load where RIR ≥ 2.';
+    return { title, detail, pct, direction, prMoved: !!prMoved };
+  }, [wv, prs]);
   const freq = useMemo(()=> frequencyByMuscleSync(history, EXERCISE_BY_ID), [history]);
   const landmarks = useMemo(()=> volumeLandmarks(history, EXERCISE_BY_ID), [history]);
   const dist = useMemo(()=> volumeDistribution(history, EXERCISE_BY_ID), [history]);
@@ -145,6 +176,24 @@ export default function ProgressView({ store }){
           </div>
         </div>
       </div>
+
+      {/* ── Am I improving? The one-glance answer, right under the level ── */}
+      {trendHeadline && (
+        <section className="rounded-2xl border border-line bg-surface p-4" aria-label="Am I improving">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Am I improving?</p>
+              <p className="text-sm font-bold truncate">{trendHeadline.title}</p>
+              <p className="text-xs text-ink3 mt-0.5">{trendHeadline.detail}</p>
+            </div>
+            {trendHeadline.pct != null && (
+              <span className={`shrink-0 text-xs font-black tabular-nums px-2.5 py-1.5 rounded-full border ${trendHeadline.direction === 'up' ? 'bg-successsoft border-success/30 text-success' : trendHeadline.direction === 'down' ? 'bg-reviewsoft border-review/30 text-review' : 'bg-surface2 border-line text-ink3'}`}>
+                {trendHeadline.pct > 0 ? '+' : ''}{trendHeadline.pct}% vs last week
+              </span>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* ── Next best action: one piece of guidance, never a nag ── */}
       <section className="rounded-2xl border border-line bg-surface p-4 flex items-center gap-3" aria-label="Suggested next step">

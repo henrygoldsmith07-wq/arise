@@ -98,6 +98,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
       ...store.onboarding,
       availableEquipment: store.onboarding.equipment || [],
       history: store.history || [],
+      customTemplates: store.customTemplates || [],
       startDateISO: new Date().toISOString().slice(0, 10),
     });
     const next = { ...store, activeSchedule: generated, programHistory: recordProgramStart(store.programHistory || [], { programId: generated.programId, version: generated.programVersion || 1, startDateISO: generated.startDateISO }) };
@@ -225,6 +226,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
       ...store.onboarding,
       availableEquipment: store.onboarding.equipment || [],
       history: store.history || [],
+      customTemplates: store.customTemplates || [],
       startDateISO: new Date().toISOString().slice(0, 10),
     });
     const next = { ...store, activeSchedule: generated, programHistory: recordProgramStart(store.programHistory || [], { programId: generated.programId, version: generated.programVersion || 1, startDateISO: generated.startDateISO }) };
@@ -279,9 +281,17 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
             <h3 className="text-2xl font-black tracking-tight">{recommendation.name} — {recommendation.daysPerWeek || '?'} days</h3>
             <p className="text-xs text-ink3">Best fit for your goal, equipment and schedule.</p>
           </div>
-          <p className="text-xs font-semibold text-ink2 tabular-nums">
-            {recommendation.estimatedMinutes != null ? `≈${recommendation.estimatedMinutes} min` : ''}{recommendation.estimatedMinutes != null && recommendation.cappedByPreference ? ' (capped to your preference)' : ''}{(recommendation.estimatedMinutes != null ? ' · ' : '')}{recommendation.level}
-          </p>
+              <p className="text-xs font-semibold text-ink2 tabular-nums">
+                {recommendation.estimatedMinutes != null ? `≈${recommendation.estimatedMinutes} min` : ''}{recommendation.cappedByPreference ? ` (fits your ${recommendation.preferredLengthLabel} preference)` : ''}{(recommendation.estimatedMinutes != null ? ' · ' : '')}{recommendation.level}
+              </p>
+              {(recommendation.substitutionCount > 0 || recommendation.warningCount > 0) && (
+                <p className="text-[11px] text-ink3">
+                  {recommendation.substitutionCount > 0 ? `${recommendation.substitutionCount} swap${recommendation.substitutionCount === 1 ? '' : 's'} for your kit` : ''}
+                  {recommendation.substitutionCount > 0 && recommendation.warningCount > 0 ? ' · ' : ''}
+                  {recommendation.warningCount > 0 ? `${recommendation.warningCount} constraint${recommendation.warningCount === 1 ? '' : 's'} to review` : ''}
+                  {' '}— previewed from the real schedule.
+                </p>
+              )}
           <div className="space-y-1.5">
             <button onClick={startRecommendation} className="btn btn-primary w-full min-h-14 rounded-xl text-base font-extrabold uppercase tracking-wide">Start programme</button>
             <details className="rounded-xl border border-line bg-surface2 px-3 py-2">

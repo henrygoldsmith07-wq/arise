@@ -14,14 +14,16 @@
 //   - adaptationInputs — things generateProgramme()/scheduling use when
 //     BUILDING sessions (history, preferred duration), shown in a separate
 //     "used when building sessions" group, never as ranking claims.
-// Duration is MEASURED from the recommended programme's blocks via
-// blockDurationMinutes (the same utility Today's estimate uses) — the
-// onboarding preferred length is labelled as a preference, never displayed
-// as the programme's estimated duration.
+// Duration is MEASURED by previewing the actual generation path
+// (generateProgramme with the same inputs Start uses, discarded afterwards) —
+// the displayed estimate is the schedule the user will really get, including
+// time caps and substitutions. The onboarding preferred length is labelled
+// as a preference, never displayed as the programme's estimated duration.
 
 import { recommendTemplate } from './templates.js';
 import { GOALS, PROGRAM_BY_ID } from './data.js';
 import { blockDurationMinutes } from './programming.js';
+import { generateProgramme } from './programmeGenerator.js';
 
 function goalLabel(goalId){
   return GOALS.find(g => g.id === goalId)?.label || goalId || 'General fitness';
@@ -61,12 +63,13 @@ export function trainRecommendation({ onboarding = null, customTemplates = [], h
   const days = onboarding.daysPerWeek || null;
   const minutes = onboarding.availableMinutes ?? null;
 
+  const extraTemplates = (customTemplates || []).filter(t => t && !t.deletedAt);
   const recommendation = recommendTemplate({
     goal,
     level,
     availableEquipment: equipment,
     daysPerWeek: days,
-    extraTemplates: (customTemplates || []).filter(t => t && !t.deletedAt),
+    extraTemplates,
   });
   const top = recommendation.top;
   if(!top) return null;
@@ -102,21 +105,60 @@ export function trainRecommendation({ onboarding = null, customTemplates = [], h
     adaptationInputs.push({ id: 'substitutions', label: 'Equipment substitutions', value: 'exercises your kit can’t support are swapped when sessions are built' });
   }
 
-  const estimatedMinutes = measuredSessionMinutes(program);
-  const cappedByPreference = preferred != null && estimatedMinutes != null && estimatedMinutes > Number(minutes);
+  // Preview the ACTUAL schedule Start will build: same engine, same inputs,
+  // discarded immediately. The displayed duration, day count and swaps are
+  // then the truth, not an estimate from the raw template.
+  let preview = null;
+  try{
+    preview = generateProgramme({
+      ...onboarding,
+      availableEquipment: equipment,
+      history,
+      customTemplates,
+      startDateISO: new Date().toISOString().slice(0, 10),
+    });
+  }catch{ /* preview is best-effort; the card falls back to template measurement */ }
+
+  // Per-session duration: capped sessions carry estimatedDurationMin; uncapped
+  // ones are measured from their blocks — the same utility Today uses.
+  const sessionMinutes = session => session.estimatedDurationMin != null
+    ? session.estimatedDurationMin
+    : Math.max(1, Math.ceil((session.blocks || []).reduce((sum, block)=> sum + blockDurationMinutes(block), 0)));
+  const estimatedMinutes = preview && preview.sessions.length
+    ? Math.round(preview.sessions.reduce((sum, s)=> sum + sessionMinutes(s), 0) / preview.sessions.length)
+    : measuredSessionMinutes(program);
+  const previewedSubstitutions = preview?.substitutions || [];
+  const previewedWarnings = preview?.generationWarnings || [];
+  // "Capped" is honest only when the schedule we would have built WITHOUT a
+  // cap is longer than the preference — the post-cap estimate can never
+  // exceed it, so compare against the preview's own original durations.
+  const uncappedAverage = preview && preview.sessions.length
+    ? Math.round(preview.sessions.reduce((sum, s)=> sum + (s.originalDurationMin != null
+        ? s.originalDurationMin
+        : sessionMinutes(s)), 0) / preview.sessions.length)
+    : null;
+  const cappedByPreference = preferred != null && uncappedAverage != null && uncappedAverage > Number(minutes);
+  const previewedDaysPerWeek = preview
+    ? new Set(preview.sessions.map(s => s.week)).size > 0
+      ? Math.max(...Object.values(preview.sessions.reduce((acc, s)=> { acc[s.week] = (acc[s.week] || 0) + 1; return acc; }, {})))
+      : null
+    : null;
 
   return {
     templateId: top.id,
     programId: top.isCustom ? top.id : top.programId,
     isCustom: !!top.isCustom,
     name: program.name || top.name,
-    daysPerWeek: program.daysPerWeek || top.daysPerWeek || null,
+    daysPerWeek: previewedDaysPerWeek || program.daysPerWeek || top.daysPerWeek || null,
     level: top.level || program.level || level,
-    // Measured from the programme itself; null only when it can't be computed.
+    // Measured from the actual generated schedule (post-cap, post-swap).
     estimatedMinutes,
     // Preferred length is a preference — the card renders it as such.
     preferredLengthLabel: preferred,
     cappedByPreference,
+    // Real substitutions/warnings from the previewed schedule, if any.
+    substitutionCount: previewedSubstitutions.length,
+    warningCount: previewedWarnings.length,
     // engine reasons — verbatim from the deterministic scorer
     reasons: top.reasons || [],
     selectionInputs,

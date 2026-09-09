@@ -4,6 +4,7 @@ import { trainRecommendation } from '../src/lib/trainRecommendation.js';
 import { recommendTemplate } from '../src/lib/templates.js';
 import { PROGRAM_BY_ID } from '../src/lib/data.js';
 import { blockDurationMinutes } from '../src/lib/programming.js';
+import { generateProgramme } from '../src/lib/programmeGenerator.js';
 
 const PROFILE = { onboarding: { goal: 'muscle', level: 'Beginner', equipment: ['bodyweight','bands'], daysPerWeek: 3, availableMinutes: 45 }, customTemplates: [], history: [] };
 
@@ -86,7 +87,12 @@ describe('trainRecommendation — explanation integrity', () => {
 
   it('a measured estimate over the preference is honestly flagged as capped', () => {
     const hero = trainRecommendation({ onboarding: { goal: 'general', level: 'Beginner', equipment: [], daysPerWeek: 3, availableMinutes: 10 }, customTemplates: [], history: [] });
-    assert.ok(hero.estimatedMinutes > 10);
+    // The preview measures the schedule that will actually be built —
+    // post-cap it can be at or under the preference, so the estimate itself
+    // must never exceed it…
+    assert.ok(hero.estimatedMinutes <= 10, `post-cap estimate ${hero.estimatedMinutes} should fit the 10-minute preference`);
+    // …while the un-capped programme is genuinely longer, which is what the
+    // capped flag must report.
     assert.equal(hero.cappedByPreference, true);
   });
 
@@ -134,6 +140,28 @@ describe('trainRecommendation — explanation integrity', () => {
     assert.equal(hero.programId, 'custom-1');
     // Customs measure duration from their own blocks too.
     assert.equal(hero.estimatedMinutes > 0, true);
+  });
+
+  it('the previewed schedule is exactly what generateProgramme builds from Start', () => {
+    // Explanation integrity: the card's numbers must come from the SAME code
+    // path Start runs. If the hero showed a different programme than Start
+    // builds (e.g. customs not reaching the generator), the card lies.
+    const onboarding = { goal: 'muscle', level: 'Beginner', equipment: ['bodyweight','bands'], daysPerWeek: 3, availableMinutes: 45 };
+    const custom = {
+      id: 'custom-x', isCustom: true, name: 'Band Split', level: 'Beginner', goal: 'muscle', daysPerWeek: 3, version: 1,
+      program: { id: 'custom-x', name: 'Band Split', level: 'Beginner', daysPerWeek: 3, version: 1, mesocycle: { weeks: 4, deloadWeek: null, progression: 'double-progression' }, equipment: ['bands'], weeks: [{ week: 1, workouts: [{ day: 1, title: 'Pull', blocks: [{ exerciseId: 'band-row', sets: 3, reps: '12–15', restSec: 60 }] }] }] },
+    };
+    const hero = trainRecommendation({ onboarding, customTemplates: [custom], history: [] });
+    const built = generateProgramme({ ...onboarding, availableEquipment: onboarding.equipment, history: [], customTemplates: [custom], startDateISO: '2026-09-09' });
+    assert.equal(hero.templateId, built.templateId);
+    assert.equal(hero.programId, built.programId);
+    assert.equal(hero.name, built.name);
+    // The displayed estimate matches the average the built schedule produces.
+    const avg = Math.round(built.sessions.reduce((sum, s)=> sum + (s.estimatedDurationMin != null ? s.estimatedDurationMin : 0), 0) / built.sessions.length);
+    assert.equal(hero.estimatedMinutes, avg);
+    // Reported swaps/warnings are the real ones from the built schedule.
+    assert.equal(hero.substitutionCount, built.substitutions.length);
+    assert.equal(hero.warningCount, built.generationWarnings.length);
   });
 
   it('soft-deleted templates never win the recommendation', () => {
