@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
+import { buildPrescriptionSnapshot } from '../lib/progression.js';
 import {
   NOTE_PROMPTS,
   fmtRest,
@@ -252,6 +253,19 @@ export default function GuidedRunner({ session, history = [], availableEquipment
       noteTags,
       startedAtISO: startedAtRef.current,
       availableEquipment,
+    });
+    // Guided mode shows the scheduled prescription rather than an engine
+    // target: freeze that schedule row, without inventing engine fields.
+    payload.blocks = payload.blocks.map((block, index)=> {
+      const planned = session.blocks?.[index] || {};
+      const prescription = block.prescription || buildPrescriptionSnapshot({
+        session,
+        block: { ...planned, exerciseId: block.exerciseId },
+        blockIndex: index,
+        recommendation: null,
+        prescribedAt: startedAtRef.current,
+      });
+      return prescription ? { ...block, prescription } : block;
     });
     onSave(payload);
   };

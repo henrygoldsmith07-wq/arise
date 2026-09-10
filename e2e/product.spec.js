@@ -131,8 +131,8 @@ test.describe('Progress assessment', () => {
     const card = page.getByRole('region', { name: 'Am I improving' });
     await expect(card.getByText('Likely improving')).toBeVisible();
     await expect(card.getByText('Strength trend ↑')).toBeVisible();
-    await expect(card.getByText(/Targets completed \d+%/)).toBeVisible();
-    await expect(card.getByText(/Evidence: (Moderate|High)/)).toBeVisible();
+    await expect(card.getByText(/Retrospective engine replay \d+%/)).toBeVisible();
+    await expect(card.getByText(/Data coverage: Low/)).toBeVisible();
 
     await page.getByRole('button', { name: 'More' }).click();
     await page.getByRole('button', { name: /Simple The essentials/i }).click();
@@ -207,6 +207,56 @@ test.describe('Progress assessment', () => {
     await expect(card.getByText('Likely improving')).toBeVisible();
     await expect(card.getByText(/8 → 13 reps/)).toBeVisible();
     await expect(card.getByText(/Bodyweight-only sessions track reps/)).toBeVisible();
+  });
+
+  test('stored prescriptions drive actual follow-through, not replay', async ({ page }) => {
+    // Six rising sessions, each carrying the prescription Arise showed at the
+    // time: eleven of twelve stored targets met.
+    const rows = [
+      { id: 'observed-0', days: 20, rxReps: 8, rxLoad: 20, sets: [{ reps: '8', weightKg: '20' }, { reps: '8', weightKg: '20' }] },
+      { id: 'observed-1', days: 17, rxReps: 9, rxLoad: 20, sets: [{ reps: '9', weightKg: '20' }, { reps: '9', weightKg: '20' }] },
+      { id: 'observed-2', days: 14, rxReps: 10, rxLoad: 20, sets: [{ reps: '10', weightKg: '20' }, { reps: '10', weightKg: '20' }] },
+      { id: 'observed-3', days: 11, rxReps: 11, rxLoad: 20, sets: [{ reps: '11', weightKg: '20' }, { reps: '11', weightKg: '20', completed: false, skipped: true }] },
+      { id: 'observed-4', days: 8, rxReps: 12, rxLoad: 20, sets: [{ reps: '12', weightKg: '20' }, { reps: '12', weightKg: '20' }] },
+      { id: 'observed-5', days: 5, rxReps: 8, rxLoad: 22.5, sets: [{ reps: '8', weightKg: '22.5' }, { reps: '8', weightKg: '22.5' }] },
+    ];
+    await page.evaluate(async ({ rows }) => {
+      const mod = await import('/src/lib/store.js');
+      const { buildPrescriptionSnapshot } = await import('/src/lib/progression.js');
+      const iso = (days) => {
+        const date = new Date();
+        date.setUTCDate(date.getUTCDate() - days);
+        return date.toISOString().slice(0, 10);
+      };
+      const store = mod.loadStore();
+      store.history = rows.map((row) => {
+        const dateISO = iso(row.days);
+        return {
+          id: row.id,
+          dateISO,
+          blocks: [{
+            exerciseId: 'bench-press-dumbbell',
+            prescription: buildPrescriptionSnapshot({
+              session: { id: row.id, dateISO },
+              block: { exerciseId: 'bench-press-dumbbell', sets: 2, reps: '8–12' },
+              blockIndex: 0,
+              recommendation: { reps: row.rxReps, load: row.rxLoad, reason: 'e2e prescription', priorsVersion: 1, policy: 'standard' },
+              prescribedAt: `${dateISO}T09:00:00.000Z`,
+              policy: 'standard',
+            }),
+            sets: row.sets.map((s) => ({ completed: true, ...s })),
+          }],
+        };
+      });
+      mod.saveStore(store);
+    }, { rows });
+    await page.reload();
+    await tapTab(page, 'Progress');
+    const card = page.getByRole('region', { name: 'Am I improving' });
+    await expect(card.getByText('Likely improving')).toBeVisible();
+    await expect(card.getByText(/Actual prescription follow-through \d+%/)).toBeVisible();
+    await expect(card.getByText(/Data coverage: Moderate/)).toBeVisible();
+    await expect(card.getByText(/Retrospective engine replay/)).toHaveCount(0);
   });
 });
 

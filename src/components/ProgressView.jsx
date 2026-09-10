@@ -173,7 +173,7 @@ export default function ProgressView({ store }){
             <p className="text-[11px] text-ink3">+{remainingSignals} more signal{remainingSignals === 1 ? '' : 's'} in Expert view.</p>
           )}
           {!simple && (
-            <p className="text-[11px] text-ink3">Evidence: {assessment.evidence} · {assessment.basis}</p>
+            <p className="text-[11px] text-ink3">Data coverage: {assessment.coverage} · {assessment.basis}</p>
           )}
           {expert && (
             <details className="rounded-xl border border-line bg-surface2 px-3 py-2">

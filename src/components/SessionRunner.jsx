@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { lastExerciseSets } from '../lib/store.js';
-import { recommendNext } from '../lib/progression.js';
+import { recommendNext, buildPrescriptionSnapshot } from '../lib/progression.js';
 import { recommendNextWithPolicy, POLICY_ORDER } from '../lib/progressionPolicies.js';
 import { runComparativeStudy, doubleProgressionRec } from '../lib/study.js';
 import { assignmentFor } from '../lib/studyEnrollment.js';
@@ -676,11 +676,25 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       substitutions: substitutions.length ? substitutions : undefined,
       exerciseOrder,
       painDiscomfort,
-      blocks: blocks.map((b, index)=> ({
-        exerciseId: b.exerciseId,
-        exerciseOrder: index,
-        ...(b.substitutionFrom ? { substitutionFrom: b.substitutionFrom, substitutionReason: b.substitutionReason } : {}),
-        equipment: EXERCISE_BY_ID[b.exerciseId]?.equipment || null,
+      blocks: blocks.map((b, index)=> {
+        // Freeze what was actually prescribed before this workout: the stored
+        // snapshot is the audit source of truth, so an existing snapshot is
+        // always preserved — never rebuilt from later engine state.
+        const planned = session.blocks?.[index] || {};
+        const prescription = b.prescription || buildPrescriptionSnapshot({
+          session,
+          block: { ...planned, exerciseId: b.exerciseId },
+          blockIndex: index,
+          recommendation: blockMeta.recs.get(b.exerciseId) || null,
+          prescribedAt: startedAt,
+          policy: appPolicy,
+        });
+        return {
+          exerciseId: b.exerciseId,
+          exerciseOrder: index,
+          ...(b.substitutionFrom ? { substitutionFrom: b.substitutionFrom, substitutionReason: b.substitutionReason } : {}),
+          ...(prescription ? { prescription } : {}),
+          equipment: EXERCISE_BY_ID[b.exerciseId]?.equipment || null,
         sets: b.sets.map(s=>{
           const completed = !!s.completed;
           const skipped = !completed && String(s.reps).trim() !== '';
@@ -692,8 +706,9 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           if(s.assistedKg && String(s.assistedKg).trim()) out.assistedKg=String(s.assistedKg).trim();
           if(s.tempo && String(s.tempo).trim()) out.tempo=String(s.tempo).trim();
           return out;
-        }),
-      })),
+          }),
+        };
+      }),
       skippedSetsCount: blocks.reduce((n,b)=> n + b.sets.filter(s=> !s.completed).length, 0),
       note: finalNote || undefined,
       noteTags: noteTags.length ? noteTags : undefined,

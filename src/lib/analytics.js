@@ -442,3 +442,76 @@ export function recommendationFollowThrough(history){
     note: total ? 'Positive differential = following recommendations precedes better e1RM gains.' : 'Not enough data yet.',
   };
 }
+
+// Observed prescription follow-through: scored ONLY from immutable snapshots
+// stored on saved history blocks (`block.prescription`). Legacy blocks without
+// a snapshot are excluded — never reconstructed, never counted as compliant.
+// One prescribed set is one target: it counts as met only when the logged set
+// at that position was completed and met the stored reps/load/assist targets.
+function prescriptionRepTarget(rx){
+  if(rx?.prescribedReps != null && Number.isFinite(Number(rx.prescribedReps))) return Number(rx.prescribedReps);
+  const range = String(rx?.prescribedRepRange || '').match(/\d+/g)?.map(Number) || [];
+  return range.length ? range[0] : null;
+}
+
+export function observedPrescriptionFollowThrough(history){
+  const ordered = (history || []).slice().sort((a, b)=> String(a?.dateISO || '').localeCompare(String(b?.dateISO || '')));
+  const workouts = new Set();
+  const exercises = new Set();
+  const attempted = new Set();
+  let prescribedSets = 0, setsCompleted = 0, repTargetsMet = 0, loadTargetsMet = 0, completeTargets = 0;
+  let skippedSets = 0, failedSets = 0, extraSets = 0;
+  for(const session of ordered){
+    let sessionHasSnapshot = false;
+    for(const block of session?.blocks || []){
+      const rx = block?.prescription;
+      if(!rx || typeof rx !== 'object') continue;
+      const prescribed = Math.max(0, Math.round(Number(rx.prescribedSets) || 0));
+      if(!(prescribed > 0)) continue;
+      sessionHasSnapshot = true;
+      exercises.add(block.exerciseId);
+      prescribedSets += prescribed;
+      const sets = block.sets || [];
+      const completed = sets.filter(s=> s?.completed && !s?.failed && !s?.skipped);
+      if(completed.length) attempted.add(block.exerciseId);
+      setsCompleted += Math.min(completed.length, prescribed);
+      skippedSets += sets.filter(s=> s?.skipped).length;
+      failedSets += sets.filter(s=> s?.failed).length;
+      extraSets += Math.max(0, sets.length - prescribed);
+      const repTarget = prescriptionRepTarget(rx);
+      const loadTarget = rx.prescribedLoadKg != null && Number(rx.prescribedLoadKg) > 0 ? Number(rx.prescribedLoadKg) : null;
+      const assistTarget = rx.prescribedAssistKg != null ? Number(rx.prescribedAssistKg) : null;
+      for(let i = 0; i < prescribed; i++){
+        const set = sets[i];
+        if(!set?.completed || set.failed || set.skipped) continue;
+        const reps = Number(String(set.reps).match(/\d+/)?.[0] || set.reps) || 0;
+        const weightKg = Number(set.weightKg) || 0;
+        const assistedKg = Number(set.assistedKg) || 0;
+        const repsOk = repTarget == null || reps >= repTarget;
+        const loadOk = loadTarget == null || weightKg >= loadTarget;
+        const assistOk = assistTarget == null || assistedKg <= assistTarget;
+        if(repsOk) repTargetsMet++;
+        if(loadOk) loadTargetsMet++;
+        if(repsOk && loadOk && assistOk) completeTargets++;
+      }
+    }
+    if(sessionHasSnapshot && session?.id) workouts.add(session.id);
+  }
+  const pct = prescribedSets ? Math.round(completeTargets / prescribedSets * 100) : null;
+  return {
+    source: 'observed',
+    workouts: workouts.size,
+    exercises: exercises.size,
+    attempted: attempted.size,
+    prescribedSets,
+    setsCompleted,
+    repTargetsMet,
+    loadTargetsMet,
+    completeTargets,
+    skippedSets,
+    failedSets,
+    extraSets,
+    followThroughPct: pct,
+    note: prescribedSets ? 'Scored from stored pre-workout prescriptions — never reconstructed.' : 'No stored prescriptions yet — legacy sessions are excluded, never fabricated.',
+  };
+}

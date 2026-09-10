@@ -13,7 +13,7 @@
 //   - nothing here ranks the user against other people — there is no "them".
 
 import { EXERCISE_BY_ID } from './data.js';
-import { weeklyVolume, recommendationFollowThrough } from './analytics.js';
+import { weeklyVolume, recommendationFollowThrough, observedPrescriptionFollowThrough } from './analytics.js';
 import { strengthTrendWithConfidence } from './progression.js';
 import { programAdherence } from './programming.js';
 import { weekPhaseFor } from './mesocycle.js';
@@ -399,8 +399,17 @@ export function progressAssessment({ history = [], schedule = null, today = null
     .map(([exerciseId, exerciseExposures]) => progressTrend(exerciseId, exerciseExposures))
     .filter(Boolean)
     .sort((a, b) => b.exposures - a.exposures || a.exerciseId.localeCompare(b.exerciseId));
-  const targets = recommendationFollowThrough(comparable);
+  // Prospective outcomes first: stored pre-workout snapshots are the audit
+  // source. The current-engine replay is only a labelled fallback — it must
+  // never be mixed with observed adherence.
+  const observed = observedPrescriptionFollowThrough(comparable);
+  const replay = recommendationFollowThrough(comparable);
+  const useObserved = observed.prescribedSets >= PROGRESS_MIN_TARGET_CHECKS && observed.workouts >= 2;
+  const targets = useObserved
+    ? { ...observed, n: observed.prescribedSets, followedPct: observed.followThroughPct, source: 'observed' }
+    : { ...replay, source: 'replay' };
   const targetPct = Number.isFinite(targets.followedPct) ? targets.followedPct : null;
+  const targetNoun = useObserved ? 'stored prescriptions' : 'reconstructed prescriptions';
   const adherence = schedule && today ? programAdherence(schedule, history, { today }) : null;
   const adherenceSupport = adherence && adherence.due >= 3 && adherence.toDateRate != null;
   const phaseContext = phase?.kind === 'deload' || phase?.kind === 'recovery'
@@ -424,7 +433,7 @@ export function progressAssessment({ history = [], schedule = null, today = null
       primaryReason: reason,
       reasons: phaseContext ? [reason, phaseContext] : [reason],
       signals: [],
-      evidence: 'Low',
+      coverage: 'Low',
       sample,
       phase,
       phaseContext,
@@ -441,7 +450,7 @@ export function progressAssessment({ history = [], schedule = null, today = null
       primaryReason: reason,
       reasons: phaseContext ? [reason, phaseContext] : [reason],
       signals: [],
-      evidence: 'Low',
+      coverage: 'Low',
       sample,
       phase,
       phaseContext,
@@ -458,7 +467,7 @@ export function progressAssessment({ history = [], schedule = null, today = null
       primaryReason: reason,
       reasons: phaseContext ? [reason, phaseContext] : [reason],
       signals: [],
-      evidence: 'Low',
+      coverage: 'Low',
       sample,
       phase,
       phaseContext,
@@ -469,17 +478,23 @@ export function progressAssessment({ history = [], schedule = null, today = null
 
   const ups = trends.filter((trend) => trend.direction === 'up');
   const downs = trends.filter((trend) => trend.direction === 'down');
-  const evidence = sample.sessions >= 8 && sample.exercises >= 2 && sample.targetChecks >= 8 ? 'High' : 'Moderate';
+  const baseCoverage = sample.sessions >= 8 && sample.exercises >= 2 && sample.targetChecks >= 8 ? 'High' : 'Moderate';
+  // Reconstructed evidence is weaker than observed evidence: a replay asks
+  // what the current engine would have said, not what the user was shown.
+  const coverage = !useObserved && baseCoverage === 'High' ? 'Moderate' : !useObserved ? 'Low' : baseCoverage;
   const trendNames = (list) => list.map((trend) => trend.name).join(', ');
+  const targetClause = useObserved
+    ? `${targetPct}% of stored prescriptions were met`
+    : `${targetPct}% of reconstructed prescriptions were met in replay`;
   const reasons = [];
   if(ups.length && !downs.length && targetPct >= PROGRESS_TARGET_SUCCESS_PCT){
-    reasons.push(`Strength is rising on ${trendNames(ups)} and ${targetPct}% of recent prescriptions were met.`);
+    reasons.push(`Strength is rising on ${trendNames(ups)} and ${targetClause}.`);
   }else if(!ups.length && !downs.length){
-    reasons.push(`Repeated lifts are holding their recent range and ${targetPct}% of recent prescriptions were met.`);
+    reasons.push(`Repeated lifts are holding their recent range and ${targetClause}.`);
   }else{
     if(ups.length && downs.length) reasons.push(`Some lifts are rising (${trendNames(ups)}) while others are falling (${trendNames(downs)}).`);
     else if(downs.length) reasons.push(`Recent comparable lifts are below their earlier range (${trendNames(downs)}).`);
-    else reasons.push(`Strength is rising on ${trendNames(ups)}, but only ${targetPct}% of recent prescriptions were met.`);
+    else reasons.push(`Strength is rising on ${trendNames(ups)}, but only ${targetPct}% of ${targetNoun} were met.`);
     if(bests.length) reasons.push(`Recent bests: ${bests.map((best) => best.name).join(', ')}.`);
   }
   if(bests.length && reasons.length < 2 && (!ups.length || downs.length)) reasons.push(`Recent bests: ${bests.map((best) => best.name).join(', ')}.`);
@@ -502,8 +517,10 @@ export function progressAssessment({ history = [], schedule = null, today = null
     {
       id: 'prescription-targets',
       kind: 'targets',
-      label: `Targets completed ${targetPct}%`,
-      detail: `${targetPct}% of recent prescriptions met (${targets.n} checks).`,
+      label: useObserved ? `Actual prescription follow-through ${targetPct}%` : `Retrospective engine replay ${targetPct}%`,
+      detail: useObserved
+        ? `${targetPct}% of stored prescriptions met (${targets.n} checks across ${observed.workouts} workouts).`
+        : `${targetPct}% of reconstructed prescriptions met (${targets.n} checks). Replay only — not the prescription shown at the time.`,
       basis: targets,
     },
     ...bests.map((best) => ({
@@ -542,7 +559,7 @@ export function progressAssessment({ history = [], schedule = null, today = null
     primaryReason,
     reasons,
     signals,
-    evidence,
+    coverage,
     sample,
     phase,
     phaseContext,

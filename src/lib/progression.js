@@ -639,3 +639,59 @@ function orderedHistory(history){
       || a.originalIndex - b.originalIndex)
     .map(item=> item.session);
 }
+
+// ── Prospective prescription snapshots ───────────────────────────────
+// What Arise actually showed before a workout, frozen at prescription time.
+// Stored on the saved history block (`block.prescription`) so it travels with
+// the session through IDB, export/import and normalisation — no separate
+// ledger, no schema migration, no fabricated snapshots for legacy sessions.
+// Consumers must read the stored snapshot; they must never regenerate it
+// from later engine state. The snapshot is frozen in memory; callers must
+// preserve an existing snapshot when re-saving rather than rebuilding it.
+export const PRESCRIPTION_SNAPSHOT_VERSION = 1;
+
+function plannedSetCount(block){
+  if(block == null) return 0;
+  if(!Array.isArray(block.sets)){
+    const count = Math.round(Number(block.sets));
+    return Number.isFinite(count) && count > 0 ? count : 0;
+  }
+  return block.sets.length;
+}
+
+export function buildPrescriptionSnapshot({ session = null, block = null, blockIndex = null, recommendation = null, prescribedAt = null, policy = 'standard', config = null } = {}){
+  if(!session?.id || !block?.exerciseId) return null;
+  const prescribedSets = plannedSetCount(block);
+  if(!(prescribedSets > 0)) return null;
+  const prescribedAtISO = prescribedAt || session.startedAt || null;
+  if(!prescribedAtISO) return null;
+  const priors = resolveArisePriors(config);
+  return Object.freeze({
+    schemaVersion: PRESCRIPTION_SNAPSHOT_VERSION,
+    source: recommendation ? 'engine' : 'schedule',
+    sessionId: session.id,
+    exerciseId: block.exerciseId,
+    blockIndex: Number.isInteger(blockIndex) ? blockIndex : null,
+    prescribedSets,
+    prescribedReps: recommendation?.reps ?? null,
+    prescribedRepRange: block?.reps ?? null,
+    prescribedLoadKg: recommendation?.load ?? null,
+    prescribedAssistKg: recommendation?.assistKg ?? null,
+    rpeTarget: recommendation?.rpe ?? null,
+    rirTarget: recommendation?.rir ?? null,
+    prescribedAt: prescribedAtISO,
+    priorCutoffDateISO: session.dateISO || null,
+    engine: recommendation ? {
+      name: 'arise-engine',
+      priorsVersion: recommendation.priorsVersion ?? priors.version,
+      policy: recommendation.policy || policy || 'standard',
+      policyVersion: recommendation.policyVersion ?? null,
+      modelVersion: recommendation.modelVersion ?? priors.progressionModel?.version ?? null,
+      strategy: recommendation.strategy || null,
+      guard: recommendation.guard || null,
+    } : null,
+    reason: recommendation?.reason || 'Scheduled programme prescription.',
+    confidence: recommendation?.confidence ?? null,
+    uncertainty: recommendation?.uncertainty ?? null,
+  });
+}

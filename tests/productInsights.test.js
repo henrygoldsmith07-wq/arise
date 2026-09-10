@@ -131,17 +131,17 @@ describe('progress assessment', () => {
     lift('g', '2026-08-28', 'bench-press-dumbbell', 22.5, 9),
   ];
 
-  it('calls rising loaded performance likely improving without using volume as proof', () => {
+  it('labels reconstructed targets as replay and reduces coverage', () => {
     const assessment = progressAssessment({ history: improvingHistory, today: '2026-08-29' });
     assert.equal(assessment.verdict, 'likely-improving');
     assert.equal(assessment.title, 'Likely improving');
     assert.match(assessment.primaryReason, /Dumbbell Bench Press/);
-    assert.match(assessment.primaryReason, /100% of recent prescriptions/);
+    assert.match(assessment.primaryReason, /100% of reconstructed prescriptions were met in replay/);
     assert.ok(assessment.signals.some((signal) => signal.label === 'Strength trend ↑'));
-    assert.ok(assessment.signals.some((signal) => signal.label === 'Targets completed 100%'));
+    assert.ok(assessment.signals.some((signal) => signal.label === 'Retrospective engine replay 100%'));
     const volume = assessment.signals.find((signal) => signal.kind === 'volume');
     assert.equal(volume?.contextOnly, true);
-    assert.equal(assessment.evidence, 'Moderate');
+    assert.equal(assessment.coverage, 'Low');
     assert.deepEqual(assessment.sample, { sessions: 7, exposures: 7, exercises: 1, targetChecks: 6 });
   });
 
@@ -207,7 +207,7 @@ describe('progress assessment', () => {
     assert.equal(assessment.title, 'Not enough evidence yet');
     assert.match(assessment.primaryReason, /2 comparable sessions logged/);
     assert.deepEqual(assessment.signals, []);
-    assert.equal(assessment.evidence, 'Low');
+    assert.equal(assessment.coverage, 'Low');
   });
 
   it('assesses bodyweight-only progress from reps rather than lifted volume', () => {
