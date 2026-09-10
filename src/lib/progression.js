@@ -659,15 +659,31 @@ function plannedSetCount(block){
   return block.sets.length;
 }
 
-export function buildPrescriptionSnapshot({ session = null, block = null, blockIndex = null, recommendation = null, prescribedAt = null, policy = 'standard', config = null } = {}){
+// `previous` (a superseded snapshot) and `changeReason` are the ONLY way a
+// snapshot legitimately changes: an exercise swap, a policy/kit/programme
+// change or any other reason Arise showed a different target than the one it
+// first froze. Passing `previous` never mutates it — it records provenance
+// (supersedesPrescriptionId, previousExerciseId, revision) so the old snapshot
+// stays auditable. A plain rebuild without `previous` is what an unfaithful
+// reconstruction would look like; callers must use attachPrescription/carryPrescription instead of rebuilding over an existing snapshot.
+export function buildPrescriptionSnapshot({ session = null, block = null, blockIndex = null, recommendation = null, prescribedAt = null, policy = 'standard', config = null, previous = null, changeReason = null } = {}){
   if(!session?.id || !block?.exerciseId) return null;
   const prescribedSets = plannedSetCount(block);
   if(!(prescribedSets > 0)) return null;
   const prescribedAtISO = prescribedAt || session.startedAt || null;
   if(!prescribedAtISO) return null;
   const priors = resolveArisePriors(config);
+  const hasPrevious = !!(previous && previous.prescriptionId);
+  const revision = hasPrevious && Number.isFinite(previous.revision) ? previous.revision + 1 : (hasPrevious ? 2 : 1);
+  const blockIndexPart = Number.isInteger(blockIndex) ? blockIndex : 'x';
+  const prescriptionId = `${session.id}:${blockIndexPart}:${block.exerciseId}:r${revision}`;
   return Object.freeze({
     schemaVersion: PRESCRIPTION_SNAPSHOT_VERSION,
+    prescriptionId,
+    revision,
+    supersedesPrescriptionId: hasPrevious ? previous.prescriptionId : null,
+    previousExerciseId: hasPrevious ? (previous.exerciseId ?? null) : null,
+    changeReason: changeReason || (hasPrevious ? 'prescription-updated' : 'initial-prescription'),
     source: recommendation ? 'engine' : 'schedule',
     sessionId: session.id,
     exerciseId: block.exerciseId,
@@ -694,4 +710,53 @@ export function buildPrescriptionSnapshot({ session = null, block = null, blockI
     confidence: recommendation?.confidence ?? null,
     uncertainty: recommendation?.uncertainty ?? null,
   });
+}
+
+function freezePrescription(prescription){
+  if(prescription && typeof prescription === 'object' && !Object.isFrozen(prescription)) Object.freeze(prescription);
+  return prescription;
+}
+
+function copyPrescriptionHistory(history){
+  if(!Array.isArray(history) || !history.length) return null;
+  return history.map(freezePrescription).slice();
+}
+
+// The audit entry point that LEGITIMATELY replaces a shown prescription (an
+// exercise swap, or a policy/kit/programme change). It never edits the previous
+// snapshot: it pushes it into `prescriptionHistory` and installs the new one.
+// If the incoming snapshot is the one already on the block, it is a no-op, so
+// reruns of a display effect cannot duplicate or mutate history.
+export function attachPrescription(block, snapshot){
+  if(!block || typeof block !== 'object' || !snapshot) return block;
+  const prior = block.prescription;
+  if(prior && prior.prescriptionId === snapshot.prescriptionId) return block;
+  const history = prior ? [...(copyPrescriptionHistory(block.prescriptionHistory) || []), freezePrescription(prior)] : copyPrescriptionHistory(block.prescriptionHistory);
+  const next = { ...block, prescription: freezePrescription(snapshot) };
+  if(history) next.prescriptionHistory = history; else delete next.prescriptionHistory;
+  return next;
+}
+
+// Draft/crash-recovery restore path: an existing prescription (a plain object
+// once it has been through IDB) is re-frozen so the in-memory immutability
+// promise survives a reload. This NEVER rebuilds anything from the engine.
+export function freezePrescriptionBlock(block){
+  if(!block || typeof block !== 'object') return block;
+  const out = { ...block };
+  if(out.prescription) out.prescription = freezePrescription(out.prescription); else delete out.prescription;
+  const history = copyPrescriptionHistory(out.prescriptionHistory);
+  if(history) out.prescriptionHistory = history; else delete out.prescriptionHistory;
+  return out;
+}
+
+// Final-save path: copy whatever prescription is already on the block, exactly.
+// Returns the fields to spread into the saved block — never calls the engine,
+// so a save can never silently restamp historical truth.
+export function carryPrescription(block){
+  if(!block || typeof block !== 'object') return {};
+  const out = {};
+  if(block.prescription) out.prescription = freezePrescription(block.prescription);
+  const history = copyPrescriptionHistory(block.prescriptionHistory);
+  if(history) out.prescriptionHistory = history;
+  return out;
 }

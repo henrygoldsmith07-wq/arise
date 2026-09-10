@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { lastExerciseSets } from '../lib/store.js';
-import { recommendNext, buildPrescriptionSnapshot } from '../lib/progression.js';
+import { recommendNext, buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock } from '../lib/progression.js';
 import { recommendNextWithPolicy, POLICY_ORDER } from '../lib/progressionPolicies.js';
 import { runComparativeStudy, doubleProgressionRec } from '../lib/study.js';
 import { assignmentFor } from '../lib/studyEnrollment.js';
@@ -62,7 +62,7 @@ function normaliseBlock(block, history, draftBlock){
   const sets = Array.isArray(source.sets)
     ? source.sets.map(s=> ({ ...newSet(source.reps, unilateral), ...s, completed: !!s.completed }))
     : Array.from({ length: count }, (_, i)=> newSet(source.reps, unilateral, previous?.sets?.[i] || previous?.sets?.[previous.sets.length-1]));
-  return {
+  return freezePrescriptionBlock({
     exerciseId: source.exerciseId,
     reps: source.reps || '',
     sets,
@@ -73,7 +73,9 @@ function normaliseBlock(block, history, draftBlock){
     why: source.why || '',
     substitutionFrom: source.substitutionFrom || '',
     substitutionReason: source.substitutionReason || '',
-  };
+    prescription: source.prescription || null,
+    prescriptionHistory: Array.isArray(source.prescriptionHistory) ? source.prescriptionHistory : null,
+  });
 }
 
 function suggestedTarget(rec, block){
@@ -408,6 +410,36 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     return { recs, prevs, assigned };
   },[blocks,history,session.dateISO,plateConfig,studyEnrollment,appPolicy,appExplanationMode]);
 
+  // Freeze the prescription the moment it is first SHOWN — not at save time.
+  // This is the audit source of truth: what the runner actually displayed for
+  // that exercise before any set was logged. It is attached to the block and
+  // rides through the draft into the saved history. It is created at most once
+  // per block (attachPrescription is a no-op when the block already carries a
+  // prescriptionId), so set edits, rest timers, Gym Mode, refresh and crash
+  // recovery can never re-stamp it, and a later engine/policy change cannot
+  // silently rewrite what was shown. Only an explicit supersede (a swap) does.
+  useEffect(()=>{
+    setBlocks(prev=>{
+      let changed = false;
+      const next = prev.map((b, index)=>{
+        if(b.prescription) return b;
+        const planned = session.blocks?.[index] || {};
+        const snapshot = buildPrescriptionSnapshot({
+          session,
+          block: { ...planned, exerciseId: b.exerciseId, sets: b.sets },
+          blockIndex: index,
+          recommendation: blockMeta.recs.get(b.exerciseId) || null,
+          prescribedAt: startedAtRef.current,
+          policy: appPolicy,
+        });
+        if(!snapshot) return b;
+        changed = true;
+        return attachPrescription(b, snapshot);
+      });
+      return changed ? next : prev;
+    });
+  },[blocks, blockMeta, session, appPolicy]);
+
   // Safety: aftercare after a painful exposure and technique/ROM cues read
   // from the last logged sets of each exercise. One memo for all blocks.
   // The max-effort check derives the target's proximity to failure from the
@@ -561,7 +593,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       if(i!==bi) return b;
       const prior=lastExerciseSets(history, option.id);
       const unilateral=!!option.unilateral;
-      return {
+      const swapped = {
         ...b,
         exerciseId: option.id,
         unilateral,
@@ -575,6 +607,23 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           return { ...newSet(b.reps, unilateral, old), completed:false };
         }),
       };
+      // A swap is an explicit change of prescription, so it is allowed to
+      // supersede — but never to overwrite. The new snapshot records the
+      // substituted exercise's shown target and carries provenance back to the
+      // one it replaces; attachPrescription keeps the old snapshot in history.
+      const planned = session.blocks?.[bi] || {};
+      const rec = getRecommendation({ exerciseId: option.id, reps: swapped.reps || planned.reps }, history, session.dateISO, plateConfig, study, assignmentFor(studyEnrollment, option.id), appPolicy, appExplanationMode);
+      const snapshot = buildPrescriptionSnapshot({
+        session,
+        block: { ...planned, exerciseId: option.id, sets: swapped.sets },
+        blockIndex: bi,
+        recommendation: rec || null,
+        prescribedAt: startedAtRef.current,
+        policy: appPolicy,
+        previous: b.prescription || null,
+        changeReason: 'exercise-substituted',
+      });
+      return snapshot ? attachPrescription(swapped, snapshot) : swapped;
     }));
     setSwapOpen(null);
   };
@@ -677,35 +726,25 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       exerciseOrder,
       painDiscomfort,
       blocks: blocks.map((b, index)=> {
-        // Freeze what was actually prescribed before this workout: the stored
-        // snapshot is the audit source of truth, so an existing snapshot is
-        // always preserved — never rebuilt from later engine state.
-        const planned = session.blocks?.[index] || {};
-        const prescription = b.prescription || buildPrescriptionSnapshot({
-          session,
-          block: { ...planned, exerciseId: b.exerciseId },
-          blockIndex: index,
-          recommendation: blockMeta.recs.get(b.exerciseId) || null,
-          prescribedAt: startedAt,
-          policy: appPolicy,
-        });
+        // Copy the snapshot frozen when this block's target was shown. The save
+        // never re-runs the engine to restamp historical truth.
         return {
           exerciseId: b.exerciseId,
           exerciseOrder: index,
           ...(b.substitutionFrom ? { substitutionFrom: b.substitutionFrom, substitutionReason: b.substitutionReason } : {}),
-          ...(prescription ? { prescription } : {}),
+          ...carryPrescription(b),
           equipment: EXERCISE_BY_ID[b.exerciseId]?.equipment || null,
-        sets: b.sets.map(s=>{
-          const completed = !!s.completed;
-          const skipped = !completed && String(s.reps).trim() !== '';
-          const failed = !!s.failed;
-          const out={ reps:String(s.reps).trim(), weightKg:String(s.weightKg).trim(), rpe:String(s.rpe).trim(), completed, skipped, failed };
-          if(painDiscomfort) out.pain = true;
-          if(b.unilateral && s.side) out.side=s.side;
-          if(s.rom && String(s.rom).trim()) out.rom=String(s.rom).trim();
-          if(s.assistedKg && String(s.assistedKg).trim()) out.assistedKg=String(s.assistedKg).trim();
-          if(s.tempo && String(s.tempo).trim()) out.tempo=String(s.tempo).trim();
-          return out;
+          sets: b.sets.map(s=>{
+            const completed = !!s.completed;
+            const skipped = !completed && String(s.reps).trim() !== '';
+            const failed = !!s.failed;
+            const out={ reps:String(s.reps).trim(), weightKg:String(s.weightKg).trim(), rpe:String(s.rpe).trim(), completed, skipped, failed };
+            if(painDiscomfort) out.pain = true;
+            if(b.unilateral && s.side) out.side=s.side;
+            if(s.rom && String(s.rom).trim()) out.rom=String(s.rom).trim();
+            if(s.assistedKg && String(s.assistedKg).trim()) out.assistedKg=String(s.assistedKg).trim();
+            if(s.tempo && String(s.tempo).trim()) out.tempo=String(s.tempo).trim();
+            return out;
           }),
         };
       }),

@@ -5,6 +5,7 @@
 
 import { EXERCISE_BY_ID } from './data.js';
 import { lastExerciseSets } from './store.js';
+import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock } from './progression.js';
 
 // Kept in sync with SessionRunner's NOTE_PROMPTS (same ids, same labels) so
 // guided and standard sessions produce comparable note tags.
@@ -42,7 +43,11 @@ export function newGuidedSet(reps, unilateral, previous = null){
 // Flatten a scheduled session into guided blocks. Draft blocks (crash
 // recovery) win over fresh initialisation; otherwise sets are prefilled from
 // the most recent history for the same exercise, matching SessionRunner.
-export function initGuidedBlocks(session, history = [], draftBlocks = null){
+// The prescription the guided runner walks through is the schedule row itself,
+// so it is frozen onto the block at init — the same immutable snapshot shown to
+// the user before the first set, never rebuilt at save. A restored draft keeps
+// its existing snapshot untouched.
+export function initGuidedBlocks(session, history = [], draftBlocks = null, startedAtISO = null){
   return (session?.blocks || []).map((block, i)=>{
     const source = draftBlocks?.[i] || block;
     const unilateral = !!source.unilateral || !!EXERCISE_BY_ID[source.exerciseId]?.unilateral;
@@ -51,7 +56,7 @@ export function initGuidedBlocks(session, history = [], draftBlocks = null){
     const sets = Array.isArray(source.sets)
       ? source.sets.map(s=> ({ ...newGuidedSet(source.reps, unilateral), ...s, completed: !!s.completed }))
       : Array.from({ length: count }, (_, j)=> newGuidedSet(source.reps, unilateral, previous?.sets?.[j] || previous?.sets?.[previous.sets.length-1]));
-    return {
+    let out = {
       exerciseId: source.exerciseId,
       reps: source.reps || '',
       sets,
@@ -61,7 +66,21 @@ export function initGuidedBlocks(session, history = [], draftBlocks = null){
       why: source.why || '',
       substitutionFrom: source.substitutionFrom || '',
       substitutionReason: source.substitutionReason || '',
+      prescription: source.prescription || null,
+      prescriptionHistory: Array.isArray(source.prescriptionHistory) ? source.prescriptionHistory : null,
     };
+    out = freezePrescriptionBlock(out);
+    if(!out.prescription){
+      const snapshot = buildPrescriptionSnapshot({
+        session,
+        block: { ...block, exerciseId: source.exerciseId, sets: out.sets },
+        blockIndex: i,
+        recommendation: null,
+        prescribedAt: startedAtISO || session?.startedAt || null,
+      });
+      if(snapshot) out = attachPrescription(out, snapshot);
+    }
+    return out;
   });
 }
 
@@ -144,6 +163,7 @@ export function buildGuidedPayload({ session, blocks, note = '', noteTags = [], 
       exerciseId: b.exerciseId,
       exerciseOrder: index,
       ...(b.substitutionFrom ? { substitutionFrom: b.substitutionFrom, substitutionReason: b.substitutionReason } : {}),
+      ...carryPrescription(b),
       equipment: EXERCISE_BY_ID[b.exerciseId]?.equipment || null,
       sets: b.sets.map(s=>{
         const completed = !!s.completed;

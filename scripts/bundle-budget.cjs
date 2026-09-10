@@ -17,6 +17,13 @@
 // product content in the data module, not incidental dependency/code growth;
 // boot and largest-lazy budgets stay unchanged.
 //
+// 325 → 330 kB with the prospective-prescription audit trail: frozen snapshot
+// identity (prescriptionId/revision) and supersede provenance
+// (supersedesPrescriptionId/previousExerciseId/changeReason) plus the early
+// observed follow-through signal. This is the requested evidence-chain feature
+// in the core progression/product modules (boot chunk), not dependency growth;
+// boot (184.3) and largest-lazy (43.0) budgets stay unchanged.
+//
 // The budgets are regression bounds with headroom, not aspirations: a change
 // that crosses one must either undo the bloat or consciously re-baseline here
 // and say why in the PR.
@@ -33,7 +40,7 @@ if(!fs.existsSync(dist)){
 
 const BOOT_BUDGET_KB = 190;
 const CHUNK_BUDGET_KB = 45;
-const TOTAL_BUDGET_KB = 325;
+const TOTAL_BUDGET_KB = 330;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

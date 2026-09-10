@@ -5,9 +5,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildPrescriptionSnapshot, recommendNext } from '../src/lib/progression.js';
+import { buildPrescriptionSnapshot, recommendNext, attachPrescription, carryPrescription, freezePrescriptionBlock } from '../src/lib/progression.js';
 import { observedPrescriptionFollowThrough } from '../src/lib/analytics.js';
 import { progressAssessment } from '../src/lib/product.js';
+import { initGuidedBlocks, buildGuidedPayload } from '../src/lib/guidedMode.js';
 import { normaliseHistoryEntry } from '../src/lib/store.js';
 import { parseImportFile } from '../src/lib/export.js';
 
@@ -171,6 +172,7 @@ describe('assessment source separation', ()=>{
     assert.equal(assessment.verdict, 'likely-improving');
     assert.ok(assessment.signals.some((signal) => signal.label.startsWith('Actual prescription follow-through')));
     assert.ok(!assessment.signals.some((signal) => signal.label.startsWith('Retrospective engine replay')));
+    assert.ok(!assessment.signals.some((signal) => signal.id === 'prescription-early'), 'established observed must not also show an early signal');
     assert.ok(!assessment.reasons.some((reason) => /reconstructed|replay/i.test(reason)));
   });
 
@@ -200,5 +202,187 @@ describe('prescription export compatibility', ()=>{
     const legacyEnvelope = JSON.stringify({ app: 'arise', data: { history: [{ id: 'old', dateISO: '2026-01-01', blocks: [{ exerciseId: 'push-up', sets: [{ reps: '10', weightKg: '0' }] }] }] } });
     const legacy = parseImportFile(legacyEnvelope);
     assert.ok(!('prescription' in legacy.history[0].blocks[0]));
+  });
+});
+
+describe('prescription identity and provenance', ()=>{
+  const ts = '2026-08-10T09:00:00.000Z';
+  it('stamps a deterministic id, revision and initial reason on first freeze', ()=>{
+    const rx = snapshot('s1', '2026-08-10', 'bench-press-dumbbell', 3, 9, 22.5, ts);
+    assert.equal(rx.revision, 1);
+    assert.equal(rx.prescriptionId, 's1:0:bench-press-dumbbell:r1');
+    assert.equal(rx.changeReason, 'initial-prescription');
+    assert.equal(rx.supersedesPrescriptionId, null);
+    assert.equal(rx.previousExerciseId, null);
+    assert.equal(buildPrescriptionSnapshot({ session: { id: 's1', dateISO: '2026-08-10' }, block: { exerciseId: 'bench-press-dumbbell', sets: 3, reps: '8–9' }, blockIndex: 0, recommendation: { reps: 9, load: 22.5, reason: 'x', priorsVersion: 1 }, prescribedAt: ts }).prescriptionId, rx.prescriptionId);
+  });
+});
+
+describe('a shown prescription is immutable — policy changes cannot mutate it', ()=>{
+  const ts = '2026-08-10T09:00:00.000Z';
+  it('refuses to overwrite an existing snapshot even if a rebuild would differ', ()=>{
+    const rx = snapshot('s1', '2026-08-10', 'bench-press-dumbbell', 2, 8, 20, ts);
+    const block = { exerciseId: 'bench-press-dumbbell', sets: [set(8, 20)], prescription: rx };
+    const aggressive = buildPrescriptionSnapshot({
+      session: { id: 's1', dateISO: '2026-08-10' },
+      block: { exerciseId: 'bench-press-dumbbell', sets: 2, reps: '8–12' },
+      blockIndex: 0,
+      recommendation: { reps: 15, load: 99, reason: 'aggressive', priorsVersion: 9, policy: 'aggressive' },
+      prescribedAt: '2026-08-10T09:30:00.000Z',
+      policy: 'aggressive',
+    });
+    assert.equal(aggressive.prescriptionId, rx.prescriptionId);
+    assert.notEqual(aggressive.prescribedLoadKg, rx.prescribedLoadKg);
+    const after = attachPrescription(block, aggressive);
+    assert.equal(after.prescription, rx);
+    assert.equal(after.prescription.prescribedLoadKg, 20);
+    assert.ok(!('prescriptionHistory' in after));
+    assert.throws(()=>{ after.prescription.prescribedReps = 999; }, TypeError);
+  });
+});
+
+describe('draft, refresh and crash recovery preserve the snapshot', ()=>{
+  const ts = '2026-08-10T09:00:00.000Z';
+  it('re-freezes a prescription returning from storage and rebuilds nothing', ()=>{
+    const rx = snapshot('s1', '2026-08-10', 'bench-press-dumbbell', 2, 8, 20, ts);
+    const fromStorage = JSON.parse(JSON.stringify({ ...rx }));
+    assert.ok(!Object.isFrozen(fromStorage), 'storage round-trip yields a plain object');
+    const restored = freezePrescriptionBlock({ exerciseId: 'bench-press-dumbbell', sets: [set(8, 20)], prescription: fromStorage, prescriptionHistory: [fromStorage] });
+    assert.ok(Object.isFrozen(restored.prescription));
+    assert.deepEqual(restored.prescription, rx);
+    assert.ok(restored.prescriptionHistory.every((item)=> Object.isFrozen(item)));
+  });
+  it('drops a null/absent prescription so legacy drafts gain none', ()=>{
+    const restored = freezePrescriptionBlock({ exerciseId: 'push-up', sets: [set(10, 0)] });
+    assert.ok(!('prescription' in restored));
+    assert.ok(!('prescriptionHistory' in restored));
+  });
+});
+
+describe('final save copies the exact snapshot and never re-runs the engine', ()=>{
+  const ts = '2026-08-10T09:00:00.000Z';
+  it('carryPrescription returns the identical frozen object (plus history)', ()=>{
+    const prev = snapshot('s1', '2026-08-10', 'bench-press-dumbbell', 2, 8, 20, ts);
+    const after = buildPrescriptionSnapshot({
+      session: { id: 's1', dateISO: '2026-08-10' },
+      block: { exerciseId: 'push-up', sets: 2, reps: '8–12' },
+      blockIndex: 0,
+      recommendation: null,
+      prescribedAt: '2026-08-10T09:05:00.000Z',
+      previous: prev,
+      changeReason: 'exercise-substituted',
+    });
+    const attached = attachPrescription({ exerciseId: 'push-up', sets: [set(8, 0)], prescription: prev }, after);
+    const carried = carryPrescription(attached);
+    assert.equal(carried.prescription, attached.prescription);
+    assert.deepEqual(carried.prescription, after);
+    assert.ok(Object.isFrozen(carried.prescription));
+    assert.equal(carried.prescriptionHistory.length, 1);
+    assert.equal(carried.prescriptionHistory[0], prev);
+    assert.equal(carried.prescription.prescribedLoadKg, null);
+    assert.ok(!('prescription' in carryPrescription({ exerciseId: 'x', sets: [] })));
+  });
+  it('a stored priors version is not silently restamped by a newer engine', ()=>{
+    const rx = snapshot('s1', '2026-08-10', 'bench-press-dumbbell', 2, 8, 20, ts);
+    assert.equal(rx.engine.priorsVersion, 1);
+    recommendNext({ exerciseId: 'bench-press-dumbbell', history: observedHistory(), targetReps: '8–12' });
+    const carried = carryPrescription({ exerciseId: 'bench-press-dumbbell', prescription: rx });
+    assert.equal(carried.prescription.engine.priorsVersion, 1);
+  });
+});
+
+describe('exercise swaps create explicit new provenance', ()=>{
+  const ts = '2026-08-10T09:00:00.000Z';
+  it('supersede records previous exercise + id and preserves the old snapshot', ()=>{
+    const prev = snapshot('s1', '2026-08-10', 'bench-press-dumbbell', 2, 8, 20, ts);
+    const after = buildPrescriptionSnapshot({
+      session: { id: 's1', dateISO: '2026-08-10' },
+      block: { exerciseId: 'push-up', sets: 3, reps: '8–12' },
+      blockIndex: 0,
+      recommendation: null,
+      prescribedAt: '2026-08-10T09:05:00.000Z',
+      previous: prev,
+      changeReason: 'exercise-substituted',
+    });
+    assert.equal(after.previousExerciseId, 'bench-press-dumbbell');
+    assert.equal(after.supersedesPrescriptionId, prev.prescriptionId);
+    assert.equal(after.revision, 2);
+    assert.equal(after.changeReason, 'exercise-substituted');
+    assert.notEqual(after.prescriptionId, prev.prescriptionId);
+    const attached = attachPrescription({ exerciseId: 'push-up', sets: [set(8, 0)], prescription: prev }, after);
+    assert.equal(attached.prescription, after);
+    assert.deepEqual(attached.prescriptionHistory, [prev]);
+    assert.ok(Object.isFrozen(prev));
+    assert.equal(prev.prescriptionId, 's1:0:bench-press-dumbbell:r1');
+  });
+});
+
+describe('guided mode freezes the schedule prescription at init', ()=>{
+  const started = '2026-08-10T09:00:00.000Z';
+  const session = { id: 'g1', dateISO: '2026-08-10', blocks: [{ exerciseId: 'push-up', sets: 3, reps: '8–12' }] };
+  it('attaches an immutable schedule snapshot before any set is logged', ()=>{
+    const blocks = initGuidedBlocks(session, [], null, started);
+    assert.ok(blocks[0].prescription);
+    assert.equal(blocks[0].prescription.source, 'schedule');
+    assert.equal(blocks[0].prescription.prescribedSets, 3);
+    assert.equal(blocks[0].prescription.prescriptionId, 'g1:0:push-up:r1');
+    assert.ok(Object.isFrozen(blocks[0].prescription));
+  });
+  it('a restored draft keeps the original snapshot (no re-timestamp)', ()=>{
+    const first = initGuidedBlocks(session, [], null, started);
+    const restored = initGuidedBlocks(session, [], first, '2026-08-10T09:40:00.000Z');
+    assert.equal(restored[0].prescription.prescriptionId, first[0].prescription.prescriptionId);
+    assert.equal(restored[0].prescription.prescribedAt, started);
+  });
+  it('the save payload carries the frozen schedule snapshot unchanged', ()=>{
+    const blocks = initGuidedBlocks(session, [], null, started);
+    const payload = buildGuidedPayload({ session, blocks, startedAtISO: started });
+    assert.deepEqual(payload.blocks[0].prescription, blocks[0].prescription);
+    assert.equal(payload.blocks[0].prescription.source, 'schedule');
+  });
+});
+
+describe('early observed follow-through never decides the verdict', ()=>{
+  const rows = [
+    { id: 'e0', dateISO: '2026-08-10', reps: 8, load: 20 },
+    { id: 'e1', dateISO: '2026-08-13', reps: 9, load: 20 },
+    { id: 'e2', dateISO: '2026-08-16', reps: 10, load: 20 },
+    { id: 'e3', dateISO: '2026-08-19', reps: 11, load: 20 },
+    { id: 'e4', dateISO: '2026-08-22', reps: 12, load: 20 },
+    { id: 'e5', dateISO: '2026-08-25', reps: 13, load: 20 },
+  ];
+  it('surfaces 1–3 observed workouts as a separate non-deciding signal while replay decides', ()=>{
+    const rxIds = new Set(['e0', 'e1']);
+    const history = rows.map((row)=> {
+      const block = { exerciseId: 'bench-press-dumbbell', sets: [set(row.reps, row.load), set(row.reps, row.load)] };
+      if(rxIds.has(row.id)) block.prescription = snapshot(row.id, row.dateISO, 'bench-press-dumbbell', 2, row.reps, row.load, `${row.dateISO}T09:00:00.000Z`);
+      return { id: row.id, dateISO: row.dateISO, blocks: [block] };
+    });
+    const assessment = progressAssessment({ history, today: '2026-08-26' });
+    assert.equal(assessment.targets.source, 'replay');
+    assert.ok(assessment.signals.some((signal)=> signal.label.startsWith('Retrospective engine replay')));
+    const early = assessment.signals.find((signal)=> signal.id === 'prescription-early');
+    assert.ok(early, 'early observed follow-through should surface');
+    assert.equal(early.deciding, false);
+    assert.match(early.label, /^Early observed follow-through/);
+    assert.equal(assessment.coverage, 'Low');
+  });
+  it('shows early observed follow-through even while the verdict is withheld', ()=>{
+    const history = rows.slice(0, 3).map((row)=> ({
+      id: row.id,
+      dateISO: row.dateISO,
+      blocks: [{
+        exerciseId: 'bench-press-dumbbell',
+        prescription: snapshot(row.id, row.dateISO, 'bench-press-dumbbell', 2, row.reps, row.load, `${row.dateISO}T09:00:00.000Z`),
+        sets: [set(row.reps, row.load), set(row.reps, row.load)],
+      }],
+    }));
+    const assessment = progressAssessment({ history, today: '2026-08-17' });
+    assert.equal(assessment.verdict, 'insufficient-evidence');
+    assert.equal(assessment.signals.length, 1);
+    assert.match(assessment.signals[0].label, /^Early observed follow-through/);
+    assert.equal(assessment.signals[0].deciding, false);
+    assert.ok(!assessment.signals.some((signal)=> signal.label.startsWith('Actual prescription')));
+    assert.ok(!assessment.signals.some((signal)=> signal.label.startsWith('Retrospective engine replay')));
   });
 });

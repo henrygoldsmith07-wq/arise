@@ -260,6 +260,77 @@ test.describe('Progress assessment', () => {
   });
 });
 
+test.describe('Prospective prescription capture', () => {
+  test.beforeEach(async ({ page }) => completeOnboarding(page));
+
+  test('freezes the shown prescription at display time, persists it to the draft, and copies it at save', async ({ page }) => {
+    await page.getByRole('button', { name: 'Train' }).click();
+    const recCard = page.locator('[aria-label="Recommended for you"]');
+    if (await recCard.getByRole('button', { name: 'Start programme' }).isVisible().catch(() => false)) {
+      await recCard.getByRole('button', { name: 'Start programme' }).click();
+    } else {
+      await page.getByRole('button', { name: 'Browse programmes' }).click();
+      const generateBtn = page.getByRole('button', { name: /Generate from profile/i });
+      if (await generateBtn.isVisible()) { await generateBtn.click(); await page.waitForTimeout(300); }
+      const scheduleBtn = page.getByRole('button', { name: /Schedule this program/i });
+      if (await scheduleBtn.isVisible()) await scheduleBtn.click();
+    }
+    await expect(page.locator('[aria-label="Current programme"]')).toBeVisible({ timeout: 5000 });
+    await page.getByRole('button', { name: 'Today', exact: true }).click();
+    const startBtn = page.getByRole('button', { name: /Start workout|Start this session/ }).first();
+    if (await startBtn.isVisible()) await startBtn.click();
+    const runner = page.getByRole('dialog', { name: /Session —/ });
+    await expect(runner).toBeVisible({ timeout: 8000 });
+
+    // Before any set is logged, the draft already carries the frozen snapshot —
+    // proof it was captured when the target was shown, not at save time.
+    await expect.poll(async () => page.evaluate(async () => {
+      const { loadStore } = await import('/src/lib/store.js');
+      return loadStore().activeWorkout?.blocks?.[0]?.prescription?.prescriptionId || null;
+    }), { timeout: 8000, message: 'display-time snapshot persisted to the draft' }).toBeTruthy();
+    const shown = await page.evaluate(async () => {
+      const { loadStore } = await import('/src/lib/store.js');
+      const rx = loadStore().activeWorkout?.blocks?.[0]?.prescription;
+      return rx ? { id: rx.prescriptionId, source: rx.source, revision: rx.revision, prescribedAt: rx.prescribedAt, hasEngine: !!rx.engine, frozen: Object.isFrozen(rx) } : null;
+    });
+    expect(shown.source).toBe('engine');
+    expect(shown.revision).toBe(1);
+    expect(shown.hasEngine).toBe(true);
+    expect(shown.prescribedAt).toBeTruthy();
+
+    // Log one real set, then fill the rest, then save.
+    const repInputs = runner.getByPlaceholder('8');
+    if (await repInputs.first().isVisible()) await repInputs.first().fill('8');
+    const loadInputs = runner.getByPlaceholder('kg');
+    if (await loadInputs.first().isVisible()) await loadInputs.first().fill('12');
+    const doneButtons = runner.getByRole('button', { name: 'Done' });
+    if (await doneButtons.count()) await doneButtons.first().click();
+
+    const applyAll = runner.getByRole('button', { name: 'Apply all' });
+    if (await applyAll.isVisible().catch(() => false)) await applyAll.click();
+    const remainingReps = runner.getByPlaceholder('8');
+    const remainingCount = await remainingReps.count();
+    for (let i = 0; i < remainingCount; i++) {
+      if (!(await remainingReps.nth(i).inputValue())) await remainingReps.nth(i).fill('8');
+    }
+    const saveBtn = runner.getByRole('button', { name: 'Save session' });
+    await expect(saveBtn).toBeEnabled({ timeout: 5000 });
+    await saveBtn.click();
+
+    const saved = await page.evaluate(async () => {
+      const { loadStore } = await import('/src/lib/store.js');
+      const store = loadStore();
+      const last = store.history[store.history.length - 1];
+      const rx = last?.blocks?.[0]?.prescription;
+      return { draftGone: !store.activeWorkout, startedAt: last?.startedAt, id: rx?.prescriptionId, revision: rx?.revision, prescribedAt: rx?.prescribedAt };
+    });
+    expect(saved.draftGone).toBe(true);
+    expect(saved.id).toBe(shown.id);
+    expect(saved.revision).toBe(1);
+    expect(saved.prescribedAt).toBe(saved.startedAt);
+  });
+});
+
 test.describe('Experience levels', () => {
   test.beforeEach(async ({ page }) => completeOnboarding(page));
 

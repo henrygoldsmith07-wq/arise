@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
-import { buildPrescriptionSnapshot } from '../lib/progression.js';
 import {
   NOTE_PROMPTS,
   fmtRest,
@@ -27,7 +26,8 @@ import ExerciseIllustration from './ExerciseIllustration.jsx';
 // with { session, blocks, ... }), so crash recovery and cross-tab protection
 // in App.jsx work identically for both modes.
 export default function GuidedRunner({ session, history = [], availableEquipment = [], draft = null, measurementConsent = false, soundCues = true, onToggleSoundCues = null, voiceCoach = false, onToggleVoiceCoach = null, voiceRate = 1, wakeLock = false, gymPrefs = null, onSetRestPreset = null, onDraftChange, onSave, onCancel }){
-  const [blocks,setBlocks]=useState(()=> initGuidedBlocks(session, history, draft?.blocks));
+  const startedAtRef=useRef(draft?.startedAt || new Date().toISOString());
+  const [blocks,setBlocks]=useState(()=> initGuidedBlocks(session, history, draft?.blocks, startedAtRef.current));
   const [note,setNote]=useState(()=> draft?.note || '');
   const [noteTags,setNoteTags]=useState(()=> draft?.noteTags || []);
   const [restEndsAt,setRestEndsAt]=useState(()=> draft?.restEndsAt || null);
@@ -44,7 +44,6 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   const draftRef=useRef(null);
   const rootRef=useRef(null);
   const closeRef=useRef(null);
-  const startedAtRef=useRef(draft?.startedAt || new Date().toISOString());
   void measurementConsent;
 
   // Escape exits only via the guarded cancel path — never silently destroys
@@ -254,19 +253,9 @@ export default function GuidedRunner({ session, history = [], availableEquipment
       startedAtISO: startedAtRef.current,
       availableEquipment,
     });
-    // Guided mode shows the scheduled prescription rather than an engine
-    // target: freeze that schedule row, without inventing engine fields.
-    payload.blocks = payload.blocks.map((block, index)=> {
-      const planned = session.blocks?.[index] || {};
-      const prescription = block.prescription || buildPrescriptionSnapshot({
-        session,
-        block: { ...planned, exerciseId: block.exerciseId },
-        blockIndex: index,
-        recommendation: null,
-        prescribedAt: startedAtRef.current,
-      });
-      return prescription ? { ...block, prescription } : block;
-    });
+    // buildGuidedPayload already carries the snapshot frozen at init (the
+    // schedule row the guided runner walked). Save copies it unchanged — it
+    // never rebuilds a prescription here.
     onSave(payload);
   };
 

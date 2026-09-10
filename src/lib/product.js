@@ -196,6 +196,10 @@ const PROGRESS_RECENT_LIMIT = 8;
 const PROGRESS_MIN_SESSIONS = 6;
 const PROGRESS_MIN_EXERCISE_EXPOSURES = 4;
 const PROGRESS_MIN_TARGET_CHECKS = 4;
+// Observed (stored-snapshot) follow-through only decides the verdict once it
+// spans at least this many distinct workouts; 1–3 observed workouts surface as
+// an "Early observed follow-through" signal that informs but never decides.
+const PROGRESS_MIN_OBSERVED_WORKOUTS = 4;
 const PROGRESS_TARGET_SUCCESS_PCT = 75;
 const PROGRESS_MEANINGFUL_LOAD_PCT = 0.02;
 const PROGRESS_MEANINGFUL_LOAD_KG = 0.5;
@@ -373,6 +377,22 @@ function progressVolumeContext(history, comparable){
   };
 }
 
+function earlyObservedSignal(observed){
+  if(!(observed && observed.prescribedSets >= 1 && observed.workouts >= 1)) return null;
+  const pct = Number.isFinite(observed.followThroughPct) ? observed.followThroughPct : null;
+  const workoutNoun = observed.workouts === 1 ? 'workout' : 'workouts';
+  const setNoun = observed.prescribedSets === 1 ? 'set' : 'sets';
+  return {
+    id: 'prescription-early',
+    kind: 'targets',
+    label: `Early observed follow-through ${pct ?? 0}%`,
+    detail: `Early: ${pct ?? 0}% of ${observed.prescribedSets} stored prescription ${setNoun} met across ${observed.workouts} observed ${workoutNoun} — real, shown prescriptions, but not yet enough to decide the verdict.`,
+    direction: pct != null && pct >= PROGRESS_TARGET_SUCCESS_PCT ? 'up' : 'neutral',
+    deciding: false,
+    basis: observed,
+  };
+}
+
 /**
  * Evidence-gated answer to “Am I improving?”.
  *
@@ -404,7 +424,14 @@ export function progressAssessment({ history = [], schedule = null, today = null
   // never be mixed with observed adherence.
   const observed = observedPrescriptionFollowThrough(comparable);
   const replay = recommendationFollowThrough(comparable);
-  const useObserved = observed.prescribedSets >= PROGRESS_MIN_TARGET_CHECKS && observed.workouts >= 2;
+  // Observed follow-through only DECIDES the verdict once it is established
+  // (enough target checks AND enough distinct observed workouts). A small run
+  // of 1–3 observed workouts is surfaced separately as an "Early observed
+  // follow-through" signal that never decides the verdict or raises coverage.
+  const observedEstablished = observed.prescribedSets >= PROGRESS_MIN_TARGET_CHECKS && observed.workouts >= PROGRESS_MIN_OBSERVED_WORKOUTS;
+  const useObserved = observedEstablished;
+  const earlyObserved = !observedEstablished && observed.prescribedSets >= 1 && observed.workouts >= 1;
+  const earlySignal = earlyObserved ? earlyObservedSignal(observed) : null;
   const targets = useObserved
     ? { ...observed, n: observed.prescribedSets, followedPct: observed.followThroughPct, source: 'observed' }
     : { ...replay, source: 'replay' };
@@ -423,6 +450,10 @@ export function progressAssessment({ history = [], schedule = null, today = null
     exercises: trends.length,
     targetChecks: targets.n || 0,
   };
+  // Even when the verdict is withheld, any real observed follow-through (1–3
+  // workouts) is surfaced as a non-deciding signal, kept separate from replay.
+  const earlySignals = earlySignal ? [earlySignal] : [];
+  const insufficientReasons = (reason) => [reason, ...(earlySignal ? [earlySignal.detail] : []), ...(phaseContext ? [phaseContext] : [])];
 
   if(sample.sessions < PROGRESS_MIN_SESSIONS){
     const reason = `Not enough evidence yet — ${sample.sessions} comparable session${sample.sessions === 1 ? '' : 's'} logged. Keep training and Arise will assess the trend when there is enough data.`;
@@ -431,12 +462,13 @@ export function progressAssessment({ history = [], schedule = null, today = null
       title: 'Not enough evidence yet',
       reason,
       primaryReason: reason,
-      reasons: phaseContext ? [reason, phaseContext] : [reason],
-      signals: [],
+      reasons: insufficientReasons(reason),
+      signals: earlySignals,
       coverage: 'Low',
       sample,
       phase,
       phaseContext,
+      targets,
       volume,
       basis: `Based on ${sample.sessions} recent sessions`,
     };
@@ -448,12 +480,13 @@ export function progressAssessment({ history = [], schedule = null, today = null
       title: 'Not enough evidence yet',
       reason,
       primaryReason: reason,
-      reasons: phaseContext ? [reason, phaseContext] : [reason],
-      signals: [],
+      reasons: insufficientReasons(reason),
+      signals: earlySignals,
       coverage: 'Low',
       sample,
       phase,
       phaseContext,
+      targets,
       volume,
       basis: `Based on ${sample.sessions} recent sessions`,
     };
@@ -465,12 +498,13 @@ export function progressAssessment({ history = [], schedule = null, today = null
       title: 'Not enough evidence yet',
       reason,
       primaryReason: reason,
-      reasons: phaseContext ? [reason, phaseContext] : [reason],
-      signals: [],
+      reasons: insufficientReasons(reason),
+      signals: earlySignals,
       coverage: 'Low',
       sample,
       phase,
       phaseContext,
+      targets,
       volume,
       basis: `Based on ${sample.sessions} recent sessions`,
     };
@@ -499,6 +533,7 @@ export function progressAssessment({ history = [], schedule = null, today = null
   }
   if(bests.length && reasons.length < 2 && (!ups.length || downs.length)) reasons.push(`Recent bests: ${bests.map((best) => best.name).join(', ')}.`);
   if(phaseContext) reasons.push(phaseContext);
+  if(earlySignal) reasons.push(earlySignal.detail);
   const verdict = ups.length && !downs.length && targetPct >= PROGRESS_TARGET_SUCCESS_PCT
     ? 'likely-improving'
     : !ups.length && !downs.length
@@ -523,6 +558,7 @@ export function progressAssessment({ history = [], schedule = null, today = null
         : `${targetPct}% of reconstructed prescriptions met (${targets.n} checks). Replay only — not the prescription shown at the time.`,
       basis: targets,
     },
+    ...(earlySignal ? [earlySignal] : []),
     ...bests.map((best) => ({
       id: `recent-best-${best.exerciseId}`,
       kind: 'recent-best',
