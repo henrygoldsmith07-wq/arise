@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 import {
   MILESTONES, milestoneState, trainingAgeDisplay, consistencyInsights,
-  healthyStreak, monthlyDigest, nextBestAction, whatChangedSummary,
+  healthyStreak, monthlyDigest, nextBestAction, progressAssessment, whatChangedSummary,
 } from '../src/lib/product.js';
 import { resolveExperience, isExpertView, isSimpleView, experiencePatch, EXPERIENCE_LEVELS } from '../src/lib/experienceMode.js';
 import { makeDemoStore, makeHistory, JOURNEY_SEEDS } from '../src/lib/demoData.js';
@@ -114,6 +114,108 @@ describe('what changed summary', () => {
     assert.equal(out[0].kind, 'programme');
     assert.match(out[0].lines[0], /repeated success added a set/);
     assert.deepEqual(whatChangedSummary({ schedule: null, history: [] }), []);
+  });
+});
+
+describe('progress assessment', () => {
+  const lift = (id, dateISO, exerciseId, weightKg, reps) => ({
+    id, dateISO, blocks: [{ exerciseId, sets: [{ reps: String(reps), weightKg: String(weightKg) }] }],
+  });
+  const improvingHistory = [
+    lift('a', '2026-08-10', 'bench-press-dumbbell', 20, 8),
+    lift('b', '2026-08-13', 'bench-press-dumbbell', 20, 9),
+    lift('c', '2026-08-16', 'bench-press-dumbbell', 20, 10),
+    lift('d', '2026-08-19', 'bench-press-dumbbell', 20, 11),
+    lift('e', '2026-08-22', 'bench-press-dumbbell', 20, 12),
+    lift('f', '2026-08-25', 'bench-press-dumbbell', 22.5, 8),
+    lift('g', '2026-08-28', 'bench-press-dumbbell', 22.5, 9),
+  ];
+
+  it('calls rising loaded performance likely improving without using volume as proof', () => {
+    const assessment = progressAssessment({ history: improvingHistory, today: '2026-08-29' });
+    assert.equal(assessment.verdict, 'likely-improving');
+    assert.equal(assessment.title, 'Likely improving');
+    assert.match(assessment.primaryReason, /Dumbbell Bench Press/);
+    assert.match(assessment.primaryReason, /100% of recent prescriptions/);
+    assert.ok(assessment.signals.some((signal) => signal.label === 'Strength trend ↑'));
+    assert.ok(assessment.signals.some((signal) => signal.label === 'Targets completed 100%'));
+    const volume = assessment.signals.find((signal) => signal.kind === 'volume');
+    assert.equal(volume?.contextOnly, true);
+    assert.equal(assessment.evidence, 'Moderate');
+    assert.deepEqual(assessment.sample, { sessions: 7, exposures: 7, exercises: 1, targetChecks: 6 });
+  });
+
+  it('calls flat repeated performance holding steady', () => {
+    const history = ['2026-08-10', '2026-08-13', '2026-08-16', '2026-08-19', '2026-08-22', '2026-08-25']
+      .map((dateISO, index) => lift(`s${index}`, dateISO, 'bench-press-dumbbell', 20, 8));
+    const assessment = progressAssessment({ history, today: '2026-08-26' });
+    assert.equal(assessment.verdict, 'holding-steady');
+    assert.equal(assessment.title, 'Holding steady');
+    assert.match(assessment.primaryReason, /holding their recent range/);
+  });
+
+  it('calls opposing exercise trends mixed signals', () => {
+    const history = [
+      lift('m0', '2026-08-10', 'bench-press-dumbbell', 20, 8),
+      lift('m1', '2026-08-12', 'dumbbell-row', 30, 10),
+      lift('m2', '2026-08-14', 'bench-press-dumbbell', 20, 9),
+      lift('m3', '2026-08-16', 'dumbbell-row', 30, 9),
+      lift('m4', '2026-08-18', 'bench-press-dumbbell', 20, 10),
+      lift('m5', '2026-08-20', 'dumbbell-row', 30, 8),
+      lift('m6', '2026-08-22', 'bench-press-dumbbell', 20, 11),
+      lift('m7', '2026-08-24', 'dumbbell-row', 30, 7),
+    ];
+    const assessment = progressAssessment({ history, today: '2026-08-25' });
+    assert.equal(assessment.verdict, 'mixed-signals');
+    assert.equal(assessment.title, 'Mixed signals');
+    assert.match(assessment.primaryReason, /rising.*falling/);
+    assert.ok(assessment.signals.some((signal) => signal.direction === 'up'));
+    assert.ok(assessment.signals.some((signal) => signal.direction === 'down'));
+  });
+
+  it('does not label a planned deload dip as regression', () => {
+    const history = [
+      lift('a', '2026-08-08', 'bench-press-dumbbell', 20, 8),
+      lift('b', '2026-08-11', 'bench-press-dumbbell', 20, 9),
+      lift('c', '2026-08-14', 'bench-press-dumbbell', 20, 10),
+      lift('d', '2026-08-17', 'bench-press-dumbbell', 20, 11),
+      lift('e', '2026-08-20', 'bench-press-dumbbell', 20, 12),
+      lift('f', '2026-08-23', 'bench-press-dumbbell', 22.5, 8),
+      lift('g', '2026-08-26', 'bench-press-dumbbell', 22.5, 9),
+      lift('h', '2026-08-29', 'bench-press-dumbbell', 12.5, 8),
+    ];
+    const schedule = {
+      programId: 'starter-3x',
+      mesocycle: { weeks: 4, deloadWeek: 1 },
+      sessions: [{ id: 'deload-week', dateISO: '2026-08-24', week: 1, title: 'Deload', status: 'planned', blocks: [{ exerciseId: 'bench-press-dumbbell', sets: 2, reps: '8' }] }],
+    };
+    const assessment = progressAssessment({ history, schedule, today: '2026-08-29' });
+    assert.equal(assessment.phase?.kind, 'deload');
+    assert.equal(assessment.verdict, 'likely-improving');
+    assert.equal(assessment.phaseContext, 'Programme context: a planned deload week. Lower volume here is intentional, not regression.');
+    assert.ok(assessment.reasons.some((reason) => /planned deload week/.test(reason)));
+    assert.equal(assessment.volume.status, 'down');
+  });
+
+  it('withholds a verdict for sparse history', () => {
+    const history = [
+      lift('s0', '2026-08-10', 'push-up', 0, 10),
+      lift('s1', '2026-08-13', 'push-up', 0, 11),
+    ];
+    const assessment = progressAssessment({ history, today: '2026-08-14' });
+    assert.equal(assessment.verdict, 'insufficient-evidence');
+    assert.equal(assessment.title, 'Not enough evidence yet');
+    assert.match(assessment.primaryReason, /2 comparable sessions logged/);
+    assert.deepEqual(assessment.signals, []);
+    assert.equal(assessment.evidence, 'Low');
+  });
+
+  it('assesses bodyweight-only progress from reps rather than lifted volume', () => {
+    const history = [8, 9, 10, 11, 12, 13].map((reps, index) => lift(`s${index}`, `2026-08-${String(10 + index * 3).padStart(2, '0')}`, 'push-up', 0, reps));
+    const assessment = progressAssessment({ history, today: '2026-08-29' });
+    assert.equal(assessment.verdict, 'likely-improving');
+    assert.ok(assessment.signals.some((signal) => signal.detail.includes('8 → 13 reps')));
+    assert.match(assessment.volume.detail, /Bodyweight-only sessions track reps/);
   });
 });
 

@@ -92,7 +92,7 @@ export function trainRecommendation({ onboarding = null, customTemplates = [], h
   // separately so the user can audit what chose vs what adapts.
   const adaptationInputs = [];
   if(history?.length){
-    adaptationInputs.push({ id: 'history', label: 'Training history', value: `${history.length} logged session${history.length === 1 ? '' : 's'} prefill loads and rest presets` });
+    adaptationInputs.push({ id: 'history', label: 'Training history', value: `${history.length} logged session${history.length === 1 ? '' : 's'} inform substitution ranking when sessions are built` });
   }
   const preferred = preferredLengthLabel(minutes);
   if(preferred){

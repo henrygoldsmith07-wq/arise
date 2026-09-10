@@ -83,6 +83,133 @@ test.describe('Demo mode', () => {
   });
 });
 
+test.describe('Progress assessment', () => {
+  const isoDaysAgo = (days) => {
+    const date = new Date();
+    date.setUTCDate(date.getUTCDate() - days);
+    return date.toISOString().slice(0, 10);
+  };
+  const daysBefore = (iso, days) => {
+    const date = new Date(`${iso}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() - days);
+    return date.toISOString().slice(0, 10);
+  };
+  const currentMonday = () => {
+    let monday = new Date().toISOString().slice(0, 10);
+    while(new Date(`${monday}T00:00:00Z`).getUTCDay() !== 1) monday = daysBefore(monday, 1);
+    return monday;
+  };
+  const lift = (id, dateISO, exerciseId, weightKg, reps) => ({
+    id, dateISO, blocks: [{ exerciseId, sets: [{ reps: String(reps), weightKg: String(weightKg) }] }],
+  });
+  const seedAssessment = async (page, { history, schedule = null }) => {
+    await page.evaluate(async ({ history, schedule }) => {
+      const mod = await import('/src/lib/store.js');
+      const store = mod.loadStore();
+      store.history = history;
+      store.activeSchedule = schedule;
+      mod.saveStore(store);
+    }, { history, schedule });
+    await page.reload();
+    await tapTab(page, 'Progress');
+    await expect(page.getByRole('region', { name: 'Am I improving' })).toBeVisible();
+  };
+
+  test.beforeEach(async ({ page }) => completeOnboarding(page));
+
+  test('improving loaded training shows strength and prescription signals', async ({ page }) => {
+    const history = [
+      lift('improving-0', isoDaysAgo(21), 'bench-press-dumbbell', 20, 8),
+      lift('improving-1', isoDaysAgo(18), 'bench-press-dumbbell', 20, 9),
+      lift('improving-2', isoDaysAgo(15), 'bench-press-dumbbell', 20, 10),
+      lift('improving-3', isoDaysAgo(12), 'bench-press-dumbbell', 20, 11),
+      lift('improving-4', isoDaysAgo(9), 'bench-press-dumbbell', 20, 12),
+      lift('improving-5', isoDaysAgo(6), 'bench-press-dumbbell', 22.5, 8),
+      lift('improving-6', isoDaysAgo(3), 'bench-press-dumbbell', 22.5, 9),
+    ];
+    await seedAssessment(page, { history });
+    const card = page.getByRole('region', { name: 'Am I improving' });
+    await expect(card.getByText('Likely improving')).toBeVisible();
+    await expect(card.getByText('Strength trend ↑')).toBeVisible();
+    await expect(card.getByText(/Targets completed \d+%/)).toBeVisible();
+    await expect(card.getByText(/Evidence: (Moderate|High)/)).toBeVisible();
+
+    await page.getByRole('button', { name: 'More' }).click();
+    await page.getByRole('button', { name: /Simple The essentials/i }).click();
+    await tapTab(page, 'Progress');
+    await expect(card.getByText('Likely improving')).toBeVisible();
+    await expect(card.getByText('Strength trend ↑')).toHaveCount(0);
+  });
+
+  test('flat repeated training holds steady instead of claiming volume progress', async ({ page }) => {
+    const history = [21, 18, 15, 12, 9, 6].map((days, index) => lift(`flat-${index}`, isoDaysAgo(days), 'bench-press-dumbbell', 20, 8));
+    await seedAssessment(page, { history });
+    const card = page.getByRole('region', { name: 'Am I improving' });
+    await expect(card.getByText('Holding steady')).toBeVisible();
+    await expect(card.getByText('Likely improving')).toHaveCount(0);
+  });
+
+  test('opposing lifts report mixed signals', async ({ page }) => {
+    const history = [
+      lift('mixed-0', isoDaysAgo(21), 'bench-press-dumbbell', 20, 8),
+      lift('mixed-1', isoDaysAgo(19), 'dumbbell-row', 30, 10),
+      lift('mixed-2', isoDaysAgo(17), 'bench-press-dumbbell', 20, 9),
+      lift('mixed-3', isoDaysAgo(15), 'dumbbell-row', 30, 9),
+      lift('mixed-4', isoDaysAgo(13), 'bench-press-dumbbell', 20, 10),
+      lift('mixed-5', isoDaysAgo(11), 'dumbbell-row', 30, 8),
+      lift('mixed-6', isoDaysAgo(9), 'bench-press-dumbbell', 20, 11),
+      lift('mixed-7', isoDaysAgo(7), 'dumbbell-row', 30, 7),
+    ];
+    await seedAssessment(page, { history });
+    const card = page.getByRole('region', { name: 'Am I improving' });
+    await expect(card.getByText('Mixed signals')).toBeVisible();
+    await expect(card.getByText(/rising.*falling/)).toBeVisible();
+  });
+
+  test('a planned deload dip is contextualised rather than labelled regression', async ({ page }) => {
+    const monday = currentMonday();
+    const history = [
+      lift('deload-0', daysBefore(monday, 20), 'bench-press-dumbbell', 20, 8),
+      lift('deload-1', daysBefore(monday, 17), 'bench-press-dumbbell', 20, 9),
+      lift('deload-2', daysBefore(monday, 14), 'bench-press-dumbbell', 20, 10),
+      lift('deload-3', daysBefore(monday, 11), 'bench-press-dumbbell', 20, 11),
+      lift('deload-4', daysBefore(monday, 8), 'bench-press-dumbbell', 20, 12),
+      lift('deload-5', daysBefore(monday, 5), 'bench-press-dumbbell', 22.5, 8),
+      lift('deload-6', daysBefore(monday, 2), 'bench-press-dumbbell', 22.5, 9),
+      lift('deload-7', isoDaysAgo(0), 'bench-press-dumbbell', 12.5, 8),
+    ];
+    const schedule = {
+      programId: 'starter-3x',
+      mesocycle: { weeks: 4, deloadWeek: 1 },
+      sessions: [{ id: 'e2e-deload', dateISO: monday, week: 1, title: 'Deload', status: 'planned', blocks: [{ exerciseId: 'bench-press-dumbbell', sets: 2, reps: '8' }] }],
+    };
+    await seedAssessment(page, { history, schedule });
+    const card = page.getByRole('region', { name: 'Am I improving' });
+    await expect(card.getByText('Likely improving')).toBeVisible();
+    await expect(card.getByText(/planned deload week/)).toBeVisible();
+  });
+
+  test('sparse history withholds the verdict', async ({ page }) => {
+    const history = [
+      lift('sparse-0', isoDaysAgo(4), 'push-up', 0, 10),
+      lift('sparse-1', isoDaysAgo(1), 'push-up', 0, 11),
+    ];
+    await seedAssessment(page, { history });
+    const card = page.getByRole('region', { name: 'Am I improving' });
+    await expect(card.getByText('Not enough evidence yet', { exact: true })).toBeVisible();
+    await expect(card.getByText(/2 comparable sessions logged/)).toBeVisible();
+  });
+
+  test('bodyweight-only progress is judged on reps, not lifted volume', async ({ page }) => {
+    const history = [8, 9, 10, 11, 12, 13].map((reps, index) => lift(`bodyweight-${index}`, isoDaysAgo(20 - index * 3), 'push-up', 0, reps));
+    await seedAssessment(page, { history });
+    const card = page.getByRole('region', { name: 'Am I improving' });
+    await expect(card.getByText('Likely improving')).toBeVisible();
+    await expect(card.getByText(/8 → 13 reps/)).toBeVisible();
+    await expect(card.getByText(/Bodyweight-only sessions track reps/)).toBeVisible();
+  });
+});
+
 test.describe('Experience levels', () => {
   test.beforeEach(async ({ page }) => completeOnboarding(page));
 

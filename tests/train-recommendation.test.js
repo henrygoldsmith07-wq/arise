@@ -51,7 +51,8 @@ describe('trainRecommendation — explanation integrity', () => {
     const historyFactor = hero.adaptationInputs.find(f => f.id === 'history');
     assert.ok(historyFactor);
     assert.match(historyFactor.value, /2 logged sessions/);
-    assert.match(historyFactor.value, /prefill|cap|swap|preset/);
+    assert.match(historyFactor.value, /substitution ranking/);
+    assert.ok(!/prefill|preset/.test(historyFactor.value), 'history must not claim load/rest prefilling');
   });
 
   it('no history → no history factor anywhere (never claims absent evidence)', () => {
