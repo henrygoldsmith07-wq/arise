@@ -443,11 +443,15 @@ export function recommendationFollowThrough(history){
   };
 }
 
-// Observed prescription follow-through: scored ONLY from immutable snapshots
-// stored on saved history blocks (`block.prescription`). Legacy blocks without
-// a snapshot are excluded — never reconstructed, never counted as compliant.
-// One prescribed set is one target: it counts as met only when the logged set
-// at that position was completed and met the stored reps/load/assist targets.
+// Observed prescription follow-through: scored ONLY from the ACTIVE immutable
+// snapshot stored on each saved history block (`block.prescription`) — the
+// exact revision that governed the block when it was completed. Superseded
+// revisions live in `block.prescriptionHistory` and are audit-only: they are
+// never added to the denominator and never mixed with the active scoring.
+// Legacy blocks without a snapshot are excluded — never reconstructed, never
+// counted as compliant. One prescribed set is one target: it counts as met only
+// when the logged set at that position was completed and met the stored
+// reps/load/assist targets.
 function prescriptionRepTarget(rx){
   if(rx?.prescribedReps != null && Number.isFinite(Number(rx.prescribedReps))) return Number(rx.prescribedReps);
   const range = String(rx?.prescribedRepRange || '').match(/\d+/g)?.map(Number) || [];

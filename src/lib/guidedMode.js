@@ -43,11 +43,11 @@ export function newGuidedSet(reps, unilateral, previous = null){
 // Flatten a scheduled session into guided blocks. Draft blocks (crash
 // recovery) win over fresh initialisation; otherwise sets are prefilled from
 // the most recent history for the same exercise, matching SessionRunner.
-// The prescription the guided runner walks through is the schedule row itself,
-// so it is frozen onto the block at init — the same immutable snapshot shown to
-// the user before the first set, never rebuilt at save. A restored draft keeps
-// its existing snapshot untouched.
-export function initGuidedBlocks(session, history = [], draftBlocks = null, startedAtISO = null){
+// A restored draft keeps its existing (immutable) snapshot untouched. A fresh
+// block is NOT given a snapshot here: the guided runner shows one block at a
+// time, so a schedule prescription is frozen only when its block first becomes
+// the active step — see withGuidedStepPrescription.
+export function initGuidedBlocks(session, history = [], draftBlocks = null){
   return (session?.blocks || []).map((block, i)=>{
     const source = draftBlocks?.[i] || block;
     const unilateral = !!source.unilateral || !!EXERCISE_BY_ID[source.exerciseId]?.unilateral;
@@ -56,7 +56,7 @@ export function initGuidedBlocks(session, history = [], draftBlocks = null, star
     const sets = Array.isArray(source.sets)
       ? source.sets.map(s=> ({ ...newGuidedSet(source.reps, unilateral), ...s, completed: !!s.completed }))
       : Array.from({ length: count }, (_, j)=> newGuidedSet(source.reps, unilateral, previous?.sets?.[j] || previous?.sets?.[previous.sets.length-1]));
-    let out = {
+    return freezePrescriptionBlock({
       exerciseId: source.exerciseId,
       reps: source.reps || '',
       sets,
@@ -68,20 +68,31 @@ export function initGuidedBlocks(session, history = [], draftBlocks = null, star
       substitutionReason: source.substitutionReason || '',
       prescription: source.prescription || null,
       prescriptionHistory: Array.isArray(source.prescriptionHistory) ? source.prescriptionHistory : null,
-    };
-    out = freezePrescriptionBlock(out);
-    if(!out.prescription){
-      const snapshot = buildPrescriptionSnapshot({
-        session,
-        block: { ...block, exerciseId: source.exerciseId, sets: out.sets },
-        blockIndex: i,
-        recommendation: null,
-        prescribedAt: startedAtISO || session?.startedAt || null,
-      });
-      if(snapshot) out = attachPrescription(out, snapshot);
-    }
-    return out;
+    });
   });
+}
+
+// First-visible capture for guided mode: freeze the schedule prescription of
+// the block that is currently the active step, the moment it is shown. Idempotent
+// (a block that already carries a snapshot is returned unchanged, and the same
+// array reference comes back when nothing changed so no render loop can start).
+// The guided runner shows the scheduled target, not an engine one, so this
+// records source 'schedule' without inventing engine fields.
+export function withGuidedStepPrescription(session, blocks, activeIndex, shownAt = null){
+  if(!session || !Array.isArray(blocks) || activeIndex == null) return blocks;
+  const current = blocks[activeIndex];
+  if(!current || current.prescription) return blocks;
+  const planned = session.blocks?.[activeIndex] || {};
+  const snapshot = buildPrescriptionSnapshot({
+    session,
+    block: { ...planned, exerciseId: current.exerciseId, sets: current.sets },
+    blockIndex: activeIndex,
+    recommendation: null,
+    shownAt: shownAt || session.startedAt || null,
+  });
+  if(!snapshot) return blocks;
+  const attached = attachPrescription(current, snapshot);
+  return attached === current ? blocks : blocks.map((b, i)=> i === activeIndex ? attached : b);
 }
 
 // The current step: the first set that is neither completed nor skipped.

@@ -5,10 +5,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildPrescriptionSnapshot, recommendNext, attachPrescription, carryPrescription, freezePrescriptionBlock } from '../src/lib/progression.js';
+import { buildPrescriptionSnapshot, recommendNext, attachPrescription, carryPrescription, freezePrescriptionBlock, supersedePrescription, deepFreezePrescription, PRESCRIPTION_CHANGE_REASONS } from '../src/lib/progression.js';
 import { observedPrescriptionFollowThrough } from '../src/lib/analytics.js';
 import { progressAssessment } from '../src/lib/product.js';
-import { initGuidedBlocks, buildGuidedPayload } from '../src/lib/guidedMode.js';
+import { initGuidedBlocks, buildGuidedPayload, withGuidedStepPrescription } from '../src/lib/guidedMode.js';
+import { visiblePrescriptionIndexes } from '../src/lib/gymMode.js';
 import { normaliseHistoryEntry } from '../src/lib/store.js';
 import { parseImportFile } from '../src/lib/export.js';
 
@@ -64,6 +65,11 @@ describe('prescription snapshots', ()=>{
     assert.equal(rx.engine.policy, 'standard');
     assert.ok(rx.reason.length > 0);
     assert.ok(Object.isFrozen(rx));
+    assert.equal(rx.firstShownAt, '2026-08-10T09:00:00.000Z');
+    assert.equal(rx.shownAt, '2026-08-10T09:00:00.000Z');
+    assert.equal(rx.createdAt, '2026-08-10T09:00:00.000Z');
+    assert.equal(rx.prescribedAt, rx.firstShownAt);
+    assert.ok(Object.isFrozen(rx.engine), 'nested engine metadata must be deeply frozen');
   });
 
   it('captures schedule prescriptions without inventing engine fields', ()=>{
@@ -125,6 +131,27 @@ describe('observed prescription follow-through', ()=>{
     assert.equal(result.prescribedSets, 2);
     assert.equal(result.completeTargets, 2);
     assert.equal(result.extraSets, 1);
+    assert.equal(result.followThroughPct, 100);
+  });
+
+  it('scores only the active revision, never a superseded prescription in the denominator', ()=>{
+    const superseded = snapshot('x2', '2026-08-10', 'bench-press-dumbbell', 9, 8, 20, '2026-08-10T09:00:00.000Z');
+    const active = buildPrescriptionSnapshot({
+      session: { id: 'x2', dateISO: '2026-08-10' },
+      block: { exerciseId: 'bench-press-dumbbell', sets: 2, reps: '8–12' },
+      blockIndex: 0,
+      recommendation: { reps: 8, load: 20, reason: 'swap', priorsVersion: 1 },
+      prescribedAt: '2026-08-10T09:10:00.000Z',
+      previous: superseded,
+      changeReason: 'exercise-substituted',
+    });
+    const history = [{
+      id: 'x2', dateISO: '2026-08-10',
+      blocks: [{ exerciseId: 'bench-press-dumbbell', prescription: active, prescriptionHistory: [superseded], sets: [set(8, 20), set(8, 20)] }],
+    }];
+    const result = observedPrescriptionFollowThrough(history);
+    assert.equal(result.prescribedSets, 2, 'only the active revision feeds the denominator');
+    assert.equal(result.completeTargets, 2);
     assert.equal(result.followThroughPct, 100);
   });
 
@@ -317,28 +344,165 @@ describe('exercise swaps create explicit new provenance', ()=>{
   });
 });
 
-describe('guided mode freezes the schedule prescription at init', ()=>{
+describe('guided mode freezes the schedule prescription on first-visible step', ()=>{
   const started = '2026-08-10T09:00:00.000Z';
-  const session = { id: 'g1', dateISO: '2026-08-10', blocks: [{ exerciseId: 'push-up', sets: 3, reps: '8–12' }] };
-  it('attaches an immutable schedule snapshot before any set is logged', ()=>{
-    const blocks = initGuidedBlocks(session, [], null, started);
-    assert.ok(blocks[0].prescription);
-    assert.equal(blocks[0].prescription.source, 'schedule');
-    assert.equal(blocks[0].prescription.prescribedSets, 3);
-    assert.equal(blocks[0].prescription.prescriptionId, 'g1:0:push-up:r1');
-    assert.ok(Object.isFrozen(blocks[0].prescription));
+  const session = { id: 'g1', dateISO: '2026-08-10', blocks: [
+    { exerciseId: 'push-up', sets: 3, reps: '8–12' },
+    { exerciseId: 'plank', sets: 2, reps: '45s' },
+  ] };
+  it('init does NOT fabricate a snapshot — capture waits for the active step', ()=>{
+    const blocks = initGuidedBlocks(session, [], null);
+    assert.ok(!('prescription' in blocks[0]) || blocks[0].prescription == null, 'nothing is frozen before any step is shown');
   });
-  it('a restored draft keeps the original snapshot (no re-timestamp)', ()=>{
-    const first = initGuidedBlocks(session, [], null, started);
-    const restored = initGuidedBlocks(session, [], first, '2026-08-10T09:40:00.000Z');
-    assert.equal(restored[0].prescription.prescriptionId, first[0].prescription.prescriptionId);
-    assert.equal(restored[0].prescription.prescribedAt, started);
+  it('captures only the active block when its step is first shown', ()=>{
+    const fresh = initGuidedBlocks(session, [], null);
+    const afterStep0 = withGuidedStepPrescription(session, fresh, 0, started);
+    assert.ok(afterStep0[0].prescription, 'active block is captured');
+    assert.equal(afterStep0[0].prescription.source, 'schedule');
+    assert.equal(afterStep0[0].prescription.prescriptionId, 'g1:0:push-up:r1');
+    assert.ok(afterStep0[0].prescription.firstShownAt === started);
+    assert.ok(!afterStep0[1].prescription, 'a not-yet-visible block is never captured');
+    assert.ok(Object.isFrozen(afterStep0[0].prescription));
   });
-  it('the save payload carries the frozen schedule snapshot unchanged', ()=>{
-    const blocks = initGuidedBlocks(session, [], null, started);
-    const payload = buildGuidedPayload({ session, blocks, startedAtISO: started });
-    assert.deepEqual(payload.blocks[0].prescription, blocks[0].prescription);
+  it('a later step is captured only when it becomes active; earlier ones are untouched', ()=>{
+    let blocks = withGuidedStepPrescription(session, initGuidedBlocks(session, [], null), 0, started);
+    const firstId = blocks[0].prescription.prescriptionId;
+    blocks = withGuidedStepPrescription(session, blocks, 1, '2026-08-10T09:20:00.000Z');
+    assert.equal(blocks[0].prescription.prescriptionId, firstId, 'block 0 snapshot is not re-stamped');
+    assert.ok(blocks[1].prescription);
+    assert.equal(blocks[1].prescription.firstShownAt, '2026-08-10T09:20:00.000Z');
+  });
+  it('re-capturing an already-shown step is a no-op (stable array, no loop)', ()=>{
+    const captured = withGuidedStepPrescription(session, initGuidedBlocks(session, [], null), 0, started);
+    assert.equal(withGuidedStepPrescription(session, captured, 0, '2026-08-10T10:00:00.000Z'), captured);
+  });
+  it('a restored draft keeps its snapshot and save carries it unchanged', ()=>{
+    const captured = withGuidedStepPrescription(session, initGuidedBlocks(session, [], null), 0, started);
+    const restored = initGuidedBlocks(session, [], captured);
+    assert.equal(restored[0].prescription.prescriptionId, captured[0].prescription.prescriptionId);
+    assert.equal(restored[0].prescription.firstShownAt, started);
+    const payload = buildGuidedPayload({ session, blocks: restored, startedAtISO: started });
+    assert.deepEqual(payload.blocks[0].prescription, captured[0].prescription);
     assert.equal(payload.blocks[0].prescription.source, 'schedule');
+  });
+});
+
+describe('first-visible timing in the standard runner', ()=>{
+  it('Gym Mode freezes only the focused block; standard mode all rendered blocks', ()=>{
+    assert.deepEqual(visiblePrescriptionIndexes({ gymMode: true, focusIdx: 1, blockCount: 3 }), [1]);
+    assert.deepEqual(visiblePrescriptionIndexes({ gymMode: true, focusIdx: 5, blockCount: 3 }), [], 'an out-of-range focus shows nothing');
+    assert.deepEqual(visiblePrescriptionIndexes({ gymMode: false, focusIdx: 0, blockCount: 3 }), [0, 1, 2]);
+  });
+  it('a first-visible snapshot records createdAt and firstShownAt at the show moment, not session start', ()=>{
+    const session = { id: 's1', dateISO: '2026-08-10', startedAt: '2026-08-10T09:00:00.000Z' };
+    const rx = buildPrescriptionSnapshot({
+      session,
+      block: { exerciseId: 'bench-press-dumbbell', sets: 2 },
+      blockIndex: 0,
+      recommendation: { reps: 8, load: 20, reason: 'x', priorsVersion: 1 },
+      shownAt: '2026-08-10T09:00:07.000Z',
+    });
+    assert.equal(rx.firstShownAt, '2026-08-10T09:00:07.000Z');
+    assert.equal(rx.createdAt, '2026-08-10T09:00:07.000Z');
+    assert.notEqual(rx.firstShownAt, session.startedAt, 'first-visible is not the session-start stamp');
+  });
+});
+
+describe('deep prescription immutability', ()=>{
+  const ts = '2026-08-10T09:00:00.000Z';
+  it('nested mutation attempts throw, at every level', ()=>{
+    const rx = buildPrescriptionSnapshot({
+      session: { id: 's1', dateISO: '2026-08-10' },
+      block: { exerciseId: 'bench-press-dumbbell', sets: 2, reps: '8–12' },
+      blockIndex: 0,
+      recommendation: { reps: 8, load: 20, reason: 'x', priorsVersion: 1, confidence: { level: 'medium', components: { n: 4, r2: 0.8 } } },
+      shownAt: ts,
+    });
+    assert.ok(Object.isFrozen(rx));
+    assert.ok(Object.isFrozen(rx.engine));
+    assert.ok(Object.isFrozen(rx.confidence));
+    assert.ok(Object.isFrozen(rx.confidence.components));
+    assert.throws(()=>{ rx.prescribedReps = 999; }, TypeError);
+    assert.throws(()=>{ rx.engine.policy = 'aggressive'; }, TypeError);
+    assert.throws(()=>{ rx.confidence.components.n = 999; }, TypeError);
+    assert.throws(()=>{ rx.prescriptionId = 'tampered'; }, TypeError);
+  });
+  it('deepFreezePrescription freezes a plain restored object deeply and is idempotent', ()=>{
+    const plain = JSON.parse(JSON.stringify(snapshot('s1', '2026-08-10', 'bench-press-dumbbell', 2, 8, 20, ts)));
+    assert.ok(!Object.isFrozen(plain.engine));
+    const frozen = deepFreezePrescription(plain);
+    assert.ok(Object.isFrozen(frozen));
+    assert.ok(Object.isFrozen(frozen.engine));
+    assert.equal(deepFreezePrescription(frozen), frozen);
+  });
+  it('a restored draft block re-freezes its nested snapshot and history', ()=>{
+    const prev = snapshot('s1', '2026-08-10', 'bench-press-dumbbell', 2, 8, 20, ts);
+    const after = buildPrescriptionSnapshot({
+      session: { id: 's1', dateISO: '2026-08-10' },
+      block: { exerciseId: 'push-up', sets: 2 },
+      blockIndex: 0, recommendation: null, shownAt: '2026-08-10T09:05:00.000Z',
+      previous: prev, changeReason: 'exercise-substituted',
+    });
+    const attached = attachPrescription({ exerciseId: 'push-up', sets: [set(8, 0)], prescription: prev }, after);
+    const fromStorage = JSON.parse(JSON.stringify({ prescription: attached.prescription, prescriptionHistory: attached.prescriptionHistory }));
+    assert.ok(!Object.isFrozen(fromStorage.prescriptionHistory[0].engine), 'storage yields plain objects');
+    const restored = freezePrescriptionBlock({ exerciseId: 'push-up', prescription: fromStorage.prescription, prescriptionHistory: fromStorage.prescriptionHistory });
+    assert.ok(Object.isFrozen(restored.prescription.engine));
+    assert.ok(Object.isFrozen(restored.prescriptionHistory[0]));
+    assert.ok(Object.isFrozen(restored.prescriptionHistory[0].engine), 'history is deeply frozen too');
+  });
+});
+
+describe('provenance chains record every legitimate revision', ()=>{
+  const session = { id: 's1', dateISO: '2026-08-10' };
+  const engine = { name: 'arise-engine' };
+  it('policy, equipment and programme changes each add a link with reason + preserved history', ()=>{
+    let block = { exerciseId: 'bench-press-dumbbell', sets: [set(8, 20)] };
+    block = attachPrescription(block, buildPrescriptionSnapshot({ session, block: { ...block, sets: 2 }, blockIndex: 0, recommendation: { reps: 8, load: 20, reason: 'r', priorsVersion: 1 }, shownAt: '2026-08-10T09:00:00.000Z' }));
+    const r1 = block.prescription;
+    block = supersedePrescription(block, { session, block: { exerciseId: 'bench-press-dumbbell', sets: 2 }, blockIndex: 0, recommendation: { reps: 9, load: 20, reason: 'p', priorsVersion: 1, policy: 'aggressive' }, shownAt: '2026-08-10T09:01:00.000Z', changeReason: 'policy-changed' });
+    const r2 = block.prescription;
+    block = supersedePrescription(block, { session, block: { exerciseId: 'dumbbell-row', sets: 2 }, blockIndex: 0, recommendation: { reps: 10, load: 30, reason: 'e', priorsVersion: 1 }, shownAt: '2026-08-10T09:02:00.000Z', changeReason: 'equipment-changed' });
+    const r3 = block.prescription;
+    block = supersedePrescription(block, { session, block: { exerciseId: 'dumbbell-row', sets: 3 }, blockIndex: 0, recommendation: { reps: 10, load: 30, reason: 'a', priorsVersion: 1 }, shownAt: '2026-08-10T09:03:00.000Z', changeReason: 'programme-adjusted' });
+    const r4 = block.prescription;
+
+    assert.equal(r2.changeReason, 'policy-changed');
+    assert.equal(r3.changeReason, 'equipment-changed');
+    assert.equal(r4.changeReason, 'programme-adjusted');
+    assert.deepEqual([r1.revision, r2.revision, r3.revision, r4.revision], [1, 2, 3, 4]);
+    assert.equal(r2.supersedesPrescriptionId, r1.prescriptionId);
+    assert.equal(r3.supersedesPrescriptionId, r2.prescriptionId);
+    assert.equal(r3.previousExerciseId, 'bench-press-dumbbell');
+    assert.equal(r4.supersedesPrescriptionId, r3.prescriptionId);
+    assert.deepEqual(block.prescriptionHistory.map((rx)=> rx.revision), [1, 2, 3]);
+    assert.equal(block.prescription, r4);
+    assert.ok(block.prescriptionHistory.every((rx)=> Object.isFrozen(rx.engine ?? {})));
+    assert.ok(PRESCRIPTION_CHANGE_REASONS.includes('user-requested-change'));
+  });
+  it('supersede never mutates the previous snapshot it preserves', ()=>{
+    const block = attachPrescription({ exerciseId: 'bench-press-dumbbell', sets: [set(8, 20)] }, buildPrescriptionSnapshot({ session, block: { exerciseId: 'bench-press-dumbbell', sets: 2 }, blockIndex: 0, recommendation: { reps: 8, load: 20, reason: 'r', priorsVersion: 1 }, shownAt: '2026-08-10T09:00:00.000Z' }));
+    const before = block.prescription;
+    const snapshot = JSON.parse(JSON.stringify(before));
+    supersedePrescription(block, { session, block: { exerciseId: 'push-up', sets: 2 }, blockIndex: 0, recommendation: { reps: 9, load: 21, reason: 'p', priorsVersion: 1 }, shownAt: '2026-08-10T09:01:00.000Z', changeReason: 'policy-changed' });
+    assert.deepEqual({ ...before }, snapshot, 'the preserved snapshot is byte-for-byte unchanged');
+  });
+});
+
+describe('export/import preserves the full revision chain and deep fields', ()=>{
+  it('round-trips active snapshot, history and provenance without fabricating legacy ones', ()=>{
+    const session = { id: 's1', dateISO: '2026-08-10' };
+    const first = buildPrescriptionSnapshot({ session, block: { exerciseId: 'bench-press-dumbbell', sets: 2, reps: '8–12' }, blockIndex: 0, recommendation: { reps: 8, load: 20, reason: 'r', priorsVersion: 1 }, shownAt: '2026-08-10T09:00:00.000Z' });
+    const second = buildPrescriptionSnapshot({ session, block: { exerciseId: 'bench-press-dumbbell', sets: 2, reps: '8–12' }, blockIndex: 0, recommendation: { reps: 9, load: 20, reason: 'p', priorsVersion: 1 }, shownAt: '2026-08-10T09:01:00.000Z', previous: first, changeReason: 'policy-changed' });
+    const history = [{ id: 's1', dateISO: '2026-08-10', blocks: [{ exerciseId: 'bench-press-dumbbell', prescription: second, prescriptionHistory: [first], sets: [set(9, 20), set(9, 20)] }] }];
+    const imported = parseImportFile(JSON.stringify({ app: 'arise', data: { history } }));
+    const block = imported.history[0].blocks[0];
+    assert.deepEqual(block.prescription, second);
+    assert.equal(block.prescription.changeReason, 'policy-changed');
+    assert.equal(block.prescription.supersedesPrescriptionId, first.prescriptionId);
+    assert.equal(block.prescription.firstShownAt, '2026-08-10T09:01:00.000Z');
+    assert.equal(block.prescriptionHistory.length, 1);
+    assert.deepEqual(block.prescriptionHistory[0], first);
   });
 });
 

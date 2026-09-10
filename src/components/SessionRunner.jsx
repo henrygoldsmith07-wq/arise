@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { lastExerciseSets } from '../lib/store.js';
-import { recommendNext, buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock } from '../lib/progression.js';
+import { recommendNext, buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, supersedePrescription } from '../lib/progression.js';
 import { recommendNextWithPolicy, POLICY_ORDER } from '../lib/progressionPolicies.js';
 import { runComparativeStudy, doubleProgressionRec } from '../lib/study.js';
 import { assignmentFor } from '../lib/studyEnrollment.js';
@@ -10,7 +10,7 @@ import { formatPlateStack } from '../lib/plates.js';
 import { substitutionOptions } from '../lib/substitutions.js';
 import { recordEvent } from '../lib/telemetry.js';
 import { recordRecommendation, markRecommendationOverride } from '../lib/longitudinal.js';
-import { quickJumps, applyQuickJump, skipTo, restPresetFor } from '../lib/gymMode.js';
+import { quickJumps, applyQuickJump, skipTo, restPresetFor, visiblePrescriptionIndexes } from '../lib/gymMode.js';
 import { SESSION_QUALITY_OPTIONS, sessionQualityLabel } from '../lib/gymMode.js';
 import { createWakeLock } from '../lib/wakeLock.js';
 import { announce } from '../lib/a11y.js';
@@ -410,26 +410,30 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     return { recs, prevs, assigned };
   },[blocks,history,session.dateISO,plateConfig,studyEnrollment,appPolicy,appExplanationMode]);
 
-  // Freeze the prescription the moment it is first SHOWN — not at save time.
-  // This is the audit source of truth: what the runner actually displayed for
-  // that exercise before any set was logged. It is attached to the block and
-  // rides through the draft into the saved history. It is created at most once
-  // per block (attachPrescription is a no-op when the block already carries a
-  // prescriptionId), so set edits, rest timers, Gym Mode, refresh and crash
-  // recovery can never re-stamp it, and a later engine/policy change cannot
-  // silently rewrite what was shown. Only an explicit supersede (a swap) does.
+  // First-visible capture. A prescription is frozen only when its block's
+  // target is actually PRESENTED — every block in the standard runner (all are
+  // on screen), or just the focused block in Gym Mode (later blocks are not
+  // rendered yet). It is attached to the block and rides through the draft into
+  // the saved history. Created at most once per block identity
+  // (attachPrescription is a no-op when that prescriptionId is already there),
+  // so set edits, rest timers, refresh and crash recovery cannot re-stamp it,
+  // and a later engine/policy change cannot silently rewrite what was shown.
+  // Only an explicit supersede (a swap) changes it.
+  const visibleBlockIndexes = visiblePrescriptionIndexes({ gymMode, focusIdx, blockCount: blocks.length });
   useEffect(()=>{
+    const visible = new Set(visibleBlockIndexes);
     setBlocks(prev=>{
       let changed = false;
+      const shownAt = new Date().toISOString();
       const next = prev.map((b, index)=>{
-        if(b.prescription) return b;
+        if(b.prescription || !visible.has(index)) return b;
         const planned = session.blocks?.[index] || {};
         const snapshot = buildPrescriptionSnapshot({
           session,
           block: { ...planned, exerciseId: b.exerciseId, sets: b.sets },
           blockIndex: index,
           recommendation: blockMeta.recs.get(b.exerciseId) || null,
-          prescribedAt: startedAtRef.current,
+          shownAt,
           policy: appPolicy,
         });
         if(!snapshot) return b;
@@ -438,7 +442,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       });
       return changed ? next : prev;
     });
-  },[blocks, blockMeta, session, appPolicy]);
+  },[visibleBlockIndexes.join(','), blockMeta, session, appPolicy]);
 
   // Safety: aftercare after a painful exposure and technique/ROM cues read
   // from the last logged sets of each exercise. One memo for all blocks.
@@ -608,22 +612,23 @@ export default function SessionRunner({ session, history = [], availableEquipmen
         }),
       };
       // A swap is an explicit change of prescription, so it is allowed to
-      // supersede — but never to overwrite. The new snapshot records the
-      // substituted exercise's shown target and carries provenance back to the
-      // one it replaces; attachPrescription keeps the old snapshot in history.
+      // supersede — but never to overwrite. supersedePrescription freezes the
+      // substituted exercise's shown target as a new revision (firstShownAt =
+      // the swap moment), links it to the one it replaces, and keeps the old
+      // snapshot in history. The new block's exercise identity changes, so its
+      // prescriptionId differs from the prior — history is preserved, never
+      // mutated. Observed follow-through later scores only this active revision.
       const planned = session.blocks?.[bi] || {};
       const rec = getRecommendation({ exerciseId: option.id, reps: swapped.reps || planned.reps }, history, session.dateISO, plateConfig, study, assignmentFor(studyEnrollment, option.id), appPolicy, appExplanationMode);
-      const snapshot = buildPrescriptionSnapshot({
+      return supersedePrescription(swapped, {
         session,
         block: { ...planned, exerciseId: option.id, sets: swapped.sets },
         blockIndex: bi,
         recommendation: rec || null,
-        prescribedAt: startedAtRef.current,
+        shownAt: new Date().toISOString(),
         policy: appPolicy,
-        previous: b.prescription || null,
         changeReason: 'exercise-substituted',
       });
-      return snapshot ? attachPrescription(swapped, snapshot) : swapped;
     }));
     setSwapOpen(null);
   };

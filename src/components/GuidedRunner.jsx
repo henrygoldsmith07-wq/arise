@@ -10,6 +10,7 @@ import {
   sessionElapsedMs,
   formatElapsed,
   buildGuidedPayload,
+  withGuidedStepPrescription,
 } from '../lib/guidedMode.js';
 import { recordEvent } from '../lib/telemetry.js';
 import { restStartCue, restTickCue, restCompleteCue } from '../lib/audioCues.js';
@@ -27,7 +28,7 @@ import ExerciseIllustration from './ExerciseIllustration.jsx';
 // in App.jsx work identically for both modes.
 export default function GuidedRunner({ session, history = [], availableEquipment = [], draft = null, measurementConsent = false, soundCues = true, onToggleSoundCues = null, voiceCoach = false, onToggleVoiceCoach = null, voiceRate = 1, wakeLock = false, gymPrefs = null, onSetRestPreset = null, onDraftChange, onSave, onCancel }){
   const startedAtRef=useRef(draft?.startedAt || new Date().toISOString());
-  const [blocks,setBlocks]=useState(()=> initGuidedBlocks(session, history, draft?.blocks, startedAtRef.current));
+  const [blocks,setBlocks]=useState(()=> initGuidedBlocks(session, history, draft?.blocks));
   const [note,setNote]=useState(()=> draft?.note || '');
   const [noteTags,setNoteTags]=useState(()=> draft?.noteTags || []);
   const [restEndsAt,setRestEndsAt]=useState(()=> draft?.restEndsAt || null);
@@ -196,6 +197,16 @@ export default function GuidedRunner({ session, history = [], availableEquipment
     spokenStepRef.current = stepKey;
     speakCurrentStep(step, blocks, voiceOn);
   }, [stepKey, voiceOn]);
+  // The guided runner shows one step at a time, so freeze a block's schedule
+  // prescription the moment it becomes the active step — not at session start.
+  // Idempotent and array-stable (see withGuidedStepPrescription), so a rerender
+  // that changes nothing does not loop, and set/skip edits never re-stamp it.
+  const activeBlockIndex = step ? step.blockIndex : null;
+  useEffect(()=>{
+    if(activeBlockIndex == null) return;
+    setBlocks(prev=> withGuidedStepPrescription(session, prev, activeBlockIndex, new Date().toISOString()));
+  },[activeBlockIndex, session]);
+
   const elapsed = sessionElapsedMs(startedAtRef.current, clock);
 
   const currentBlock = step ? blocks[step.blockIndex] : null;

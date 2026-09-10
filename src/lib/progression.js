@@ -640,15 +640,31 @@ function orderedHistory(history){
     .map(item=> item.session);
 }
 
-// ── Prospective prescription snapshots ───────────────────────────────
-// What Arise actually showed before a workout, frozen at prescription time.
+// ── First-visible prescription snapshots ─────────────────────────────
+// The exact recommendation Arise showed for a block, frozen the moment that
+// block's target is first PRESENTED (not at session start, not at save).
 // Stored on the saved history block (`block.prescription`) so it travels with
 // the session through IDB, export/import and normalisation — no separate
 // ledger, no schema migration, no fabricated snapshots for legacy sessions.
-// Consumers must read the stored snapshot; they must never regenerate it
-// from later engine state. The snapshot is frozen in memory; callers must
-// preserve an existing snapshot when re-saving rather than rebuilding it.
+// A snapshot is DEEPLY frozen: no nested object or array can be mutated after
+// creation. It is never regenerated from later engine state; the only way a
+// block's shown prescription changes is an explicit supersede (see
+// attachPrescription/supersedePrescription), which keeps the old snapshot in
+// `prescriptionHistory` and links the chain by provenance.
 export const PRESCRIPTION_SNAPSHOT_VERSION = 1;
+
+// The explicit reasons a shown prescription may legitimately change. A reason
+// is required for every supersede; unknown reasons are preserved verbatim so
+// the audit trail never silently invents one.
+export const PRESCRIPTION_CHANGE_REASONS = Object.freeze([
+  'initial-prescription',
+  'exercise-substituted',
+  'policy-changed',
+  'equipment-changed',
+  'programme-adjusted',
+  'user-requested-change',
+  'prescription-updated',
+]);
 
 function plannedSetCount(block){
   if(block == null) return 0;
@@ -659,25 +675,46 @@ function plannedSetCount(block){
   return block.sets.length;
 }
 
+// Recursively freeze an object graph (arrays and nested plain objects), so a
+// frozen snapshot cannot be mutated at any depth. Cycles are tolerated via a
+// seen set; already-frozen subtrees are skipped.
+function deepFreeze(value, seen){
+  if(value == null || typeof value !== 'object') return value;
+  const visited = seen || new WeakSet();
+  if(visited.has(value) || Object.isFrozen(value)) return value;
+  visited.add(value);
+  Object.freeze(value);
+  for(const key of Object.keys(value)) deepFreeze(value[key], visited);
+  return value;
+}
+
+export function deepFreezePrescription(prescription){
+  return deepFreeze(prescription, new WeakSet());
+}
+
 // `previous` (a superseded snapshot) and `changeReason` are the ONLY way a
-// snapshot legitimately changes: an exercise swap, a policy/kit/programme
-// change or any other reason Arise showed a different target than the one it
-// first froze. Passing `previous` never mutates it — it records provenance
+// snapshot legitimately changes: an exercise swap, or a policy/kit/programme/
+// user change that made Arise show a different target than the one it first
+// froze. Passing `previous` never mutates it — it records provenance
 // (supersedesPrescriptionId, previousExerciseId, revision) so the old snapshot
-// stays auditable. A plain rebuild without `previous` is what an unfaithful
-// reconstruction would look like; callers must use attachPrescription/carryPrescription instead of rebuilding over an existing snapshot.
-export function buildPrescriptionSnapshot({ session = null, block = null, blockIndex = null, recommendation = null, prescribedAt = null, policy = 'standard', config = null, previous = null, changeReason = null } = {}){
+// stays auditable. `shownAt`/`createdAt` are the first-visible timestamp and
+// the construction timestamp; `prescribedAt` mirrors shownAt for the
+// first-visible moment this snapshot governed. A rebuild with no `previous`
+// over a block that already has a snapshot is what an unfaithful
+// reconstruction looks like — callers must attach/carry, never rebuild.
+export function buildPrescriptionSnapshot({ session = null, block = null, blockIndex = null, recommendation = null, prescribedAt = null, shownAt = null, createdAt = null, policy = 'standard', config = null, previous = null, changeReason = null } = {}){
   if(!session?.id || !block?.exerciseId) return null;
   const prescribedSets = plannedSetCount(block);
   if(!(prescribedSets > 0)) return null;
-  const prescribedAtISO = prescribedAt || session.startedAt || null;
-  if(!prescribedAtISO) return null;
+  const shownISO = shownAt || prescribedAt || session.startedAt || null;
+  if(!shownISO) return null;
+  const createdISO = createdAt || shownISO;
   const priors = resolveArisePriors(config);
   const hasPrevious = !!(previous && previous.prescriptionId);
   const revision = hasPrevious && Number.isFinite(previous.revision) ? previous.revision + 1 : (hasPrevious ? 2 : 1);
   const blockIndexPart = Number.isInteger(blockIndex) ? blockIndex : 'x';
   const prescriptionId = `${session.id}:${blockIndexPart}:${block.exerciseId}:r${revision}`;
-  return Object.freeze({
+  return deepFreezePrescription({
     schemaVersion: PRESCRIPTION_SNAPSHOT_VERSION,
     prescriptionId,
     revision,
@@ -695,7 +732,10 @@ export function buildPrescriptionSnapshot({ session = null, block = null, blockI
     prescribedAssistKg: recommendation?.assistKg ?? null,
     rpeTarget: recommendation?.rpe ?? null,
     rirTarget: recommendation?.rir ?? null,
-    prescribedAt: prescribedAtISO,
+    shownAt: shownISO,
+    firstShownAt: shownISO,
+    createdAt: createdISO,
+    prescribedAt: shownISO,
     priorCutoffDateISO: session.dateISO || null,
     engine: recommendation ? {
       name: 'arise-engine',
@@ -712,38 +752,54 @@ export function buildPrescriptionSnapshot({ session = null, block = null, blockI
   });
 }
 
-function freezePrescription(prescription){
-  if(prescription && typeof prescription === 'object' && !Object.isFrozen(prescription)) Object.freeze(prescription);
-  return prescription;
-}
-
-function copyPrescriptionHistory(history){
-  if(!Array.isArray(history) || !history.length) return null;
-  return history.map(freezePrescription).slice();
-}
-
-// The audit entry point that LEGITIMATELY replaces a shown prescription (an
-// exercise swap, or a policy/kit/programme change). It never edits the previous
-// snapshot: it pushes it into `prescriptionHistory` and installs the new one.
-// If the incoming snapshot is the one already on the block, it is a no-op, so
-// reruns of a display effect cannot duplicate or mutate history.
+// The audit entry point that LEGITIMATELY replaces a shown prescription. It
+// never edits the previous snapshot: it pushes it into `prescriptionHistory`
+// and installs the new one. If the incoming snapshot is the one already on the
+// block it is a no-op, so reruns of a first-visible effect cannot duplicate or
+// mutate history (and a policy/kit change that would rebuild the same frozen
+// identity cannot overwrite what was actually shown).
 export function attachPrescription(block, snapshot){
   if(!block || typeof block !== 'object' || !snapshot) return block;
   const prior = block.prescription;
   if(prior && prior.prescriptionId === snapshot.prescriptionId) return block;
-  const history = prior ? [...(copyPrescriptionHistory(block.prescriptionHistory) || []), freezePrescription(prior)] : copyPrescriptionHistory(block.prescriptionHistory);
-  const next = { ...block, prescription: freezePrescription(snapshot) };
+  const history = prior ? [...(copyPrescriptionHistory(block.prescriptionHistory) || []), deepFreezePrescription(prior)] : copyPrescriptionHistory(block.prescriptionHistory);
+  const next = { ...block, prescription: deepFreezePrescription(snapshot) };
   if(history) next.prescriptionHistory = history; else delete next.prescriptionHistory;
   return next;
 }
 
+// Explicit, reason-carrying supersede: the ONLY sanctioned way to replace a
+// block's shown prescription mid-session (e.g. an exercise swap). The old
+// snapshot is preserved in history and the new revision records provenance.
+export function supersedePrescription(block, { session = null, block: rxBlock = null, blockIndex = null, recommendation = null, shownAt = null, createdAt = null, policy = 'standard', config = null, changeReason = 'prescription-updated' } = {}){
+  const previous = block?.prescription || null;
+  const snapshot = buildPrescriptionSnapshot({
+    session,
+    block: rxBlock || block,
+    blockIndex,
+    recommendation,
+    shownAt,
+    createdAt,
+    policy,
+    config,
+    previous,
+    changeReason,
+  });
+  return snapshot ? attachPrescription(block, snapshot) : block;
+}
+
+function copyPrescriptionHistory(history){
+  if(!Array.isArray(history) || !history.length) return null;
+  return history.map(deepFreezePrescription).slice();
+}
+
 // Draft/crash-recovery restore path: an existing prescription (a plain object
-// once it has been through IDB) is re-frozen so the in-memory immutability
-// promise survives a reload. This NEVER rebuilds anything from the engine.
+// once it has been through IDB) is re-frozen so the deep-immutability promise
+// survives a reload. This NEVER rebuilds anything from the engine.
 export function freezePrescriptionBlock(block){
   if(!block || typeof block !== 'object') return block;
   const out = { ...block };
-  if(out.prescription) out.prescription = freezePrescription(out.prescription); else delete out.prescription;
+  if(out.prescription) out.prescription = deepFreezePrescription(out.prescription); else delete out.prescription;
   const history = copyPrescriptionHistory(out.prescriptionHistory);
   if(history) out.prescriptionHistory = history; else delete out.prescriptionHistory;
   return out;
@@ -755,7 +811,7 @@ export function freezePrescriptionBlock(block){
 export function carryPrescription(block){
   if(!block || typeof block !== 'object') return {};
   const out = {};
-  if(block.prescription) out.prescription = freezePrescription(block.prescription);
+  if(block.prescription) out.prescription = deepFreezePrescription(block.prescription);
   const history = copyPrescriptionHistory(block.prescriptionHistory);
   if(history) out.prescriptionHistory = history;
   return out;

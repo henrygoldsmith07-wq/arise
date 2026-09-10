@@ -148,3 +148,15 @@ export const SESSION_QUALITY_OPTIONS = [
 export function sessionQualityLabel(id){
   return SESSION_QUALITY_OPTIONS.find(o=> o.id === id)?.label || null;
 }
+
+// Which blocks are actually PRESENTED to the user right now. In the standard
+// runner every block's target is on screen, so all indices are visible. In Gym
+// Mode only the focused block is rendered (later blocks are `return null`), so
+// a block's prescription must not be frozen until it becomes the focused one.
+// This is the pure core of first-visible capture timing: the runner asks
+// "which indices are shown?" and only freezes those.
+export function visiblePrescriptionIndexes({ gymMode = false, focusIdx = 0, blockCount = 0 } = {}){
+  const count = Math.max(0, Number(blockCount) || 0);
+  if(!gymMode) return Array.from({ length: count }, (_, i)=> i);
+  return focusIdx >= 0 && focusIdx < count ? [focusIdx] : [];
+}

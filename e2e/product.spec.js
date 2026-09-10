@@ -291,12 +291,12 @@ test.describe('Prospective prescription capture', () => {
     const shown = await page.evaluate(async () => {
       const { loadStore } = await import('/src/lib/store.js');
       const rx = loadStore().activeWorkout?.blocks?.[0]?.prescription;
-      return rx ? { id: rx.prescriptionId, source: rx.source, revision: rx.revision, prescribedAt: rx.prescribedAt, hasEngine: !!rx.engine, frozen: Object.isFrozen(rx) } : null;
+      return rx ? { id: rx.prescriptionId, source: rx.source, revision: rx.revision, firstShownAt: rx.firstShownAt, createdAt: rx.createdAt } : null;
     });
     expect(shown.source).toBe('engine');
     expect(shown.revision).toBe(1);
-    expect(shown.hasEngine).toBe(true);
-    expect(shown.prescribedAt).toBeTruthy();
+    expect(shown.firstShownAt).toBeTruthy();
+    expect(shown.createdAt).toBeTruthy();
 
     // Log one real set, then fill the rest, then save.
     const repInputs = runner.getByPlaceholder('8');
@@ -322,12 +322,73 @@ test.describe('Prospective prescription capture', () => {
       const store = loadStore();
       const last = store.history[store.history.length - 1];
       const rx = last?.blocks?.[0]?.prescription;
-      return { draftGone: !store.activeWorkout, startedAt: last?.startedAt, id: rx?.prescriptionId, revision: rx?.revision, prescribedAt: rx?.prescribedAt };
+      return { draftGone: !store.activeWorkout, startedAt: last?.startedAt, finishedAt: last?.finishedAt, id: rx?.prescriptionId, revision: rx?.revision, firstShownAt: rx?.firstShownAt };
     });
     expect(saved.draftGone).toBe(true);
     expect(saved.id).toBe(shown.id);
     expect(saved.revision).toBe(1);
-    expect(saved.prescribedAt).toBe(saved.startedAt);
+    // First-visible capture: the shown stamp falls inside the session window
+    // and is copied verbatim by save (never rebuilt to finishedAt).
+    expect(saved.firstShownAt).toBe(shown.firstShownAt);
+    expect(Date.parse(saved.firstShownAt)).toBeGreaterThanOrEqual(Date.parse(saved.startedAt));
+    expect(Date.parse(saved.firstShownAt)).toBeLessThanOrEqual(Date.parse(saved.finishedAt));
+  });
+
+  test('Gym Mode defers capture: only the focused block is frozen, later blocks wait', async ({ page }) => {
+    await page.getByRole('button', { name: 'Train' }).click();
+    const recCard = page.locator('[aria-label="Recommended for you"]');
+    if (await recCard.getByRole('button', { name: 'Start programme' }).isVisible().catch(() => false)) {
+      await recCard.getByRole('button', { name: 'Start programme' }).click();
+    } else {
+      await page.getByRole('button', { name: 'Browse programmes' }).click();
+      const generateBtn = page.getByRole('button', { name: /Generate from profile/i });
+      if (await generateBtn.isVisible()) { await generateBtn.click(); await page.waitForTimeout(300); }
+      const scheduleBtn = page.getByRole('button', { name: /Schedule this program/i });
+      if (await scheduleBtn.isVisible()) await scheduleBtn.click();
+    }
+    await expect(page.locator('[aria-label="Current programme"]')).toBeVisible({ timeout: 5000 });
+
+    // Start the session already in Gym Mode (focus is one block at a time).
+    await page.evaluate(async () => {
+      const { loadStore, saveStore } = await import('/src/lib/store.js');
+      const store = loadStore();
+      store.preferences = { ...(store.preferences || {}), focusDefault: true };
+      saveStore(store);
+    });
+    await page.reload();
+    await page.getByRole('button', { name: 'Today', exact: true }).click();
+    const startBtn = page.getByRole('button', { name: /Start workout|Start this session/ }).first();
+    if (await startBtn.isVisible()) await startBtn.click();
+    const runner = page.getByRole('dialog', { name: /Session —/ });
+    await expect(runner).toBeVisible({ timeout: 8000 });
+
+    // The focused block (0) is captured; the not-yet-shown block (1) is not.
+    await expect.poll(async () => page.evaluate(async () => {
+      const { loadStore } = await import('/src/lib/store.js');
+      return loadStore().activeWorkout?.blocks?.[0]?.prescription?.prescriptionId || null;
+    }), { timeout: 8000, message: 'focused block captured' }).toBeTruthy();
+    const focusOnly = await page.evaluate(async () => {
+      const { loadStore } = await import('/src/lib/store.js');
+      const blocks = loadStore().activeWorkout?.blocks || [];
+      return { first: !!blocks[0]?.prescription, second: !!blocks[1]?.prescription, count: blocks.length };
+    });
+    expect(focusOnly.first).toBe(true);
+    if (focusOnly.count > 1) expect(focusOnly.second).toBe(false, 'a hidden block must not be frozen yet');
+
+    // Work through the focused block's sets so focus advances to block 1,
+    // which is only then captured (delayed first-visible).
+    for (let guard = 0; guard < 6; guard++) {
+      const repInputs = runner.getByPlaceholder('8');
+      for (let i = 0; i < await repInputs.count(); i++) if (!(await repInputs.nth(i).inputValue())) await repInputs.nth(i).fill('8');
+      const complete = runner.getByRole('button', { name: 'Complete next set' });
+      if (await complete.isVisible().catch(() => false)) await complete.click();
+      else break;
+    }
+
+    await expect.poll(async () => page.evaluate(async () => {
+      const { loadStore } = await import('/src/lib/store.js');
+      return loadStore().activeWorkout?.blocks?.[1]?.prescription?.prescriptionId || null;
+    }), { timeout: 8000, message: 'newly focused block captured on visibility' }).toBeTruthy();
   });
 });
 
