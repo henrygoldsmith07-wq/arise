@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { lastExerciseSets } from '../lib/store.js';
-import { recommendNext, buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, supersedePrescription } from '../lib/progression.js';
+import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, applySwapToBlocks } from '../lib/progression.js';
 import { recommendNextWithPolicy, POLICY_ORDER } from '../lib/progressionPolicies.js';
 import { runComparativeStudy, doubleProgressionRec } from '../lib/study.js';
 import { assignmentFor } from '../lib/studyEnrollment.js';
@@ -54,7 +54,7 @@ function newSet(reps, unilateral, previous = null){
   };
 }
 
-function normaliseBlock(block, history, draftBlock){
+function normaliseBlock(block, history, draftBlock, planIndex = 0){
   const source = draftBlock || block;
   const unilateral = !!source.unilateral || !!EXERCISE_BY_ID[source.exerciseId]?.unilateral;
   const previous = draftBlock ? null : lastExerciseSets(history, source.exerciseId);
@@ -73,6 +73,10 @@ function normaliseBlock(block, history, draftBlock){
     why: source.why || '',
     substitutionFrom: source.substitutionFrom || '',
     substitutionReason: source.substitutionReason || '',
+    // Which scheduled row this block came from. A partial swap inserts a block,
+    // so later blocks shift array position — planIndex keeps the first-visible
+    // capture pointed at the right prescription of record regardless.
+    planIndex: Number.isInteger(source.planIndex) ? source.planIndex : planIndex,
     prescription: source.prescription || null,
     prescriptionHistory: Array.isArray(source.prescriptionHistory) ? source.prescriptionHistory : null,
   });
@@ -168,7 +172,7 @@ function hasUnfinishedSet(blocks, bi, si){
 }
 
 export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, appPrefs = null, gymPrefs = null, onSetRestPreset = null, studyEnrollment = null, participantId = null, onDraftChange, onSave, onCancel }){
-  const [blocks,setBlocks]=useState(()=> session.blocks.map((b,i)=> normaliseBlock(b, history, draft?.blocks?.[i])));
+  const [blocks,setBlocks]=useState(()=> session.blocks.map((b,i)=> normaliseBlock(b, history, draft?.blocks?.[i], i)));
   // Transient confirmation for the one-tap "apply all" fast-log path.
   const [applyAllNote,setApplyAllNote]=useState(null);
   const [note,setNote]=useState(()=> draft?.note || '');
@@ -427,11 +431,12 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       const shownAt = new Date().toISOString();
       const next = prev.map((b, index)=>{
         if(b.prescription || !visible.has(index)) return b;
-        const planned = session.blocks?.[index] || {};
+        const plan = Number.isInteger(b.planIndex) ? b.planIndex : index;
+        const planned = session.blocks?.[plan] || {};
         const snapshot = buildPrescriptionSnapshot({
           session,
           block: { ...planned, exerciseId: b.exerciseId, sets: b.sets },
-          blockIndex: index,
+          blockIndex: plan,
           recommendation: blockMeta.recs.get(b.exerciseId) || null,
           shownAt,
           policy: appPolicy,
@@ -593,43 +598,27 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   }, [gymMode, focusIdx, blocks]);
 
   const swapBlock = (bi, option)=>{
-    setBlocks(prev=> prev.map((b,i)=>{
-      if(i!==bi) return b;
-      const prior=lastExerciseSets(history, option.id);
-      const unilateral=!!option.unilateral;
-      const swapped = {
-        ...b,
-        exerciseId: option.id,
-        unilateral,
-        warmups: [],
-        loadHint: option.supportsWeighted ? 'use a controlled load' : 'bodyweight',
-        substitutionFrom: b.substitutionFrom || b.exerciseId,
-        substitutionReason: option.reason,
-        sets: b.sets.map((s,si)=>{
-          if(s.completed) return { ...s, side: unilateral ? (s.side || 'L') : '', completed:true };
-          const old=prior?.sets?.[si] || prior?.sets?.[prior.sets.length-1];
-          return { ...newSet(b.reps, unilateral, old), completed:false };
-        }),
-      };
-      // A swap is an explicit change of prescription, so it is allowed to
-      // supersede — but never to overwrite. supersedePrescription freezes the
-      // substituted exercise's shown target as a new revision (firstShownAt =
-      // the swap moment), links it to the one it replaces, and keeps the old
-      // snapshot in history. The new block's exercise identity changes, so its
-      // prescriptionId differs from the prior — history is preserved, never
-      // mutated. Observed follow-through later scores only this active revision.
-      const planned = session.blocks?.[bi] || {};
-      const rec = getRecommendation({ exerciseId: option.id, reps: swapped.reps || planned.reps }, history, session.dateISO, plateConfig, study, assignmentFor(studyEnrollment, option.id), appPolicy, appExplanationMode);
-      return supersedePrescription(swapped, {
+    setBlocks(prev=>{
+      const target = prev[bi];
+      if(!target || !option?.id || option.id === target.exerciseId) return prev;
+      const plan = Number.isInteger(target.planIndex) ? target.planIndex : bi;
+      const recommendation = getRecommendation({ exerciseId: option.id, reps: target.reps || session.blocks?.[plan]?.reps }, history, session.dateISO, plateConfig, study, assignmentFor(studyEnrollment, option.id), appPolicy, appExplanationMode);
+      // applySwapToBlocks splits a partially-completed block so done work keeps
+      // its original exercise + prescription, or replaces it in place if nothing
+      // has been performed yet. Either way the swap stays a single tap.
+      return applySwapToBlocks({
+        blocks: prev,
+        index: bi,
+        option,
         session,
-        block: { ...planned, exerciseId: option.id, sets: swapped.sets },
-        blockIndex: bi,
-        recommendation: rec || null,
-        shownAt: new Date().toISOString(),
+        recommendation: recommendation || null,
+        priorSets: lastExerciseSets(history, option.id)?.sets || [],
+        planIndex: plan,
         policy: appPolicy,
-        changeReason: 'exercise-substituted',
+        nowISO: new Date().toISOString(),
+        newSet,
       });
-    }));
+    });
     setSwapOpen(null);
   };
 

@@ -5,8 +5,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildPrescriptionSnapshot, recommendNext, attachPrescription, carryPrescription, freezePrescriptionBlock, supersedePrescription, deepFreezePrescription, PRESCRIPTION_CHANGE_REASONS } from '../src/lib/progression.js';
-import { observedPrescriptionFollowThrough } from '../src/lib/analytics.js';
+import { buildPrescriptionSnapshot, recommendNext, attachPrescription, carryPrescription, freezePrescriptionBlock, supersedePrescription, deepFreezePrescription, applySwapToBlocks, PRESCRIPTION_CHANGE_REASONS } from '../src/lib/progression.js';
+import { observedPrescriptionFollowThrough, strengthSeries } from '../src/lib/analytics.js';
 import { progressAssessment } from '../src/lib/product.js';
 import { initGuidedBlocks, buildGuidedPayload, withGuidedStepPrescription } from '../src/lib/guidedMode.js';
 import { visiblePrescriptionIndexes } from '../src/lib/gymMode.js';
@@ -548,5 +548,128 @@ describe('early observed follow-through never decides the verdict', ()=>{
     assert.equal(assessment.signals[0].deciding, false);
     assert.ok(!assessment.signals.some((signal)=> signal.label.startsWith('Actual prescription')));
     assert.ok(!assessment.signals.some((signal)=> signal.label.startsWith('Retrospective engine replay')));
+  });
+});
+
+describe('partial exercise swaps never relabel completed work', ()=>{
+  const session = { id: 's1', dateISO: '2026-08-10', startedAt: '2026-08-10T09:00:00.000Z', blocks: [{ exerciseId: 'bench-press-dumbbell', sets: 3, reps: '8–10' }] };
+  const option = { id: 'dumbbell-row', unilateral: false, supportsWeighted: true, reason: 'kit' };
+  const now = '2026-08-10T09:20:00.000Z';
+  const benchRx = () => snapshot('s1', '2026-08-10', 'bench-press-dumbbell', 3, 8, 20, '2026-08-10T09:00:00.000Z');
+  const completedSet = (reps, load) => ({ reps: String(reps), weightKg: String(load), rpe: '', completed: true, skipped: false, failed: false });
+  const pendingSet = () => ({ reps: '', weightKg: '', rpe: '', completed: false, skipped: false, failed: false });
+  const failedSet = (reps, load) => ({ reps: String(reps), weightKg: String(load), rpe: '', completed: false, skipped: false, failed: true });
+
+  it('no work performed → replaced in place (single block), never split', ()=>{
+    const blocks = [{ exerciseId: 'bench-press-dumbbell', reps: '8–10', planIndex: 0, prescription: benchRx(), sets: [pendingSet(), pendingSet(), pendingSet()] }];
+    const out = applySwapToBlocks({ blocks, index: 0, option, session, recommendation: { reps: 10, load: 22.5, reason: 'r', priorsVersion: 1 }, nowISO: now });
+    assert.equal(out.length, 1);
+    assert.equal(out[0].exerciseId, 'dumbbell-row');
+    assert.equal(out[0].prescription.revision, 2);
+    assert.equal(out[0].prescription.changeReason, 'exercise-substituted');
+    assert.equal(out[0].prescription.supersedesPrescriptionId, 's1:0:bench-press-dumbbell:r1');
+    assert.deepEqual(out[0].prescriptionHistory.map((rx)=> rx.prescriptionId), ['s1:0:bench-press-dumbbell:r1']);
+  });
+
+  it('one completed set → split: done set keeps original exercise + prescription', ()=>{
+    const blocks = [{ exerciseId: 'bench-press-dumbbell', reps: '8–10', planIndex: 0, prescription: benchRx(), sets: [completedSet(8, 20), pendingSet(), pendingSet()] }];
+    const out = applySwapToBlocks({ blocks, index: 0, option, session, recommendation: { reps: 10, load: 22.5, reason: 'r', priorsVersion: 1 }, priorSets: [], nowISO: now });
+    assert.equal(out.length, 2);
+    assert.equal(out[0].exerciseId, 'bench-press-dumbbell');
+    assert.equal(out[0].prescription.prescriptionId, 's1:0:bench-press-dumbbell:r1', 'original prescription untouched');
+    assert.equal(out[0].sets.length, 1);
+    assert.equal(out[0].sets[0].weightKg, '20');
+    assert.equal(out[1].exerciseId, 'dumbbell-row');
+    assert.equal(out[1].prescription.revision, 2);
+    assert.equal(out[1].prescription.previousExerciseId, 'bench-press-dumbbell');
+    assert.equal(out[1].prescription.supersedesPrescriptionId, 's1:0:bench-press-dumbbell:r1');
+    assert.equal(out[1].prescription.prescribedSets, 2, 'replacement inherits only the remaining slots');
+    assert.equal(out[1].substitutionFrom, 'bench-press-dumbbell');
+    assert.equal(out[1].substitutedFromBlockIndex, 0);
+    assert.equal(out[1].substitutedAt, now);
+  });
+
+  it('a failed set is retained by the original block too', ()=>{
+    const blocks = [{ exerciseId: 'bench-press-dumbbell', reps: '8–10', planIndex: 0, prescription: benchRx(), sets: [failedSet(3, 20), pendingSet()] }];
+    const out = applySwapToBlocks({ blocks, index: 0, option, session, recommendation: null, nowISO: now });
+    assert.equal(out.length, 2);
+    assert.equal(out[0].exerciseId, 'bench-press-dumbbell');
+    assert.equal(out[0].sets.length, 1);
+    assert.equal(out[0].sets[0].failed, true);
+    assert.equal(out[1].exerciseId, 'dumbbell-row');
+  });
+
+  it('multiple swaps chain into separate identity-preserved blocks', ()=>{
+    let blocks = [{ exerciseId: 'bench-press-dumbbell', reps: '8–10', planIndex: 0, prescription: benchRx(), sets: [completedSet(8, 20), completedSet(8, 20), pendingSet()] }];
+    blocks = applySwapToBlocks({ blocks, index: 0, option, session, recommendation: { reps: 10, load: 22.5, reason: 'r', priorsVersion: 1 }, nowISO: now });
+    assert.equal(blocks.length, 2);
+    blocks = [{ ...blocks[0], sets: [...blocks[0].sets] }, { ...blocks[1], sets: [completedSet(10, 22.5), pendingSet()] }];
+    blocks = applySwapToBlocks({ blocks, index: 1, option: { id: 'pull-up', unilateral: false, supportsWeighted: false, reason: 'no kit' }, session, recommendation: null, planIndex: 0, nowISO: '2026-08-10T09:30:00.000Z' });
+    assert.equal(blocks.length, 3);
+    assert.deepEqual(blocks.map((b)=> b.exerciseId), ['bench-press-dumbbell', 'dumbbell-row', 'pull-up']);
+    assert.equal(blocks[0].prescription.prescriptionId, 's1:0:bench-press-dumbbell:r1');
+    assert.equal(blocks[1].prescription.prescriptionId, 's1:0:dumbbell-row:r2');
+    assert.equal(blocks[2].prescription.changeReason, 'exercise-substituted');
+    assert.equal(blocks[2].prescription.previousExerciseId, 'dumbbell-row');
+  });
+
+  it('split survives reload/crash restore and stays deeply frozen', ()=>{
+    const blocks = [{ exerciseId: 'bench-press-dumbbell', reps: '8–10', planIndex: 0, prescription: benchRx(), sets: [completedSet(8, 20), pendingSet()] }];
+    const split = applySwapToBlocks({ blocks, index: 0, option, session, recommendation: { reps: 10, load: 22.5, reason: 'r', priorsVersion: 1 }, nowISO: now });
+    const restored = split.map((b)=> freezePrescriptionBlock(JSON.parse(JSON.stringify(b))));
+    assert.equal(restored[0].exerciseId, 'bench-press-dumbbell');
+    assert.equal(restored[1].exerciseId, 'dumbbell-row');
+    assert.ok(Object.isFrozen(restored[0].prescription));
+    assert.ok(Object.isFrozen(restored[1].prescription.engine), 'replacement engine metadata deeply frozen after restore');
+    assert.throws(()=>{ restored[1].prescription.previousExerciseId = 'tampered'; }, TypeError);
+  });
+
+  it('saved history keeps distinct exercise identities for completed vs replacement work', ()=>{
+    const blocks = [{ exerciseId: 'bench-press-dumbbell', reps: '8–10', planIndex: 0, prescription: benchRx(), sets: [completedSet(8, 20), completedSet(8, 20), pendingSet()] }];
+    const split = applySwapToBlocks({ blocks, index: 0, option, session, recommendation: { reps: 10, load: 22.5, reason: 'r', priorsVersion: 1 }, nowISO: now });
+    split[1].sets[0] = completedSet(10, 22.5);
+    const entry = normaliseHistoryEntry({ id: 's1', dateISO: '2026-08-10', savedAt: now, blocks: JSON.parse(JSON.stringify(split)) });
+    assert.deepEqual(entry.blocks.map((b)=> b.exerciseId), ['bench-press-dumbbell', 'dumbbell-row']);
+    assert.equal(entry.blocks[0].sets.every((s)=> s.completed), true);
+    assert.equal(entry.blocks[0].sets.length, 2);
+  });
+
+  it('observed follow-through scores bench vs bench and row vs row, not a merged denominator', ()=>{
+    const blocks = [{ exerciseId: 'bench-press-dumbbell', reps: '8–10', planIndex: 0, prescription: benchRx(), sets: [completedSet(8, 20), completedSet(8, 20), pendingSet()] }];
+    const split = applySwapToBlocks({ blocks, index: 0, option, session, recommendation: { reps: 10, load: 22.5, reason: 'r', priorsVersion: 1 }, nowISO: now });
+    split[1].sets = [completedSet(10, 22.5)];
+    const scored = observedPrescriptionFollowThrough([{ id: 's1', dateISO: '2026-08-10', blocks: split }]);
+    assert.equal(scored.prescribedSets, 4, 'bench r1 (3) + row active (1); superseded never counted');
+    assert.equal(scored.completeTargets, 3, '2 bench + 1 row met');
+    assert.equal(scored.exercises, 2);
+    assert.equal(scored.followThroughPct, 75);
+  });
+
+  it('strength/e1RM history attributes the bench set to bench and the row set to row', ()=>{
+    const blocks = [{ exerciseId: 'bench-press-dumbbell', reps: '8–10', planIndex: 0, prescription: benchRx(), sets: [completedSet(8, 100), pendingSet()] }];
+    const split = applySwapToBlocks({ blocks, index: 0, option, session, recommendation: { reps: 10, load: 22.5, reason: 'r', priorsVersion: 1 }, nowISO: now });
+    split[1].sets = [completedSet(10, 30)];
+    const hist = [{ id: 's1', dateISO: '2026-08-10', blocks: split }];
+    const bench = strengthSeries(hist, 'bench-press-dumbbell');
+    const row = strengthSeries(hist, 'dumbbell-row');
+    assert.ok(bench.length && bench.every((p)=> p.w === 100), 'bench series sees only the 100kg bench work');
+    assert.ok(row.length && row.every((p)=> p.w === 30), 'row series sees only the 30kg row work');
+    assert.ok(!bench.some((p)=> p.w === 30) && !row.some((p)=> p.w === 100), 'no cross-contamination');
+  });
+
+  it('export/import preserves the split, provenance and deep snapshot fields', ()=>{
+    const blocks = [{ exerciseId: 'bench-press-dumbbell', reps: '8–10', planIndex: 0, prescription: benchRx(), sets: [completedSet(8, 20), pendingSet()] }];
+    const split = applySwapToBlocks({ blocks, index: 0, option, session, recommendation: { reps: 10, load: 22.5, reason: 'r', priorsVersion: 1 }, nowISO: now });
+    const history = [{ id: 's1', dateISO: '2026-08-10', savedAt: now, blocks: split }];
+    const imported = parseImportFile(JSON.stringify({ app: 'arise', data: { history } }));
+    const [benchBlock, rowBlock] = imported.history[0].blocks;
+    assert.equal(benchBlock.exerciseId, 'bench-press-dumbbell');
+    assert.equal(rowBlock.exerciseId, 'dumbbell-row');
+    assert.equal(rowBlock.prescription.changeReason, 'exercise-substituted');
+    assert.equal(rowBlock.prescription.supersedesPrescriptionId, benchRx().prescriptionId);
+    assert.equal(rowBlock.prescription.firstShownAt, now);
+    assert.equal(rowBlock.substitutedFromBlockIndex, 0);
+    assert.equal(rowBlock.substitutedAt, now);
+    assert.deepEqual(rowBlock.prescriptionHistory.map((rx)=> rx.prescriptionId), ['s1:0:bench-press-dumbbell:r1']);
   });
 });

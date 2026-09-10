@@ -79,15 +79,22 @@ function bestSet(block){
 }
 
 function exerciseLogs(history, exerciseId){
-  const logs = [];
+  // One row per SESSION per exercise (the best set across that session's
+  // blocks). A partial exercise swap can leave two blocks in one session, so a
+  // per-block row would fake an extra exposure and contaminate the trend.
+  const bySession = new Map();
   for(const session of history || []){
+    let best = null;
     for(const block of session.blocks || []){
       if(block.exerciseId !== exerciseId) continue;
-      const best = bestSet(block);
-      if(best) logs.push({ ...best, dateISO: session.dateISO, sessionId: session.id, title: session.title, programId: session.programId });
+      const candidate = bestSet(block);
+      if(candidate && (!best || candidate.score > best.score)) best = candidate;
     }
+    if(!best) continue;
+    const key = session.id || session.dateISO || bySession.size;
+    if(!bySession.has(key)) bySession.set(key, { ...best, dateISO: session.dateISO, sessionId: session.id, title: session.title, programId: session.programId });
   }
-  return logs.sort((a, b)=> String(a.dateISO || '').localeCompare(String(b.dateISO || '')));
+  return [...bySession.values()].sort((a, b)=> String(a.dateISO || '').localeCompare(String(b.dateISO || '')));
 }
 
 // A machine-readable explanation for every next-load decision. The UI can

@@ -390,6 +390,74 @@ test.describe('Prospective prescription capture', () => {
       return loadStore().activeWorkout?.blocks?.[1]?.prescription?.prescriptionId || null;
     }), { timeout: 8000, message: 'newly focused block captured on visibility' }).toBeTruthy();
   });
+
+  test('a swap after completed work splits the block instead of relabelling it', async ({ page }) => {
+    await page.getByRole('button', { name: 'Train' }).click();
+    const recCard = page.locator('[aria-label="Recommended for you"]');
+    if (await recCard.getByRole('button', { name: 'Start programme' }).isVisible().catch(() => false)) {
+      await recCard.getByRole('button', { name: 'Start programme' }).click();
+    } else {
+      await page.getByRole('button', { name: 'Browse programmes' }).click();
+      const generateBtn = page.getByRole('button', { name: /Generate from profile/i });
+      if (await generateBtn.isVisible()) { await generateBtn.click(); await page.waitForTimeout(300); }
+      const scheduleBtn = page.getByRole('button', { name: /Schedule this program/i });
+      if (await scheduleBtn.isVisible()) await scheduleBtn.click();
+    }
+    await expect(page.locator('[aria-label="Current programme"]')).toBeVisible({ timeout: 5000 });
+    await page.getByRole('button', { name: 'Today', exact: true }).click();
+    const startBtn = page.getByRole('button', { name: /Start workout|Start this session/ }).first();
+    if (await startBtn.isVisible()) await startBtn.click();
+    const runner = page.getByRole('dialog', { name: /Session —/ });
+    await expect(runner).toBeVisible({ timeout: 8000 });
+
+    const original = await page.evaluate(async () => {
+      const { loadStore } = await import('/src/lib/store.js');
+      return loadStore().activeWorkout?.blocks?.[0]?.exerciseId || null;
+    });
+    expect(original).toBeTruthy();
+
+    // Complete the first set (its reps are pre-filled by the runner) under the
+    // original exercise, before any swap.
+    await runner.getByRole('button', { name: 'Done' }).first().click();
+
+    // Open the substitution sheet and take the first equipment-aware option.
+    await runner.getByRole('button', { name: 'Swap', exact: true }).first().click();
+    const options = runner.locator('[aria-label="Exercise substitutions"] button').filter({ hasText: 'Use' });
+    test.skip(await options.count() === 0, 'no substitution available for this kit');
+    await options.first().click();
+
+    // The completed set stays on the original exercise; a new block appears.
+    await expect.poll(async () => page.evaluate(async (orig) => {
+      const { loadStore } = await import('/src/lib/store.js');
+      const blocks = loadStore().activeWorkout?.blocks || [];
+      const keep = blocks.find((b)=> b.exerciseId === orig);
+      return blocks.length >= 2 && keep?.sets?.some((s)=> s.completed) && blocks.some((b)=> b.exerciseId !== orig);
+    }, original), { timeout: 8000, message: 'block split with original work preserved' }).toBeTruthy();
+
+    // Save the session.
+    await runner.getByRole('button', { name: 'Save session' }).click();
+
+    const saved = await page.evaluate(async (orig) => {
+      const { loadStore } = await import('/src/lib/store.js');
+      const last = loadStore().history[loadStore().history.length - 1];
+      const blocks = last.blocks || [];
+      const keep = blocks.find((b)=> b.exerciseId === orig);
+      const other = blocks.find((b)=> b.exerciseId !== orig);
+      return {
+        ids: blocks.map((b)=> b.exerciseId),
+        keepHasCompleted: !!keep?.sets?.some((s)=> s.completed),
+        keepPrescriptionId: keep?.prescription?.prescriptionId || null,
+        keepPrescriptionExercise: keep?.prescription?.exerciseId || null,
+        otherPrescriptionChange: other?.prescription?.changeReason || null,
+        otherSupersedes: other?.prescription?.supersedesPrescriptionId || null,
+      };
+    }, original);
+    expect(saved.ids.filter((id)=> id !== original).length).toBeGreaterThan(0, 'a replacement block exists');
+    expect(saved.keepHasCompleted).toBe(true, 'completed work stays under the original exercise');
+    expect(saved.keepPrescriptionExercise).toBe(original, 'the original prescription keeps its exercise');
+    expect(saved.otherPrescriptionChange).toBe('exercise-substituted');
+    expect(saved.otherSupersedes).toBe(saved.keepPrescriptionId);
+  });
 });
 
 test.describe('Experience levels', () => {

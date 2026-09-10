@@ -788,6 +788,68 @@ export function supersedePrescription(block, { session = null, block: rxBlock = 
   return snapshot ? attachPrescription(block, snapshot) : block;
 }
 
+// A partial swap must NEVER relabel completed work. When the block still has
+// no completed/failed set, swapping replaces it in place (nothing was done
+// under the old identity). As soon as real work exists, the block is SPLIT:
+// the original keeps only its completed/failed sets and its original exerciseId
+// + prescription (byte-for-byte, so history/e1RM/progression attribute that
+// work to the movement actually performed), and a fresh replacement block takes
+// the remaining slots under the new exerciseId with a superseding prescription
+// linked back through provenance. Pure and deterministic so every invariant is
+// unit-testable; the runner supplies the recommendation + set factory.
+export function applySwapToBlocks({ blocks = [], index, option, session = null, recommendation = null, priorSets = [], planIndex = index, policy = 'standard', config = null, nowISO = null, newSet = null } = {}){
+  const target = blocks[index];
+  if(!target || !option || !option.id || option.id === target.exerciseId) return blocks;
+  const now = nowISO || new Date().toISOString();
+  const unilateral = !!option.unilateral;
+  const origin = target.substitutionFrom || target.exerciseId;
+  const repsFor = target.reps || session?.blocks?.[planIndex]?.reps || '';
+  const makeSlot = (si)=>{
+    const prev = priorSets[si] || priorSets[priorSets.length - 1] || null;
+    if(newSet) return { ...newSet(repsFor, unilateral, prev), completed: false };
+    return { reps: prev?.reps != null ? String(prev.reps) : '', weightKg: prev?.weightKg != null ? String(prev.weightKg) : '', rpe: '', side: unilateral ? (prev?.side || 'L') : '', rom: '', assistedKg: '', tempo: '', completed: false };
+  };
+  const buildReplacement = (remainingSets)=> {
+    const base = {
+      ...target,
+      exerciseId: option.id,
+      unilateral,
+      warmups: [],
+      loadHint: option.supportsWeighted ? 'use a controlled load' : 'bodyweight',
+      substitutionFrom: origin,
+      substitutionReason: option.reason || 'user-requested change',
+      substitutedFromBlockIndex: Number.isInteger(planIndex) ? planIndex : null,
+      substitutedAt: now,
+      planIndex,
+      prescriptionHistory: null,
+      sets: remainingSets,
+    };
+    const planned = { ...(session?.blocks?.[planIndex] || {}), exerciseId: option.id, sets: remainingSets };
+    return supersedePrescription(base, {
+      session,
+      block: planned,
+      blockIndex: Number.isInteger(planIndex) ? planIndex : null,
+      recommendation: recommendation || null,
+      shownAt: now,
+      policy,
+      config,
+      changeReason: 'exercise-substituted',
+    });
+  };
+  const sets = target.sets || [];
+  const done = sets.filter(s=> s && (s.completed || s.failed));
+  const pendingCount = sets.filter(s=> !s || (!s.completed && !s.failed)).length;
+  if(!done.length){
+    const remainingSets = Array.from({ length: Math.max(1, pendingCount) }, (_, si)=> makeSlot(si));
+    return blocks.map((b, i)=> i === index ? buildReplacement(remainingSets) : b);
+  }
+  const doneOriginal = freezePrescriptionBlock({ ...target, sets: done.map(s=> ({ ...s })) });
+  const plannedCount = Math.max(1, Number(session?.blocks?.[planIndex]?.sets) || 1);
+  const remainingSets = Array.from({ length: Math.max(1, pendingCount || plannedCount) }, (_, si)=> makeSlot(si));
+  const replacement = buildReplacement(remainingSets);
+  return blocks.flatMap((b, i)=> i === index ? [doneOriginal, replacement] : [b]);
+}
+
 function copyPrescriptionHistory(history){
   if(!Array.isArray(history) || !history.length) return null;
   return history.map(deepFreezePrescription).slice();
