@@ -22,12 +22,13 @@ import { EXERCISE_BY_ID, equipmentClassFor } from './data.js';
 import { movementPatternFor } from './substitutions.js';
 import { computeArms, STUDY_DESIGN } from './study.js';
 import { STUDY_VERSION } from './studyEnrollment.js';
-import { EVALUATION_SCHEMA_VERSION, EVALUATION_KEY, round, parseReps, e1rm, bestSetOfBlock, hasConsent } from './longitudinalCore.js';
+import { EVALUATION_SCHEMA_VERSION, EVALUATION_KEY, round, parseReps, e1rm, bestSetOfBlock, hasConsent, classifyRecommendationOutcome } from './longitudinalCore.js';
 export { EVALUATION_SCHEMA_VERSION, wilsonInterval, EVALUATION_KEY, hasConsent } from './longitudinalCore.js';
+export { RECOMMENDATION_OUTCOME_LABELS, isProspectiveRecord, confidenceBandOf, recommendationTypeOf, shrinkRate, classifyRecommendationOutcome } from './longitudinalCore.js';
 import { withProvenance } from './domain.js';
 import { getDeviceId } from './exportPolicy.js';
-import { evaluateLongitudinal } from './evaluation.js';
-export { evaluateLongitudinal, clusteredBootstrapDifference, clusteredBootstrapWinRate } from './evaluation.js';
+import { evaluateLongitudinal, calibrateRecommendations } from './evaluation.js';
+export { evaluateLongitudinal, calibrateRecommendations, clusteredBootstrapDifference, clusteredBootstrapWinRate } from './evaluation.js';
 export function markRecommendationOverride({ exerciseId, dueDateISO = null, storage = defaultStorage() } = {}){
   const ledger = loadEvaluationLedger(storage);
   let changed = false;
@@ -272,8 +273,19 @@ export function loadArchivedEvaluationCount(storage = defaultStorage()){
 
 // Attach the real outcome once the following workout completes. The outcome is
 // taken from the saved session payload only — never from recommendations.
-export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore = [], preferences = null, config = null, nowISO = null, storage = defaultStorage() } = {}){
+// `sessionMeta` (optional) carries session-level context (pain tag, note,
+// quality) so the outcome can flag pain/form and grade the prescription honestly.
+export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore = [], sessionMeta = null, preferences = null, config = null, nowISO = null, storage = defaultStorage() } = {}){
   if(!hasConsent(preferences)) return [];
+  const priors = resolveArisePriors(config);
+  const outcomeLabels = priors.longitudinal.outcomeLabels;
+  const TECHNIQUE_RE = /rom|depth|form|technique|paused|tempo|partial|shallow|assisted|band/i;
+  const meta = sessionMeta || {};
+  const outcomePain = meta.painDiscomfort === true
+    || (Array.isArray(meta.noteTags) && meta.noteTags.includes('pain-discomfort'))
+    || (blocks || []).some(b=> (b.sets || []).some(s=> s.pain === true));
+  const outcomeTechnique = TECHNIQUE_RE.test(String(meta.note || ''))
+    || (blocks || []).some(b=> (b.sets || []).some(s=> s.rom && TECHNIQUE_RE.test(String(s.rom))));
   const ledger = loadEvaluationLedger(storage);
   const resolved = [];
   const byExercise = new Map();
@@ -379,6 +391,8 @@ export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore =
         assignedMet,
         assignedArm: record.assignedArm || null,
         userOverride: record.userOverride === true,
+        pain: outcomePain,
+        techniqueWarning: outcomeTechnique,
         repsMet, loadMet, assistMet,
         loadErrorKg: errors.loadErrorKg,
         repError: errors.repError,
@@ -394,6 +408,12 @@ export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore =
       // first-party evidence in the study pipeline.
       outcomeProvenance: { origin: 'live-engine', capturedAt: nowISO || new Date().toISOString(), deviceId: getDeviceId() },
     };
+    // Named, conservative outcome label for calibration. Stored on the outcome
+    // so every consumer grades the pair identically and cannot re-litigate it.
+    const graded = classifyRecommendationOutcome(enriched, outcomeLabels);
+    enriched.outcome.label = graded.label;
+    enriched.outcome.labelReason = graded.reason;
+    enriched.outcome.attempted = graded.attempted;
     resolved.push(enriched);
     return enriched;
   });
@@ -403,8 +423,9 @@ export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore =
 
 
 export function longitudinalSummary({ preferences = null, config = null, storage = defaultStorage() } = {}){
-  if(!hasConsent(preferences)) return { consented: false, evaluation: null };
-  return { consented: true, evaluation: evaluateLongitudinal(loadEvaluationLedger(storage), { config }) };
+  if(!hasConsent(preferences)) return { consented: false, evaluation: null, calibration: null };
+  const ledger = loadEvaluationLedger(storage);
+  return { consented: true, evaluation: evaluateLongitudinal(ledger, { config }), calibration: calibrateRecommendations(ledger, { config }) };
 }
 
 // ── Substitution quality validation ─────────────────────────────────────

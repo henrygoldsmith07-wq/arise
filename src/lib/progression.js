@@ -458,6 +458,98 @@ export function sideImbalance(sets){
   return { left: l, right: r, imbalancePct: Math.round(Math.abs(l-r)/total*100), weaker };
 }
 
+// Learn, conservatively, whether this exercise's own prospective prescriptions
+// have been hitting, overshooting, or undershooting — purely from the user's
+// logged history (which carries the frozen first-visible `block.prescription`
+// snapshots). This NEVER reads the separate evaluation ledger: the training
+// engine may consume training history, and nothing else. Sparse or noisy
+// evidence keeps the default stance; a single session can never flip it.
+export function personalCalibrationFromHistory(history, { exerciseId = null, config = null, asOfDateISO = null } = {}){
+  const cfg = resolveArisePriors(config);
+  const cal = cfg.calibration;
+  const regCut = cfg.longitudinal.outcomeLabels.regressionCutPct;
+  const gainPct = cfg.longitudinal.outcomeLabels.meaningfulGainPct;
+  const easyRpe = cfg.longitudinal.outcomeLabels.easyRpeThreshold;
+  const aggro = cfg.longitudinal.outcomeLabels.aggressiveLoadPct;
+  if(!exerciseId) return { active: false, jumpMultiplier: 1, samples: 0 };
+  const TECH = /rom|depth|form|technique|paused|tempo|partial|shallow|assisted|band/i;
+  const sessions = (history || [])
+    .filter(h=> h?.dateISO && (!asOfDateISO || String(h.dateISO) <= String(asOfDateISO)))
+    .sort((a, b)=> String(a.dateISO).localeCompare(String(b.dateISO)));
+  let previousBest = null;
+  let samples = 0, over = 0, under = 0, success = 0;
+  for(const session of sessions){
+    for(const block of session.blocks || []){
+      if(block.exerciseId !== exerciseId) continue;
+      const rx = block.prescription;
+      if(!rx || typeof rx !== 'object') continue;
+      const sets = block.sets || [];
+      // Not attempted at all → grade nothing (never blame, never learn).
+      if(!sets.some(s=> s && (s.completed || s.failed || Number(String(s.reps).match(/\d+/)?.[0] || s.reps) > 0))) continue;
+      // Pain or a technique change makes this exposure unfit to calibrate on.
+      if(session.painDiscomfort || (session.noteTags||[]).includes('pain-discomfort')
+        || sets.some(s=> s && s.pain) || sets.some(s=> s && s.rom && TECH.test(String(s.rom)))) continue;
+      let best = null;
+      for(const s of sets){
+        const reps = Number(String(s.reps).match(/\d+/)?.[0] || s.reps) || 0;
+        const weightKg = Number(s.weightKg) || 0;
+        const assistedKg = Number(s.assistedKg) || 0;
+        if(!reps && !weightKg) continue;
+        const val = e1rm(weightKg, reps) || reps;
+        if(!best || val > best.val) best = { reps, weightKg, assistedKg, rpe: s.rpe, val, failed: !!s.failed };
+      }
+      if(!best) continue;
+      samples++;
+      const repsTarget = rx.prescribedReps != null ? Number(rx.prescribedReps)
+        : (String(rx.prescribedRepRange || '').match(/\d+/)?.map(Number)?.[0] ?? null);
+      const loadTarget = rx.prescribedLoadKg != null && Number(rx.prescribedLoadKg) > 0 ? Number(rx.prescribedLoadKg) : null;
+      const assistTarget = rx.prescribedAssistKg != null ? Number(rx.prescribedAssistKg) : null;
+      const repsMet = repsTarget == null || best.reps >= repsTarget;
+      const loadMet = loadTarget == null || best.weightKg >= loadTarget;
+      const assistMet = assistTarget == null || best.assistedKg <= assistTarget;
+      const met = repsMet && loadMet && assistMet;
+      const changePct = previousBest && previousBest > 0 ? (best.val - previousBest) / previousBest : null;
+      const regressed = changePct != null && changePct <= -regCut;
+      const gained = changePct != null && changePct >= gainPct;
+      const aggressive = loadTarget != null && previousBest != null && loadTarget > previousBest * aggro;
+      const easy = best.rpe != null && String(best.rpe).trim() !== '' && Number(best.rpe) <= easyRpe;
+      if(!met || regressed) over++;
+      else if(!aggressive && easy && gained) under++;
+      else if(met) success++;
+      previousBest = best.val;
+    }
+  }
+  const weight = samples / (samples + cal.pseudoCount);
+  const overRate = samples ? over / samples : 0;
+  const underRate = samples ? under / samples : 0;
+  let dir = 0;
+  if(samples >= cal.minExerciseSessions){
+    if(overRate >= cal.overRateCutoff) dir = -1;
+    else if(underRate >= cal.underRateCutoff) dir = 1;
+  }
+  const step = cal.jumpDeltaStep * weight * dir;
+  const raw = 1 + step;
+  const jumpMultiplier = Math.round(Math.max(cal.jumpMultiplierMin, Math.min(cal.jumpMultiplierMax, raw)) * 1e4) / 1e4;
+  const active = dir !== 0 && samples >= cal.minExerciseSessions && Math.abs(jumpMultiplier - 1) > 1e-6;
+  const successRate = samples ? Math.round(success / samples * 1000) / 1000 : null;
+  const shrunkSuccessRate = Math.round(((success + cal.defaultSuccessRate * cal.pseudoCount) / (samples + cal.pseudoCount)) * 1000) / 1000;
+  let note = null, headline = null;
+  if(active && dir < 0){
+    headline = 'Smaller increase recommended.';
+    note = `Your last ${samples} increases at this exercise were completed ${success}/${samples} times, so Arise is progressing more cautiously.`;
+  }else if(active && dir > 0){
+    headline = 'Slightly more assertive progression.';
+    note = `Your last ${samples} targets at this exercise were met easily ${under} times, so Arise is stepping up a little more confidently.`;
+  }
+  return {
+    active, jumpMultiplier, direction: dir,
+    samples, successRate, overRate: Math.round(overRate * 1000) / 1000, underRate: Math.round(underRate * 1000) / 1000,
+    shrunkSuccessRate, evidenceWeight: Math.round(weight * 1000) / 1000,
+    minExerciseSessions: cal.minExerciseSessions,
+    headline, note,
+  };
+}
+
 // Helpers
 function lastSessionSetCount(history, exerciseId, fallback = 3){
   for(let i = (history||[]).length - 1; i >= 0; i--){

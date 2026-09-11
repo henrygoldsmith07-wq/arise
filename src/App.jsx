@@ -281,6 +281,7 @@ export default function App(){
         dateISO: payload.dateISO,
         blocks: payload.blocks,
         historyBefore: next.history || [],
+        sessionMeta: payload,
         preferences: next.preferences?.telemetryEnabled === true ? { telemetryEnabled: true } : null,
       });
     }catch{}

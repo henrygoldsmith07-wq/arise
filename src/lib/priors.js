@@ -294,6 +294,47 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
     minimumSegmentSamples: 5,
     maxOpenRecordsPerExercise: 3,
     retentionLimit: 500,
+    // Outcome-label decision constants for the named classifier (see
+    // classifyRecommendationOutcome). Meaningful gain reuses the session-quality
+    // prior; regression + easy-effort are the conservative cuts for grading a
+    // prescription — never to punish the engine for an unattempted session.
+    outcomeLabels: {
+      meaningfulGainPct: 0.02,
+      regressionCutPct: 0.05,
+      easyRpeThreshold: 7,
+      aggressiveLoadPct: 1.1,
+    },
+  },
+  // Prospective recommendation calibration: how well the engine's frozen
+  // predictions match what the user actually achieved, segmented honestly and
+  // shrunk hard toward safe defaults when evidence is sparse. Distinct from the
+  // retrospective `backtest` block — this only ever reads first-visible
+  // prospective ledger rows, never a reconstructed recommendation.
+  calibration: {
+    // Jeffreys-style prior mass that pulls a small-n empirical rate toward the
+    // safe default success rate. weight = n / (n + pseudoCount).
+    pseudoCount: 5,
+    // Below this many resolved pairs in a segment, rates stay `null` (withheld).
+    minSamplesToTrust: 5,
+    // Neutral prior for the shrunk rate + a missing confidence band.
+    defaultSuccessRate: 0.6,
+    // Expected target-achievement probability per confidence band, for the
+    // calibration-error (expected-vs-realised) estimate.
+    bandExpected: {
+      high: 0.8,
+      medium: 0.6,
+      low: 0.45,
+      'low-thin': 0.45,
+      none: 0.5,
+    },
+    // Conservative personalisation of future jumps, bounded to stay safe.
+    jumpMultiplierMin: 0.85,
+    jumpMultiplierMax: 1.08,
+    minExerciseSessions: 5,
+    // Shrink-to-default so a single odd session cannot flip the stance.
+    overRateCutoff: 0.34,   // ≥ this fraction too-aggressive → smaller jumps
+    underRateCutoff: 0.5,  // ≥ this fraction too-conservative (easy gains) → slightly bolder
+    jumpDeltaStep: 0.1,    // max multiplier move per calibration pass (bounded)
   },
   // Evidence gates for the progression model. Every capability is inert until
   // its own sample threshold AND a demonstrated weakness (arise losing to a

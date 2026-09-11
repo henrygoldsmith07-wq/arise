@@ -608,6 +608,54 @@ export function progressAssessment({ history = [], schedule = null, today = null
 }
 
 /**
+ * Compact "Coaching calibration" summary derived from the PROSPECTIVE
+ * recommendation→outcome calibration (evaluation.calibration). Pure and
+ * deterministic. Tone rules: numbers carry their basis, nothing is presented
+ * as validated effectiveness until the prospective sample clears the gate, and
+ * reconstructed recommendations never count (the caller's calibration already
+ * excludes them). `active:false` is the honest "still learning" state.
+ */
+export function coachingCalibration(calibration){
+  const resolved = Number(calibration?.resolved) || 0;
+  const minimum = Number(calibration?.minimumSamples) || 5;
+  const o = calibration?.overall || {};
+  if(!calibration || resolved < 1){
+    return {
+      active: false, status: 'gathering',
+      observed: Number(calibration?.prospective) || 0, resolved: 0, open: Number(calibration?.open) || 0,
+      successRate: null, shrunkSuccessRate: null, overRate: null, underRate: null,
+      tendency: 'learning', confidenceQuality: 'unknown',
+      headline: 'Learning what works for you',
+      detail: 'Arise records each recommendation before the workout and checks how it went afterward. Calibration appears once enough prospective outcomes have been logged.',
+      note: calibration?.note || null,
+    };
+  }
+  const enough = resolved >= minimum;
+  const tendency = enough ? (calibration.tendency || 'learning') : 'learning';
+  const headline = enough
+    ? (tendency === 'over-prescribing' ? 'Calibrated to progress more cautiously'
+      : tendency === 'too-conservative' ? 'Ready to step up a little more'
+      : tendency === 'balanced' ? 'Your recommendation calibration is steady'
+      : 'Tuning to what you actually complete')
+    : 'Learning what works for you';
+  return {
+    active: enough, status: enough ? 'calibrated' : 'gathering',
+    observed: Number(calibration.prospective) || 0, resolved, open: Number(calibration.open) || 0,
+    successRate: enough ? (o.successRate ?? null) : null,
+    shrunkSuccessRate: o.shrunkSuccessRate ?? null,
+    overRate: enough ? (o.overPrescriptionRate ?? null) : null,
+    underRate: enough ? (o.underPrescriptionRate ?? null) : null,
+    tendency,
+    confidenceQuality: enough ? (calibration.confidenceQuality || 'unknown') : 'unknown',
+    headline,
+    detail: enough
+      ? `Based on ${resolved} prospective recommendation→outcome pairs: ${o.successful ?? 0} clean successes, ${o.tooAggressive ?? 0} too aggressive, ${o.tooConservative ?? 0} too safe. Personal calibration is ${enough ? 'active' : 'still warming up'}.`
+      : `${resolved} of ${minimum} prospective outcomes logged so far — not enough to grade the engine yet.`,
+    note: calibration.note || null,
+  };
+}
+
+/**
  * Session-count streak with honest, healthy framing. Day-level streaks
  * punish rest days; a "weeks with training" run does not. Returned shape
  * powers both the Progress counter and the "no guilt" copy: a lapsed run

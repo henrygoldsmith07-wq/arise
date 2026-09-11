@@ -9,7 +9,7 @@ import { exerciseHistorySummary, plateauDetection, programAdherence, recommendat
 import { badSessionAttribution, plateauAttribution } from '../lib/sessionQuality.js';
 import { longitudinalSummaryAsync } from '../lib/analyticsWorker.js';
 import { isSimpleView, isExpertView } from '../lib/experienceMode.js';
-import { milestoneState, trainingAgeDisplay, consistencyInsights, healthyStreak, monthlyDigest, nextBestAction, progressAssessment, whatChangedSummary } from '../lib/product.js';
+import { milestoneState, trainingAgeDisplay, consistencyInsights, healthyStreak, monthlyDigest, nextBestAction, progressAssessment, whatChangedSummary, coachingCalibration } from '../lib/product.js';
 import { todayISO, sessionForToday, nextSession } from '../lib/schedule.js';
 import { missedWorkoutRecovery } from '../lib/programming.js';
 
@@ -109,6 +109,8 @@ export default function ProgressView({ store }){
     return ()=> { live = false; };
   }, [prefsKey]);
   const evaluation = longitudinal?.evaluation || null;
+  const coaching = coachingCalibration(longitudinal?.calibration || null);
+  const fmtPct = v=> v == null ? '—' : `${Math.round(v * 100)}%`;
   const formatSegment = segment=> {
     if(!segment || !segment.resolved) return '—';
     if(!segment.conclusive) return `${segment.resolved} pairs (need ${evaluation.minimumSegmentSamples}+ for conclusions)`;
@@ -485,6 +487,42 @@ export default function ProgressView({ store }){
           <p>{calibration.backtest?.calibration?.note || calibration.note}</p>
         </div>
       </section>
+      )}
+
+      {longitudinal?.calibration && (
+        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="Coaching calibration">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-bold">Coaching calibration</h3>
+            <span className={`text-[11px] font-bold px-2 py-1 rounded-full border ${coaching.active ? 'bg-successsoft border-success/30 text-ink' : 'bg-surface2 border-line text-ink3'}`}>{coaching.active ? 'calibrated' : 'gathering'}</span>
+          </div>
+          <p className="text-xs text-ink3">{coaching.headline}</p>
+          <p className="text-[11px] text-ink3">{coaching.detail}</p>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs tabular-nums">
+            <span>{coaching.observed} prospective</span>
+            <span>{coaching.resolved} outcomes</span>
+            <span>success {fmtPct(coaching.successRate)}</span>
+            <span>{coaching.overRate != null ? `${Math.round(coaching.overRate * 100)}% too-fast` : 'tendency —'}</span>
+            <span>{coaching.underRate != null ? `${Math.round(coaching.underRate * 100)}% too-safe` : ''}</span>
+            <span className="text-ink3">confidence {coaching.confidenceQuality}</span>
+          </div>
+          {expert && (
+          <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+            <summary className="text-[11px] font-bold cursor-pointer">Segment calibration (prospective only)</summary>
+            <div className="mt-2 space-y-2 text-[11px] text-ink3">
+              <p><span className="font-bold text-ink">By confidence</span></p>
+              {Object.values(longitudinal.calibration.byConfidenceBand || {}).filter(seg=> seg.conclusive).slice(0, 6).map(seg=> (
+                <p key={seg.key}>{seg.key}: {Math.round((seg.successRate||0)*100)}% success • {Math.round((seg.overPrescriptionRate||0)*100)}% over • {Math.round((seg.underPrescriptionRate||0)*100)}% under • err {seg.calibrationError ?? '—'} • n={seg.sampleSize}</p>
+              ))}
+              <p><span className="font-bold text-ink">By experience</span></p>
+              {Object.values(longitudinal.calibration.byExperience || {}).filter(seg=> seg.conclusive).slice(0, 6).map(seg=> (
+                <p key={seg.key}>{seg.key}: {Math.round((seg.successRate||0)*100)}% success • n={seg.sampleSize}</p>
+              ))}
+              <p>Excluded reconstructed/imported recommendations: {longitudinal.calibration.excludedReconstructed || 0}. Rates below {longitudinal.calibration.minimumSamples} pairs are withheld and shrunk toward the default.</p>
+            </div>
+          </details>
+          )}
+          <p className="text-[11px] text-ink3">{coaching.note}</p>
+        </section>
       )}
 
       {evaluation && evaluation.totalRecords > 0 && (

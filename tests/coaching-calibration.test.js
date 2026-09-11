@@ -1,0 +1,332 @@
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+
+import {
+  RECOMMENDATION_OUTCOME_LABELS,
+  isProspectiveRecord,
+  confidenceBandOf,
+  recommendationTypeOf,
+  shrinkRate,
+  classifyRecommendationOutcome,
+} from '../src/lib/longitudinalCore.js';
+import { calibrateRecommendations } from '../src/lib/evaluation.js';
+import { personalCalibrationFromHistory } from '../src/lib/progression.js';
+import { coachingCalibration } from '../src/lib/product.js';
+import { recordRecommendation, attachOutcome, loadEvaluationLedger } from '../src/lib/longitudinal.js';
+import { withProvenance } from '../src/lib/domain.js';
+
+function memoryStorage(){
+  const map = new Map();
+  return {
+    getItem: key=> map.has(key) ? map.get(key) : null,
+    setItem: (key, value)=> map.set(key, String(value)),
+    removeItem: key=> map.delete(key),
+  };
+}
+const CONSENT = { telemetryEnabled: true };
+
+// A minimal, controllable ledger row (already-resolved or open) for the pure
+// classifier + calibration tests. Mirrors the real record/outcome shape.
+function row(o = {}){
+  const outcome = o.outcome === null ? null : {
+    followed: o.followed === null ? null : (o.followed !== false),
+    metTarget: !!o.met,
+    changePct: o.changePct ?? 0.03,
+    failedSets: o.failed ?? 0,
+    rpe: o.rpe ?? '8.5',
+    pain: o.pain || false,
+    techniqueWarning: o.technique || false,
+  };
+  return {
+    id: o.id || 'row',
+    exerciseId: o.exerciseId || 'bench-press-dumbbell',
+    movementPattern: o.movement || 'horizontal-push',
+    recommendedAction: o.action || 'add_load',
+    basis: { previousBest: o.prev || { reps: 12, weightKg: 20, assistedKg: 0, e1rm: 28 }, trainingAgePhase: o.phase || 'intermediate' },
+    recommendation: { load: o.load ?? 25, reps: o.reps ?? 8, assistKg: null },
+    prescription: { arm: 'arise', load: o.load ?? 25, reps: o.reps ?? 8, assistKg: null },
+    audit: { confidence: o.band ? { band: o.band } : null, policy: o.policy || 'standard' },
+    provenance: { origin: o.origin || 'live-engine' },
+    outcome,
+  };
+}
+
+const T = { meaningfulGainPct: 0.02, regressionCutPct: 0.05, easyRpeThreshold: 7, aggressiveLoadPct: 1.1 };
+
+describe('recommendation outcome labels', ()=>{
+  it('exposes the five conservative labels', ()=>{
+    assert.deepEqual(RECOMMENDATION_OUTCOME_LABELS, ['successful', 'neutral', 'too-aggressive', 'too-conservative', 'insufficient-evidence']);
+  });
+
+  it('a met, non-easy increase that was followed is successful', ()=>{
+    const c = classifyRecommendationOutcome(row({ met: true, changePct: 0.03, rpe: '8.5', load: 22, prev: { weightKg: 20, reps: 12, assistedKg: 0 } }), T);
+    assert.equal(c.label, 'successful');
+    assert.equal(c.attempted, true);
+  });
+
+  it('a missed target after an attempted increase is too-aggressive', ()=>{
+    assert.equal(classifyRecommendationOutcome(row({ met: false }), T).label, 'too-aggressive');
+  });
+
+  it('a regression after an increase is too-aggressive', ()=>{
+    assert.equal(classifyRecommendationOutcome(row({ met: true, changePct: -0.08 }), T).label, 'too-aggressive');
+  });
+
+  it('a failed set on a progression attempt is too-aggressive', ()=>{
+    assert.equal(classifyRecommendationOutcome(row({ met: true, failed: 1, changePct: 0 }), T).label, 'too-aggressive');
+  });
+
+  it('an easy, unaggressive gain is too-conservative', ()=>{
+    const c = classifyRecommendationOutcome(row({ met: true, changePct: 0.04, rpe: '6', load: 21, prev: { weightKg: 20, reps: 12, assistedKg: 0 } }), T);
+    assert.equal(c.label, 'too-conservative');
+  });
+
+  it('a hold that still gained is too-conservative', ()=>{
+    const c = classifyRecommendationOutcome(row({ action: 'hold', met: true, changePct: 0.05 }), T);
+    assert.equal(c.label, 'too-conservative');
+  });
+
+  it('an unfollowed or unknown-adherence prescription is NOT punished', ()=>{
+    const notFollowed = classifyRecommendationOutcome(row({ followed: false, met: false }), T);
+    assert.equal(notFollowed.label, 'insufficient-evidence');
+    assert.equal(notFollowed.attempted, false);
+    const unknown = classifyRecommendationOutcome(row({ followed: null }), T);
+    assert.equal(unknown.label, 'insufficient-evidence');
+    assert.equal(unknown.attempted, false);
+    // A followed increase that was missed IS attempted and IS graded as too-aggressive.
+    assert.equal(classifyRecommendationOutcome(row({ action: 'add_load', met: false }), T).attempted, true);
+  });
+
+  it('a pain or technique session is neutral and not attempted (engine not graded)', ()=>{
+    assert.equal(classifyRecommendationOutcome(row({ met: false, pain: true }), T).label, 'neutral');
+    assert.equal(classifyRecommendationOutcome(row({ met: false, technique: true }), T).attempted, true);
+  });
+
+  it('an unresolved record is insufficient-evidence', ()=>{
+    assert.equal(classifyRecommendationOutcome(row({ outcome: null }), T).label, 'insufficient-evidence');
+  });
+});
+
+describe('prospective-only evidence gate', ()=>{
+  it('live-engine records with a live outcome count; reconstructed ones never do', ()=>{
+    assert.equal(isProspectiveRecord(row()), true);
+    assert.equal(isProspectiveRecord(row({ origin: 'imported' })), false);
+    assert.equal(isProspectiveRecord(row({ origin: 'replayed' })), false);
+    assert.equal(isProspectiveRecord(row({ origin: 'seed' })), false);
+    assert.equal(isProspectiveRecord({ provenance: { origin: 'live-engine' }, outcomeProvenance: { origin: 'replayed' } }), false);
+  });
+  it('confidence band and recommendation type read from the frozen audit', ()=>{
+    assert.equal(confidenceBandOf(row({ band: 'high' })), 'high');
+    assert.equal(confidenceBandOf(row()), null);
+    assert.equal(recommendationTypeOf(row({ action: 'add_reps' })), 'add_reps');
+  });
+});
+
+describe('shrinkage toward safe defaults', ()=>{
+  it('a single success barely moves off the default prior', ()=>{
+    const one = shrinkRate({ successes: 1, samples: 1, prior: 0.6, pseudoCount: 5 });
+    assert.ok(one.rate === 1);
+    assert.ok(one.shrunk < 0.9 && one.shrunk > 0.6, `expected near prior, got ${one.shrunk}`);
+    assert.ok(one.weight < 0.2);
+  });
+  it('a large sample converges to the empirical rate', ()=>{
+    const many = shrinkRate({ successes: 90, samples: 100, prior: 0.6, pseudoCount: 5 });
+    assert.equal(many.rate, 0.9);
+    assert.ok(many.shrunk >= 0.85 && many.shrunk <= 0.9);
+    assert.ok(many.weight > 0.9);
+  });
+  it('zero samples returns the prior with no weight', ()=>{
+    const none = shrinkRate({ successes: 0, samples: 0, prior: 0.6, pseudoCount: 5 });
+    assert.equal(none.rate, null);
+    assert.equal(none.shrunk, 0.6);
+    assert.equal(none.weight, 0);
+  });
+});
+
+describe('recommendation calibration aggregation', ()=>{
+  it('counts only prospective, resolved pairs and reports withheld segments honestly', ()=>{
+    const ledger = [
+      row({ id: 'a', met: true }), row({ id: 'b', met: true }), row({ id: 'c', met: false }),
+      row({ id: 'imp', met: false, origin: 'imported' }),
+      row({ id: 'open', outcome: null }),
+    ];
+    const cal = calibrateRecommendations(ledger, { config: null });
+    assert.equal(cal.prospective, 4);
+    assert.equal(cal.resolved, 3);
+    assert.equal(cal.open, 1);
+    assert.equal(cal.excludedReconstructed, 1);
+    assert.equal(cal.overall.conclusive, false);           // 3 < minimumSamples(5)
+    assert.equal(cal.overall.successRate, null);           // withheld
+    assert.ok(cal.overall.shrunkSuccessRate > 0.4 && cal.overall.shrunkSuccessRate < 0.8); // pulled to default
+    assert.equal(cal.tendency, 'learning');
+    assert.equal(cal.confidenceQuality, 'unknown');
+  });
+  it('a conclusive segment reports success + over/under rates and a bounded calibration error', ()=>{
+    const ledger = [];
+    for(let i = 0; i < 6; i++) ledger.push(row({ id: `s${i}`, met: true, band: 'high' }));
+    for(let i = 0; i < 4; i++) ledger.push(row({ id: `o${i}`, met: false, band: 'high' }));
+    const cal = calibrateRecommendations(ledger, { config: null });
+    assert.equal(cal.overall.conclusive, true);
+    assert.equal(cal.overall.successful, 6);
+    assert.equal(cal.overall.tooAggressive, 4);
+    assert.equal(cal.overall.successRate, 0.6);
+    assert.equal(cal.overall.overPrescriptionRate, 0.4);
+    assert.ok(cal.overall.calibrationError >= 0 && cal.overall.calibrationError <= 1);
+    assert.equal(cal.byConfidenceBand.high.conclusive, true);
+    assert.equal(cal.tendency, 'over-prescribing');
+  });
+  it('segments by exercise, category, policy, experience, type and band', ()=>{
+    const cal = calibrateRecommendations([
+      row({ band: 'medium', policy: 'conservative', exerciseId: 'bench-press-dumbbell' }),
+      row({ band: 'high', policy: 'aggressive', exerciseId: 'pull-up' }),
+    ], { config: null });
+    for(const key of ['byExercise', 'byCategory', 'byPolicy', 'byExperience', 'byType', 'byConfidenceBand']){
+      assert.ok(cal[key] && typeof cal[key] === 'object', `${key} present`);
+    }
+    assert.ok(cal.byPolicy.conservative);
+    assert.ok('medium' in cal.byConfidenceBand);
+  });
+  it('empty ledger yields an honest "not yet" state, not a fabricated 0%', ()=>{
+    const cal = calibrateRecommendations([], { config: null });
+    assert.equal(cal.prospective, 0);
+    assert.equal(cal.overall.successRate, null);
+    assert.match(cal.note, /Need .* more prospective/);
+  });
+  it('is deterministic across repeated aggregation', ()=>{
+    const ledger = [row({ id: 'a', met: true }), row({ id: 'b', met: false }), row({ id: 'c', band: 'low' })];
+    assert.deepEqual(calibrateRecommendations(ledger, { config: null }).overall, calibrateRecommendations(ledger, { config: null }).overall);
+  });
+});
+
+describe('conservative personalisation learned from logged history only', ()=>{
+  // History blocks carry a frozen first-visible prescription + the performed set.
+  const presc = load => Object.freeze({ prescriptionId: 'x:r1', prescribedReps: 8, prescribedLoadKg: load, prescribedAssistKg: null });
+  const perf = (weightKg, rpe) => ({ reps: '8', weightKg: String(weightKg), rpe: String(rpe), completed: true, skipped: false, failed: false, assistedKg: 0 });
+
+  function sessionsWith(exposure){ // exposure: [{prescribe, performed}] with rising dates
+    return exposure.map((e, i)=> ({ id: `d${i}`, dateISO: `2026-02-0${i + 1}`, blocks: [{ exerciseId: 'bench-press-dumbbell', prescription: presc(e.prescribe), sets: [perf(e.performed, e.rpe ?? 8.5)] }] }));
+  }
+
+  it('sparse history keeps the default stance (never learns from a couple sessions)', ()=>{
+    const pc = personalCalibrationFromHistory(sessionsWith([{ prescribe: 25, performed: 25 }]), { exerciseId: 'bench-press-dumbbell' });
+    assert.equal(pc.active, false);
+    assert.equal(pc.jumpMultiplier, 1);
+    assert.equal(pc.samples, 1);
+  });
+  it('repeated over-prescription shrinks future jumps', ()=>{
+    const history = sessionsWith([
+      { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 },
+      { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 },
+    ]);
+    const pc = personalCalibrationFromHistory(history, { exerciseId: 'bench-press-dumbbell' });
+    assert.equal(pc.active, true);
+    assert.equal(pc.direction, -1);
+    assert.ok(pc.jumpMultiplier < 1 && pc.jumpMultiplier >= 0.85, `multiplier ${pc.jumpMultiplier}`);
+    assert.match(pc.note, /more cautiously/);
+    assert.match(pc.headline, /Smaller increase/);
+  });
+  it('repeated easy, successful gains nudge progression slightly bolder (bounded)', ()=>{
+    const history = sessionsWith([
+      { prescribe: 20, performed: 22, rpe: 5 }, { prescribe: 22, performed: 24, rpe: 5 }, { prescribe: 24, performed: 26, rpe: 5 },
+      { prescribe: 26, performed: 28, rpe: 5 }, { prescribe: 28, performed: 30, rpe: 5 },
+    ]);
+    const pc = personalCalibrationFromHistory(history, { exerciseId: 'bench-press-dumbbell' });
+    assert.equal(pc.active, true);
+    assert.equal(pc.direction, 1);
+    assert.ok(pc.jumpMultiplier > 1 && pc.jumpMultiplier <= 1.08, `multiplier ${pc.jumpMultiplier}`);
+    assert.match(pc.headline, /assertive/);
+  });
+  it('pain/technique exposures are not used to personalise', ()=>{
+    const painy = [
+      { id: 'd0', dateISO: '2026-02-01', painDiscomfort: true, blocks: [{ exerciseId: 'bench-press-dumbbell', prescription: presc(25), sets: [perf(20, 8.5)] }] },
+      { id: 'd1', dateISO: '2026-02-02', painDiscomfort: true, blocks: [{ exerciseId: 'bench-press-dumbbell', prescription: presc(25), sets: [perf(20, 8.5)] }] },
+      { id: 'd2', dateISO: '2026-02-03', blocks: [{ exerciseId: 'bench-press-dumbbell', prescription: presc(25), sets: [{ reps: '8', weightKg: '20', rpe: '8.5', completed: true, pain: true, assistedKg: 0 }] }] },
+    ];
+    const pc = personalCalibrationFromHistory(painy, { exerciseId: 'bench-press-dumbbell' });
+    assert.equal(pc.samples, 0);
+    assert.equal(pc.active, false);
+  });
+  it('respects the prior-only cut (asOfDateISO)', ()=>{
+    const history = sessionsWith([{ prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }]);
+    const pc = personalCalibrationFromHistory(history, { exerciseId: 'bench-press-dumbbell', asOfDateISO: '2026-02-02' });
+    assert.equal(pc.samples, 2);
+    assert.equal(pc.active, false);
+  });
+  it('is deterministic', ()=>{
+    const history = sessionsWith([{ prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }]);
+    assert.deepEqual(personalCalibrationFromHistory(history, { exerciseId: 'bench-press-dumbbell' }), personalCalibrationFromHistory(history, { exerciseId: 'bench-press-dumbbell' }));
+  });
+});
+
+describe('prospective → outcome end-to-end through the real recorder', ()=>{
+  it('a met increase attaches label=successful and flows into calibration', ()=>{
+    const storage = memoryStorage();
+    const history = [
+      { id: 'h0', dateISO: '2026-01-01', blocks: [{ exerciseId: 'bench-press-dumbbell', sets: [{ reps: '12', weightKg: '20', rpe: '7' }] }] },
+    ];
+    recordRecommendation({ exerciseId: 'bench-press-dumbbell', recommendation: { load: 22, reps: 8, reason: 'test' }, history, dueDateISO: '2026-01-05', preferences: CONSENT, targetReps: '8', storage });
+    const [resolved] = attachOutcome({
+      sessionId: 's1', dateISO: '2026-01-05',
+      blocks: [{ exerciseId: 'bench-press-dumbbell', sets: [{ reps: '8', weightKg: '22', rpe: '8.5', completed: true, skipped: false, failed: false }] }],
+      sessionMeta: { dateISO: '2026-01-05', note: '' },
+      preferences: CONSENT, storage,
+    });
+    assert.equal(resolved.outcome.label, 'successful');
+    assert.equal(resolved.outcome.attempted, true);
+    assert.equal(isProspectiveRecord(resolved), true);
+    const cal = calibrateRecommendations(loadEvaluationLedger(storage), { config: null });
+    assert.equal(cal.prospective, 1);
+    assert.equal(cal.resolved, 1);
+    assert.equal(cal.overall.successful, 1);
+  });
+
+  it('an imported recommendation is excluded from prospective calibration', ()=>{
+    const storage = memoryStorage();
+    const history = [{ id: 'h0', dateISO: '2026-01-01', blocks: [{ exerciseId: 'bench-press-dumbbell', sets: [{ reps: '12', weightKg: '20', rpe: '7' }] }] }];
+    const rec = recordRecommendation({ exerciseId: 'bench-press-dumbbell', recommendation: { load: 22, reps: 8 }, history, dueDateISO: '2026-01-05', preferences: CONSENT, targetReps: '8', storage });
+    // Simulate a re-import re-stamping provenance.
+    saveLedgerImported(storage, rec.id);
+    const cal = calibrateRecommendations(loadEvaluationLedger(storage), { config: null });
+    assert.equal(cal.prospective, 0);
+    assert.equal(cal.excludedReconstructed >= 1, true);
+  });
+
+  it('legacy rows without provenance are not counted as prospective', ()=>{
+    const legacy = [{ id: 'l', exerciseId: 'bench-press-dumbbell', recommendation: { load: 25, reps: 8 }, outcome: { followed: true, metTarget: true, changePct: 0.03 } }];
+    assert.equal(isProspectiveRecord(legacy[0]), false);
+    assert.equal(calibrateRecommendations(legacy, { config: null }).prospective, 0);
+  });
+});
+
+function saveLedgerImported(storage, id){
+  const all = JSON.parse(storage.getItem('arise.evaluation.v1'));
+  all.records = all.records.map(r=> r.id === id ? withProvenance(r, 'imported') : r);
+  storage.setItem('arise.evaluation.v1', JSON.stringify(all));
+}
+
+describe('coachingCalibration presentation layer', ()=>{
+  it('is honest and inactive before the prospective sample clears the gate', ()=>{
+    const cal = calibrateRecommendations([row({ met: true }), row({ met: false })], { config: null });
+    const s = coachingCalibration(cal);
+    assert.equal(s.active, false);
+    assert.equal(s.status, 'gathering');
+    assert.equal(s.successRate, null);
+    assert.match(s.headline, /Learning what works/i);
+  });
+  it('becomes active and states a tendency once conclusive', ()=>{
+    const ledger = [];
+    for(let i = 0; i < 6; i++) ledger.push(row({ id: `m${i}`, met: true }));
+    for(let i = 0; i < 4; i++) ledger.push(row({ id: `o${i}`, met: false }));
+    const s = coachingCalibration(calibrateRecommendations(ledger, { config: null }));
+    assert.equal(s.active, true);
+    assert.equal(s.status, 'calibrated');
+    assert.equal(s.successRate, 0.6);
+    assert.equal(s.tendency, 'over-prescribing');
+    assert.match(s.headline, /cautiously/i);
+  });
+  it('survives reload/export round-trip identically (provenance + outcome labels ride through)', ()=>{
+    const ledger = [row({ met: true, band: 'high' }), row({ met: false })];
+    const json = JSON.parse(JSON.stringify(ledger));
+    assert.deepEqual(calibrateRecommendations(json, { config: null }).overall, calibrateRecommendations(ledger, { config: null }).overall);
+  });
+});

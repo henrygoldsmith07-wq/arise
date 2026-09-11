@@ -24,6 +24,14 @@
 // in the core progression/product modules (boot chunk), not dependency growth;
 // boot (184.3) and largest-lazy (43.0) budgets stay unchanged.
 //
+// boot 190 → 195 kB and total 330 → 340 kB with the learning layer: named
+// prospective outcome labels, prospective-only calibration with sample-gated
+// shrinkage, and history-derived conservative personalisation. longitudinal.js
+// is reached from App (boot) so the classifier/calibration land in the boot
+// chunk, and the same code is bundled into the on-demand analytics worker
+// (largest-lazy 45 → 48). All of it is requested product logic, not incidental
+// dependency growth; headroom above measured (boot 191.2, lazy 45.1, total 335.4).
+//
 // The budgets are regression bounds with headroom, not aspirations: a change
 // that crosses one must either undo the bloat or consciously re-baseline here
 // and say why in the PR.
@@ -38,9 +46,9 @@ if(!fs.existsSync(dist)){
   process.exit(2);
 }
 
-const BOOT_BUDGET_KB = 190;
-const CHUNK_BUDGET_KB = 45;
-const TOTAL_BUDGET_KB = 330;
+const BOOT_BUDGET_KB = 195;
+const CHUNK_BUDGET_KB = 48;
+const TOTAL_BUDGET_KB = 340;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

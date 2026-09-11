@@ -355,7 +355,7 @@ export function buildExplanation({ rec, policy, confidence, uncertainty, evidenc
 
 export function recommendNextWithPolicy({
   exerciseId, history, targetReps = null, policy = 'standard', policyConfig = null,
-  config = null, asOfDateISO = null, plateConfig = null, study = null, readinessLog = [],
+  config = null, asOfDateISO = null, plateConfig = null, study = null, readinessLog = [], personalCalibration = null,
 } = {}){
   const pol = resolvePolicy(policy, { config: policyConfig || config });
   const base = recommendNextWithModel({ exerciseId, history, targetReps, config, asOfDateISO, plateConfig, study })
@@ -413,6 +413,35 @@ export function recommendNextWithPolicy({
         rec.reason = `${rec.reason} Rep jump capped to +${pol.maxRepGain} by ${pol.label} policy.`;
         rec.guard = rec.guard || 'rep-cap';
       }
+    }
+  }
+
+  // Personal calibration (learned from this lifter's own prospective outcomes,
+  // via personalCalibrationFromHistory — never the evaluation ledger). When a
+  // history-grounded stance is ACTIVE, nudge the size of the load increase and
+  // explain it. Every result is snapped to the grid and re-clamped to the
+  // policy's max-jump cap, so this can only ever make the step smaller or
+  // modestly bolder — never unloadable, never beyond policy. Inactive by
+  // default, so a lone or noisy session changes nothing.
+  if(personalCalibration?.active && personalCalibration.jumpMultiplier != null
+    && rec.load != null && rec.__prevLoad != null && rec.load > rec.__prevLoad){
+    const delta = rec.load - rec.__prevLoad;
+    const raw = rec.__prevLoad + delta * personalCalibration.jumpMultiplier;
+    let next = raw <= rec.__prevLoad ? snapLoad(rec.__prevLoad, config) : snapLoad(raw, config);
+    if(pol.maxLoadJumpPct > 0){
+      const cap = rec.__prevLoad * (1 + pol.maxLoadJumpPct);
+      if(next > cap){ const snapped = snapLoad(cap, config); next = snapped > cap ? snapLoad(cap - 0.01, config) : snapped; }
+    }
+    if(next !== rec.load){
+      rec.load = next;
+      rec.personalCalibration = {
+        active: true,
+        direction: personalCalibration.direction ?? null,
+        jumpMultiplier: personalCalibration.jumpMultiplier,
+        samples: personalCalibration.samples ?? 0,
+        headline: personalCalibration.headline || null,
+      };
+      if(personalCalibration.note) rec.reason = `${rec.reason} ${personalCalibration.note}`;
     }
   }
 

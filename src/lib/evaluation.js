@@ -9,6 +9,7 @@ import { resolveArisePriors } from './priors.js';
 import { STUDY_VERSION } from './studyEnrollment.js';
 import { STUDY_DESIGN } from './study.js';
 import { EVALUATION_SCHEMA_VERSION, round, wilsonInterval } from './longitudinalCore.js';
+import { isProspectiveRecord, realisedSuccess, confidenceBandOf, recommendationTypeOf, shrinkRate, classifyRecommendationOutcome } from './longitudinalCore.js';
 
 // ── Aggregation ─────────────────────────────────────────────────────────
 
@@ -361,4 +362,105 @@ function findFrozenArm(row, arm){
     demandedMore = Number(frozen.load) > 0;
   }
   return { frozen, demandedMore, aggressive };
+}
+
+// ── Prospective recommendation calibration ───────────────────────────────
+// "Did the recommendation actually work?" Answered only from genuine
+// first-visible (live-engine) prospective records that have since resolved.
+// A reconstructed/replayed/imported recommendation is NEVER treated as
+// prospective evidence here. Rates are shrunk toward a safe default and
+// withheld below the sample gate, so a lone session can never look learned.
+export function calibrateRecommendations(ledger, { config = null } = {}){
+  const priors = resolveArisePriors(config);
+  const cal = priors.calibration;
+  const thresholds = priors.longitudinal.outcomeLabels;
+  const prospective = (ledger || []).filter(row=> row && row.recommendation && isProspectiveRecord(row));
+  const resolvedRows = prospective.filter(row=> row.outcome);
+  const minimum = Math.max(1, Number(cal.minSamplesToTrust) || 1);
+
+  const gradeSegment = (rows, key)=>{
+    const resolved = rows.filter(row=> row.outcome);
+    let successful = 0, tooAggressive = 0, tooConservative = 0, neutral = 0, insufficient = 0;
+    let errSum = 0, errN = 0;
+    for(const row of resolved){
+      const cls = classifyRecommendationOutcome(row, thresholds);
+      if(cls.label === 'successful') successful++;
+      else if(cls.label === 'too-aggressive') tooAggressive++;
+      else if(cls.label === 'too-conservative') tooConservative++;
+      else if(cls.label === 'neutral') neutral++;
+      else insufficient++;
+      const exp = cal.bandExpected[confidenceBandOf(row)] ?? cal.defaultSuccessRate;
+      const realised = realisedSuccess(row);
+      if(realised != null){ errSum += Math.abs(exp - realised); errN++; }
+    }
+    const n = resolved.length;
+    // Shrink the success rate toward the safe default; a tiny n stays near prior.
+    const shrink = shrinkRate({ successes: successful, samples: n, prior: cal.defaultSuccessRate, pseudoCount: cal.pseudoCount });
+    const conclusive = n >= minimum;
+    return {
+      key,
+      records: rows.length,
+      resolved: n,
+      conclusive,
+      successful, tooAggressive, tooConservative, neutral, insufficient,
+      // Raw rates are withheld below the sample gate; the shrunk estimate is
+      // always safe to show because it is already pulled toward the default.
+      successRate: conclusive && n ? round(successful / n, 3) : null,
+      overPrescriptionRate: conclusive && n ? round(tooAggressive / n, 3) : null,
+      underPrescriptionRate: conclusive && n ? round(tooConservative / n, 3) : null,
+      shrunkSuccessRate: shrink.shrunk,
+      evidenceWeight: shrink.weight,
+      calibrationError: errN ? round(errSum / errN, 3) : null,
+      sampleSize: n,
+    };
+  };
+  const dimension = (label, keyFn)=>{
+    const out = {};
+    for(const [groupKey, rows] of groupBy(prospective, keyFn)){
+      const seg = gradeSegment(rows, groupKey);
+      out[groupKey] = seg;
+    }
+    return out;
+  };
+
+  const overall = gradeSegment(prospective, 'all');
+  const policyKey = row => row.audit?.policy || (row.policy ? `priors-v${row.policy.priorsVersion}` : 'unknown');
+  const experienceKey = row => row.basis?.trainingAgePhase || 'unknown';
+
+  // Confidence quality: how well the stated band matched what actually
+  // happened, summarised from the overall calibration error. Withheld below the
+  // sample gate so a thin slice never reads as "well-calibrated".
+  const confidenceQuality = (!overall.conclusive || overall.calibrationError == null) ? 'unknown'
+    : overall.calibrationError <= 0.15 ? 'well-calibrated'
+    : overall.calibrationError <= 0.3 ? 'roughly-calibrated'
+    : 'miscalibrated';
+
+  // Which way the engine leans, only once there is enough evidence to say so.
+  let tendency = 'learning';
+  if(overall.conclusive){
+    if((overall.overPrescriptionRate ?? 0) >= cal.overRateCutoff) tendency = 'over-prescribing';
+    else if((overall.underPrescriptionRate ?? 0) >= cal.underRateCutoff) tendency = 'too-conservative';
+    else tendency = 'balanced';
+  }
+
+  return {
+    schemaVersion: EVALUATION_SCHEMA_VERSION,
+    minimumSamples: minimum,
+    prospective: prospective.length,
+    resolved: resolvedRows.length,
+    open: prospective.length - resolvedRows.length,
+    excludedReconstructed: (ledger || []).filter(row=> row && row.recommendation && !isProspectiveRecord(row)).length,
+    overall,
+    byConfidenceBand: dimension('band', row=> confidenceBandOf(row)),
+    byExercise: dimension('exercise', row=> row.exerciseId),
+    byCategory: dimension('category', row=> row.movementPattern),
+    byPolicy: dimension('policy', policyKey),
+    byExperience: dimension('experience', experienceKey),
+    byType: dimension('type', recommendationTypeOf),
+    confidenceQuality,
+    tendency,
+    note: resolvedRows.length >= minimum
+      ? `Calibrated on ${resolvedRows.length} prospective recommendation→outcome pairs. Reconstructed or imported recommendations are excluded (${(ledger||[]).filter(r=>r&&r.recommendation&&!isProspectiveRecord(r)).length}). Sparse segments are shrunk toward a ${Math.round(cal.defaultSuccessRate*100)}% default and withheld below ${minimum} pairs.`
+      : `Need ${Math.max(0, minimum - resolvedRows.length)} more prospective recommendation→outcome pairs before any rate is trustworthy (${resolvedRows.length} so far). Reconstructed recommendations never count as prospective evidence.`,
+  };
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { lastExerciseSets } from '../lib/store.js';
-import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, applySwapToBlocks, attributePrescribedSets, userAddedSet, removeSetAt, isSetPerformed } from '../lib/progression.js';
+import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, applySwapToBlocks, attributePrescribedSets, userAddedSet, removeSetAt, isSetPerformed, personalCalibrationFromHistory } from '../lib/progression.js';
 import { recommendNextWithPolicy, POLICY_ORDER } from '../lib/progressionPolicies.js';
 import { runComparativeStudy, doubleProgressionRec } from '../lib/study.js';
 import { assignmentFor } from '../lib/studyEnrollment.js';
@@ -161,7 +161,10 @@ function getRecommendation(block, history, asOfDateISO, plateConfig = null, stud
     // barbells through plates and dumbbells/machines through their own
     // achievable increments. The policy layer wraps the modelled/plain engine
     // with the user's chosen policy, confidence scoring and explanations.
-    return recommendNextWithPolicy({ exerciseId:block.exerciseId, history, targetReps:block.reps || '8–12', asOfDateISO, plateConfig, study, policy });
+    // A conservative personal stance is learned from this lifter's OWN logged
+    // history (frozen prescription snapshots), never the evaluation ledger.
+    const personalCalibration = personalCalibrationFromHistory(history, { exerciseId: block.exerciseId, asOfDateISO });
+    return recommendNextWithPolicy({ exerciseId:block.exerciseId, history, targetReps:block.reps || '8–12', asOfDateISO, plateConfig, study, policy, personalCalibration: personalCalibration.active ? personalCalibration : null });
   }catch{ return null; }
 }
 
