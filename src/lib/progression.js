@@ -788,6 +788,88 @@ export function supersedePrescription(block, { session = null, block: rxBlock = 
   return snapshot ? attachPrescription(block, snapshot) : block;
 }
 
+// ── Stable per-set identity ──────────────────────────────────────────
+// Every set carries: setId (stable for the set's life), plannedSlot (the
+// original prescription position, or null for user-added), origin
+// ('prescribed' | 'user-added'), and governingPrescriptionId (the revision that
+// owns it). Historical identity is NEVER derived from the current array index.
+// A removed prescribed set is voided into `block.removedSlots` (plannedSlot +
+// governingPrescriptionId kept) so its slot survives as an explicit 'removed'
+// target instead of collapsing positions; a removed user-added set is simply
+// deleted. This lets follow-through tell apart completed / failed / skipped /
+// removed / user-added, and keeps user-added work out of the denominator.
+export const SET_ORIGINS = Object.freeze(['prescribed', 'user-added']);
+
+function defaultIdFactory(){
+  let n = 0;
+  const stamp = Date.now().toString(36);
+  return ()=> `set_${stamp}_${(n++).toString(36)}`;
+}
+
+export function isSetIdentified(set){
+  return !!(set && (set.origin || set.plannedSlot != null || set.governingPrescriptionId != null || set.setId));
+}
+
+function blockHasSetIdentity(block){
+  return (block?.sets || []).some(isSetIdentified);
+}
+
+// When a prescription is first shown, give each planned set a stable slot + id
+// and bind it to the revision. Idempotent: sets already attributed to this
+// revision are left untouched; user-added sets keep their own identity.
+export function attributePrescribedSets(block, prescriptionId, makeId = null){
+  if(!block || !prescriptionId) return block;
+  const uid = makeId || defaultIdFactory();
+  let changed = false;
+  const sets = (block.sets || []).map((set, i)=>{
+    if(!set) return set;
+    if(set.origin === 'user-added') return set.setId ? set : ((changed = true), { ...set, setId: uid() });
+    if(set.setId && set.origin === 'prescribed' && set.governingPrescriptionId === prescriptionId && Number.isInteger(set.plannedSlot)) return set;
+    changed = true;
+    return { ...set, setId: set.setId || uid(), origin: 'prescribed', plannedSlot: Number.isInteger(set.plannedSlot) ? set.plannedSlot : i, governingPrescriptionId: prescriptionId, removed: false };
+  });
+  return changed ? { ...block, sets } : block;
+}
+
+// A fresh set the user tapped "+ Set" onto: it belongs to training history, not
+// to any prescription revision, so it never raises a follow-through denominator.
+export function userAddedSet(base, makeId = null){
+  const uid = makeId || defaultIdFactory();
+  return { ...(base || {}), setId: uid(), origin: 'user-added', plannedSlot: null, governingPrescriptionId: null, removed: false };
+}
+
+// Remove a set by position WITHOUT letting history collapse: a prescribed slot
+// is voided into `removedSlots` (its plannedSlot + governingPrescriptionId
+// preserved); a user-added / unattributed row is simply deleted. Returns the new
+// block and whether the slot was preserved (for caller messaging/tests).
+export function removeSetAt(block, index){
+  const sets = block?.sets || [];
+  const set = sets[index];
+  if(!set) return { block, preserved: false };
+  const isPrescribedSlot = set.origin === 'prescribed' && set.governingPrescriptionId != null && Number.isInteger(set.plannedSlot);
+  if(isPrescribedSlot){
+    const removedSlots = [...(Array.isArray(block.removedSlots) ? block.removedSlots : []), { setId: set.setId || null, plannedSlot: set.plannedSlot, governingPrescriptionId: set.governingPrescriptionId }];
+    return { block: { ...block, sets: sets.filter((_, i)=> i !== index), removedSlots }, preserved: true };
+  }
+  return { block: { ...block, sets: sets.filter((_, i)=> i !== index) }, preserved: false };
+}
+
+// The outcomes of one block's ACTIVE prescription, per governed slot. Identity
+// first (live sets + removedSlots carrying this revision's id); legacy blocks
+// without set identity fall back to position-counted governed slots and never
+// fabricate an attribution that a record does not have.
+export function activePrescriptionOutcomes(block, rx = block?.prescription){
+  if(!rx) return { identified: false, targets: 0 };
+  const rxId = rx.prescriptionId;
+  if(!blockHasSetIdentity(block)){
+    const positions = governedSlotsFor(block, rx);
+    return { identified: false, targets: positions.length };
+  }
+  const live = (block.sets || []).filter((s)=> s && s.origin !== 'user-added' && s.governingPrescriptionId === rxId);
+  const removed = (Array.isArray(block.removedSlots) ? block.removedSlots : []).filter((r)=> r && r.governingPrescriptionId === rxId);
+  return { identified: true, live, removed, targets: live.length + removed.length };
+}
+
 // A partial swap must NEVER relabel completed work. When the block still has
 // no completed/failed set, swapping replaces it in place (nothing was done
 // under the old identity). As soon as real work exists, the block is SPLIT:
@@ -804,20 +886,24 @@ export function supersedePrescription(block, { session = null, block: rxBlock = 
 // and only unfinished slots move to the replacement. This lets follow-through
 // score the governed targets (never the full immutable `prescribedSets` of a
 // partially-handed-off revision) while the historical snapshot stays unchanged.
-export function applySwapToBlocks({ blocks = [], index, option, session = null, recommendation = null, priorSets = [], planIndex = index, policy = 'standard', config = null, nowISO = null, newSet = null } = {}){
+// With stable set identity, a swap transfers only unfinished PRESCRIBED slots —
+// user-added sets (and already-removed slots) never become prescription targets.
+export function applySwapToBlocks({ blocks = [], index, option, session = null, recommendation = null, priorSets = [], planIndex = index, policy = 'standard', config = null, nowISO = null, newSet = null, makeId = null } = {}){
   const target = blocks[index];
   if(!target || !option || !option.id || option.id === target.exerciseId) return blocks;
-  const now = nowISO || new Date().toISOString();
-  const unilateral = !!option.unilateral;
-  const origin = target.substitutionFrom || target.exerciseId;
-  const repsFor = target.reps || session?.blocks?.[planIndex]?.reps || '';
-  const absPosition = (si)=> Number.isInteger(target.governedSlots?.[si]) ? target.governedSlots[si] : si;
-  const makeSlot = (si)=>{
+  const identified = blockHasSetIdentity(target);
+  return identified
+    ? swapIdentifiedBlock({ blocks, index, target, option, session, recommendation, priorSets, planIndex, policy, config, nowISO, newSet, makeId })
+    : swapLegacyBlock({ blocks, index, target, option, session, recommendation, priorSets, planIndex, policy, config, nowISO, newSet });
+}
+
+function swapCore({ target, option, session, recommendation, planIndex, policy, config, now, priorSets, newSet, unilateral, origin, repsFor }){
+  const makeFreshSlot = (si)=>{
     const prev = priorSets[si] || priorSets[priorSets.length - 1] || null;
     if(newSet) return { ...newSet(repsFor, unilateral, prev), completed: false };
     return { reps: prev?.reps != null ? String(prev.reps) : '', weightKg: prev?.weightKg != null ? String(prev.weightKg) : '', rpe: '', side: unilateral ? (prev?.side || 'L') : '', rom: '', assistedKg: '', tempo: '', completed: false };
   };
-  const buildReplacement = (remainingSets, governed)=> {
+  const buildBlock = (remainingSets, governed, identityFor)=> {
     const base = {
       ...target,
       exerciseId: option.id,
@@ -830,11 +916,12 @@ export function applySwapToBlocks({ blocks = [], index, option, session = null, 
       substitutedAt: now,
       planIndex,
       prescriptionHistory: null,
+      removedSlots: null,
       governedSlots: governed.slice().sort((a, b)=> a - b),
       sets: remainingSets,
     };
     const planned = { ...(session?.blocks?.[planIndex] || {}), exerciseId: option.id, sets: remainingSets };
-    return supersedePrescription(base, {
+    const swapped = supersedePrescription(base, {
       session,
       block: planned,
       blockIndex: Number.isInteger(planIndex) ? planIndex : null,
@@ -844,7 +931,18 @@ export function applySwapToBlocks({ blocks = [], index, option, session = null, 
       config,
       changeReason: 'exercise-substituted',
     });
+    return identityFor ? swapped : { ...swapped, sets: remainingSets };
   };
+  return { makeFreshSlot, buildBlock };
+}
+
+function swapLegacyBlock({ blocks, index, target, option, session, recommendation, priorSets, planIndex, policy, config, nowISO, newSet }){
+  const now = nowISO || new Date().toISOString();
+  const unilateral = !!option.unilateral;
+  const origin = target.substitutionFrom || target.exerciseId;
+  const repsFor = target.reps || session?.blocks?.[planIndex]?.reps || '';
+  const { makeFreshSlot, buildBlock } = swapCore({ target, option, session, recommendation, planIndex, policy, config, now, priorSets, newSet, unilateral, origin, repsFor });
+  const absPosition = (si)=> Number.isInteger(target.governedSlots?.[si]) ? target.governedSlots[si] : si;
   const sets = target.sets || [];
   const doneIdx = [], pendingIdx = [];
   sets.forEach((s, si)=> (s && (s.completed || s.failed) ? doneIdx : pendingIdx).push(si));
@@ -855,19 +953,58 @@ export function applySwapToBlocks({ blocks = [], index, option, session = null, 
     return Array.from({ length: count }, (_, i)=> base + i);
   };
   if(!doneIdx.length){
-    const remainingSets = Array.from({ length: Math.max(1, pendingIdx.length || 1) }, (_, si)=> makeSlot(si));
+    const remainingSets = Array.from({ length: Math.max(1, pendingIdx.length || 1) }, (_, si)=> makeFreshSlot(si));
     const governed = pendingIdx.length ? absPositions(pendingIdx) : nextSynthetic(remainingSets.length);
-    return blocks.map((b, i)=> i === index ? buildReplacement(remainingSets, governed) : b);
+    return blocks.map((b, i)=> i === index ? buildBlock(remainingSets, governed, false) : b);
   }
+  const doneOriginal = freezePrescriptionBlock({ ...target, sets: doneIdx.map((si)=> ({ ...sets[si] })), governedSlots: absPositions(doneIdx).sort((a, b)=> a - b) });
+  const plannedCount = Math.max(1, Number(session?.blocks?.[planIndex]?.sets) || 1);
+  const remainingSets = Array.from({ length: Math.max(1, pendingIdx.length || plannedCount) }, (_, si)=> makeFreshSlot(si));
+  const replacementGoverned = pendingIdx.length ? absPositions(pendingIdx) : nextSynthetic(remainingSets.length);
+  const replacement = buildBlock(remainingSets, replacementGoverned, false);
+  return blocks.flatMap((b, i)=> i === index ? [doneOriginal, replacement] : [b]);
+}
+
+function swapIdentifiedBlock({ blocks, index, target, option, session, recommendation, priorSets, planIndex, policy, config, nowISO, newSet, makeId }){
+  const now = nowISO || new Date().toISOString();
+  const unilateral = !!option.unilateral;
+  const origin = target.substitutionFrom || target.exerciseId;
+  const repsFor = target.reps || session?.blocks?.[planIndex]?.reps || '';
+  const rxId = target.prescription?.prescriptionId;
+  const uid = makeId || defaultIdFactory();
+  const { makeFreshSlot, buildBlock } = swapCore({ target, option, session, recommendation, planIndex, policy, config, now, priorSets, newSet, unilateral, origin, repsFor });
+  const sets = target.sets || [];
+  const carriedRemoved = Array.isArray(target.removedSlots) ? target.removedSlots.slice() : [];
+  const isUserAdded = (s)=> !!s && (s.origin === 'user-added' || (s.governingPrescriptionId == null && s.plannedSlot == null && s.origin !== 'prescribed'));
+  const performed = (s)=> !!s && (s.completed || s.failed);
+  const transferable = (s)=> !!s && !isUserAdded(s) && !performed(s) && s.governingPrescriptionId === rxId && Number.isInteger(s.plannedSlot);
+
+  const keepLive = sets.filter((s)=> !transferable(s));
+  const transfers = sets.map((s, si)=> ({ s, si })).filter(({ s })=> transferable(s));
+
+  if(!transfers.length){
+    const doneOriginal = freezePrescriptionBlock({ ...target, removedSlots: carriedRemoved.length ? carriedRemoved : null });
+    return blocks.map((b, i)=> i === index ? doneOriginal : b);
+  }
+
+  const keepPrescribedSlots = keepLive.filter((s)=> !isUserAdded(s) && Number.isInteger(s.plannedSlot)).map((s)=> s.plannedSlot);
+  const removedPositions = carriedRemoved.filter((r)=> Number.isInteger(r.plannedSlot)).map((r)=> r.plannedSlot);
+  const originalGoverned = [...new Set([...keepPrescribedSlots, ...removedPositions])].sort((a, b)=> a - b);
   const doneOriginal = freezePrescriptionBlock({
     ...target,
-    sets: doneIdx.map((si)=> ({ ...sets[si] })),
-    governedSlots: absPositions(doneIdx).sort((a, b)=> a - b),
+    sets: keepLive,
+    removedSlots: carriedRemoved.length ? carriedRemoved : null,
+    governedSlots: originalGoverned.length ? originalGoverned : null,
   });
-  const plannedCount = Math.max(1, Number(session?.blocks?.[planIndex]?.sets) || 1);
-  const remainingSets = Array.from({ length: Math.max(1, pendingIdx.length || plannedCount) }, (_, si)=> makeSlot(si));
-  const replacementGoverned = pendingIdx.length ? absPositions(pendingIdx) : nextSynthetic(remainingSets.length);
-  const replacement = buildReplacement(remainingSets, replacementGoverned);
+
+  const remainingSets = transfers.map(({ s }, k)=>{
+    const base = makeFreshSlot(k);
+    return { ...base, setId: s.setId || uid(), origin: 'prescribed', plannedSlot: s.plannedSlot, governingPrescriptionId: null, removed: false, completed: false, failed: false, skipped: false };
+  });
+  const replacementGoverned = transfers.map(({ s })=> s.plannedSlot);
+  const built = buildBlock(remainingSets, replacementGoverned, true);
+  const newRxId = built.prescription?.prescriptionId || null;
+  const replacement = { ...built, sets: (built.sets || []).map((s)=> s.origin === 'user-added' ? s : { ...s, governingPrescriptionId: newRxId }) };
   return blocks.flatMap((b, i)=> i === index ? [doneOriginal, replacement] : [b]);
 }
 

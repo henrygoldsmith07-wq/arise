@@ -5,7 +5,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildPrescriptionSnapshot, recommendNext, attachPrescription, carryPrescription, freezePrescriptionBlock, supersedePrescription, deepFreezePrescription, applySwapToBlocks, governedSlotsFor, sessionGovernedSlots, PRESCRIPTION_CHANGE_REASONS } from '../src/lib/progression.js';
+import { buildPrescriptionSnapshot, recommendNext, attachPrescription, carryPrescription, freezePrescriptionBlock, supersedePrescription, deepFreezePrescription, applySwapToBlocks, attributePrescribedSets, userAddedSet, removeSetAt, activePrescriptionOutcomes, governedSlotsFor, sessionGovernedSlots, PRESCRIPTION_CHANGE_REASONS } from '../src/lib/progression.js';
 import { observedPrescriptionFollowThrough, strengthSeries } from '../src/lib/analytics.js';
 import { progressAssessment } from '../src/lib/product.js';
 import { initGuidedBlocks, buildGuidedPayload, withGuidedStepPrescription } from '../src/lib/guidedMode.js';
@@ -548,6 +548,146 @@ describe('early observed follow-through never decides the verdict', ()=>{
     assert.equal(assessment.signals[0].deciding, false);
     assert.ok(!assessment.signals.some((signal)=> signal.label.startsWith('Actual prescription')));
     assert.ok(!assessment.signals.some((signal)=> signal.label.startsWith('Retrospective engine replay')));
+  });
+});
+
+describe('stable set identity separates prescribed from user-added work', ()=>{
+  const session = { id: 'sid', dateISO: '2026-08-10', startedAt: '2026-08-10T09:00:00.000Z', blocks: [{ exerciseId: 'bench-press-dumbbell', sets: 3, reps: '8–10' }] };
+  const now = '2026-08-10T09:20:00.000Z';
+  const option = { id: 'dumbbell-row', unilateral: false, supportsWeighted: true, reason: 'kit' };
+  const makeIdFactory = ()=>{ let n = 0; return ()=> `set${n++}`; };
+  const done = (reps, load) => ({ reps: String(reps), weightKg: String(load), rpe: '', completed: true, skipped: false, failed: false });
+  const open = () => ({ reps: '', weightKg: '', rpe: '', completed: false, skipped: false, failed: false });
+  const benchRx = () => buildPrescriptionSnapshot({ session, block: { exerciseId: 'bench-press-dumbbell', sets: 3, reps: '8–10' }, blockIndex: 0, recommendation: { reps: 8, load: 20, reason: 'r', priorsVersion: 1 }, shownAt: '2026-08-10T09:00:00.000Z', policy: 'standard' });
+  const attributed = (rx, sets) => attributePrescribedSets({ exerciseId: 'bench-press-dumbbell', reps: '8–10', planIndex: 0, prescription: rx, sets }, rx.prescriptionId, makeIdFactory());
+
+  it('capture attributes every planned slot with a stable, distinct id', ()=>{
+    const block = attributed(benchRx(), [open(), open(), open()]);
+    assert.deepEqual(block.sets.map((s)=> [s.origin, s.plannedSlot, s.governingPrescriptionId]),
+      [['prescribed', 0, 'sid:0:bench-press-dumbbell:r1'], ['prescribed', 1, 'sid:0:bench-press-dumbbell:r1'], ['prescribed', 2, 'sid:0:bench-press-dumbbell:r1']]);
+    assert.equal(new Set(block.sets.map((s)=> s.setId)).size, 3, 'ids are unique');
+    assert.equal(new Set(block.sets.map((s)=> s.setId)).has(undefined), false);
+  });
+
+  it('user-added sets contribute to history but not the denominator', ()=>{
+    const rx = benchRx();
+    const block = attributed(rx, [done(8, 20), done(8, 20), done(8, 20)]);
+    block.sets.push(userAddedSet(done(20, 200), makeIdFactory()));
+    const scored = observedPrescriptionFollowThrough([{ id: 'sid', dateISO: '2026-08-10', blocks: [block] }]);
+    assert.equal(scored.governedTargets, 3, 'the 3 prescribed slots only');
+    assert.equal(scored.completeTargets, 3, 'the 200kg user set is not a prescription target');
+    assert.equal(scored.followThroughPct, 100);
+    assert.equal(scored.userAddedSets, 1);
+    assert.equal(scored.extraSets, 1);
+  });
+
+  it('add then swap keeps user-added rows out of the transferred targets', ()=>{
+    const rx = benchRx();
+    const block = attributed(rx, [done(8, 20), done(8, 20), open(), ...[]]);
+    block.sets.push(userAddedSet(open(), makeIdFactory())); // extra unfinished user row
+    const out = applySwapToBlocks({ blocks: [block], index: 0, option, session, recommendation: { reps: 10, load: 30, reason: 'r', priorsVersion: 1 }, planIndex: 0, nowISO: now, makeId: makeIdFactory() });
+    assert.equal(out.length, 2);
+    const original = out[0], replacement = out[1];
+    assert.deepEqual(original.governedSlots, [0, 1]);
+    assert.equal(original.sets.filter((s)=> s.origin === 'user-added').length, 1, 'user row stays with original exercise');
+    assert.deepEqual(replacement.governedSlots, [2], 'only the unfinished prescribed slot transferred');
+    assert.equal(replacement.sets.length, 1);
+    assert.equal(replacement.sets[0].origin, 'prescribed');
+    assert.equal(replacement.sets[0].governingPrescriptionId, 'sid:0:dumbbell-row:r2');
+    const slots = sessionGovernedSlots({ blocks: out }).map((g)=> g.slot).sort((a, b)=> a - b);
+    assert.deepEqual(slots, [0, 1, 2], 'three planned slots, each governed once');
+  });
+
+  it('removing a prescribed set voids its slot (never collapses positions)', ()=>{
+    const rx = benchRx();
+    const block = attributed(rx, [done(8, 20), open(), open()]);
+    const removed = removeSetAt(block, 2);
+    assert.equal(removed.preserved, true);
+    assert.equal(removed.block.sets.length, 2);
+    assert.deepEqual(removed.block.removedSlots, [{ setId: 'set2', plannedSlot: 2, governingPrescriptionId: rx.prescriptionId }]);
+    const scored = observedPrescriptionFollowThrough([{ id: 'sid', dateISO: '2026-08-10', blocks: [removed.block] }]);
+    assert.equal(scored.governedTargets, 3, 'the removed slot is still a governed target');
+    assert.equal(scored.completeTargets, 1);
+    assert.equal(scored.removedSets, 1);
+    assert.equal(scored.followThroughPct, 33);
+  });
+
+  it('removing a user-added set simply deletes it (no phantom slot)', ()=>{
+    const rx = benchRx();
+    const block = attributed(rx, [done(8, 20)]);
+    block.sets.push(userAddedSet(done(9, 21), makeIdFactory()));
+    const before = block.sets.length;
+    const removed = removeSetAt(block, before - 1);
+    assert.equal(removed.preserved, false);
+    assert.equal(removed.block.sets.length, before - 1);
+    assert.ok(!removed.block.removedSlots || removed.block.removedSlots.length === 0);
+  });
+
+  it('remove then swap keeps the removed slot with the original revision', ()=>{
+    const rx = benchRx();
+    let block = attributed(rx, [done(8, 20), open(), open()]);
+    block = removeSetAt(block, 2).block; // void slot 2
+    const out = applySwapToBlocks({ blocks: [block], index: 0, option, session, recommendation: { reps: 10, load: 30, reason: 'r', priorsVersion: 1 }, planIndex: 0, nowISO: now, makeId: makeIdFactory() });
+    const original = out[0], replacement = out[1];
+    assert.deepEqual(original.governedSlots, [0, 2], 'original still governs the done slot and the voided slot');
+    assert.deepEqual(original.removedSlots.map((r)=> r.plannedSlot), [2]);
+    assert.deepEqual(replacement.governedSlots, [1], 'only the still-open slot 1 transferred');
+    const slots = sessionGovernedSlots({ blocks: out }).map((g)=> g.slot).sort((a, b)=> a - b);
+    assert.deepEqual(slots, [0, 1, 2]);
+  });
+
+  it('reload, export and import all preserve per-set identity and removals', ()=>{
+    const rx = benchRx();
+    let block = attributed(rx, [done(8, 20), done(8, 20), open()]);
+    block = removeSetAt(block, 2).block;
+    block.sets.push(userAddedSet(done(9, 22), makeIdFactory()));
+    const history = [{ id: 'sid', dateISO: '2026-08-10', savedAt: now, blocks: [block] }];
+    const roundTripped = JSON.parse(JSON.stringify(history));
+    const restored = roundTripped[0].blocks.map((b)=> freezePrescriptionBlock(b));
+    assert.equal(restored[0].sets.filter((s)=> s.origin === 'prescribed').length, 2);
+    assert.equal(restored[0].userAddedSets, undefined);
+    assert.deepEqual(restored[0].removedSlots.map((r)=> r.plannedSlot), [2]);
+    assert.ok(restored[0].sets.some((s)=> s.origin === 'user-added'));
+    const imported = parseImportFile(JSON.stringify({ app: 'arise', data: { history } }));
+    const ib = imported.history[0].blocks[0];
+    const scored = observedPrescriptionFollowThrough(imported.history);
+    assert.equal(scored.governedTargets, 3);
+    assert.equal(scored.removedSets, 1);
+    assert.equal(scored.userAddedSets, 1);
+    assert.equal(scored.followThroughPct, 67, '2 of 3 prescribed done; removed slot is a target');
+    assert.ok(ib.sets.every((s)=> s.setId), 'identity survives the export/import round trip');
+  });
+
+  it('multiple identity swaps chain r1 → r2 → r3 across the planned slots', ()=>{
+    const rx = buildPrescriptionSnapshot({ session, block: { exerciseId: 'bench-press-dumbbell', sets: 4, reps: '8–10' }, recommendation: { reps: 8, load: 20, reason: 'r', priorsVersion: 1 }, shownAt: '2026-08-10T09:00:00.000Z' });
+    const fourSession = { id: 'sid', dateISO: '2026-08-10', startedAt: rx.shownAt, blocks: [{ exerciseId: 'bench-press-dumbbell', sets: 4, reps: '8–10' }] };
+    let block = attributed(rx, [done(8, 20), done(8, 20), open(), open()]);
+    block.prescription = rx;
+    let blocks = applySwapToBlocks({ blocks: [block], index: 0, option, session: fourSession, recommendation: { reps: 10, load: 30, reason: 'r', priorsVersion: 1 }, planIndex: 0, nowISO: now, makeId: makeIdFactory() });
+    assert.equal(blocks.length, 2);
+    assert.equal(blocks[0].governingPrescriptionId, undefined);
+    blocks[1].sets[0] = { ...blocks[1].sets[0], reps: '10', weightKg: '30', completed: true, failed: false, skipped: false }; // complete first transferred slot
+    blocks = applySwapToBlocks({ blocks, index: 1, option: { id: 'pull-up', unilateral: false, supportsWeighted: false, reason: 'kit' }, session: fourSession, recommendation: null, planIndex: 0, nowISO: '2026-08-10T09:30:00.000Z', makeId: makeIdFactory() });
+    assert.equal(blocks.length, 3);
+    assert.deepEqual(blocks.map((b)=> b.exerciseId), ['bench-press-dumbbell', 'dumbbell-row', 'pull-up']);
+    assert.deepEqual(blocks[0].governedSlots, [0, 1]);
+    assert.deepEqual(blocks[1].governedSlots, [2]);
+    assert.deepEqual(blocks[2].governedSlots, [3]);
+    assert.equal(blocks[2].prescription.previousExerciseId, 'dumbbell-row');
+    assert.equal(blocks[2].prescription.revision, 3);
+    const scored = observedPrescriptionFollowThrough([{ id: 'sid', dateISO: '2026-08-10', blocks }]);
+    assert.equal(scored.governedTargets, 4);
+    assert.equal(scored.completeTargets, 3);
+    assert.deepEqual(sessionGovernedSlots({ blocks }).map((g)=> g.slot).sort((a, b)=> a - b), [0, 1, 2, 3]);
+  });
+
+  it('a legacy block without identity falls back conservatively (no fabrication)', ()=>{
+    const legacy = [{ id: 'l1', dateISO: '2026-08-10', blocks: [{ exerciseId: 'bench-press-dumbbell', prescription: benchRx(), sets: [done(8, 20), done(8, 20)] }] }];
+    assert.equal(activePrescriptionOutcomes(legacy[0].blocks[0]).identified, false);
+    const scored = observedPrescriptionFollowThrough(legacy);
+    assert.equal(scored.governedTargets, 3, 'legacy uses the prescribed position count, not the live rows');
+    assert.equal(scored.completeTargets, 2);
+    assert.equal(normaliseHistoryEntry(legacy[0]).blocks[0].sets.every((s)=> !s.setId), true, 'legacy sets are not given fabricated ids');
   });
 });
 

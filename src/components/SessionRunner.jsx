@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { lastExerciseSets } from '../lib/store.js';
-import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, applySwapToBlocks } from '../lib/progression.js';
+import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, applySwapToBlocks, attributePrescribedSets, userAddedSet, removeSetAt } from '../lib/progression.js';
 import { recommendNextWithPolicy, POLICY_ORDER } from '../lib/progressionPolicies.js';
 import { runComparativeStudy, doubleProgressionRec } from '../lib/study.js';
 import { assignmentFor } from '../lib/studyEnrollment.js';
@@ -78,6 +78,7 @@ function normaliseBlock(block, history, draftBlock, planIndex = 0){
     // capture pointed at the right prescription of record regardless.
     planIndex: Number.isInteger(source.planIndex) ? source.planIndex : planIndex,
     governedSlots: Array.isArray(source.governedSlots) ? source.governedSlots : null,
+    removedSlots: Array.isArray(source.removedSlots) ? source.removedSlots : null,
     prescription: source.prescription || null,
     prescriptionHistory: Array.isArray(source.prescriptionHistory) ? source.prescriptionHistory : null,
   });
@@ -238,6 +239,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   const lastSetAtRef=useRef(draft?.lastSetAt || startedAtRef.current);
   const shownRecommendationRef=useRef(new Set());
   const dismissedRecommendationRef=useRef(new Set());
+  // Stable per-set ids, unique within this runner instance and across reloads
+  // (restored sets keep their own id; new ones use a fresh timestamp base).
+  const setSeqRef=useRef(0);
+  const makeSetId=()=> `${session.id}:set:${Date.now().toString(36)}:${(setSeqRef.current++).toString(36)}`;
 
   // Escape dismisses only the topmost layer — a stray Esc must never silently
   // destroy a workout with logged sets (a11y baseline: dialogs confirm before
@@ -444,7 +449,9 @@ export default function SessionRunner({ session, history = [], availableEquipmen
         });
         if(!snapshot) return b;
         changed = true;
-        return attachPrescription(b, snapshot);
+        // Bind each planned slot to this revision with a stable id, then attach
+        // the immutable snapshot. Done once (guarded by b.prescription above).
+        return attachPrescription(attributePrescribedSets(b, snapshot.prescriptionId, makeSetId), snapshot);
       });
       return changed ? next : prev;
     });
@@ -558,7 +565,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       if(preferences?.autoRest !== false && appPrefs?.autoRest !== false && hasUnfinishedSet(blocks,bi,si)) startRest(restPresetFor(gymPrefs, block.exerciseId, block.restSec) || block.restSec, EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId, block.exerciseId);
     }
   };
-  const addSet = (bi)=> setBlocks(prev=> prev.map((b,i)=> i!==bi? b : { ...b, sets: [...b.sets, newSet('', b.unilateral, b.sets[b.sets.length-1])] }));
+  const addSet = (bi)=> setBlocks(prev=> prev.map((b,i)=> i!==bi? b : { ...b, sets: [...b.sets, userAddedSet(newSet('', b.unilateral, b.sets[b.sets.length-1]), makeSetId)] }));
   // One-thumb adjustment for the set being logged: reps move in whole reps,
   // clamped at zero. The stepper carries the tap; the input stays typable.
   const adjustReps = (bi, si, delta)=>{
@@ -568,9 +575,9 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   const duplicateUnilateral = (bi)=> setBlocks(prev=> prev.map((b,i)=>{
     if(i!==bi || !b.unilateral) return b;
     const last=b.sets[b.sets.length-1]; if(!last) return b;
-    return { ...b, sets: [...b.sets, { ...last, side:last.side==='L'?'R':'L', completed:false }] };
+    return { ...b, sets: [...b.sets, userAddedSet({ ...last, side:last.side==='L'?'R':'L', completed:false, failed:false, skipped:false }, makeSetId)] };
   }));
-  const removeSet = (bi,si)=> setBlocks(prev=> prev.map((b,i)=> i!==bi? b : { ...b, sets: b.sets.filter((_,j)=> j!==si) }));
+  const removeSet = (bi,si)=> setBlocks(prev=> prev.map((b,i)=> i!==bi? b : removeSetAt(b, si).block));
   // Gym Mode: mark a set failed (attempted, didn't get the reps). Persisted as
   // `failed: true`, which the store already normalises.
   const markFailed = (bi,si)=>{
@@ -618,6 +625,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
         policy: appPolicy,
         nowISO: new Date().toISOString(),
         newSet,
+        makeId: makeSetId,
       });
     });
     setSwapOpen(null);
@@ -728,6 +736,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           exerciseOrder: index,
           ...(b.substitutionFrom ? { substitutionFrom: b.substitutionFrom, substitutionReason: b.substitutionReason } : {}),
           ...(Array.isArray(b.governedSlots) && b.governedSlots.length ? { governedSlots: b.governedSlots } : {}),
+          ...(Array.isArray(b.removedSlots) && b.removedSlots.length ? { removedSlots: b.removedSlots } : {}),
           ...carryPrescription(b),
           equipment: EXERCISE_BY_ID[b.exerciseId]?.equipment || null,
           sets: b.sets.map(s=>{
@@ -735,6 +744,14 @@ export default function SessionRunner({ session, history = [], availableEquipmen
             const skipped = !completed && String(s.reps).trim() !== '';
             const failed = !!s.failed;
             const out={ reps:String(s.reps).trim(), weightKg:String(s.weightKg).trim(), rpe:String(s.rpe).trim(), completed, skipped, failed };
+            // Stable identity travels with the set so history never depends on
+            // the current array position (plannedSlot, not the index).
+            if(s.setId) out.setId = s.setId;
+            if(s.origin) out.origin = s.origin;
+            if(Number.isInteger(s.plannedSlot)) out.plannedSlot = s.plannedSlot;
+            else if(s.origin === 'user-added') out.plannedSlot = null;
+            if(s.governingPrescriptionId) out.governingPrescriptionId = s.governingPrescriptionId;
+            else if(s.origin === 'user-added') out.governingPrescriptionId = null;
             if(painDiscomfort) out.pain = true;
             if(b.unilateral && s.side) out.side=s.side;
             if(s.rom && String(s.rom).trim()) out.rom=String(s.rom).trim();

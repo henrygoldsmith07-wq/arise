@@ -1,7 +1,7 @@
 // analytics.js — volume/frequency + actionable trend helpers.
 // Pure helpers used by ProgressView visualizations.
 
-import { recommendNext, governedSlotsFor } from "./progression.js";
+import { recommendNext, activePrescriptionOutcomes } from "./progression.js";
 import { EXERCISE_BY_ID } from "./data.js";
 
 export function weeklyVolume(history){
@@ -458,55 +458,82 @@ function prescriptionRepTarget(rx){
   return range.length ? range[0] : null;
 }
 
-// Follow-through denominator = GOVERNED set targets, not `prescribedSets` summed
-// across blocks. A whole block governs every planned position (governedSlotsFor
-// falls back to its prescribed count); a block after a partial swap governs only
-// the slots that revision actually owned (its explicit `governedSlots`). So a
-// three-set workout that did two bench sets then swapped the last slot to push-ups
-// has three governed targets total — never four or five — and each slot is
-// scored against the one revision that governed it. Superseded revisions held in
-// `prescriptionHistory` are never counted, and legacy records without attribution
-// fall back conservatively to their own prescribed count (no fabricated history).
+// Follow-through scores each set against the ONE active prescription revision
+// that governs it, via stable set identity (`setId`/`plannedSlot`/
+// `governingPrescriptionId`) plus the `removedSlots` ledger — never the raw
+// array position and never a summed `prescribedSets`. So a three-set workout
+// that did two bench sets then swapped the last slot has exactly three governed
+// targets, split across the two revisions, and a "+ Set" row (or a removed slot)
+// is reported in its own bucket, never inflating the denominator. Superseded
+// revisions in `prescriptionHistory` stay audit-only. Legacy records with no set
+// identity fall back to the conservative position count — never fabricating
+// attribution they do not have.
 export function observedPrescriptionFollowThrough(history){
   const ordered = (history || []).slice().sort((a, b)=> String(a?.dateISO || '').localeCompare(String(b?.dateISO || '')));
   const workouts = new Set();
   const exercises = new Set();
   const attempted = new Set();
   let governedTargets = 0, setsCompleted = 0, repTargetsMet = 0, loadTargetsMet = 0, completeTargets = 0;
-  let skippedSets = 0, failedSets = 0, extraSets = 0;
+  let skippedSets = 0, failedSets = 0, removedSets = 0, userAddedSets = 0, extraSets = 0;
+  const assess = (rx, set)=>{
+    const reps = Number(String(set.reps).match(/\d+/)?.[0] || set.reps) || 0;
+    const weightKg = Number(set.weightKg) || 0;
+    const assistedKg = Number(set.assistedKg) || 0;
+    const repTarget = prescriptionRepTarget(rx);
+    const loadTarget = rx.prescribedLoadKg != null && Number(rx.prescribedLoadKg) > 0 ? Number(rx.prescribedLoadKg) : null;
+    const assistTarget = rx.prescribedAssistKg != null ? Number(rx.prescribedAssistKg) : null;
+    const repsOk = repTarget == null || reps >= repTarget;
+    const loadOk = loadTarget == null || weightKg >= loadTarget;
+    const assistOk = assistTarget == null || assistedKg <= assistTarget;
+    return { repsOk, loadOk, complete: repsOk && loadOk && assistOk };
+  };
   for(const session of ordered){
     let sessionHasSnapshot = false;
     for(const block of session?.blocks || []){
       const rx = block?.prescription;
       if(!rx || typeof rx !== 'object') continue;
-      const governed = governedSlotsFor(block, rx);
-      const targets = governed.length;
-      if(!(targets > 0)) continue;
+      const rxId = rx.prescriptionId;
+      const sets = block.sets || [];
+      const userAddedHere = sets.filter(s=> s && s.origin === 'user-added').length;
+      userAddedSets += userAddedHere;
+      const outcomes = activePrescriptionOutcomes(block, rx);
+      if(!(outcomes.targets > 0)) continue;
       sessionHasSnapshot = true;
       exercises.add(block.exerciseId);
-      governedTargets += targets;
-      const sets = block.sets || [];
+      governedTargets += outcomes.targets;
+      if(outcomes.identified){
+        const foreign = sets.filter(s=> s && s.origin !== 'user-added' && s.governingPrescriptionId !== rxId).length;
+        extraSets += userAddedHere + foreign;
+        let doneHere = 0;
+        for(const set of outcomes.live){
+          if(set.failed){ failedSets++; continue; }
+          if(!set.completed || set.skipped){ skippedSets++; continue; }
+          doneHere++;
+          const { repsOk, loadOk, complete } = assess(rx, set);
+          if(repsOk) repTargetsMet++;
+          if(loadOk) loadTargetsMet++;
+          if(complete) completeTargets++;
+        }
+        removedSets += (outcomes.removed || []).length;
+        setsCompleted += doneHere;
+        if(doneHere) attempted.add(block.exerciseId);
+        continue;
+      }
+      // Legacy path (no per-set identity): position-based, unchanged.
+      const targets = outcomes.targets;
       const completed = sets.filter(s=> s?.completed && !s?.failed && !s?.skipped);
       if(completed.length) attempted.add(block.exerciseId);
       setsCompleted += Math.min(completed.length, targets);
       skippedSets += sets.filter(s=> s?.skipped).length;
       failedSets += sets.filter(s=> s?.failed).length;
       extraSets += Math.max(0, sets.length - targets);
-      const repTarget = prescriptionRepTarget(rx);
-      const loadTarget = rx.prescribedLoadKg != null && Number(rx.prescribedLoadKg) > 0 ? Number(rx.prescribedLoadKg) : null;
-      const assistTarget = rx.prescribedAssistKg != null ? Number(rx.prescribedAssistKg) : null;
       for(let i = 0; i < targets; i++){
         const set = sets[i];
         if(!set?.completed || set.failed || set.skipped) continue;
-        const reps = Number(String(set.reps).match(/\d+/)?.[0] || set.reps) || 0;
-        const weightKg = Number(set.weightKg) || 0;
-        const assistedKg = Number(set.assistedKg) || 0;
-        const repsOk = repTarget == null || reps >= repTarget;
-        const loadOk = loadTarget == null || weightKg >= loadTarget;
-        const assistOk = assistTarget == null || assistedKg <= assistTarget;
+        const { repsOk, loadOk, complete } = assess(rx, set);
         if(repsOk) repTargetsMet++;
         if(loadOk) loadTargetsMet++;
-        if(repsOk && loadOk && assistOk) completeTargets++;
+        if(complete) completeTargets++;
       }
     }
     if(sessionHasSnapshot && session?.id) workouts.add(session.id);
@@ -525,6 +552,8 @@ export function observedPrescriptionFollowThrough(history){
     completeTargets,
     skippedSets,
     failedSets,
+    removedSets,
+    userAddedSets,
     extraSets,
     followThroughPct: pct,
     note: governedTargets ? 'Scored against the prescription revision governing each set slot — never reconstructed, never double-counted.' : 'No stored prescriptions yet — legacy sessions are excluded, never fabricated.',
