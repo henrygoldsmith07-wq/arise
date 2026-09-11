@@ -5,7 +5,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildPrescriptionSnapshot, recommendNext, attachPrescription, carryPrescription, freezePrescriptionBlock, supersedePrescription, deepFreezePrescription, applySwapToBlocks, PRESCRIPTION_CHANGE_REASONS } from '../src/lib/progression.js';
+import { buildPrescriptionSnapshot, recommendNext, attachPrescription, carryPrescription, freezePrescriptionBlock, supersedePrescription, deepFreezePrescription, applySwapToBlocks, governedSlotsFor, sessionGovernedSlots, PRESCRIPTION_CHANGE_REASONS } from '../src/lib/progression.js';
 import { observedPrescriptionFollowThrough, strengthSeries } from '../src/lib/analytics.js';
 import { progressAssessment } from '../src/lib/product.js';
 import { initGuidedBlocks, buildGuidedPayload, withGuidedStepPrescription } from '../src/lib/guidedMode.js';
@@ -577,16 +577,20 @@ describe('partial exercise swaps never relabel completed work', ()=>{
     assert.equal(out.length, 2);
     assert.equal(out[0].exerciseId, 'bench-press-dumbbell');
     assert.equal(out[0].prescription.prescriptionId, 's1:0:bench-press-dumbbell:r1', 'original prescription untouched');
+    assert.equal(out[0].prescription.prescribedSets, 3, 'the immutable snapshot still records the ORIGINAL 3-set prescription');
+    assert.deepEqual(out[0].governedSlots, [0], 'r1 governed only the completed slot');
     assert.equal(out[0].sets.length, 1);
     assert.equal(out[0].sets[0].weightKg, '20');
     assert.equal(out[1].exerciseId, 'dumbbell-row');
     assert.equal(out[1].prescription.revision, 2);
     assert.equal(out[1].prescription.previousExerciseId, 'bench-press-dumbbell');
     assert.equal(out[1].prescription.supersedesPrescriptionId, 's1:0:bench-press-dumbbell:r1');
-    assert.equal(out[1].prescription.prescribedSets, 2, 'replacement inherits only the remaining slots');
+    assert.deepEqual(out[1].governedSlots, [1, 2], 'r2 governed only the two unfinished slots');
     assert.equal(out[1].substitutionFrom, 'bench-press-dumbbell');
     assert.equal(out[1].substitutedFromBlockIndex, 0);
     assert.equal(out[1].substitutedAt, now);
+    // Core invariant: the two revisions partition the three planned slots exactly once.
+    assert.deepEqual(sessionGovernedSlots({ blocks: out }).map((g)=> g.slot).sort((a, b)=> a - b), [0, 1, 2]);
   });
 
   it('a failed set is retained by the original block too', ()=>{
@@ -599,18 +603,29 @@ describe('partial exercise swaps never relabel completed work', ()=>{
     assert.equal(out[1].exerciseId, 'dumbbell-row');
   });
 
-  it('multiple swaps chain into separate identity-preserved blocks', ()=>{
-    let blocks = [{ exerciseId: 'bench-press-dumbbell', reps: '8–10', planIndex: 0, prescription: benchRx(), sets: [completedSet(8, 20), completedSet(8, 20), pendingSet()] }];
-    blocks = applySwapToBlocks({ blocks, index: 0, option, session, recommendation: { reps: 10, load: 22.5, reason: 'r', priorsVersion: 1 }, nowISO: now });
+  it('multiple swaps chain the slot partition across three revisions', ()=>{
+    const fourSlot = { id: 's1', dateISO: '2026-08-10', startedAt: '2026-08-10T09:00:00.000Z', blocks: [{ exerciseId: 'bench-press-dumbbell', sets: 4, reps: '8–10' }] };
+    const rx4 = () => snapshot('s1', '2026-08-10', 'bench-press-dumbbell', 4, 8, 20, '2026-08-10T09:00:00.000Z');
+    let blocks = [{ exerciseId: 'bench-press-dumbbell', reps: '8–10', planIndex: 0, prescription: rx4(), sets: [completedSet(8, 20), completedSet(8, 20), pendingSet(), pendingSet()] }];
+    blocks = applySwapToBlocks({ blocks, index: 0, option, session: fourSlot, recommendation: { reps: 10, load: 22.5, reason: 'r', priorsVersion: 1 }, nowISO: now });
+    // bench keeps slots [0,1]; row takes slots [2,3].
     assert.equal(blocks.length, 2);
-    blocks = [{ ...blocks[0], sets: [...blocks[0].sets] }, { ...blocks[1], sets: [completedSet(10, 22.5), pendingSet()] }];
-    blocks = applySwapToBlocks({ blocks, index: 1, option: { id: 'pull-up', unilateral: false, supportsWeighted: false, reason: 'no kit' }, session, recommendation: null, planIndex: 0, nowISO: '2026-08-10T09:30:00.000Z' });
+    assert.deepEqual(blocks[0].governedSlots, [0, 1]);
+    assert.deepEqual(blocks[1].governedSlots, [2, 3]);
+    // Complete row slot 2, then swap the row → pull-up keeps the partition clean.
+    blocks[1].sets = [completedSet(10, 22.5), pendingSet()];
+    blocks = applySwapToBlocks({ blocks, index: 1, option: { id: 'pull-up', unilateral: false, supportsWeighted: false, reason: 'no kit' }, session: fourSlot, recommendation: null, planIndex: 0, nowISO: '2026-08-10T09:30:00.000Z' });
     assert.equal(blocks.length, 3);
     assert.deepEqual(blocks.map((b)=> b.exerciseId), ['bench-press-dumbbell', 'dumbbell-row', 'pull-up']);
-    assert.equal(blocks[0].prescription.prescriptionId, 's1:0:bench-press-dumbbell:r1');
-    assert.equal(blocks[1].prescription.prescriptionId, 's1:0:dumbbell-row:r2');
-    assert.equal(blocks[2].prescription.changeReason, 'exercise-substituted');
+    assert.deepEqual(blocks[1].governedSlots, [2], 'row keeps only the slot it completed');
+    assert.deepEqual(blocks[2].governedSlots, [3], 'pull-up inherits exactly the last remaining slot');
     assert.equal(blocks[2].prescription.previousExerciseId, 'dumbbell-row');
+    assert.equal(blocks[2].prescription.revision, 3);
+    // Four planned slots, each governed exactly once across the three revisions.
+    const slots = sessionGovernedSlots({ blocks }).map((g)=> g.slot).sort((a, b)=> a - b);
+    assert.deepEqual(slots, [0, 1, 2, 3]);
+    const dupes = slots.length !== new Set(slots).size;
+    assert.equal(dupes, false, 'no slot is governed by two revisions');
   });
 
   it('split survives reload/crash restore and stays deeply frozen', ()=>{
@@ -619,6 +634,8 @@ describe('partial exercise swaps never relabel completed work', ()=>{
     const restored = split.map((b)=> freezePrescriptionBlock(JSON.parse(JSON.stringify(b))));
     assert.equal(restored[0].exerciseId, 'bench-press-dumbbell');
     assert.equal(restored[1].exerciseId, 'dumbbell-row');
+    assert.deepEqual(restored[0].governedSlots, [0], 'attribution survives the crash/restore round trip');
+    assert.deepEqual(restored[1].governedSlots, [1]);
     assert.ok(Object.isFrozen(restored[0].prescription));
     assert.ok(Object.isFrozen(restored[1].prescription.engine), 'replacement engine metadata deeply frozen after restore');
     assert.throws(()=>{ restored[1].prescription.previousExerciseId = 'tampered'; }, TypeError);
@@ -630,19 +647,34 @@ describe('partial exercise swaps never relabel completed work', ()=>{
     split[1].sets[0] = completedSet(10, 22.5);
     const entry = normaliseHistoryEntry({ id: 's1', dateISO: '2026-08-10', savedAt: now, blocks: JSON.parse(JSON.stringify(split)) });
     assert.deepEqual(entry.blocks.map((b)=> b.exerciseId), ['bench-press-dumbbell', 'dumbbell-row']);
+    assert.deepEqual(entry.blocks[0].governedSlots, [0, 1], 'normalisation preserves set-slot attribution');
+    assert.deepEqual(entry.blocks[1].governedSlots, [2]);
     assert.equal(entry.blocks[0].sets.every((s)=> s.completed), true);
     assert.equal(entry.blocks[0].sets.length, 2);
   });
 
-  it('observed follow-through scores bench vs bench and row vs row, not a merged denominator', ()=>{
+  it('observed denominator is governed targets (3), never prescribedSets summed (4)', ()=>{
+    // 3 planned slots: two bench sets done, the last slot handed to a row.
     const blocks = [{ exerciseId: 'bench-press-dumbbell', reps: '8–10', planIndex: 0, prescription: benchRx(), sets: [completedSet(8, 20), completedSet(8, 20), pendingSet()] }];
     const split = applySwapToBlocks({ blocks, index: 0, option, session, recommendation: { reps: 10, load: 22.5, reason: 'r', priorsVersion: 1 }, nowISO: now });
     split[1].sets = [completedSet(10, 22.5)];
     const scored = observedPrescriptionFollowThrough([{ id: 's1', dateISO: '2026-08-10', blocks: split }]);
-    assert.equal(scored.prescribedSets, 4, 'bench r1 (3) + row active (1); superseded never counted');
+    assert.equal(scored.governedTargets, 3, 'the three planned slots, each governed once');
+    assert.equal(scored.prescribedSets, 3, 'no inflation from r1.prescribedSets (3) + r2 (1)');
     assert.equal(scored.completeTargets, 3, '2 bench + 1 row met');
     assert.equal(scored.exercises, 2);
-    assert.equal(scored.followThroughPct, 75);
+    assert.equal(scored.followThroughPct, 100);
+  });
+
+  it('a row set at the wrong target does not borrow the bench revision', ()=>{
+    // Same 3-slot workout, but the replacement row is done below its own target.
+    const blocks = [{ exerciseId: 'bench-press-dumbbell', reps: '8–10', planIndex: 0, prescription: benchRx(), sets: [completedSet(8, 20), completedSet(8, 20), pendingSet()] }];
+    const split = applySwapToBlocks({ blocks, index: 0, option, session, recommendation: { reps: 10, load: 30, reason: 'r', priorsVersion: 1 }, nowISO: now });
+    split[1].sets = [completedSet(10, 25)]; // row target 30 → miss, even though it beats bench's 20
+    const scored = observedPrescriptionFollowThrough([{ id: 's1', dateISO: '2026-08-10', blocks: split }]);
+    assert.equal(scored.governedTargets, 3);
+    assert.equal(scored.completeTargets, 2, 'row scored against r2 (30kg), not the bench 20kg');
+    assert.equal(scored.followThroughPct, 67);
   });
 
   it('strength/e1RM history attributes the bench set to bench and the row set to row', ()=>{
@@ -665,11 +697,42 @@ describe('partial exercise swaps never relabel completed work', ()=>{
     const [benchBlock, rowBlock] = imported.history[0].blocks;
     assert.equal(benchBlock.exerciseId, 'bench-press-dumbbell');
     assert.equal(rowBlock.exerciseId, 'dumbbell-row');
+    assert.deepEqual(benchBlock.governedSlots, [0]);
+    assert.deepEqual(rowBlock.governedSlots, [1]);
     assert.equal(rowBlock.prescription.changeReason, 'exercise-substituted');
     assert.equal(rowBlock.prescription.supersedesPrescriptionId, benchRx().prescriptionId);
     assert.equal(rowBlock.prescription.firstShownAt, now);
     assert.equal(rowBlock.substitutedFromBlockIndex, 0);
     assert.equal(rowBlock.substitutedAt, now);
     assert.deepEqual(rowBlock.prescriptionHistory.map((rx)=> rx.prescriptionId), ['s1:0:bench-press-dumbbell:r1']);
+    // Follow-through still scores 2 governed targets after the import round trip.
+    assert.equal(observedPrescriptionFollowThrough(imported.history).governedTargets, 2);
+  });
+
+  it('swap after 2 of 3 sets → bench governs [0,1], replacement governs [2]', ()=>{
+    const blocks = [{ exerciseId: 'bench-press-dumbbell', reps: '8–10', planIndex: 0, prescription: benchRx(), sets: [completedSet(8, 20), completedSet(9, 20), pendingSet()] }];
+    const out = applySwapToBlocks({ blocks, index: 0, option, session, recommendation: { reps: 10, load: 22.5, reason: 'r', priorsVersion: 1 }, nowISO: now });
+    assert.deepEqual(out[0].governedSlots, [0, 1]);
+    assert.deepEqual(out[1].governedSlots, [2]);
+    assert.equal(out[1].prescription.prescribedSets, 1, 'replacement owns a single transferred slot');
+  });
+
+  it('a whole, unswapped block governs all its planned slots (legacy fallback)', ()=>{
+    const rx = snapshot('w1', '2026-08-10', 'bench-press-dumbbell', 3, 8, 20, '2026-08-10T09:00:00.000Z');
+    const entry = { id: 'w1', dateISO: '2026-08-10', blocks: [{ exerciseId: 'bench-press-dumbbell', prescription: rx, sets: [completedSet(8, 20), completedSet(8, 20), completedSet(8, 20)] }] };
+    assert.deepEqual(governedSlotsFor(entry.blocks[0]), [0, 1, 2], 'no explicit attribution → conservative full count');
+    assert.equal(observedPrescriptionFollowThrough([entry]).governedTargets, 3);
+  });
+
+  it('mixed legacy and attributed histories sum governed targets without double counting', ()=>{
+    // A legacy whole-block day (3 slots, no governedSlots) + a swapped day (3 slots split 2+1).
+    const legacy = { id: 'd1', dateISO: '2026-08-03', blocks: [{ exerciseId: 'bench-press-dumbbell', prescription: snapshot('d1', '2026-08-03', 'bench-press-dumbbell', 3, 8, 20, '2026-08-03T09:00:00.000Z'), sets: [completedSet(8, 20), completedSet(8, 20), completedSet(8, 20)] }] };
+    const swapBlocks = [{ exerciseId: 'bench-press-dumbbell', reps: '8–10', planIndex: 0, prescription: snapshot('d2', '2026-08-10', 'bench-press-dumbbell', 3, 8, 20, '2026-08-10T09:00:00.000Z'), sets: [completedSet(8, 20), completedSet(8, 20), pendingSet()] }];
+    const split = applySwapToBlocks({ blocks: swapBlocks, index: 0, option, session: { id: 'd2', dateISO: '2026-08-10', blocks: [{ exerciseId: 'bench-press-dumbbell', sets: 3 }] }, recommendation: null, nowISO: '2026-08-10T09:20:00.000Z' });
+    split[1].sets = [completedSet(8, 20)];
+    const scored = observedPrescriptionFollowThrough([legacy, { id: 'd2', dateISO: '2026-08-10', blocks: split }]);
+    assert.equal(scored.governedTargets, 6, '3 legacy + 3 governed on the swapped day (never 7)');
+    assert.equal(scored.completeTargets, 6);
+    assert.equal(scored.workouts, 2);
   });
 });

@@ -66,6 +66,7 @@ export function initGuidedBlocks(session, history = [], draftBlocks = null){
       why: source.why || '',
       substitutionFrom: source.substitutionFrom || '',
       substitutionReason: source.substitutionReason || '',
+      governedSlots: Array.isArray(source.governedSlots) ? source.governedSlots : null,
       prescription: source.prescription || null,
       prescriptionHistory: Array.isArray(source.prescriptionHistory) ? source.prescriptionHistory : null,
     });
@@ -174,6 +175,7 @@ export function buildGuidedPayload({ session, blocks, note = '', noteTags = [], 
       exerciseId: b.exerciseId,
       exerciseOrder: index,
       ...(b.substitutionFrom ? { substitutionFrom: b.substitutionFrom, substitutionReason: b.substitutionReason } : {}),
+      ...(Array.isArray(b.governedSlots) && b.governedSlots.length ? { governedSlots: b.governedSlots } : {}),
       ...carryPrescription(b),
       equipment: EXERCISE_BY_ID[b.exerciseId]?.equipment || null,
       sets: b.sets.map(s=>{

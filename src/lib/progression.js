@@ -797,6 +797,13 @@ export function supersedePrescription(block, { session = null, block: rxBlock = 
 // the remaining slots under the new exerciseId with a superseding prescription
 // linked back through provenance. Pure and deterministic so every invariant is
 // unit-testable; the runner supplies the recommendation + set factory.
+//
+// Set-slot attribution: each block records `governedSlots` — the ABSOLUTE
+// planned-set positions that its active revision actually governed. Splitting
+// partitions those positions so completed slots stay with the original revision
+// and only unfinished slots move to the replacement. This lets follow-through
+// score the governed targets (never the full immutable `prescribedSets` of a
+// partially-handed-off revision) while the historical snapshot stays unchanged.
 export function applySwapToBlocks({ blocks = [], index, option, session = null, recommendation = null, priorSets = [], planIndex = index, policy = 'standard', config = null, nowISO = null, newSet = null } = {}){
   const target = blocks[index];
   if(!target || !option || !option.id || option.id === target.exerciseId) return blocks;
@@ -804,12 +811,13 @@ export function applySwapToBlocks({ blocks = [], index, option, session = null, 
   const unilateral = !!option.unilateral;
   const origin = target.substitutionFrom || target.exerciseId;
   const repsFor = target.reps || session?.blocks?.[planIndex]?.reps || '';
+  const absPosition = (si)=> Number.isInteger(target.governedSlots?.[si]) ? target.governedSlots[si] : si;
   const makeSlot = (si)=>{
     const prev = priorSets[si] || priorSets[priorSets.length - 1] || null;
     if(newSet) return { ...newSet(repsFor, unilateral, prev), completed: false };
     return { reps: prev?.reps != null ? String(prev.reps) : '', weightKg: prev?.weightKg != null ? String(prev.weightKg) : '', rpe: '', side: unilateral ? (prev?.side || 'L') : '', rom: '', assistedKg: '', tempo: '', completed: false };
   };
-  const buildReplacement = (remainingSets)=> {
+  const buildReplacement = (remainingSets, governed)=> {
     const base = {
       ...target,
       exerciseId: option.id,
@@ -822,6 +830,7 @@ export function applySwapToBlocks({ blocks = [], index, option, session = null, 
       substitutedAt: now,
       planIndex,
       prescriptionHistory: null,
+      governedSlots: governed.slice().sort((a, b)=> a - b),
       sets: remainingSets,
     };
     const planned = { ...(session?.blocks?.[planIndex] || {}), exerciseId: option.id, sets: remainingSets };
@@ -837,17 +846,53 @@ export function applySwapToBlocks({ blocks = [], index, option, session = null, 
     });
   };
   const sets = target.sets || [];
-  const done = sets.filter(s=> s && (s.completed || s.failed));
-  const pendingCount = sets.filter(s=> !s || (!s.completed && !s.failed)).length;
-  if(!done.length){
-    const remainingSets = Array.from({ length: Math.max(1, pendingCount) }, (_, si)=> makeSlot(si));
-    return blocks.map((b, i)=> i === index ? buildReplacement(remainingSets) : b);
+  const doneIdx = [], pendingIdx = [];
+  sets.forEach((s, si)=> (s && (s.completed || s.failed) ? doneIdx : pendingIdx).push(si));
+  const absPositions = (idxList)=> idxList.map(absPosition);
+  const allPositions = sets.map((_, si)=> absPosition(si));
+  const nextSynthetic = (count)=>{
+    const base = allPositions.length ? Math.max(...allPositions) + 1 : 0;
+    return Array.from({ length: count }, (_, i)=> base + i);
+  };
+  if(!doneIdx.length){
+    const remainingSets = Array.from({ length: Math.max(1, pendingIdx.length || 1) }, (_, si)=> makeSlot(si));
+    const governed = pendingIdx.length ? absPositions(pendingIdx) : nextSynthetic(remainingSets.length);
+    return blocks.map((b, i)=> i === index ? buildReplacement(remainingSets, governed) : b);
   }
-  const doneOriginal = freezePrescriptionBlock({ ...target, sets: done.map(s=> ({ ...s })) });
+  const doneOriginal = freezePrescriptionBlock({
+    ...target,
+    sets: doneIdx.map((si)=> ({ ...sets[si] })),
+    governedSlots: absPositions(doneIdx).sort((a, b)=> a - b),
+  });
   const plannedCount = Math.max(1, Number(session?.blocks?.[planIndex]?.sets) || 1);
-  const remainingSets = Array.from({ length: Math.max(1, pendingCount || plannedCount) }, (_, si)=> makeSlot(si));
-  const replacement = buildReplacement(remainingSets);
+  const remainingSets = Array.from({ length: Math.max(1, pendingIdx.length || plannedCount) }, (_, si)=> makeSlot(si));
+  const replacementGoverned = pendingIdx.length ? absPositions(pendingIdx) : nextSynthetic(remainingSets.length);
+  const replacement = buildReplacement(remainingSets, replacementGoverned);
   return blocks.flatMap((b, i)=> i === index ? [doneOriginal, replacement] : [b]);
+}
+
+// The set positions an active prescription revision actually governed. Explicit
+// `block.governedSlots` wins (set after a partial swap). Otherwise fall back
+// conservatively to the revision's own planned count (legacy/whole blocks) —
+// never fabricating a revision history for records that have none.
+export function governedSlotsFor(block, rx = block?.prescription){
+  if(!rx) return [];
+  const explicit = block?.governedSlots;
+  if(Array.isArray(explicit) && explicit.length && explicit.every((v)=> Number.isInteger(v) && v >= 0)) return explicit.slice();
+  const planned = Number(rx.prescribedSets);
+  const count = Number.isFinite(planned) && planned > 0 ? Math.round(planned) : (Array.isArray(block?.sets) ? block.sets.length : 0);
+  return Array.from({ length: Math.max(0, count) }, (_, i)=> i);
+}
+
+// Every governed-slot position across a session's blocks — for auditing the
+// core invariant that each planned set position is governed exactly once.
+export function sessionGovernedSlots(session){
+  const out = [];
+  for(const block of session?.blocks || []){
+    if(!block?.prescription) continue;
+    for(const slot of governedSlotsFor(block)) out.push({ exerciseId: block.exerciseId, prescriptionId: block.prescription.prescriptionId, slot });
+  }
+  return out;
 }
 
 function copyPrescriptionHistory(history){

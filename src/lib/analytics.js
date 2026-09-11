@@ -1,7 +1,7 @@
 // analytics.js — volume/frequency + actionable trend helpers.
 // Pure helpers used by ProgressView visualizations.
 
-import { recommendNext } from "./progression.js";
+import { recommendNext, governedSlotsFor } from "./progression.js";
 import { EXERCISE_BY_ID } from "./data.js";
 
 export function weeklyVolume(history){
@@ -458,34 +458,44 @@ function prescriptionRepTarget(rx){
   return range.length ? range[0] : null;
 }
 
+// Follow-through denominator = GOVERNED set targets, not `prescribedSets` summed
+// across blocks. A whole block governs every planned position (governedSlotsFor
+// falls back to its prescribed count); a block after a partial swap governs only
+// the slots that revision actually owned (its explicit `governedSlots`). So a
+// three-set workout that did two bench sets then swapped the last slot to push-ups
+// has three governed targets total — never four or five — and each slot is
+// scored against the one revision that governed it. Superseded revisions held in
+// `prescriptionHistory` are never counted, and legacy records without attribution
+// fall back conservatively to their own prescribed count (no fabricated history).
 export function observedPrescriptionFollowThrough(history){
   const ordered = (history || []).slice().sort((a, b)=> String(a?.dateISO || '').localeCompare(String(b?.dateISO || '')));
   const workouts = new Set();
   const exercises = new Set();
   const attempted = new Set();
-  let prescribedSets = 0, setsCompleted = 0, repTargetsMet = 0, loadTargetsMet = 0, completeTargets = 0;
+  let governedTargets = 0, setsCompleted = 0, repTargetsMet = 0, loadTargetsMet = 0, completeTargets = 0;
   let skippedSets = 0, failedSets = 0, extraSets = 0;
   for(const session of ordered){
     let sessionHasSnapshot = false;
     for(const block of session?.blocks || []){
       const rx = block?.prescription;
       if(!rx || typeof rx !== 'object') continue;
-      const prescribed = Math.max(0, Math.round(Number(rx.prescribedSets) || 0));
-      if(!(prescribed > 0)) continue;
+      const governed = governedSlotsFor(block, rx);
+      const targets = governed.length;
+      if(!(targets > 0)) continue;
       sessionHasSnapshot = true;
       exercises.add(block.exerciseId);
-      prescribedSets += prescribed;
+      governedTargets += targets;
       const sets = block.sets || [];
       const completed = sets.filter(s=> s?.completed && !s?.failed && !s?.skipped);
       if(completed.length) attempted.add(block.exerciseId);
-      setsCompleted += Math.min(completed.length, prescribed);
+      setsCompleted += Math.min(completed.length, targets);
       skippedSets += sets.filter(s=> s?.skipped).length;
       failedSets += sets.filter(s=> s?.failed).length;
-      extraSets += Math.max(0, sets.length - prescribed);
+      extraSets += Math.max(0, sets.length - targets);
       const repTarget = prescriptionRepTarget(rx);
       const loadTarget = rx.prescribedLoadKg != null && Number(rx.prescribedLoadKg) > 0 ? Number(rx.prescribedLoadKg) : null;
       const assistTarget = rx.prescribedAssistKg != null ? Number(rx.prescribedAssistKg) : null;
-      for(let i = 0; i < prescribed; i++){
+      for(let i = 0; i < targets; i++){
         const set = sets[i];
         if(!set?.completed || set.failed || set.skipped) continue;
         const reps = Number(String(set.reps).match(/\d+/)?.[0] || set.reps) || 0;
@@ -501,13 +511,14 @@ export function observedPrescriptionFollowThrough(history){
     }
     if(sessionHasSnapshot && session?.id) workouts.add(session.id);
   }
-  const pct = prescribedSets ? Math.round(completeTargets / prescribedSets * 100) : null;
+  const pct = governedTargets ? Math.round(completeTargets / governedTargets * 100) : null;
   return {
     source: 'observed',
     workouts: workouts.size,
     exercises: exercises.size,
     attempted: attempted.size,
-    prescribedSets,
+    governedTargets,
+    prescribedSets: governedTargets,
     setsCompleted,
     repTargetsMet,
     loadTargetsMet,
@@ -516,6 +527,6 @@ export function observedPrescriptionFollowThrough(history){
     failedSets,
     extraSets,
     followThroughPct: pct,
-    note: prescribedSets ? 'Scored from stored pre-workout prescriptions — never reconstructed.' : 'No stored prescriptions yet — legacy sessions are excluded, never fabricated.',
+    note: governedTargets ? 'Scored against the prescription revision governing each set slot — never reconstructed, never double-counted.' : 'No stored prescriptions yet — legacy sessions are excluded, never fabricated.',
   };
 }

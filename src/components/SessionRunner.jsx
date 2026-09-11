@@ -77,6 +77,7 @@ function normaliseBlock(block, history, draftBlock, planIndex = 0){
     // so later blocks shift array position — planIndex keeps the first-visible
     // capture pointed at the right prescription of record regardless.
     planIndex: Number.isInteger(source.planIndex) ? source.planIndex : planIndex,
+    governedSlots: Array.isArray(source.governedSlots) ? source.governedSlots : null,
     prescription: source.prescription || null,
     prescriptionHistory: Array.isArray(source.prescriptionHistory) ? source.prescriptionHistory : null,
   });
@@ -726,6 +727,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           exerciseId: b.exerciseId,
           exerciseOrder: index,
           ...(b.substitutionFrom ? { substitutionFrom: b.substitutionFrom, substitutionReason: b.substitutionReason } : {}),
+          ...(Array.isArray(b.governedSlots) && b.governedSlots.length ? { governedSlots: b.governedSlots } : {}),
           ...carryPrescription(b),
           equipment: EXERCISE_BY_ID[b.exerciseId]?.equipment || null,
           sets: b.sets.map(s=>{
