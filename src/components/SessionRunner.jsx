@@ -79,6 +79,7 @@ function normaliseBlock(block, history, draftBlock, planIndex = 0){
     planIndex: Number.isInteger(source.planIndex) ? source.planIndex : planIndex,
     governedSlots: Array.isArray(source.governedSlots) ? source.governedSlots : null,
     removedSlots: Array.isArray(source.removedSlots) ? source.removedSlots : null,
+    prescriptionOverridden: source.prescriptionOverridden === true,
     prescription: source.prescription || null,
     prescriptionHistory: Array.isArray(source.prescriptionHistory) ? source.prescriptionHistory : null,
   });
@@ -242,6 +243,11 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   const lastSetAtRef=useRef(draft?.lastSetAt || startedAtRef.current);
   const shownRecommendationRef=useRef(new Set());
   const dismissedRecommendationRef=useRef(new Set());
+  // Exercises whose SHOWN prescription the user has since overwritten by hand.
+  // Seeded from a restored draft so a reload keeps the flag, and used both to
+  // stamp `prescriptionOverridden` on the saved block (history attribution) and
+  // to suppress grading/personalisation on that exposure.
+  const overrideRef=useRef(new Set((draft?.blocks || []).filter(b=> b?.prescriptionOverridden).map(b=> b.exerciseId)));
   // Stable per-set ids, unique within this runner instance and across reloads
   // (restored sets keep their own id; new ones use a fresh timestamp base).
   const setSeqRef=useRef(0);
@@ -353,32 +359,6 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     try{ return runComparativeStudy(history); }catch{ return null; }
   }, [history]);
 
-  useEffect(()=>{
-    for(const block of blocks){
-      if(shownRecommendationRef.current.has(block.exerciseId)) continue;
-      const arm = assignmentFor(studyEnrollment, block.exerciseId);
-      const recommendation=getRecommendation(block,history,session.dateISO,plateConfig,study,arm);
-      shownRecommendationRef.current.add(block.exerciseId);
-      recordEvent('recommendation:shown', { sessionId:session.id, exerciseId:block.exerciseId, assignedArm:arm || 'arise', target:suggestedTarget(recommendation,block) });
-      // Prospective evaluation record: snapshot the recommendation BEFORE the
-      // workout. Consent-gated; stored separately from training history.
-        try{
-          recordRecommendation({
-            exerciseId: block.exerciseId,
-            recommendation,
-            history,
-            dueDateISO: session.dateISO,
-            programId: session.programId || null,
-            programVersion: session.programVersion ?? null,
-            targetReps: block.reps || undefined,
-            assignedArm: arm || 'arise',
-            participantId,
-            preferences: measurementConsent === true ? { telemetryEnabled: true } : null,
-          });
-        }catch{}
-    }
-  }, [blocks, history, session.id, session.dateISO, plateConfig, measurementConsent, study, studyEnrollment, participantId]);
-
   const startRest=(seconds,label,exerciseId=null)=>{
     const sec=Number(seconds)||0;
     if(sec<=0){ setRestEndsAt(null); return; }
@@ -422,6 +402,37 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     }
     return { recs, prevs, assigned };
   },[blocks,history,session.dateISO,plateConfig,studyEnrollment,appPolicy,appExplanationMode]);
+
+  // Prospective evaluation record: persist the EXACT recommendation the user is
+  // shown — the same blockMeta.recs value rendered on screen, carrying its
+  // policy, confidence, uncertainty, evidence, study arm and any personal-
+  // calibration adjustment — never a recomputed default-policy one. Recorded
+  // once per exercise before the workout; consent-gated; stored separately from
+  // training history. The ledger therefore always matches what was displayed.
+  useEffect(()=>{
+    for(const block of blocks){
+      if(shownRecommendationRef.current.has(block.exerciseId)) continue;
+      const recommendation = blockMeta.recs.get(block.exerciseId) || null;
+      if(!recommendation) continue;
+      shownRecommendationRef.current.add(block.exerciseId);
+      const arm = blockMeta.assigned.get(block.exerciseId);
+      recordEvent('recommendation:shown', { sessionId:session.id, exerciseId:block.exerciseId, assignedArm:arm || 'arise', target:suggestedTarget(recommendation,block) });
+      try{
+        recordRecommendation({
+          exerciseId: block.exerciseId,
+          recommendation,
+          history,
+          dueDateISO: session.dateISO,
+          programId: session.programId || null,
+          programVersion: session.programVersion ?? null,
+          targetReps: block.reps || undefined,
+          assignedArm: arm || 'arise',
+          participantId,
+          preferences: measurementConsent === true ? { telemetryEnabled: true } : null,
+        });
+      }catch{}
+    }
+  },[blocks, blockMeta, history, session.id, session.dateISO, session.programId, session.programVersion, measurementConsent, participantId]);
 
   // First-visible capture. A prescription is frozen only when its block's
   // target is actually PRESENTED — every block in the standard runner (all are
@@ -509,21 +520,39 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     return Boolean(r && ((r.load != null && r.load > 0) || (r.reps != null && String(r.reps).trim() !== '')));
   }), [blocks, blockMeta]);
 
-  const updateSet = (bi, si, patch)=>{
+  const updateSet = (bi, si, patch, { userEdit = true } = {})=>{
     // Guard against the rare stale-closure path (gesture completion after a
     // reorder): a set row that no longer exists must not resurrect as an edit
     // of the wrong row.
     if(!blocks[bi]?.sets?.[si]) return;
-    if((patch.reps!==undefined || patch.weightKg!==undefined) && !dismissedRecommendationRef.current.has(bi)){
-      dismissedRecommendationRef.current.add(bi);
-      recordEvent('recommendation:dismissed', { sessionId:session.id, exerciseId:blocks[bi]?.exerciseId, reason:'manual set edit' });
-      // Policy versioning: the ledger must know this transition was USER-decided,
-      // not engine-decided, so studies can separate the two.
-      try{
-        markRecommendationOverride({ exerciseId: blocks[bi]?.exerciseId, dueDateISO: session.dateISO });
-      }catch{}
+    const exerciseId = blocks[bi].exerciseId;
+    if(userEdit && (patch.reps!==undefined || patch.weightKg!==undefined)){
+      if(!dismissedRecommendationRef.current.has(bi)){
+        dismissedRecommendationRef.current.add(bi);
+        recordEvent('recommendation:dismissed', { sessionId:session.id, exerciseId, reason:'manual set edit' });
+      }
+      // A manual override is specifically replacing the SHOWN load, not merely
+      // logging fewer reps against it (that is an honest attempt that may only
+      // later grade as too-aggressive). Only a deviating weight marks the
+      // prescription overridden so it is excluded from grading + personalising.
+      if(patch.weightKg !== undefined){
+        const shown = blockMeta.recs.get(exerciseId);
+        const shownLoad = shown?.load != null && Number(shown.load) > 0 ? Number(shown.load) : null;
+        const nextW = Number(String(patch.weightKg).match(/[\d.]+/)?.[0] ?? patch.weightKg) || 0;
+        if(shownLoad != null && Math.abs(nextW - shownLoad) > Math.max(0.5, shownLoad * 0.02)){
+          overrideRef.current.add(exerciseId);
+          // Policy versioning: the ledger must know this transition was
+          // USER-decided, not engine-decided, so studies can separate the two.
+          try{ markRecommendationOverride({ exerciseId, dueDateISO: session.dateISO }); }catch{}
+        }
+      }
     }
-    setBlocks(prev=> prev.map((b,i)=> i!==bi? b : { ...b, sets: b.sets.map((s,j)=> j!==si? s : { ...s, ...patch }) }));
+    const flagged = overrideRef.current.has(exerciseId);
+    setBlocks(prev=> prev.map((b,i)=> i!==bi? b : {
+      ...b,
+      ...(flagged ? { prescriptionOverridden: true } : {}),
+      sets: b.sets.map((s,j)=> j!==si? s : { ...s, ...patch }),
+    }));
   };
   const completeSet = (bi,si)=>{
     const block=blocks[bi];
@@ -549,7 +578,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
         const carry = {};
         if(String(block.sets[nextIdx].reps).trim()==='') carry.reps = set.reps;
         if(String(block.sets[nextIdx].weightKg).trim()==='') carry.weightKg = set.weightKg;
-        if(Object.keys(carry).length) updateSet(bi,nextIdx,carry);
+        if(Object.keys(carry).length) updateSet(bi,nextIdx,carry,{ userEdit: false });
       }
       // One-thumb flow: the field you edit between sets is the NEXT set's
       // reps. Auto-advance focus there so the keyboard is up and its content
@@ -740,6 +769,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           ...(b.substitutionFrom ? { substitutionFrom: b.substitutionFrom, substitutionReason: b.substitutionReason } : {}),
           ...(Array.isArray(b.governedSlots) && b.governedSlots.length ? { governedSlots: b.governedSlots } : {}),
           ...(Array.isArray(b.removedSlots) && b.removedSlots.length ? { removedSlots: b.removedSlots } : {}),
+          ...(b.prescriptionOverridden ? { prescriptionOverridden: true } : {}),
           ...carryPrescription(b),
           equipment: EXERCISE_BY_ID[b.exerciseId]?.equipment || null,
           sets: b.sets.map(s=>{

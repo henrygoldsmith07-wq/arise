@@ -499,11 +499,17 @@ export function personalCalibrationFromHistory(history, { exerciseId = null, con
         if(!best || val > best.val) best = { reps, weightKg, assistedKg, rpe: s.rpe, val, failed: !!s.failed };
       }
       if(!best) continue;
-      samples++;
       const repsTarget = rx.prescribedReps != null ? Number(rx.prescribedReps)
         : (String(rx.prescribedRepRange || '').match(/\d+/)?.map(Number)?.[0] ?? null);
       const loadTarget = rx.prescribedLoadKg != null && Number(rx.prescribedLoadKg) > 0 ? Number(rx.prescribedLoadKg) : null;
       const assistTarget = rx.prescribedAssistKg != null ? Number(rx.prescribedAssistKg) : null;
+      // §4: never learn from an exposure the user explicitly overrode, or where
+      // adherence cannot be established at all (no frozen target). A missed
+      // target is NOT an override — it is the primary "too aggressive" signal
+      // and must still be graded, so it is never dropped here.
+      const establishedTargets = repsTarget != null || loadTarget != null || assistTarget != null;
+      if(!establishedTargets || rx.userOverride === true || block.prescriptionOverridden === true) continue;
+      samples++;
       const repsMet = repsTarget == null || best.reps >= repsTarget;
       const loadMet = loadTarget == null || best.weightKg >= loadTarget;
       const assistMet = assistTarget == null || best.assistedKg <= assistTarget;

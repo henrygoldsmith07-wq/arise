@@ -378,31 +378,48 @@ export function calibrateRecommendations(ledger, { config = null } = {}){
   const resolvedRows = prospective.filter(row=> row.outcome);
   const minimum = Math.max(1, Number(cal.minSamplesToTrust) || 1);
 
+  const isGradeable = (row)=>{
+    const o = row.outcome;
+    if(!o) return false;
+    if(o.gradeable != null) return o.gradeable === true;
+    // Legacy outcome without the explicit flag: derive from the same
+    // conservative rule the recorder applies — followed, no pain/technique/
+    // override, and a label that is not insufficient-evidence.
+    if(o.pain === true || o.techniqueWarning === true || o.userOverride === true) return false;
+    if(o.followed !== true) return false;
+    const cls = classifyRecommendationOutcome(row, thresholds);
+    return cls.attempted && cls.label !== 'insufficient-evidence';
+  };
+
   const gradeSegment = (rows, key)=>{
     const resolved = rows.filter(row=> row.outcome);
-    let successful = 0, tooAggressive = 0, tooConservative = 0, neutral = 0, insufficient = 0;
+    // Rates, sample gates and calibration error use GRADEABLE outcomes only —
+    // a resolved-but-not-attempted pair must never move the denominator.
+    const gradeableRows = resolved.filter(isGradeable);
+    let successful = 0, tooAggressive = 0, tooConservative = 0, neutral = 0;
     let errSum = 0, errN = 0;
-    for(const row of resolved){
+    for(const row of gradeableRows){
       const cls = classifyRecommendationOutcome(row, thresholds);
       if(cls.label === 'successful') successful++;
       else if(cls.label === 'too-aggressive') tooAggressive++;
       else if(cls.label === 'too-conservative') tooConservative++;
-      else if(cls.label === 'neutral') neutral++;
-      else insufficient++;
+      else neutral++;
       const exp = cal.bandExpected[confidenceBandOf(row)] ?? cal.defaultSuccessRate;
       const realised = realisedSuccess(row);
       if(realised != null){ errSum += Math.abs(exp - realised); errN++; }
     }
-    const n = resolved.length;
+    const n = gradeableRows.length;
     // Shrink the success rate toward the safe default; a tiny n stays near prior.
     const shrink = shrinkRate({ successes: successful, samples: n, prior: cal.defaultSuccessRate, pseudoCount: cal.pseudoCount });
     const conclusive = n >= minimum;
     return {
       key,
       records: rows.length,
-      resolved: n,
+      resolved: resolved.length,
+      gradeable: n,
+      excluded: resolved.length - n,
       conclusive,
-      successful, tooAggressive, tooConservative, neutral, insufficient,
+      successful, tooAggressive, tooConservative, neutral,
       // Raw rates are withheld below the sample gate; the shrunk estimate is
       // always safe to show because it is already pulled toward the default.
       successRate: conclusive && n ? round(successful / n, 3) : null,
@@ -448,6 +465,7 @@ export function calibrateRecommendations(ledger, { config = null } = {}){
     minimumSamples: minimum,
     prospective: prospective.length,
     resolved: resolvedRows.length,
+    gradeable: overall.gradeable,
     open: prospective.length - resolvedRows.length,
     excludedReconstructed: (ledger || []).filter(row=> row && row.recommendation && !isProspectiveRecord(row)).length,
     overall,
@@ -459,8 +477,8 @@ export function calibrateRecommendations(ledger, { config = null } = {}){
     byType: dimension('type', recommendationTypeOf),
     confidenceQuality,
     tendency,
-    note: resolvedRows.length >= minimum
-      ? `Calibrated on ${resolvedRows.length} prospective recommendation→outcome pairs. Reconstructed or imported recommendations are excluded (${(ledger||[]).filter(r=>r&&r.recommendation&&!isProspectiveRecord(r)).length}). Sparse segments are shrunk toward a ${Math.round(cal.defaultSuccessRate*100)}% default and withheld below ${minimum} pairs.`
-      : `Need ${Math.max(0, minimum - resolvedRows.length)} more prospective recommendation→outcome pairs before any rate is trustworthy (${resolvedRows.length} so far). Reconstructed recommendations never count as prospective evidence.`,
+    note: overall.gradeable >= minimum
+      ? `Calibrated on ${overall.gradeable} GRADEABLE prospective recommendation→outcome pairs (out of ${resolvedRows.length} resolved; unfollowed, overridden, and pain/technique sessions are excluded from every rate). Reconstructed or imported recommendations are excluded (${(ledger||[]).filter(r=>r&&r.recommendation&&!isProspectiveRecord(r)).length}). Sparse segments are shrunk toward a ${Math.round(cal.defaultSuccessRate*100)}% default and withheld below ${minimum} gradeable pairs.`
+      : `Need ${Math.max(0, minimum - overall.gradeable)} more prospective GRADEABLE pairs before any rate is trustworthy (${overall.gradeable} gradeable of ${resolvedRows.length} resolved so far — unfollowed, overridden and pain/technique sessions never count). Reconstructed recommendations are not prospective evidence.`,
   };
 }

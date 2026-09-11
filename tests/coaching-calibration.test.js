@@ -12,7 +12,9 @@ import {
 import { calibrateRecommendations } from '../src/lib/evaluation.js';
 import { personalCalibrationFromHistory } from '../src/lib/progression.js';
 import { coachingCalibration } from '../src/lib/product.js';
-import { recordRecommendation, attachOutcome, loadEvaluationLedger } from '../src/lib/longitudinal.js';
+import { recordRecommendation, attachOutcome, loadEvaluationLedger, markRecommendationOverride } from '../src/lib/longitudinal.js';
+import { recommendNext } from '../src/lib/progression.js';
+import { recommendNextWithPolicy } from '../src/lib/progressionPolicies.js';
 import { withProvenance } from '../src/lib/domain.js';
 
 function memoryStorage(){
@@ -328,5 +330,113 @@ describe('coachingCalibration presentation layer', ()=>{
     const ledger = [row({ met: true, band: 'high' }), row({ met: false })];
     const json = JSON.parse(JSON.stringify(ledger));
     assert.deepEqual(calibrateRecommendations(json, { config: null }).overall, calibrateRecommendations(ledger, { config: null }).overall);
+  });
+});
+
+describe('shown recommendation == recorded prospective record (no recompute)', ()=>{
+  const shownHistory = [{ id: 'h0', dateISO: '2026-01-01', blocks: [{ exerciseId: 'bench-press-dumbbell', sets: [{ reps: '8', weightKg: '20', rpe: '7' }] }] }];
+  function recordShown(rec){
+    const storage = memoryStorage();
+    const stored = recordRecommendation({ exerciseId: 'bench-press-dumbbell', recommendation: rec, history: shownHistory, dueDateISO: '2026-01-05', preferences: CONSENT, targetReps: '8', policy: rec.policy, storage });
+    return { stored, storage };
+  }
+  it('a conservative-policy target is stored exactly, not recomputed', ()=>{
+    const shown = recommendNextWithPolicy({ exerciseId: 'bench-press-dumbbell', history: shownHistory, targetReps: '8–12', policy: 'conservative', asOfDateISO: '2026-01-05' });
+    const { stored } = recordShown(shown);
+    assert.equal(stored.recommendation.load, shown.load);
+    assert.equal(stored.recommendation.reps, shown.reps);
+    assert.equal(stored.prescription.load, shown.load);
+    assert.equal(stored.audit.policy, shown.policy);
+  });
+  it('an aggressive-policy target is stored exactly (never re-derived by the engine)', ()=>{
+    // Simulate the target the aggressive policy actually displayed, which is
+    // deliberately above what a plain recompute would return. The recorder must
+    // persist THIS, not silently recompute a different one.
+    const recomputed = recommendNext({ exerciseId: 'bench-press-dumbbell', history: shownHistory, targetReps: '8–12', asOfDateISO: '2026-01-05' });
+    const shown = { ...recomputed, load: recomputed.load + 5, policy: 'aggressive' };
+    const { stored } = recordShown(shown);
+    assert.equal(stored.recommendation.load, shown.load);
+    assert.equal(stored.prescription.load, shown.load);
+    assert.equal(stored.audit.policy, 'aggressive');
+    assert.equal(stored.recommendation.load, recomputed.load + 5); // stored the shown, not the recompute
+  });
+  it('a personal-calibration adjustment is persisted on the record', ()=>{
+    const shown = { ...recommendNext({ exerciseId: 'bench-press-dumbbell', history: shownHistory, targetReps: '8–12', asOfDateISO: '2026-01-05' }), policy: 'standard', personalCalibration: { active: true, jumpMultiplier: 0.92, direction: -1, samples: 6, headline: 'Smaller increase recommended.' } };
+    const { stored } = recordShown(shown);
+    assert.equal(stored.audit.personalCalibration.jumpMultiplier, 0.92);
+    assert.equal(stored.audit.personalCalibration.active, true);
+    assert.equal(stored.recommendation.load, shown.load);
+  });
+});
+
+describe('gradeable vs non-gradeable outcomes', ()=>{
+  it('a manual override is never graded or used to personalise', ()=>{
+    const storage = memoryStorage();
+    recordRecommendation({ exerciseId: 'bench-press-dumbbell', recommendation: { load: 25, reps: 8 }, history: [{ id: 'h', dateISO: '2026-01-01', blocks: [{ exerciseId: 'bench-press-dumbbell', sets: [{ reps: '8', weightKg: '20', rpe: '7' }] }] }], dueDateISO: '2026-01-05', preferences: CONSENT, targetReps: '8', storage });
+    markRecommendationOverride({ exerciseId: 'bench-press-dumbbell', dueDateISO: '2026-01-05', storage });
+    const [resolved] = attachOutcome({ sessionId: 's', dateISO: '2026-01-05', blocks: [{ exerciseId: 'bench-press-dumbbell', sets: [{ reps: '8', weightKg: '25', rpe: '8', completed: true }] }], preferences: CONSENT, storage });
+    assert.equal(resolved.outcome.userOverride, true);
+    assert.equal(resolved.outcome.gradeable, false);
+    assert.equal(resolved.outcome.followed, false);
+    assert.equal(resolved.outcome.label, 'insufficient-evidence');
+    const cal = calibrateRecommendations(loadEvaluationLedger(storage), { config: null });
+    assert.equal(cal.prospective, 1);
+    assert.equal(cal.resolved, 1);
+    assert.equal(cal.gradeable, 0);
+    assert.equal(cal.tendency, 'learning');
+  });
+  it('a skipped / unfollowed recommendation is resolved but not gradeable', ()=>{
+    const skipped = row({ met: false, followed: false, changePct: null });
+    assert.equal(classifyRecommendationOutcome(skipped, T).label, 'insufficient-evidence');
+    const cal = calibrateRecommendations([skipped], { config: null });
+    assert.equal(cal.resolved, 1);
+    assert.equal(cal.gradeable, 0);
+    assert.equal(cal.overall.successRate, null);
+  });
+  it('pain or technique makes a met attempt non-gradeable', ()=>{
+    assert.equal(classifyRecommendationOutcome(row({ met: true, pain: true }), T).label, 'neutral');
+    for(const r of [row({ met: true, pain: true }), row({ met: true, technique: true })]){
+      assert.equal(calibrateRecommendations([r], { config: null }).gradeable, 0);
+    }
+  });
+  it('5 resolved but only 1 gradeable keeps calibration inactive', ()=>{
+    const ledger = [row({ id: 'g', met: true }), row({ id: 'u1', followed: false }), row({ id: 'u2', followed: false }), row({ id: 'p', met: true, pain: true }), row({ id: 't', met: true, technique: true })];
+    const cal = calibrateRecommendations(ledger, { config: null });
+    assert.equal(cal.resolved, 5);
+    assert.equal(cal.gradeable, 1);
+    assert.equal(cal.overall.conclusive, false);
+    assert.equal(cal.overall.successRate, null);
+    assert.equal(coachingCalibration(cal).active, false);
+  });
+  it('calibration error is computed from gradeable rows only', ()=>{
+    const gradeable = Array.from({ length: 5 }, (_, i)=> row({ id: `h${i}`, met: true, band: 'high' })); // realised 1 vs expected 0.8 → error 0.2
+    const noise = [row({ id: 'n1', met: false, followed: false, band: 'low' }), row({ id: 'n2', met: false, followed: false, band: 'low' })];
+    const withNoise = calibrateRecommendations([...gradeable, ...noise], { config: null });
+    assert.equal(withNoise.resolved, 7);
+    assert.equal(withNoise.gradeable, 5);
+    assert.equal(withNoise.overall.calibrationError, 0.2); // unfollowed low-band rows excluded
+  });
+});
+
+describe('personalisation ignores overridden and ungradeable exposures', ()=>{
+  const presc = load => ({ prescriptionId: 'pc:r1', prescribedReps: 8, prescribedLoadKg: load, prescribedAssistKg: null });
+  const done = (weightKg, rpe) => ({ reps: '8', weightKg: String(weightKg), rpe: String(rpe), completed: true, skipped: false, failed: false, assistedKg: 0 });
+  const exposures = rows => rows.map((e, i)=> ({ id: `d${i}`, dateISO: `2026-03-0${i + 1}`, blocks: [{ exerciseId: 'bench-press-dumbbell', prescription: presc(e.prescribe), sets: [done(e.performed, e.rpe ?? 8)] }] }));
+  it('overridden exposures do not count toward the sample', ()=>{
+    const base = exposures([{ prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }]);
+    base[0].blocks[0].prescriptionOverridden = true;
+    assert.equal(personalCalibrationFromHistory(base, { exerciseId: 'bench-press-dumbbell' }).samples, 1);
+  });
+  it('a run that is majority overridden never activates', ()=>{
+    const h = exposures([{ prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }]);
+    h.slice(0, 4).forEach(b=> { b.blocks[0].prescriptionOverridden = true; });
+    assert.equal(personalCalibrationFromHistory(h, { exerciseId: 'bench-press-dumbbell' }).active, false);
+  });
+  it('without overrides, 6 missed increases still activate caution (regression guard)', ()=>{
+    const h = exposures(Array.from({ length: 6 }, ()=> ({ prescribe: 25, performed: 20 })));
+    const pc = personalCalibrationFromHistory(h, { exerciseId: 'bench-press-dumbbell' });
+    assert.equal(pc.samples, 6);
+    assert.equal(pc.active, true);
+    assert.ok(pc.jumpMultiplier < 1);
   });
 });

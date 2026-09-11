@@ -199,6 +199,10 @@ export function recordRecommendation({ exerciseId, recommendation, history = [],
       confidence: recommendation.confidence ?? null,
       uncertainty: recommendation.uncertainty ?? null,
       evidence: recommendation.evidence ?? null,
+      // The exact personal-calibration adjustment that shaped the SHOWN target
+      // (from personalCalibrationFromHistory), frozen so the ledger always
+      // matches what the user actually saw — policy, target and adjustment.
+      personalCalibration: recommendation.personalCalibration ?? null,
     },
     // ── Randomised trial fields (immutable once written) ──
     // participantId: pseudonymous study id (studyIdentity.js)
@@ -350,6 +354,11 @@ export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore =
       followed = loadOk && repsOk && assistOk;
       assignedMet = meetsPrescription(best, { reps: aReps, load: aLoad, assistKg: aAssist });
     }
+    // A manual override means the user substituted their own target for the
+    // engine's — the recorded recommendation is no longer what was tested, so
+    // adherence is false by definition and the pair is never graded against
+    // the engine.
+    if(record.userOverride === true) followed = false;
     // Score every FROZEN baseline arm against the same real outcome. All arms
     // saw the same prior history at record time; the realised training is
     // identical across arms, so differences are decision quality — would this
@@ -414,6 +423,14 @@ export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore =
     enriched.outcome.label = graded.label;
     enriched.outcome.labelReason = graded.reason;
     enriched.outcome.attempted = graded.attempted;
+    // resolved ≠ gradeable: only a followed, non-pain, non-technique, non-
+    // overridden attempt with a meaningful label may calibrate the engine.
+    enriched.outcome.gradeable = graded.attempted
+      && enriched.outcome.followed === true
+      && enriched.outcome.pain !== true
+      && enriched.outcome.techniqueWarning !== true
+      && enriched.outcome.userOverride !== true
+      && graded.label !== 'insufficient-evidence';
     resolved.push(enriched);
     return enriched;
   });

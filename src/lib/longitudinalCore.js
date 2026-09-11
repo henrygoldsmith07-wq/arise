@@ -142,6 +142,11 @@ export function classifyRecommendationOutcome(record, thresholds = {}){
   if(!o) return { label: 'insufficient-evidence', reason: 'No outcome attached yet.', attempted: false };
   const action = record?.recommendedAction || 'unknown';
   const followed = o.followed;
+  // A manual override means the user substituted their own target — the
+  // recorded prescription was not what was tested, so it is never graded.
+  if(o.userOverride === true || record?.userOverride === true){
+    return { label: 'insufficient-evidence', reason: 'Manual override — the shown prescription was not what was tested; not graded.', attempted: false };
+  }
   // Not followed, or adherence unknown: the engine is not punished for a
   // prescription the lifter did not meaningfully attempt.
   if(followed !== true){

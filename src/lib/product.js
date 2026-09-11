@@ -617,12 +617,14 @@ export function progressAssessment({ history = [], schedule = null, today = null
  */
 export function coachingCalibration(calibration){
   const resolved = Number(calibration?.resolved) || 0;
+  const gradeable = Number(calibration?.gradeable ?? calibration?.overall?.gradeable) || 0;
+  const excluded = Number(calibration?.overall?.excluded) || Math.max(0, resolved - gradeable);
   const minimum = Number(calibration?.minimumSamples) || 5;
   const o = calibration?.overall || {};
   if(!calibration || resolved < 1){
     return {
       active: false, status: 'gathering',
-      observed: Number(calibration?.prospective) || 0, resolved: 0, open: Number(calibration?.open) || 0,
+      observed: Number(calibration?.prospective) || 0, resolved: 0, gradeable: 0, excluded: 0, open: Number(calibration?.open) || 0,
       successRate: null, shrunkSuccessRate: null, overRate: null, underRate: null,
       tendency: 'learning', confidenceQuality: 'unknown',
       headline: 'Learning what works for you',
@@ -630,7 +632,9 @@ export function coachingCalibration(calibration){
       note: calibration?.note || null,
     };
   }
-  const enough = resolved >= minimum;
+  // Activation is on GRADEABLE pairs only — resolved-but-not-attempted,
+  // overridden and pain/technique sessions never move the rate or the gate.
+  const enough = gradeable >= minimum;
   const tendency = enough ? (calibration.tendency || 'learning') : 'learning';
   const headline = enough
     ? (tendency === 'over-prescribing' ? 'Calibrated to progress more cautiously'
@@ -640,7 +644,7 @@ export function coachingCalibration(calibration){
     : 'Learning what works for you';
   return {
     active: enough, status: enough ? 'calibrated' : 'gathering',
-    observed: Number(calibration.prospective) || 0, resolved, open: Number(calibration.open) || 0,
+    observed: Number(calibration.prospective) || 0, resolved, gradeable, excluded, open: Number(calibration.open) || 0,
     successRate: enough ? (o.successRate ?? null) : null,
     shrunkSuccessRate: o.shrunkSuccessRate ?? null,
     overRate: enough ? (o.overPrescriptionRate ?? null) : null,
@@ -649,8 +653,8 @@ export function coachingCalibration(calibration){
     confidenceQuality: enough ? (calibration.confidenceQuality || 'unknown') : 'unknown',
     headline,
     detail: enough
-      ? `Based on ${resolved} prospective recommendation→outcome pairs: ${o.successful ?? 0} clean successes, ${o.tooAggressive ?? 0} too aggressive, ${o.tooConservative ?? 0} too safe. Personal calibration is ${enough ? 'active' : 'still warming up'}.`
-      : `${resolved} of ${minimum} prospective outcomes logged so far — not enough to grade the engine yet.`,
+      ? `Based on ${gradeable} gradeable prospective pairs (${excluded} resolved but not gradeable): ${o.successful ?? 0} clean successes, ${o.tooAggressive ?? 0} too aggressive, ${o.tooConservative ?? 0} too safe. Personal calibration is active.`
+      : `${gradeable} of ${minimum} prospective outcomes are gradeable so far (${excluded} resolved but unfollowed / overridden / flagged) — not enough to grade the engine yet.`,
     note: calibration.note || null,
   };
 }
