@@ -5,7 +5,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildPrescriptionSnapshot, recommendNext, attachPrescription, carryPrescription, freezePrescriptionBlock, supersedePrescription, deepFreezePrescription, applySwapToBlocks, attributePrescribedSets, userAddedSet, removeSetAt, activePrescriptionOutcomes, governedSlotsFor, sessionGovernedSlots, PRESCRIPTION_CHANGE_REASONS } from '../src/lib/progression.js';
+import { buildPrescriptionSnapshot, recommendNext, attachPrescription, carryPrescription, freezePrescriptionBlock, supersedePrescription, deepFreezePrescription, applySwapToBlocks, attributePrescribedSets, userAddedSet, removeSetAt, isSetPerformed, activePrescriptionOutcomes, governedSlotsFor, sessionGovernedSlots, PRESCRIPTION_CHANGE_REASONS } from '../src/lib/progression.js';
 import { observedPrescriptionFollowThrough, strengthSeries } from '../src/lib/analytics.js';
 import { progressAssessment } from '../src/lib/product.js';
 import { initGuidedBlocks, buildGuidedPayload, withGuidedStepPrescription } from '../src/lib/guidedMode.js';
@@ -874,5 +874,115 @@ describe('partial exercise swaps never relabel completed work', ()=>{
     assert.equal(scored.governedTargets, 6, '3 legacy + 3 governed on the swapped day (never 7)');
     assert.equal(scored.completeTargets, 6);
     assert.equal(scored.workouts, 2);
+  });
+});
+
+describe('performed sets are protected from destructive removal', ()=>{
+  const session = { id: 'pid', dateISO: '2026-08-10', startedAt: '2026-08-10T09:00:00.000Z', blocks: [{ exerciseId: 'bench-press-dumbbell', sets: 3, reps: '8–10' }] };
+  const rx = buildPrescriptionSnapshot({ session, block: { exerciseId: 'bench-press-dumbbell', sets: 3, reps: '8–10' }, blockIndex: 0, recommendation: { reps: 8, load: 20, reason: 'r', priorsVersion: 1 }, shownAt: '2026-08-10T09:00:00.000Z' });
+  const makeIdFactory = ()=>{ let n = 0; return ()=> `p${n++}`; };
+  const done = (reps, load) => ({ reps: String(reps), weightKg: String(load), rpe: '', completed: true, skipped: false, failed: false });
+  const failed = (reps, load) => ({ reps: String(reps), weightKg: String(load), rpe: '', completed: false, skipped: false, failed: true });
+  const open = () => ({ reps: '', weightKg: '', rpe: '', completed: false, skipped: false, failed: false });
+  const attributed = (sets) => attributePrescribedSets({ exerciseId: 'bench-press-dumbbell', reps: '8–10', planIndex: 0, prescription: rx, sets }, rx.prescriptionId, makeIdFactory());
+
+  it('a completed prescribed set cannot be directly removed', ()=>{
+    const block = attributed([done(8, 20), open(), open()]);
+    const res = removeSetAt(block, 0);
+    assert.equal(res.action, 'protected');
+    assert.equal(res.blocked, true);
+    assert.equal(res.preserved, false);
+    assert.equal(res.block, block, 'the block is returned untouched');
+    assert.equal(block.sets.length, 3);
+    assert.ok(isSetPerformed(block.sets[0]));
+  });
+
+  it('a failed prescribed set cannot be directly removed', ()=>{
+    const block = attributed([failed(3, 20), open(), open()]);
+    const res = removeSetAt(block, 0);
+    assert.equal(res.action, 'protected');
+    assert.equal(res.blocked, true);
+    assert.equal(res.block, block);
+    assert.ok(isSetPerformed(block.sets[0]));
+  });
+
+  it('undoing completion first, THEN removing yields a removed slot', ()=>{
+    let block = attributed([done(8, 20), open(), open()]);
+    assert.equal(removeSetAt(block, 0).action, 'protected');
+    block = { ...block, sets: block.sets.map((s, i)=> i === 0 ? { ...s, completed: false, skipped: false, failed: false } : s) };
+    const res = removeSetAt(block, 0);
+    assert.equal(res.action, 'removed-prescribed-slot');
+    assert.equal(res.preserved, true);
+    assert.equal(res.block.sets.length, 2);
+    assert.deepEqual(res.block.removedSlots, [{ setId: 'p0', plannedSlot: 0, governingPrescriptionId: rx.prescriptionId }]);
+  });
+
+  it('a removed target means removed-before-performance, never completed work', ()=>{
+    const block = attributed([done(8, 20), open(), open()]);
+    const res = removeSetAt(block, 1); // remove the pending slot, keep the done one
+    assert.equal(res.action, 'removed-prescribed-slot');
+    assert.equal(res.block.sets.filter((s)=> s.completed).length, 1, 'the completed set survives untouched');
+    assert.deepEqual(res.block.removedSlots.map((r)=> r.plannedSlot), [1]);
+  });
+
+  it('a user-added set stays removable', ()=>{
+    const block = attributed([done(8, 20)]);
+    block.sets.push(userAddedSet(open(), makeIdFactory()));
+    const idx = block.sets.length - 1;
+    const res = removeSetAt(block, idx);
+    assert.equal(res.action, 'deleted');
+    assert.equal(res.preserved, false);
+    assert.equal(res.block.sets.length, block.sets.length - 1);
+    assert.ok(res.block.sets.every((s)=> s.completed), 'the prescribed done set is unaffected');
+  });
+});
+
+describe('guided mode carries stable set identity end-to-end', ()=>{
+  const makeIdFactory = ()=>{ let n = 0; return ()=> `gd${n++}`; };
+  const session = { id: 'gg', dateISO: '2026-08-10', startedAt: '2026-08-10T09:00:00.000Z', blocks: [{ exerciseId: 'push-up', sets: 3, reps: '8–12' }] };
+
+  it('first-visible capture attributes each guided set', ()=>{
+    const fresh = initGuidedBlocks(session, [], null);
+    assert.ok(!fresh[0].prescription);
+    const withStep = withGuidedStepPrescription(session, fresh, 0, '2026-08-10T09:00:00.000Z', makeIdFactory());
+    const rxId = withStep[0].prescription.prescriptionId;
+    withStep[0].sets.forEach((s, i)=>{
+      assert.equal(s.origin, 'prescribed');
+      assert.equal(s.plannedSlot, i);
+      assert.equal(s.governingPrescriptionId, rxId);
+      assert.ok(s.setId);
+    });
+    assert.equal(new Set(withStep[0].sets.map((s)=> s.setId)).size, 3);
+    assert.equal(activePrescriptionOutcomes(withStep[0]).identified, true, 'guided uses the identified path, not legacy fallback');
+  });
+
+  it('attribution survives a draft restore and is not re-stamped', ()=>{
+    const withStep = withGuidedStepPrescription(session, initGuidedBlocks(session, [], null), 0, '2026-08-10T09:00:00.000Z', makeIdFactory());
+    const restored = initGuidedBlocks(session, [], withStep);
+    assert.equal(restored[0].prescription.prescriptionId, withStep[0].prescription.prescriptionId);
+    assert.deepEqual(restored[0].sets.map((s)=> [s.setId, s.origin, s.plannedSlot, s.governingPrescriptionId]), withStep[0].sets.map((s)=> [s.setId, s.origin, s.plannedSlot, s.governingPrescriptionId]));
+  });
+
+  it('the save payload emits identity and the identified analytics score it', ()=>{
+    const withStep = withGuidedStepPrescription(session, initGuidedBlocks(session, [], null), 0, '2026-08-10T09:00:00.000Z', makeIdFactory());
+    const doneSets = withStep[0].sets.map((s, i)=> i < 2 ? { ...s, reps: '10', weightKg: '0', completed: true } : s);
+    const payload = buildGuidedPayload({ session, blocks: [{ ...withStep[0], sets: doneSets }], startedAtISO: '2026-08-10T09:00:00.000Z' });
+    assert.ok(payload.blocks[0].sets.every((s)=> s.setId && s.origin === 'prescribed' && Number.isInteger(s.plannedSlot) && s.governingPrescriptionId), 'identity persisted through save');
+    const imported = parseImportFile(JSON.stringify({ app: 'arise', data: { history: [payload] } }));
+    const entry = imported.history[0];
+    assert.equal(activePrescriptionOutcomes(entry.blocks[0]).identified, true);
+    const scored = observedPrescriptionFollowThrough([entry]);
+    assert.equal(scored.governedTargets, 3);
+    assert.equal(scored.completeTargets, 2, 'two push-up sets met the 8–12 band, the third stayed undone');
+  });
+
+  it('a legacy guided block without identity still falls back', ()=>{
+    const rx = buildPrescriptionSnapshot({ session, block: { exerciseId: 'push-up', sets: 3, reps: '8–12' }, blockIndex: 0, recommendation: null, shownAt: session.startedAt });
+    const legacy = [{ id: 'old', dateISO: '2026-08-10', blocks: [{ exerciseId: 'push-up', prescription: rx, sets: [{ reps: '10', weightKg: '0', completed: true }] }] }];
+    assert.equal(activePrescriptionOutcomes(legacy[0].blocks[0]).identified, false);
+    const scored = observedPrescriptionFollowThrough(legacy);
+    assert.equal(scored.governedTargets, 3);
+    assert.equal(scored.completeTargets, 1);
+    assert.equal(normaliseHistoryEntry(legacy[0]).blocks[0].sets.every((s)=> !s.setId), true, 'no ids fabricated for legacy guided rows');
   });
 });

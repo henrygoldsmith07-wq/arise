@@ -838,20 +838,35 @@ export function userAddedSet(base, makeId = null){
   return { ...(base || {}), setId: uid(), origin: 'user-added', plannedSlot: null, governingPrescriptionId: null, removed: false };
 }
 
-// Remove a set by position WITHOUT letting history collapse: a prescribed slot
-// is voided into `removedSlots` (its plannedSlot + governingPrescriptionId
-// preserved); a user-added / unattributed row is simply deleted. Returns the new
-// block and whether the slot was preserved (for caller messaging/tests).
+// Whether a set already records performed work (completed or failed). This
+// outcome must never be destroyed by an accidental delete.
+export function isSetPerformed(set){
+  return !!set && (!!set.completed || !!set.failed);
+}
+
+// Remove a set by position WITHOUT destroying performed history or collapsing
+// a planned slot. Outcomes are kept distinct:
+//   • completed / failed prescribed set  → PROTECTED (never touched; the user
+//     must undo completion/failure first — that returns it to pending, not a
+//     silently-voided slot).
+//   • unfinished prescribed set          → voided into `removedSlots` (its
+//     plannedSlot + governingPrescriptionId preserved) = "removed before it was
+//     performed"; it stays a governed target, never a collapsed position.
+//   • user-added / unattributed set       → simply deleted (no prescription slot).
+// Returns the new block plus an `action` describing what happened.
 export function removeSetAt(block, index){
   const sets = block?.sets || [];
   const set = sets[index];
-  if(!set) return { block, preserved: false };
+  if(!set) return { block, preserved: false, blocked: false, action: 'none' };
   const isPrescribedSlot = set.origin === 'prescribed' && set.governingPrescriptionId != null && Number.isInteger(set.plannedSlot);
+  if(isPrescribedSlot && isSetPerformed(set)){
+    return { block, preserved: false, blocked: true, action: 'protected' };
+  }
   if(isPrescribedSlot){
     const removedSlots = [...(Array.isArray(block.removedSlots) ? block.removedSlots : []), { setId: set.setId || null, plannedSlot: set.plannedSlot, governingPrescriptionId: set.governingPrescriptionId }];
-    return { block: { ...block, sets: sets.filter((_, i)=> i !== index), removedSlots }, preserved: true };
+    return { block: { ...block, sets: sets.filter((_, i)=> i !== index), removedSlots }, preserved: true, blocked: false, action: 'removed-prescribed-slot' };
   }
-  return { block: { ...block, sets: sets.filter((_, i)=> i !== index) }, preserved: false };
+  return { block: { ...block, sets: sets.filter((_, i)=> i !== index) }, preserved: false, blocked: false, action: 'deleted' };
 }
 
 // The outcomes of one block's ACTIVE prescription, per governed slot. Identity

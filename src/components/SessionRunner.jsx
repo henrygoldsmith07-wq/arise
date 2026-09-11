@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { lastExerciseSets } from '../lib/store.js';
-import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, applySwapToBlocks, attributePrescribedSets, userAddedSet, removeSetAt } from '../lib/progression.js';
+import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, applySwapToBlocks, attributePrescribedSets, userAddedSet, removeSetAt, isSetPerformed } from '../lib/progression.js';
 import { recommendNextWithPolicy, POLICY_ORDER } from '../lib/progressionPolicies.js';
 import { runComparativeStudy, doubleProgressionRec } from '../lib/study.js';
 import { assignmentFor } from '../lib/studyEnrollment.js';
@@ -1004,7 +1004,11 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                           className={`min-h-12 w-9 grid place-items-center rounded-xl border text-[11px] font-bold ${s.failed?'bg-review text-bg border-review':'bg-surface2 border-line'}`}>{s.failed?'↺':'✗'}</button>
                       )}
                     </span>
-                    <button onClick={()=> removeSet(bi,si)} aria-label={`Remove set ${si+1}`} className="relative w-9 h-9 grid place-items-center rounded-full border border-line text-ink3 before:absolute before:-inset-1.5 before:rounded-full before:content-['']">×</button>
+                    {isSetPerformed(s) ? (
+                      <span className="w-9 h-9 grid place-items-center text-ink3" title="Already performed — undo it before removing" aria-label={`Set ${si+1} performed`}>·</span>
+                    ) : (
+                      <button onClick={()=> removeSet(bi,si)} aria-label={`Remove set ${si+1}`} className="relative w-9 h-9 grid place-items-center rounded-full border border-line text-ink3 before:absolute before:-inset-1.5 before:rounded-full before:content-['']">×</button>
+                    )}
                   </div>
                   );
                 })}

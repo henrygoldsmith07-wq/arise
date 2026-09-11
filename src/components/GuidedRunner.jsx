@@ -28,6 +28,8 @@ import ExerciseIllustration from './ExerciseIllustration.jsx';
 // in App.jsx work identically for both modes.
 export default function GuidedRunner({ session, history = [], availableEquipment = [], draft = null, measurementConsent = false, soundCues = true, onToggleSoundCues = null, voiceCoach = false, onToggleVoiceCoach = null, voiceRate = 1, wakeLock = false, gymPrefs = null, onSetRestPreset = null, onDraftChange, onSave, onCancel }){
   const startedAtRef=useRef(draft?.startedAt || new Date().toISOString());
+  const setSeqRef=useRef(0);
+  const makeSetId=()=> `${session.id}:set:${Date.now().toString(36)}:${(setSeqRef.current++).toString(36)}`;
   const [blocks,setBlocks]=useState(()=> initGuidedBlocks(session, history, draft?.blocks));
   const [note,setNote]=useState(()=> draft?.note || '');
   const [noteTags,setNoteTags]=useState(()=> draft?.noteTags || []);
@@ -204,7 +206,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   const activeBlockIndex = step ? step.blockIndex : null;
   useEffect(()=>{
     if(activeBlockIndex == null) return;
-    setBlocks(prev=> withGuidedStepPrescription(session, prev, activeBlockIndex, new Date().toISOString()));
+    setBlocks(prev=> withGuidedStepPrescription(session, prev, activeBlockIndex, new Date().toISOString(), makeSetId));
   },[activeBlockIndex, session]);
 
   const elapsed = sessionElapsedMs(startedAtRef.current, clock);

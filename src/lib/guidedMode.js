@@ -5,7 +5,7 @@
 
 import { EXERCISE_BY_ID } from './data.js';
 import { lastExerciseSets } from './store.js';
-import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock } from './progression.js';
+import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, attributePrescribedSets } from './progression.js';
 
 // Kept in sync with SessionRunner's NOTE_PROMPTS (same ids, same labels) so
 // guided and standard sessions produce comparable note tags.
@@ -67,6 +67,7 @@ export function initGuidedBlocks(session, history = [], draftBlocks = null){
       substitutionFrom: source.substitutionFrom || '',
       substitutionReason: source.substitutionReason || '',
       governedSlots: Array.isArray(source.governedSlots) ? source.governedSlots : null,
+      removedSlots: Array.isArray(source.removedSlots) ? source.removedSlots : null,
       prescription: source.prescription || null,
       prescriptionHistory: Array.isArray(source.prescriptionHistory) ? source.prescriptionHistory : null,
     });
@@ -78,8 +79,11 @@ export function initGuidedBlocks(session, history = [], draftBlocks = null){
 // (a block that already carries a snapshot is returned unchanged, and the same
 // array reference comes back when nothing changed so no render loop can start).
 // The guided runner shows the scheduled target, not an engine one, so this
-// records source 'schedule' without inventing engine fields.
-export function withGuidedStepPrescription(session, blocks, activeIndex, shownAt = null){
+// records source 'schedule' without inventing engine fields. Each planned set is
+// then bound to that revision with a stable id + slot, exactly as in the
+// standard runner, so guided histories use the identified analytics path rather
+// than the legacy position fallback.
+export function withGuidedStepPrescription(session, blocks, activeIndex, shownAt = null, makeId = null){
   if(!session || !Array.isArray(blocks) || activeIndex == null) return blocks;
   const current = blocks[activeIndex];
   if(!current || current.prescription) return blocks;
@@ -92,7 +96,8 @@ export function withGuidedStepPrescription(session, blocks, activeIndex, shownAt
     shownAt: shownAt || session.startedAt || null,
   });
   if(!snapshot) return blocks;
-  const attached = attachPrescription(current, snapshot);
+  const attributed = attributePrescribedSets(current, snapshot.prescriptionId, makeId);
+  const attached = attachPrescription(attributed, snapshot);
   return attached === current ? blocks : blocks.map((b, i)=> i === activeIndex ? attached : b);
 }
 
@@ -176,12 +181,20 @@ export function buildGuidedPayload({ session, blocks, note = '', noteTags = [], 
       exerciseOrder: index,
       ...(b.substitutionFrom ? { substitutionFrom: b.substitutionFrom, substitutionReason: b.substitutionReason } : {}),
       ...(Array.isArray(b.governedSlots) && b.governedSlots.length ? { governedSlots: b.governedSlots } : {}),
+      ...(Array.isArray(b.removedSlots) && b.removedSlots.length ? { removedSlots: b.removedSlots } : {}),
       ...carryPrescription(b),
       equipment: EXERCISE_BY_ID[b.exerciseId]?.equipment || null,
       sets: b.sets.map(s=>{
         const completed = !!s.completed;
         const skipped = !!s.skipped;
         const out = { reps: String(s.reps||'').trim(), weightKg: String(s.weightKg||'').trim(), rpe: String(s.rpe||'').trim(), completed, skipped, failed: !!s.failed };
+        // Stable identity rides with the set (never fabricated for legacy rows).
+        if(s.setId) out.setId = s.setId;
+        if(s.origin) out.origin = s.origin;
+        if(Number.isInteger(s.plannedSlot)) out.plannedSlot = s.plannedSlot;
+        else if(s.origin === 'user-added') out.plannedSlot = null;
+        if(s.governingPrescriptionId) out.governingPrescriptionId = s.governingPrescriptionId;
+        else if(s.origin === 'user-added') out.governingPrescriptionId = null;
         if(painDiscomfort) out.pain = true;
         if(b.unilateral && s.side) out.side = s.side;
         if(s.rom && String(s.rom).trim()) out.rom = String(s.rom).trim();
