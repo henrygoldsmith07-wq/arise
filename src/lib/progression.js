@@ -845,23 +845,26 @@ export function isSetPerformed(set){
 }
 
 // Remove a set by position WITHOUT destroying performed history or collapsing
-// a planned slot. Outcomes are kept distinct:
-//   • completed / failed prescribed set  → PROTECTED (never touched; the user
-//     must undo completion/failure first — that returns it to pending, not a
-//     silently-voided slot).
-//   • unfinished prescribed set          → voided into `removedSlots` (its
-//     plannedSlot + governingPrescriptionId preserved) = "removed before it was
-//     performed"; it stays a governed target, never a collapsed position.
-//   • user-added / unattributed set       → simply deleted (no prescription slot).
+// a planned slot. The invariant holds for EVERY set regardless of origin,
+// prescription status, workout mode, exercise, or reload state:
+//   • completed / failed set (prescribed OR user-added) → PROTECTED first, so a
+//     direct delete can never destroy real work; the user must undo
+//     completion/failure to return it to pending before removing.
+// Only unfinished sets fall through to:
+//   • unfinished prescribed set    → voided into `removedSlots` (its plannedSlot
+//     + governingPrescriptionId preserved) = "removed before it was performed";
+//     it stays a governed target, never a collapsed position.
+//   • unfinished user-added set    → simply deleted (no prescription slot).
+//   • invalid index                → no-op.
 // Returns the new block plus an `action` describing what happened.
 export function removeSetAt(block, index){
   const sets = block?.sets || [];
   const set = sets[index];
   if(!set) return { block, preserved: false, blocked: false, action: 'none' };
-  const isPrescribedSlot = set.origin === 'prescribed' && set.governingPrescriptionId != null && Number.isInteger(set.plannedSlot);
-  if(isPrescribedSlot && isSetPerformed(set)){
+  if(isSetPerformed(set)){
     return { block, preserved: false, blocked: true, action: 'protected' };
   }
+  const isPrescribedSlot = set.origin === 'prescribed' && set.governingPrescriptionId != null && Number.isInteger(set.plannedSlot);
   if(isPrescribedSlot){
     const removedSlots = [...(Array.isArray(block.removedSlots) ? block.removedSlots : []), { setId: set.setId || null, plannedSlot: set.plannedSlot, governingPrescriptionId: set.governingPrescriptionId }];
     return { block: { ...block, sets: sets.filter((_, i)=> i !== index), removedSlots }, preserved: true, blocked: false, action: 'removed-prescribed-slot' };

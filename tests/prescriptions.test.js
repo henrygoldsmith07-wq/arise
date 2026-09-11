@@ -612,12 +612,13 @@ describe('stable set identity separates prescribed from user-added work', ()=>{
     assert.equal(scored.followThroughPct, 33);
   });
 
-  it('removing a user-added set simply deletes it (no phantom slot)', ()=>{
+  it('removing an UNFINISHED user-added set deletes it (no phantom slot)', ()=>{
     const rx = benchRx();
     const block = attributed(rx, [done(8, 20)]);
-    block.sets.push(userAddedSet(done(9, 21), makeIdFactory()));
+    block.sets.push(userAddedSet(open(), makeIdFactory()));
     const before = block.sets.length;
     const removed = removeSetAt(block, before - 1);
+    assert.equal(removed.action, 'deleted');
     assert.equal(removed.preserved, false);
     assert.equal(removed.block.sets.length, before - 1);
     assert.ok(!removed.block.removedSlots || removed.block.removedSlots.length === 0);
@@ -934,6 +935,57 @@ describe('performed sets are protected from destructive removal', ()=>{
     assert.equal(res.preserved, false);
     assert.equal(res.block.sets.length, block.sets.length - 1);
     assert.ok(res.block.sets.every((s)=> s.completed), 'the prescribed done set is unaffected');
+  });
+
+  it('a COMPLETED user-added set is protected (origin does not matter)', ()=>{
+    const block = attributed([done(8, 20)]);
+    block.sets.push(userAddedSet(done(9, 21), makeIdFactory()));
+    const idx = block.sets.length - 1;
+    const res = removeSetAt(block, idx);
+    assert.equal(res.action, 'protected');
+    assert.equal(res.blocked, true);
+    assert.equal(res.preserved, false);
+    assert.equal(res.block, block, 'the block is returned untouched');
+    assert.equal(block.sets.length, 2, 'the completed user-added set is still there');
+    assert.ok(isSetPerformed(block.sets[idx]));
+  });
+
+  it('a FAILED user-added set is protected too', ()=>{
+    const block = attributed([done(8, 20)]);
+    block.sets.push(userAddedSet(failed(2, 21), makeIdFactory()));
+    const idx = block.sets.length - 1;
+    const res = removeSetAt(block, idx);
+    assert.equal(res.action, 'protected');
+    assert.equal(res.blocked, true);
+    assert.equal(res.block, block);
+    assert.ok(isSetPerformed(block.sets[idx]));
+  });
+
+  it('undoing a completed user-added set makes it removable (unfinished → deleted)', ()=>{
+    const block = attributed([done(8, 20)]);
+    block.sets.push(userAddedSet(done(9, 21), makeIdFactory()));
+    const idx = block.sets.length - 1;
+    assert.equal(removeSetAt(block, idx).action, 'protected');
+    const undone = { ...block, sets: block.sets.map((s, i)=> i === idx ? { ...s, completed: false, skipped: false, failed: false } : s) };
+    const res = removeSetAt(undone, idx);
+    assert.equal(res.action, 'deleted');
+    assert.equal(res.preserved, false);
+    assert.equal(res.block.sets.length, block.sets.length - 1);
+  });
+
+  it('invalid index is a no-op and protection never corrupts history/analytics', ()=>{
+    assert.equal(removeSetAt({ sets: [open()] }, 5).action, 'none');
+    const block = attributed([done(8, 20), done(8, 20)]);
+    block.sets.push(userAddedSet(done(9, 21), makeIdFactory()));
+    const attempted = removeSetAt(block, 2); // protected
+    assert.equal(attempted.block, block);
+    const roundTripped = JSON.parse(JSON.stringify([attempted.block]));
+    const entry = normaliseHistoryEntry({ id: 'pid', dateISO: '2026-08-10', savedAt: '2026-08-10T10:00:00.000Z', blocks: roundTripped });
+    const scored = observedPrescriptionFollowThrough([entry]);
+    assert.equal(scored.governedTargets, 2, 'both prescribed slots still governed; the protected user-added row is never counted');
+    assert.equal(scored.completeTargets, 2, 'the two completed prescribed sets still score');
+    assert.equal(scored.userAddedSets, 1, 'the completed user-added set survived into history');
+    assert.equal(entry.blocks[0].sets.filter((s)=> s.completed).length, 3, 'all three performed sets are intact after the protected call');
   });
 });
 
