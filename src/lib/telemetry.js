@@ -72,8 +72,22 @@ export function hasTelemetryOption(option){
 // in scope. Anything matching a sensitive key (own or inherited) is dropped —
 // health metrics are the critical class (medical data must never land in a
 // log), plus identity and free-text keys that invite accidental capture.
+//
+// Two further write-time gates live in recordEvent (below), enforced for
+// EVERY event type so no call site can leak by forgetting:
+//   TIMING_KEYS — duration-bearing measurements, persisted only while the
+//     sessionTimings refinement is on;
+//   TARGET_VALUE_KEY_RE — recommendation target text/load/rep keys, NEVER
+//     persisted (the prospective evaluation ledger owns those data).
 const SENSITIVE_KEY_RE = /(heart|hr|rate|sleep|weight|kg|steps|calorie|cal|nutrition|bp|blood|spo2|oxygen|vo2|temp(erature)?|glucose|body|health|fitness|medication|dose|pain|injur|symptom|diagnos|email|phone|token|secret|password|passphrase|address|geo|lat|lng|gps|name|note|text|message|summary|consent)/i;
 const MAX_STRING_LEN = 160;
+
+// Duration-bearing measurement keys: persisted only with sessionTimings on.
+const TIMING_KEYS = new Set(['elapsedMs', 'durationMs', 'sessionElapsedMs']);
+// Recommendation target vocabulary: text/load/rep values belong to the
+// prospective evaluation ledger, never to product telemetry. Matched before
+// the sensitive-key pass so smuggled target fields cannot survive either.
+const TARGET_VALUE_KEY_RE = /^(target|suggestedTarget|load|loadKg|loadTarget|reps|repTarget|rir|rirTarget|assistKg|assistedKg|weightKg|weight)$/i;
 
 export function sanitizeEventPayload(input, { sensitiveKeys = SENSITIVE_KEY_RE } = {}){
   const out={};
@@ -95,9 +109,24 @@ export function recordEvent(type, payload={}, { essential=false, sensitiveKeys=S
   // Granular gate: metric-specific options must be on for their event types.
   if(type === 'error' && !hasTelemetryOption('errorDiagnostics')) return null;
   if(type === 'logging-time' && !hasTelemetryOption('sessionTimings')) return null;
+  // Privacy gates at WRITE time (never rely on call sites to remember):
+  //  - duration-bearing keys are dropped unless the sessionTimings refinement
+  //    is on — when timing consent is off, no timing VALUE is persisted, only
+  //    the fact that the action happened (counts still work, medians degrade
+  //    to null instead of inventing times);
+  //  - recommendation target text/load/rep keys are ALWAYS dropped — the
+  //    prospective evaluation ledger already owns those data, product
+  //    telemetry must never duplicate workout content.
+  const timingsOn = hasTelemetryOption('sessionTimings');
+  const scrubbed = {};
+  for(const [key, value] of Object.entries(payload || {})){
+    if(TARGET_VALUE_KEY_RE.test(key)) continue;
+    if(!timingsOn && TIMING_KEYS.has(key)) continue;
+    scrubbed[key] = value;
+  }
   // Identity fields are pinned after the payload spread so a stray
   // { id, type, at } in the payload can't corrupt dedup or time ordering.
-  const safePayload = sensitiveKeys ? sanitizeEventPayload(payload, { sensitiveKeys }) : payload;
+  const safePayload = sensitiveKeys ? sanitizeEventPayload(scrubbed, { sensitiveKeys }) : scrubbed;
   const event={
     ...safePayload,
     id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
@@ -207,13 +236,57 @@ export function loggingTimeStats(events){
 
 // ── Logging-friction measurement ─────────────────────────────────────────
 // Aggregates the discrete interaction events the runners record into honest
-// speed-of-logging metrics. Privacy design notes, enforced by the sanitizer:
-// keystrokes and focus moves are deliberately NEVER instrumented, so
-// taps-per-completed-set counts only discrete logged actions (complete,
-// uncomplete, skip, remove, add) and is therefore a LOWER bound on real taps.
+// speed-of-logging metrics. Privacy design notes, enforced at write time:
+// keystrokes are NEVER instrumented — field inputs emit one value-free
+// *-field-commit on blur-and-changed only, so taps-per-action counts discrete
+// committed actions (never keystrokes) and is a LOWER bound on real taps.
 // All inputs are scalar ids, counts, modes and millisecond durations — any
-// content-bearing key (reps, loads, notes) is stripped at write time and
-// would equally be dropped here. Pure and deterministic over its input.
+// content-bearing key (target text, loads, reps, notes) is stripped at write
+// time and would equally be dropped here. Pure and deterministic over input.
+//
+// Canonical value-free interaction taxonomy (action type only, never entered
+// values). Legacy event names are accepted as aliases into the same buckets
+// so old telemetry still aggregates and degrades safely instead of vanishing:
+//   complete-set  ← set:complete          undo-set   ← set:uncomplete,
+//                                                          set:unfailed
+//   add-set       (new)                    remove-set ← set:removed
+//   swap-open     (new)                    swap-commit← exercise:swapped
+//   apply-all     ← recommendation:accepted via apply-all
+//   load/reps/rir-field-commit (new)       set:skip, set:failed, accepted/
+//                                          dismissed stay as legacy actions.
+const COMPLETE_EVENTS = ['complete-set', 'set:complete'];
+const UNDO_EVENTS = ['undo-set', 'set:uncomplete', 'set:unfailed'];
+const ADD_EVENTS = ['add-set'];
+const REMOVE_EVENTS = ['remove-set', 'set:removed'];
+const SKIP_EVENTS = ['set:skip'];
+const FAILED_EVENTS = ['set:failed'];
+const FIELD_COMMIT_EVENTS = ['load-field-commit', 'reps-field-commit', 'rir-field-commit'];
+const APPLY_ALL_EVENTS = ['apply-all'];
+const SWAP_OPEN_EVENTS = ['swap-open'];
+const SWAP_COMMIT_EVENTS = ['swap-commit', 'exercise:swapped'];
+const ACCEPT_EVENTS = ['recommendation:accepted', 'recommendation:dismissed'];
+const INTERACTION_EVENTS = [
+  ...COMPLETE_EVENTS, ...UNDO_EVENTS, ...ADD_EVENTS, ...REMOVE_EVENTS,
+  ...SKIP_EVENTS, ...FAILED_EVENTS, ...FIELD_COMMIT_EVENTS, ...APPLY_ALL_EVENTS,
+  ...SWAP_OPEN_EVENTS, ...SWAP_COMMIT_EVENTS, ...ACCEPT_EVENTS,
+];
+// Value-free field-commit tracking for set-editor inputs. Call onFocus on
+// focus and fieldCommitted on blur: it reports true only when the value
+// actually CHANGED while focused, so a commit event means one committed edit
+// — never keystrokes, never focus visits. Payloads must stay value-free
+// (ids/mode only); this helper never sees or stores the entered value beyond
+// the blur comparison.
+export function trackFieldFocus(e){
+  try{ if(e?.target) e.target.dataset.prevValue = String(e.target.value ?? ''); }catch{}
+}
+export function fieldCommitted(e){
+  try{
+    const prev = e?.target?.dataset?.prevValue;
+    const next = String(e?.target?.value ?? '');
+    if(e?.target?.dataset) delete e.target.dataset.prevValue;
+    return prev != null && next !== prev;
+  }catch{ return false; }
+}
 function medianOfMs(values){
   const list=(values||[]).filter(v=> Number.isFinite(v) && v>=0).sort((a,b)=> a-b);
   if(!list.length) return null;
@@ -230,40 +303,59 @@ function frictionCore(events, { mode = null } = {}){
     if(!bySession.has(e.sessionId)) bySession.set(e.sessionId, []);
     bySession.get(e.sessionId).push(e);
   }
+  const inType = (e, list)=> list.includes(e.type);
   let startToFirst=[];
   let completionMs=[];
-  let completed=0, skipped=0, uncompleted=0, removed=0, failedMarked=0;
+  let completed=0, skipped=0, undos=0, added=0, removed=0, failedMarked=0;
+  let fieldLoad=0, fieldReps=0, fieldRir=0;
   let interactions=0;
   let accepted=0, viaApplyAll=0;
-  let swapMs=[], saveMs=[];
+  let swapOpens=0, swapCommits=0, swapMs=[], saveMs=[];
   for(const list of bySession.values()){
     const byTime=list.slice().sort((a,b)=> String(a.at||'').localeCompare(String(b.at||'')));
     const start=byTime.find(e=> e.type==='session:start');
-    const firstComplete=byTime.find(e=> e.type==='set:complete');
-    // Per-mode buckets attribute the start→first-set gap by the mode tag on
-    // that first completion; untagged legacy flows count toward the overall
-    // numbers only, never a mode bucket.
-    if(start && firstComplete && (mode == null || firstComplete.mode === mode)){
+    const firstComplete=byTime.find(e=> inType(e, COMPLETE_EVENTS));
+    // A start→first-set interval is only computable when the first completion
+    // carries its own duration: with sessionTimings off (or legacy telemetry)
+    // durations are never persisted, so the interval degrades to null instead
+    // of being reconstructed from bare timestamps.
+    const anchorMs = firstComplete == null ? NaN : Number(firstComplete.elapsedMs);
+    if(start && firstComplete && Number.isFinite(anchorMs) && anchorMs >= 0 && (mode == null || firstComplete.mode === mode)){
       const ms=Date.parse(firstComplete.at)-Date.parse(start.at);
       if(Number.isFinite(ms) && ms>=0) startToFirst.push(ms);
     }
     for(const e of byTime){
       if(mode != null && e.type !== 'session:start' && e.mode !== mode) continue;
-      if(e.type==='set:complete'){
+      if(inType(e, COMPLETE_EVENTS)){
         completed++;
         interactions++;
         const ms=Number(e.elapsedMs);
         if(Number.isFinite(ms) && ms>=0) completionMs.push(ms);
       }
-      else if(e.type==='set:skip'){ skipped++; interactions++; }
-      else if(e.type==='set:uncomplete'){ uncompleted++; interactions++; }
-      else if(e.type==='set:removed'){ removed++; interactions++; }
-      else if(e.type==='set:failed' || e.type==='set:unfailed'){ failedMarked++; interactions++; }
-      else if(e.type==='recommendation:accepted'){
-        accepted++;
-        if(e.via==='apply-all') viaApplyAll++;
+      else if(inType(e, UNDO_EVENTS)){ undos++; interactions++; }
+      else if(inType(e, ADD_EVENTS)){ added++; interactions++; }
+      else if(inType(e, REMOVE_EVENTS)){ removed++; interactions++; }
+      else if(inType(e, SKIP_EVENTS)){ skipped++; interactions++; }
+      else if(inType(e, FAILED_EVENTS)){ failedMarked++; interactions++; }
+      else if(inType(e, FIELD_COMMIT_EVENTS)){
+        interactions++;
+        if(e.type==='load-field-commit') fieldLoad++;
+        else if(e.type==='reps-field-commit') fieldReps++;
+        else fieldRir++;
       }
-      else if(e.type==='exercise:swapped'){
+      else if(inType(e, APPLY_ALL_EVENTS) || (e.type==='recommendation:accepted' && e.via==='apply-all')){
+        accepted++;
+        viaApplyAll++;
+        interactions++;
+      }
+      else if(e.type==='recommendation:accepted' || e.type==='recommendation:dismissed'){
+        accepted++;
+        interactions++;
+      }
+      else if(inType(e, SWAP_OPEN_EVENTS)){ swapOpens++; interactions++; }
+      else if(inType(e, SWAP_COMMIT_EVENTS)){
+        swapCommits++;
+        interactions++;
         const ms=Number(e.elapsedMs);
         if(Number.isFinite(ms) && ms>=0) swapMs.push(ms);
       }
@@ -273,34 +365,43 @@ function frictionCore(events, { mode = null } = {}){
       }
     }
   }
-  return { sessions: bySession.size, completed, skipped, uncompleted, removed, failedMarked, interactions, accepted, viaApplyAll, startToFirst, completionMs, swapMs, saveMs };
+  return { sessions: bySession.size, completed, skipped, undos, added, removed, failedMarked, fieldLoad, fieldReps, fieldRir, interactions, accepted, viaApplyAll, swapOpens, swapCommits, startToFirst, completionMs, swapMs, saveMs };
 }
 
 function frictionSummary(core){
   const startToFirstSetMs = medianOfMs(core.startToFirst);
-  const completionMsMedian = medianOfMs(core.completionMs);
+  const loggingMsMedian = medianOfMs(core.completionMs);
   const swapMsMedian = medianOfMs(core.swapMs);
   const saveMsMedian = medianOfMs(core.saveMs);
+  const fieldCommits = core.fieldLoad + core.fieldReps + core.fieldRir;
   return {
     sessions: core.sessions,
     completedSets: core.completed,
-    startToFirstSetMs,
-    completionMsMedian,
-    tapsPerCompletedSet: core.completed ? Math.round(core.interactions / core.completed * 100) / 100 : null,
-    undos: core.uncompleted,
+    // Actions per completed set: every discrete value-free interaction over
+    // completions. Keystrokes are never instrumented, so this stays a lower
+    // bound on real taps.
+    actionsPerCompletedSet: core.completed ? Math.round(core.interactions / core.completed * 100) / 100 : null,
+    // Corrections per session: undoing a completion or a failed-mark.
+    correctionsPerSession: core.sessions ? Math.round(core.undos / core.sessions * 100) / 100 : null,
+    undos: core.undos,
+    addedSets: core.added,
     removedSets: core.removed,
     failedMarks: core.failedMarked,
+    skippedSets: core.skipped,
+    fieldCommits: { total: fieldCommits, load: core.fieldLoad, reps: core.fieldReps, rir: core.fieldRir },
+    startToFirstSetMs,
+    loggingMsMedian,
     applyAll: {
       accepted: core.accepted,
       viaApplyAll: core.viaApplyAll,
       applyAllRate: core.accepted ? Math.round(core.viaApplyAll / core.accepted * 100) / 100 : null,
     },
-    swapMsMedian,
+    swap: { opens: core.swapOpens, commits: core.swapCommits, msMedian: swapMsMedian },
     saveMsMedian,
     // Degraded when nothing loggable produced a timing: legacy telemetry that
     // only ever marked sessions complete contributes events but no durations,
     // so every timing median stays null and no speed is ever invented.
-    degraded: startToFirstSetMs == null && completionMsMedian == null && swapMsMedian == null && saveMsMedian == null,
+    degraded: startToFirstSetMs == null && loggingMsMedian == null && swapMsMedian == null && saveMsMedian == null,
   };
 }
 
@@ -314,7 +415,7 @@ export function loggingFrictionStats(events){
   return {
     ...overall,
     byMode,
-    note: 'Discrete logged actions only — keystrokes and focus moves are intentionally never instrumented, so taps-per-completed-set is a lower bound on real taps. Per-mode buckets count only events carrying that mode tag; untagged legacy events count toward the overall numbers only.',
+    note: 'Discrete committed actions only — keystrokes and focus moves are intentionally never instrumented, so actions-per-completed-set is a lower bound on real taps. Durations persist only with the sessionTimings refinement on; otherwise timing medians degrade to null. Per-mode buckets count only events carrying that mode tag; untagged legacy events count toward the overall numbers only.',
   };
 }
 

@@ -1015,7 +1015,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
                 })()}
                 <div>
                   <p className="text-xs font-bold">Field-study contribution</p>
-                  <p className="text-[11px] text-ink3 mt-1">{evidenceData.fieldStudy.mode === 'enrolled' ? `Enrolled${evidenceData.fieldStudy.enrollmentOk ? '' : ' (enrollment needs review)'} · ` : evidenceData.fieldStudy.mode === 'observing' ? 'Observing (not enrolled) · ' : 'Off · '}{evidenceData.fieldStudy.samples.gradeable} gradeable pairs · {evidenceData.fieldStudy.samples.resolved} resolved · {evidenceData.fieldStudy.samples.open} awaiting workout · maturity: {evidenceData.fieldStudy.maturity}.</p>
+                  <p className="text-[11px] text-ink3 mt-1">{evidenceData.fieldStudy.mode === 'enrolled' ? `Enrolled${evidenceData.fieldStudy.enrollmentOk ? '' : ' (enrollment needs review)'} · ` : evidenceData.fieldStudy.mode === 'observing' ? 'Observing (not enrolled) · ' : 'Off · '}{evidenceData.fieldStudy.samples.assigned} assigned transitions (arise {evidenceData.fieldStudy.samples.arise} · double progression {evidenceData.fieldStudy.samples.doubleProgression}) · {evidenceData.fieldStudy.samples.users} users · maturity: {evidenceData.fieldStudy.maturity}.</p>
                   {!!evidenceData.fieldStudy.reasons.length && (
                     <p className="text-[11px] text-ink3 mt-1">{evidenceData.fieldStudy.reasons.join('; ')}.</p>
                   )}

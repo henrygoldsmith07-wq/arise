@@ -13,6 +13,15 @@ import { isProspectiveRecord, realisedSuccess, confidenceBandOf, recommendationT
 
 // ── Aggregation ─────────────────────────────────────────────────────────
 
+// Shadow-evidence labelling: frozen shadow-arm analysis (byArm,
+// pairedVsArise, prospectiveFieldComparison) is a SECONDARY diagnostic only —
+// prescription difficulty and decision agreement. It must never be presented
+// as causal effectiveness evidence: shadow prescriptions were never trained
+// under, so "would have fit the workout" cannot become "produced better
+// outcomes". Every shadow result carries causal:false plus this exact label
+// for display surfaces.
+export const SHADOW_EVIDENCE_LABEL = 'Counterfactual target comparison on the same realised workout — not a treatment-effect estimate.';
+
 function emptySegment(key){
   return { key, n: 0, resolved: 0, conclusive: false, progressionSuccessRate: null, regressionRate: null, stagnationRate: null, adherenceRate: null, meanLoadErrorKg: null, meanRepError: null, failedSetRate: null, totalVolumeKg: 0 };
 }
@@ -159,7 +168,7 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
   for(const arm of armNames){
     const rows = resolvedWithArms.filter(row=> row.outcome.arms[arm]);
     const n = rows.length;
-    const entry = { key: arm, n, conclusive: false, targetAchievementRate: null, progressionSuccessRate: null, stallRate: null, regressionRate: null, conservatismRate: null, meanLoadErrorKg: null };
+    const entry = { key: arm, n, conclusive: false, causal: false, evidenceLabel: SHADOW_EVIDENCE_LABEL, targetAchievementRate: null, progressionSuccessRate: null, stallRate: null, regressionRate: null, conservatismRate: null, meanLoadErrorKg: null };
     if(!n){ byArm[arm] = entry; continue; }
     entry.targetAchievementRate = round(rows.filter(r=> r.outcome.arms[arm].metTarget).length / n, 3);
     entry.progressionSuccessRate = round(rows.filter(r=> r.outcome.arms[arm].metTarget && (r.outcome.changePct == null || r.outcome.changePct > gainPct)).length / n, 3);
@@ -215,6 +224,8 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
       confidenceInterval: pairs >= minimum ? wilsonInterval(ariseWin, pairs) : null,
       conclusive: pairs >= minimum,
       shadow: true,
+      causal: false,
+      evidenceLabel: SHADOW_EVIDENCE_LABEL,
     };
   }
 
@@ -645,6 +656,11 @@ export function prospectiveFieldComparison(rows, { config = null } = {}){
     open: prospective.length - resolvedRows.length,
     excluded,
     duplicatePairs: foldedDuplicates.length,
+    // Shadow diagnostic, never causal: prescription difficulty and decision
+    // agreement on identical transitions — not a treatment-effect estimate.
+    causal: false,
+    evidenceKind: 'shadow-decision-agreement',
+    evidenceLabel: SHADOW_EVIDENCE_LABEL,
     users: users.length,
     userList: users,
     exercises,

@@ -9,7 +9,7 @@ import { exerciseHistorySummary, plateauDetection, programAdherence, recommendat
 import { badSessionAttribution, plateauAttribution } from '../lib/sessionQuality.js';
 import { longitudinalSummaryAsync } from '../lib/analyticsWorker.js';
 import { isSimpleView, isExpertView } from '../lib/experienceMode.js';
-import { milestoneState, trainingAgeDisplay, consistencyInsights, healthyStreak, monthlyDigest, nextBestAction, progressAssessment, whatChangedSummary, coachingCalibration, coachingEvidence } from '../lib/product.js';
+import { milestoneState, trainingAgeDisplay, consistencyInsights, healthyStreak, monthlyDigest, nextBestAction, progressAssessment, whatChangedSummary, coachingCalibration, coachingEvidence, shadowAgreement } from '../lib/product.js';
 import { todayISO, sessionForToday, nextSession } from '../lib/schedule.js';
 import { missedWorkoutRecovery } from '../lib/programming.js';
 
@@ -110,7 +110,8 @@ export default function ProgressView({ store }){
   }, [prefsKey]);
   const evaluation = longitudinal?.evaluation || null;
   const coaching = coachingCalibration(longitudinal?.calibration || null);
-  const evidence = coachingEvidence(longitudinal?.fieldComparison || null);
+  const evidence = coachingEvidence(longitudinal?.evaluation?.primaryComparison || null);
+  const shadow = shadowAgreement(longitudinal?.fieldComparison || null);
   const fmtPct = v=> v == null ? '—' : `${Math.round(v * 100)}%`;
   const formatSegment = segment=> {
     if(!segment || !segment.resolved) return '—';
@@ -526,39 +527,43 @@ export default function ProgressView({ store }){
         </section>
       )}
 
-      {expert && longitudinal?.fieldComparison && (
+      {expert && longitudinal?.evaluation?.primaryComparison && (
         <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="Coaching evidence">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-sm font-bold">Coaching evidence</h3>
-            <span className={`text-[11px] font-bold px-2 py-1 rounded-full border ${evidence.status === 'early' ? 'bg-successsoft border-success/30 text-ink' : 'bg-surface2 border-line text-ink3'}`}>{evidence.status === 'early' ? 'early' : 'insufficient'}</span>
+            <span className={`text-[11px] font-bold px-2 py-1 rounded-full border ${evidence.status === 'descriptive' ? 'bg-successsoft border-success/30 text-ink' : 'bg-surface2 border-line text-ink3'}`}>{evidence.status}</span>
           </div>
           <div className="space-y-1">
             {evidence.lines.map(line=> (
               <p key={line} className="text-xs text-ink3">{line}</p>
             ))}
           </div>
-          {!!evidence.arms.length && (
-            <div className="mt-1 space-y-1" role="table" aria-label="Prospective arise versus baseline comparison">
-              {evidence.arms.map(arm=> (
-                <div key={arm.id} role="row" className="flex items-center gap-2 text-[11px]">
-                  <span className="font-semibold w-32 truncate" role="cell">{arm.label}</span>
-                  <span role="cell" className="text-ink3 tabular-nums">arise {arm.ariseRate == null ? '—' : `${Math.round(arm.ariseRate * 100)}%`} vs baseline {arm.baseRate == null ? '—' : `${Math.round(arm.baseRate * 100)}%`}{arm.deltaPp == null ? '' : ` (${arm.deltaPp > 0 ? '+' : ''}${arm.deltaPp}pp)`}</span>
-                  <span role="cell" className="ml-auto text-ink3 tabular-nums">{arm.pairs} pairs · {arm.users} users</span>
-                </div>
-              ))}
-            </div>
-          )}
-          <p className="text-[11px] text-ink3">Across {evidence.users} user{evidence.users === 1 ? '' : 's'}{evidence.exercises.length ? ` · ${evidence.exercises.length} exercise${evidence.exercises.length === 1 ? '' : 's'}` : ''}. Personal calibration, retrospective replay, prospective observation and external pooled evidence are different sources — they are never mixed.</p>
+          <p className="text-[11px] text-ink3">Across {evidence.users} assigned user{evidence.users === 1 ? '' : 's'} · {evidence.observed} assigned transitions. Assigned-arm comparison, personal calibration, retrospective replay and shadow agreement are different sources — they are never mixed.</p>
           <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
             <summary className="text-[11px] font-bold cursor-pointer">Evidence sources</summary>
             <div className="mt-2 space-y-1 text-[11px] text-ink3">
+              <p><span className="font-bold text-ink">Assigned.</span> {evidence.evidenceKinds.assigned}</p>
               <p><span className="font-bold text-ink">Personal.</span> {evidence.evidenceKinds.personal}</p>
               <p><span className="font-bold text-ink">Replay.</span> {evidence.evidenceKinds.replay}</p>
-              <p><span className="font-bold text-ink">Prospective.</span> {evidence.evidenceKinds.prospective}</p>
+              <p><span className="font-bold text-ink">Shadow.</span> {evidence.evidenceKinds.shadow}</p>
               <p><span className="font-bold text-ink">External.</span> {evidence.evidenceKinds.external}</p>
               {evidence.note && <p>{evidence.note}</p>}
             </div>
           </details>
+          {longitudinal?.fieldComparison && (
+          <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+            <summary className="text-[11px] font-bold cursor-pointer">Prescription difficulty / decision agreement (secondary diagnostic)</summary>
+            <div className="mt-2 space-y-1 text-[11px] text-ink3">
+              <p>{shadow.label}</p>
+              {shadow.lines.map(line=> (
+                <p key={line}>{line}</p>
+              ))}
+              {shadow.realised && (
+                <p>Realised difficulty on those transitions: failed-set rate {shadow.realised.failedSetRate == null ? '—' : `${Math.round(shadow.realised.failedSetRate * 100)}%`} · over-prescribed {shadow.realised.overPrescriptionShare == null ? '—' : `${Math.round(shadow.realised.overPrescriptionShare * 100)}%`} / under-prescribed {shadow.realised.underPrescriptionShare == null ? '—' : `${Math.round(shadow.realised.underPrescriptionShare * 100)}%`}.</p>
+              )}
+            </div>
+          </details>
+          )}
         </section>
       )}
 

@@ -41,6 +41,14 @@
 // boot + worker chunks, not dependency growth; measured boot 194.1 (budget 195
 // unchanged), largest-lazy 46.9 (budget 48 unchanged), total 341.6.
 //
+// boot 195 → 196 kB and total 342 → 344 kB with the assigned-arm validation
+// fix: pooled assigned-arm comparison with participant-clustered bootstrap
+// (fieldStudy.js), shadow-evidence labelling (evaluation.js), primary-based
+// coaching evidence + shadow diagnostic (product.js), write-time timing/target
+// gating plus the value-free interaction taxonomy and friction v2
+// (telemetry.js), and field-commit/swap/add instrumentation in both runners.
+// Measured boot 195.0, largest-lazy 47.0 (budget 48 unchanged), total 343.0.
+//
 // The budgets are regression bounds with headroom, not aspirations: a change
 // that crosses one must either undo the bloat or consciously re-baseline here
 // and say why in the PR.
@@ -55,9 +63,9 @@ if(!fs.existsSync(dist)){
   process.exit(2);
 }
 
-const BOOT_BUDGET_KB = 195;
+const BOOT_BUDGET_KB = 196;
 const CHUNK_BUDGET_KB = 48;
-const TOTAL_BUDGET_KB = 342;
+const TOTAL_BUDGET_KB = 344;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

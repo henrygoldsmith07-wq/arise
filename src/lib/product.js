@@ -661,63 +661,88 @@ export function coachingCalibration(calibration){
 
 /**
  * Compact, honest "Coaching evidence" model for the expert Progress surface.
- * Reads a prospectiveFieldComparison result (gradeable, repeated-user-aware)
- * plus the neighbouring evidence kinds, and formats them so the four sources
- * can never be confused: personal calibration (your history), retrospective
- * replay (reconstructed), prospective observation (this device, first-visible)
- * and external pooled evidence (other consenting users). Pure/deterministic.
- * Maturity is 'insufficient' | 'early' — a firm cross-arm claim is never
- * emitted here; that requires pooled multi-user replication.
+ * Reads evaluateLongitudinal().primaryComparison ONLY — users/exercises that
+ * actually trained under an assigned arm (arise vs double progression), ITT,
+ * with participant-clustered uncertainty. Shadow prescriptions (frozen arms
+ * that were never trained under) can never reach this model: a byBaseline /
+ * shadow-shaped input yields 'insufficient' with no headline, never a causal
+ * claim. Pure/deterministic. Maturity is 'insufficient' | 'early' |
+ * 'descriptive' — even a conclusive read stays descriptive, never proof.
  */
-export function coachingEvidence(comparison){
-  const c = comparison || {};
-  const gradeable = Number(c.gradeable) || 0;
-  const arms = Object.entries(c.byBaseline || {}).map(([id, arm])=> ({
-    id,
-    label: arm?.label || id,
-    pairs: arm?.pairs ?? 0,
-    users: arm?.users ?? 0,
-    ariseRate: arm?.ariseRate ?? null,
-    baseRate: arm?.baseRate ?? null,
-    deltaPp: arm?.effectPp ?? null,
-  }));
-  // The headline pair mirrors the task's display contract: the baseline with
-  // the most shared transitions stands in as the "baseline equivalent".
-  const headlineArm = arms.slice().sort((a, b)=> (b.pairs || 0) - (a.pairs || 0))[0] || null;
+export function coachingEvidence(primary){
+  const p = (primary && primary.arise && primary['double-progression']) ? primary : null;
+  const blank = { n: 0, participants: 0, metCount: 0, targetAchievementRate: null, conclusive: false };
+  const arise = p?.arise || blank;
+  const dp = p?.['double-progression'] || blank;
+  const diff = p?.difference || {};
+  const boot = diff.clusteredBootstrap || {};
+  const transitions = Number(p?.transitions) || 0;
+  const users = Number(p?.participants) || 0;
   const fmtRate = v=> v == null ? '—' : `${Math.round(v * 100)}%`;
-  const fmtDelta = v=> v == null ? '—' : `${v > 0 ? '+' : ''}${v} percentage points`;
+  const delta = diff.metRateDelta;
+  const ci = Number.isFinite(boot.low) && Number.isFinite(boot.high)
+    ? `clustered 95% CI [${Math.round(boot.low * 100)}pp, ${Math.round(boot.high * 100)}pp] over ${boot.participants} participants`
+    : 'clustered 95% CI needs ≥2 participants';
+  const followedRate = p?.adherence?.followedRate;
   const lines = [
-    `Prospective gradeable recommendations: ${gradeable}`,
-    headlineArm
-      ? `Arise target success: ${fmtRate(headlineArm.ariseRate)}`
-      : 'Arise target success: —',
-    headlineArm
-      ? `Baseline equivalent: ${fmtRate(headlineArm.baseRate)}`
-      : 'Baseline equivalent: —',
-    headlineArm
-      ? `Difference: ${fmtDelta(headlineArm.deltaPp)}`
-      : 'Difference: —',
-    `Evidence: ${c.maturity === 'early' ? 'early' : 'insufficient'}${c.maturity === 'early' ? ' / insufficient for a firm conclusion' : ' for a firm conclusion'}`,
+    `Arise-assigned: ${arise.n} transitions · ${arise.participants} users · ${fmtRate(arise.targetAchievementRate)} targets met`,
+    `Double-progression-assigned: ${dp.n} transitions · ${dp.participants} users · ${fmtRate(dp.targetAchievementRate)} targets met`,
+    `Difference: ${delta == null ? '—' : `${delta > 0 ? '+' : ''}${Math.round(delta * 100)}pp`}`,
+    `Uncertainty: ${ci}`,
+    `Adherence: ${followedRate == null ? '—' : `${Math.round(followedRate * 100)}% followed`} (ITT — every assigned transition counts)`,
+    `Evidence: ${p?.conclusive === true ? 'descriptive — assigned-arm comparison, not proof' : transitions > 0 ? 'early / insufficient for a firm conclusion' : 'insufficient for a firm conclusion'}`,
   ];
+  const status = p?.conclusive === true ? 'descriptive' : transitions > 0 ? 'early' : 'insufficient';
   return {
-    status: c.maturity === 'early' ? 'early' : 'insufficient',
-    observed: Number(c.prospective) || 0,
-    resolved: Number(c.resolved) || 0,
-    gradeable,
-    users: Number(c.users) || 0,
-    exercises: Array.isArray(c.exercises) ? c.exercises : [],
-    headlineArm: headlineArm ? { id: headlineArm.id, label: headlineArm.label } : null,
-    arms,
-    realised: c.realised || null,
-    sampleSufficiency: c.sampleSufficiency || null,
+    status,
+    causal: true,
+    observed: transitions,
+    users,
+    arise: { n: arise.n, participants: arise.participants, metCount: arise.metCount, targetAchievementRate: arise.targetAchievementRate, conclusive: !!arise.conclusive },
+    doubleProgression: { n: dp.n, participants: dp.participants, metCount: dp.metCount, targetAchievementRate: dp.targetAchievementRate, conclusive: !!dp.conclusive },
+    metRateDelta: delta ?? null,
+    clusteredBootstrap: boot.participants != null ? boot : null,
+    adherence: p?.adherence || null,
     lines,
     evidenceKinds: {
       personal: 'Personal calibration — learned from your own logged history only',
       replay: 'Retrospective replay — reconstructed recommendations, never proof',
-      prospective: 'Prospective observation — first-visible targets scored on this device',
+      assigned: 'Assigned-arm comparison — trained under arise or double progression (the causal read)',
+      shadow: 'Shadow decision agreement — frozen prescriptions never trained under, never causal',
       external: 'External pooled evidence — other consenting users, analysed separately',
     },
-    note: c.note || null,
+    note: status === 'descriptive'
+      ? 'Descriptive assigned-arm read with clustered uncertainty. Conclusions stay descriptive until prespecified pooled sample requirements are met.'
+      : 'No firm conclusion yet — shadow "would have fit" comparisons are never substituted for trained-under evidence.',
+  };
+}
+
+/**
+ * Secondary diagnostic model for frozen shadow-arm analysis: prescription
+ * difficulty and decision agreement. Carries the exact shadow label and
+ * causal:false so no surface can mistake it for a treatment-effect estimate.
+ * Reads a prospectiveFieldComparison result. Pure/deterministic.
+ */
+export function shadowAgreement(comparison){
+  const c = comparison || {};
+  const arms = Object.entries(c.byBaseline || {}).map(([id, arm])=> ({
+    id,
+    label: arm?.label || id,
+    pairs: arm?.pairs ?? 0,
+    ariseRate: arm?.ariseRate ?? null,
+    baseRate: arm?.baseRate ?? null,
+  }));
+  return {
+    causal: false,
+    evidenceKind: 'shadow-decision-agreement',
+    label: c.evidenceLabel || null,
+    gradeable: Number(c.gradeable) || 0,
+    arms,
+    realised: c.realised || null,
+    lines: [
+      `Shadow gradeable transitions: ${Number(c.gradeable) || 0}`,
+      ...arms.map(a=> `${a.label}: arise target would have fit ${a.ariseRate == null ? '—' : `${Math.round(a.ariseRate * 100)}%`} vs baseline ${a.baseRate == null ? '—' : `${Math.round(a.baseRate * 100)}%`} (${a.pairs} shared transitions)`),
+    ],
   };
 }
 

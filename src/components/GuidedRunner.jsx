@@ -12,7 +12,7 @@ import {
   buildGuidedPayload,
   withGuidedStepPrescription,
 } from '../lib/guidedMode.js';
-import { recordEvent } from '../lib/telemetry.js';
+import { recordEvent, trackFieldFocus, fieldCommitted } from '../lib/telemetry.js';
 import { restStartCue, restTickCue, restCompleteCue } from '../lib/audioCues.js';
 import { speak, cancelSpeech, voiceSupported } from '../lib/voiceCoach.js';
 import { haptic } from '../lib/haptics.js';
@@ -245,7 +245,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
       updateSet(step.blockIndex, step.setIndex, { completed: true });
       const now=Date.now();
       try {
-        recordEvent('set:complete', {
+        recordEvent('complete-set', {
           sessionId: session.id,
           exerciseId: block.exerciseId,
           setIndex: step.setIndex,
@@ -364,10 +364,10 @@ export default function GuidedRunner({ session, history = [], availableEquipment
 
               <div className="grid grid-cols-2 gap-2">
                 <label className="text-[11px]">Load kg
-                  <input type="number" min="0" step="0.5" inputMode="decimal" value={currentSet?.weightKg || ''} onChange={e=> updateSet(step.blockIndex, step.setIndex, { weightKg: e.target.value })} placeholder={currentExercise?.supportsWeighted ? '22' : 'bw'} aria-label="Load in kilograms" className="mt-1 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                  <input type="number" min="0" step="0.5" inputMode="decimal" value={currentSet?.weightKg || ''} onChange={e=> updateSet(step.blockIndex, step.setIndex, { weightKg: e.target.value })} onFocus={trackFieldFocus} onBlur={(e)=> { if(fieldCommitted(e)){ try{ recordEvent('load-field-commit', { sessionId: session.id, exerciseId: currentBlock.exerciseId, setIndex: step.setIndex, mode: 'guided' }); }catch{} } }} placeholder={currentExercise?.supportsWeighted ? '22' : 'bw'} aria-label="Load in kilograms" className="mt-1 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                 </label>
                 <label className="text-[11px]">Reps
-                  <input type="number" min="0" step="1" inputMode="numeric" value={currentSet?.reps || ''} onChange={e=> updateSet(step.blockIndex, step.setIndex, { reps: e.target.value })} placeholder="9" aria-label="Reps" className="mt-1 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                  <input type="number" min="0" step="1" inputMode="numeric" value={currentSet?.reps || ''} onChange={e=> updateSet(step.blockIndex, step.setIndex, { reps: e.target.value })} onFocus={trackFieldFocus} onBlur={(e)=> { if(fieldCommitted(e)){ try{ recordEvent('reps-field-commit', { sessionId: session.id, exerciseId: currentBlock.exerciseId, setIndex: step.setIndex, mode: 'guided' }); }catch{} } }} placeholder="9" aria-label="Reps" className="mt-1 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                 </label>
               </div>
               {currentBlock.unilateral && (

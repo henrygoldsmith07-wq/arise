@@ -8,7 +8,7 @@ import { assignmentFor } from '../lib/studyEnrollment.js';
 import { recommendNextWithModel } from '../lib/progressionModel.js';
 import { formatPlateStack } from '../lib/plates.js';
 import { substitutionOptions } from '../lib/substitutions.js';
-import { recordEvent } from '../lib/telemetry.js';
+import { recordEvent, trackFieldFocus, fieldCommitted } from '../lib/telemetry.js';
 import { recordRecommendation, markRecommendationOverride } from '../lib/longitudinal.js';
 import { quickJumps, applyQuickJump, skipTo, restPresetFor, visiblePrescriptionIndexes } from '../lib/gymMode.js';
 import { SESSION_QUALITY_OPTIONS, sessionQualityLabel } from '../lib/gymMode.js';
@@ -83,14 +83,6 @@ function normaliseBlock(block, history, draftBlock, planIndex = 0){
     prescription: source.prescription || null,
     prescriptionHistory: Array.isArray(source.prescriptionHistory) ? source.prescriptionHistory : null,
   });
-}
-
-function suggestedTarget(rec, block){
-  const reps = rec?.reps || firstInt(block.reps) || 'working reps';
-  if(rec?.assistKg != null) return `${reps} reps @ ${rec.assistKg}kg assist`;
-  if(rec?.load != null && rec.load > 0) return `${reps} reps @ ${rec.load}kg`;
-  if(block.loadHint) return `${reps} reps @ ${block.loadHint}`;
-  return `${reps} reps`;
 }
 
 // The ONE clear target shown big on the block: load × reps for this session.
@@ -256,6 +248,25 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   // on open; read + clear on commit. A commit without a stamp is still logged
   // (elapsedMs omitted) so the swap itself is never lost to a race.
   const swapOpenedAtRef=useRef(null);
+  // Load-keypad baseline: the keypad edits per keystroke without blur, so the
+  // commit is measured at close against the value at open — still value-free.
+  const keypadBaselineRef=useRef(null);
+  // Load-keypad commit: the keypad edits per keystroke with no blur, so the
+  // commit is measured at close against the value stashed at open.
+  const openKeypad = (bi, si)=>{
+    keypadBaselineRef.current = { bi, si, value: String(blocks[bi]?.sets?.[si]?.weightKg ?? '') };
+    setKeypadOpen(`${bi}:${si}`);
+  };
+  const closeKeypad = ()=>{
+    const base = keypadBaselineRef.current;
+    keypadBaselineRef.current = null;
+    setKeypadOpen(null);
+    if(!base) return;
+    const nowValue = String(blocks[base.bi]?.sets?.[base.si]?.weightKg ?? '');
+    if(nowValue !== base.value){
+      try{ recordEvent('load-field-commit', { sessionId:session.id, exerciseId:blocks[base.bi]?.exerciseId, setIndex:base.si, mode: gymMode ? 'gym' : 'standard' }); }catch{}
+    }
+  };
 
   // Escape dismisses only the topmost layer — a stray Esc must never silently
   // destroy a workout with logged sets (a11y baseline: dialogs confirm before
@@ -420,7 +431,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       if(!recommendation) continue;
       shownRecommendationRef.current.add(block.exerciseId);
       const arm = blockMeta.assigned.get(block.exerciseId);
-      recordEvent('recommendation:shown', { sessionId:session.id, exerciseId:block.exerciseId, assignedArm:arm || 'arise', target:suggestedTarget(recommendation,block) });
+      recordEvent('recommendation:shown', { sessionId:session.id, exerciseId:block.exerciseId, assignedArm:arm || 'arise' });
       try{
         recordRecommendation({
           exerciseId: block.exerciseId,
@@ -558,6 +569,16 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       sets: b.sets.map((s,j)=> j!==si? s : { ...s, ...patch }),
     }));
   };
+  // Value-free field commits: one event per committed edit (blur-and-changed),
+  // never keystrokes, never entered values — session/exercise/set ids and
+  // mode only.
+  const logFieldCommit = (kind, exerciseId, setIndex)=>{
+    try{ recordEvent(kind, { sessionId:session.id, exerciseId, setIndex, mode: gymMode ? 'gym' : 'standard' }); }catch{}
+  };
+  const commitProps = (kind, exerciseId, setIndex)=> ({
+    onFocus: trackFieldFocus,
+    onBlur: (e)=> { if(fieldCommitted(e)) logFieldCommit(kind, exerciseId, setIndex); },
+  });
   const completeSet = (bi,si)=>{
     const block=blocks[bi];
     const set=block?.sets?.[si];
@@ -566,7 +587,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     updateSet(bi,si,{ completed: completing });
     if(completing){
       const now=Date.now();
-      recordEvent('set:complete', {
+      recordEvent('complete-set', {
         sessionId:session.id,
         exerciseId:block.exerciseId,
         setIndex:si,
@@ -603,28 +624,33 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     }else{
       // Undoing a completion is a correction, recorded as its own fact so
       // friction metrics can count undos without guessing from missing rows.
-      try{ recordEvent('set:uncomplete', { sessionId:session.id, exerciseId:block.exerciseId, setIndex:si, mode: gymMode ? 'gym' : 'standard' }); }catch{}
+      try{ recordEvent('undo-set', { sessionId:session.id, exerciseId:block.exerciseId, setIndex:si, mode: gymMode ? 'gym' : 'standard' }); }catch{}
     }
   };
-  const addSet = (bi)=> setBlocks(prev=> prev.map((b,i)=> i!==bi? b : { ...b, sets: [...b.sets, userAddedSet(newSet('', b.unilateral, b.sets[b.sets.length-1]), makeSetId)] }));
+  const addSet = (bi)=>{
+    try{ recordEvent('add-set', { sessionId:session.id, exerciseId:blocks[bi]?.exerciseId, mode: gymMode ? 'gym' : 'standard' }); }catch{}
+    setBlocks(prev=> prev.map((b,i)=> i!==bi? b : { ...b, sets: [...b.sets, userAddedSet(newSet('', b.unilateral, b.sets[b.sets.length-1]), makeSetId)] }));
+  };
   // One-thumb adjustment for the set being logged: reps move in whole reps,
   // clamped at zero. The stepper carries the tap; the input stays typable.
   const adjustReps = (bi, si, delta)=>{
     const current = parseNum(blocks[bi]?.sets?.[si]?.reps);
     updateSet(bi, si, { reps: String(Math.max(0, current + delta)) });
   };
-  const duplicateUnilateral = (bi)=> setBlocks(prev=> prev.map((b,i)=>{
+  const duplicateUnilateral = (bi)=>{
+    try{ recordEvent('add-set', { sessionId:session.id, exerciseId:blocks[bi]?.exerciseId, mode: gymMode ? 'gym' : 'standard' }); }catch{}
+    setBlocks(prev=> prev.map((b,i)=>{
     if(i!==bi || !b.unilateral) return b;
     const last=b.sets[b.sets.length-1]; if(!last) return b;
     return { ...b, sets: [...b.sets, userAddedSet({ ...last, side:last.side==='L'?'R':'L', completed:false, failed:false, skipped:false }, makeSetId)] };
-  }));
+  }));};
   const removeSet = (bi,si)=>{
     const set = blocks[bi]?.sets?.[si];
     if(!set) return;
     // A removed row is a correction too — record which kind vanished so the
     // friction stats can count deletions without inspecting content (which the
     // sanitizer would strip anyway).
-    try{ recordEvent('set:removed', { sessionId:session.id, exerciseId:blocks[bi].exerciseId, setIndex:si, kind: set.origin==='user-added' ? 'user-added' : 'prescribed', mode: gymMode ? 'gym' : 'standard' }); }catch{}
+    try{ recordEvent('remove-set', { sessionId:session.id, exerciseId:blocks[bi].exerciseId, setIndex:si, kind: set.origin==='user-added' ? 'user-added' : 'prescribed', mode: gymMode ? 'gym' : 'standard' }); }catch{}
     setBlocks(prev=> prev.map((b,i)=> i!==bi? b : removeSetAt(b, si).block));
   };
   // Gym Mode: mark a set failed (attempted, didn't get the reps). Persisted as
@@ -685,7 +711,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     // Swap time = sheet-open to commit; commit-without-open still logs the swap
     // itself (elapsedMs omitted) so the substitution is never lost to a race.
     try{
-      recordEvent('exercise:swapped', {
+      recordEvent('swap-commit', {
         sessionId: session.id,
         from: fromExerciseId,
         to: option?.id || null,
@@ -698,7 +724,6 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   const applyRecommendation=(bi,recommendation)=>{
     const block=blocks[bi];
     if(!block || !recommendation) return;
-    const target=suggestedTarget(recommendation,block);
     setBlocks(prev=> prev.map((b,i)=> i!==bi ? b : {
       ...b,
       sets:b.sets.map(s=> s.completed ? s : {
@@ -709,7 +734,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       }),
     }));
     dismissedRecommendationRef.current.add(bi);
-    recordEvent('recommendation:accepted', { sessionId:session.id, exerciseId:block.exerciseId, target, via:'single' });
+    recordEvent('recommendation:accepted', { sessionId:session.id, exerciseId:block.exerciseId, via:'single' });
   };
 
   // One-tap "apply all": stamp every un-started block with its engine
@@ -730,7 +755,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       if(!hasTarget && !hasReps) return b;
       applied++;
       dismissedRecommendationRef.current.add(i);
-      recordEvent('recommendation:accepted', { sessionId:session.id, exerciseId:b.exerciseId, target:suggestedTarget(recommendation,b), via:'apply-all' });
+      recordEvent('apply-all', { sessionId:session.id, exerciseId:b.exerciseId });
       return {
         ...b,
         sets:b.sets.map(s=> ({
@@ -997,7 +1022,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     <button onClick={()=> toggleDictation(bi)} aria-pressed={dictating===bi} title="Dictate a set — say the load, then the reps"
                       className={`relative text-xs font-bold px-3 py-1.5 rounded-full border before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-[''] ${dictating===bi ? 'bg-ink text-bg border-ink' : 'border-line bg-surface2'}`}>🎙️</button>
                   )}
-                  <button onClick={()=> { if(swapOpen!==bi) swapOpenedAtRef.current = Date.now(); setSwapOpen(swapOpen===bi ? null : bi); }} aria-expanded={swapOpen===bi} className="relative text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">Swap</button>
+                  <button onClick={()=> { if(swapOpen!==bi){ swapOpenedAtRef.current = Date.now(); try{ recordEvent('swap-open', { sessionId:session.id, exerciseId:blocks[bi]?.exerciseId, mode: gymMode ? 'gym' : 'standard' }); }catch{} } setSwapOpen(swapOpen===bi ? null : bi); }} aria-expanded={swapOpen===bi} className="relative text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">Swap</button>
                   <button onClick={()=> addSet(bi)} className="relative min-h-[32px] text-xs font-bold px-3 py-1.5 rounded-full bg-ink text-bg before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">+ Set</button>
                   {b.unilateral ? <button onClick={()=> duplicateUnilateral(bi)} className="relative text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">+ other side</button> : null}
                 </div>
@@ -1031,28 +1056,28 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                   const gestures = gymMode && !s.completed ? swipeRowHandlers({
                     onComplete: ()=> completeSet(bi,si),
                     onFail: ()=> markFailed(bi,si),
-                    onLongPress: ()=> setKeypadOpen(`${bi}:${si}`),
+                    onLongPress: ()=> openKeypad(bi,si),
                   }) : null;
                   return (
                   <div key={si} {...(gestures ? { onPointerDown:gestures.onPointerDown, onPointerMove:gestures.onPointerMove, onPointerUp:gestures.onPointerUp, onPointerLeave:gestures.onPointerLeave, onPointerCancel:gestures.onPointerCancel } : {})} style={gestures?.style}
                     className={`grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] gap-1.5 items-center rounded-xl ${s.failed ? 'bg-reviewsoft border border-review/30' : ''}`}>
                     <span className={`w-7 h-7 grid place-items-center rounded-full border text-xs font-bold tabular-nums ${s.completed?'bg-success text-bg border-success':s.failed?'bg-review text-bg border-review':'bg-surface2 border-line'}`}>{si+1}</span>
                     <div className="min-w-0 flex items-center gap-1">
-                      <input type="number" min="0" step="0.5" inputMode="decimal" value={s.weightKg} onChange={e=> updateSet(bi,si,{weightKg:e.target.value})} placeholder={supportsWeighted?'22':'bw'} aria-label={`Load set ${si+1} in kilograms`} className={`min-w-0 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
+                      <input type="number" min="0" step="0.5" inputMode="decimal" value={s.weightKg} onChange={e=> updateSet(bi,si,{weightKg:e.target.value})} {...commitProps('load-field-commit', b.exerciseId, si)} placeholder={supportsWeighted?'22':'bw'} aria-label={`Load set ${si+1} in kilograms`} className={`min-w-0 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
                       {supportsWeighted && !s.completed && (
-                        <button onClick={()=> setKeypadOpen(`${bi}:${si}`)} aria-label={`Open load keypad for set ${si+1}`} title="Load keypad" className="shrink-0 w-9 h-9 grid place-items-center rounded-xl border border-line bg-surface2 text-sm font-black">✛</button>
+                        <button onClick={()=> openKeypad(bi,si)} aria-label={`Open load keypad for set ${si+1}`} title="Load keypad" className="shrink-0 w-9 h-9 grid place-items-center rounded-xl border border-line bg-surface2 text-sm font-black">✛</button>
                       )}
                     </div>
                     {isActive ? (
                       <div className="flex items-center gap-1 min-w-0">
                         <StepperButton label="−" ariaLabel={`Decrease reps set ${si+1}`} onStep={()=> adjustReps(bi,si,-1)} className="w-9 px-0" />
-                        <input type="number" min="0" step="1" inputMode="numeric" value={s.reps} onChange={e=> updateSet(bi,si,{reps:e.target.value})} placeholder="9" aria-label={`Reps set ${si+1}`} className={`min-w-0 flex-1 rounded-xl border border-line bg-surface2 px-1 py-2 text-xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
+                        <input type="number" min="0" step="1" inputMode="numeric" value={s.reps} onChange={e=> updateSet(bi,si,{reps:e.target.value})} {...commitProps('reps-field-commit', b.exerciseId, si)} placeholder="9" aria-label={`Reps set ${si+1}`} className={`min-w-0 flex-1 rounded-xl border border-line bg-surface2 px-1 py-2 text-xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
                         <StepperButton label="+" ariaLabel={`Increase reps set ${si+1}`} onStep={()=> adjustReps(bi,si,1)} className="w-9 px-0" />
                       </div>
                     ) : (
-                    <input type="number" min="0" step="1" inputMode="numeric" value={s.reps} onChange={e=> updateSet(bi,si,{reps:e.target.value})} placeholder="9" aria-label={`Reps set ${si+1}`} className={`min-w-0 rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
+                    <input type="number" min="0" step="1" inputMode="numeric" value={s.reps} onChange={e=> updateSet(bi,si,{reps:e.target.value})} {...commitProps('reps-field-commit', b.exerciseId, si)} placeholder="9" aria-label={`Reps set ${si+1}`} className={`min-w-0 rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
                     )}
-                    <input type="number" min="0" max="10" step="1" inputMode="numeric" value={rirFromRpe(s.rpe)} onChange={e=> updateSet(bi,si,{rpe:rpeFromRir(e.target.value)})} placeholder="—" aria-label={`Reps in reserve set ${si+1}`} className={`min-w-0 rounded-xl border border-line bg-surface2 px-1 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
+                    <input type="number" min="0" max="10" step="1" inputMode="numeric" value={rirFromRpe(s.rpe)} onChange={e=> updateSet(bi,si,{rpe:rpeFromRir(e.target.value)})} {...commitProps('rir-field-commit', b.exerciseId, si)} placeholder="—" aria-label={`Reps in reserve set ${si+1}`} className={`min-w-0 rounded-xl border border-line bg-surface2 px-1 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
                     {b.unilateral ? (
                       <select value={s.side||'L'} onChange={e=> updateSet(bi,si,{side:e.target.value})} aria-label={`Side set ${si+1}`} className="min-w-0 rounded-xl border border-line bg-surface2 px-1 py-3 text-xs font-bold"><option value="L">L</option><option value="R">R</option></select>
                     ) : <span />}
@@ -1063,7 +1088,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                           gestures never gate an action (WCAG 2.5.6 / 2.1.1). */}
                       {gymMode && !s.completed && (
                         <button
-                          onClick={()=> { if(s.failed){ try{ recordEvent('set:unfailed', { sessionId:session.id, exerciseId:b.exerciseId, setIndex:si, mode: gymMode ? 'gym' : 'standard' }); }catch{} updateSet(bi,si,{ failed:false }); } else markFailed(bi,si); }}
+                          onClick={()=> { if(s.failed){ try{ recordEvent('undo-set', { sessionId:session.id, exerciseId:b.exerciseId, setIndex:si, mode: gymMode ? 'gym' : 'standard' }); }catch{} updateSet(bi,si,{ failed:false }); } else markFailed(bi,si); }}
                           aria-pressed={s.failed}
                           aria-label={s.failed ? `Unmark set ${si+1} failed` : `Mark set ${si+1} failed`}
                           className={`min-h-12 w-9 grid place-items-center rounded-xl border text-[11px] font-bold ${s.failed?'bg-review text-bg border-review':'bg-surface2 border-line'}`}>{s.failed?'↺':'✗'}</button>
@@ -1073,7 +1098,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                           instead of being deleted or faked as completed. */}
                       {!gymMode && !s.completed && (
                         <button
-                          onClick={()=> { if(s.failed){ try{ recordEvent('set:unfailed', { sessionId:session.id, exerciseId:b.exerciseId, setIndex:si, mode: 'standard' }); }catch{} updateSet(bi,si,{ failed:false }); } else markFailed(bi,si); }}
+                          onClick={()=> { if(s.failed){ try{ recordEvent('undo-set', { sessionId:session.id, exerciseId:b.exerciseId, setIndex:si, mode: 'standard' }); }catch{} updateSet(bi,si,{ failed:false }); } else markFailed(bi,si); }}
                           aria-pressed={s.failed}
                           aria-label={s.failed ? `Unmark set ${si+1} failed` : `Mark set ${si+1} failed`}
                           className={`min-h-12 min-w-11 grid place-items-center rounded-xl border text-[11px] font-bold ${s.failed?'bg-review text-bg border-review':'bg-surface2 border-line'}`}>{s.failed?'↺':'✗'}</button>
@@ -1100,7 +1125,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                 <LoadNumpad
                   value={b.sets[Number(keypadOpen.split(':')[1])]?.weightKg || ''}
                   onChange={(v)=> updateSet(bi, Number(keypadOpen.split(':')[1]), { weightKg: v })}
-                  onClose={()=> setKeypadOpen(null)}
+                  onClose={closeKeypad}
                   equipment={ex?.equipment?.[0] || 'barbell'}
                   plateConfig={plateConfig}
                   exerciseName={ex?.name || b.exerciseId}

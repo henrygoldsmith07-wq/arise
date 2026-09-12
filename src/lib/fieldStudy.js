@@ -12,7 +12,7 @@ import { resolveArisePriors } from './priors.js';
 import { parseImportFile, mergeStores } from './export.js';
 import { isValidStudyParticipantId } from './studyIdentity.js';
 import { evaluateLongitudinal } from './longitudinal.js';
-import { prospectiveFieldComparison, isGradeableOutcome, prospectiveTransitionKey } from './evaluation.js';
+import { prospectiveFieldComparison, isGradeableOutcome, prospectiveTransitionKey, clusteredBootstrapDifference, SHADOW_EVIDENCE_LABEL } from './evaluation.js';
 import { isProspectiveRecord, bestSetOfBlock } from './longitudinalCore.js';
 import { enrollmentAudit } from './studyEnrollment.js';
 import { runComparativeStudy, collectDeloadDecisions, validateDeloadDecisions } from './study.js';
@@ -216,6 +216,121 @@ export function pooledProspectiveComparison(participants, { config = null } = {}
   };
 }
 
+// ── Pooled assigned-arm comparison (the causal pooled read) ───────────
+// Aggregates ONLY genuine assigned-arm prospective outcomes: live-engine
+// provenance on both sides, an assigned arm in the primary pair
+// (arise/double-progression), and a scored assignedMet. ITT is preserved —
+// compliance and follow-through never filter. Participant is the clustering
+// unit: pooled rates sum transitions, uncertainty resamples participants via
+// the same clustered bootstrap as the single-device primary. Conclusions stay
+// descriptive until the prespecified participant/transition gates are met.
+// Pure and deterministic.
+const ASSIGNED_PRIMARY_ARMS = ['arise', 'double-progression'];
+
+export function pooledAssignedComparison(participants, { config = null, minParticipants = 10, minTransitions = 1000 } = {}){
+  const { groups: deduped, unidentified } = groupParticipantsByIdentity(participants);
+  const consented = deduped.filter(p=> p?.store?.preferences?.telemetryEnabled === true);
+  const unconsentedExports = deduped.length - consented.length;
+  const rows = [];
+  const historiesByCode = {};
+  for(const p of consented){
+    const code = p.code || p.studyParticipantId || 'anonymous';
+    historiesByCode[code] = p.store?.history || [];
+    for(const row of p.store?.evaluationLedger || []){
+      rows.push({ ...row, participantId: row.participantId ?? code });
+    }
+  }
+  const excluded = { nonProspective: 0, unresolved: 0, unassigned: 0, noAssignedMet: 0 };
+  const seen = new Set();
+  const assigned = [];
+  let duplicatePairs = 0;
+  for(const row of rows){
+    if(!(row && row.recommendation) || !isProspectiveRecord(row)){ excluded.nonProspective++; continue; }
+    if(!row.outcome){ excluded.unresolved++; continue; }
+    if(!ASSIGNED_PRIMARY_ARMS.includes(row.assignedArm)){ excluded.unassigned++; continue; }
+    if(row.outcome.assignedMet == null){ excluded.noAssignedMet++; continue; }
+    const key = `${prospectiveTransitionKey(row)}::${row.assignedArm}`;
+    if(seen.has(key)){ duplicatePairs++; continue; }
+    seen.add(key);
+    assigned.push(row);
+  }
+  // Participant-clustered rollup: per-participant per-arm wins, pooled sums.
+  const perParticipant = new Map();
+  for(const row of assigned){
+    const code = row.participantId ?? 'anonymous';
+    if(!perParticipant.has(code)) perParticipant.set(code, { arise: { n: 0, met: 0 }, dp: { n: 0, met: 0 } });
+    const buckets = perParticipant.get(code);
+    const bucket = row.assignedArm === 'double-progression' ? buckets.dp : buckets.arise;
+    bucket.n++;
+    if(row.outcome.assignedMet === true) bucket.met++;
+  }
+  const sumBucket = (kind)=> {
+    let n = 0, met = 0, users = 0;
+    for(const e of perParticipant.values()){ n += e[kind].n; met += e[kind].met; if(e[kind].n) users++; }
+    return { n, met, users };
+  };
+  const ariseTot = sumBucket('arise');
+  const dpTot = sumBucket('dp');
+  const rate = ({ n, met })=> n ? round(met / n, 3) : null;
+  const ariseRate = rate(ariseTot);
+  const dpRate = rate(dpTot);
+  const metRateDelta = ariseRate != null && dpRate != null ? round(ariseRate - dpRate, 3) : null;
+  const bootPairs = assigned.map(r=> ({ participant: r.participantId ?? 'anonymous', group: r.assignedArm, met: r.outcome.assignedMet === true }));
+  const clustered = clusteredBootstrapDifference(bootPairs, { seed: 'pooled-assigned-diff-v1' });
+  const minimum = Math.max(1, Number(resolveArisePriors(config).longitudinal.minimumSegmentSamples) || 1);
+  const ariseConclusive = ariseTot.n >= minimum;
+  const dpConclusive = dpTot.n >= minimum;
+  const participantCount = perParticipant.size;
+  const transitions = assigned.length;
+  const reasons = [];
+  if(transitions < minTransitions) reasons.push(`only ${transitions} assigned transitions (need ${minTransitions}+)`);
+  if(participantCount < minParticipants) reasons.push(`only ${participantCount} participants (need ${minParticipants}+)`);
+  if(participantCount < 2) reasons.push('fewer than 2 participants — no clustered uncertainty');
+  if(!(ariseConclusive && dpConclusive)) reasons.push('an assigned arm is below the per-arm sample gate');
+  const sufficient = reasons.length === 0;
+  // Next-exposure performance BY ASSIGNED TREATMENT: the best-set e1RM delta
+  // at the user's next logged session after the resolved one, split by the
+  // arm they trained under. Reported with n — thin arms stay descriptive.
+  const nextSeen = new Set();
+  const nextByArm = { arise: { n: 0, sum: 0 }, 'double-progression': { n: 0, sum: 0 } };
+  for(const row of assigned){
+    const key = `${prospectiveTransitionKey(row)}::${row.assignedArm}`;
+    if(nextSeen.has(key)) continue;
+    nextSeen.add(key);
+    const history = historiesByCode[row.participantId ?? 'anonymous'] || [];
+    const next = nextExposureDelta(history, row.exerciseId, row.outcome.dateISO, row.outcome.sessionId);
+    if(next == null || !(next.e1rm > 0) || !(row.outcome.e1rm > 0)) continue;
+    const delta = (next.e1rm - row.outcome.e1rm) / row.outcome.e1rm;
+    if(!Number.isFinite(delta)) continue;
+    const bucket = row.assignedArm === 'double-progression' ? nextByArm['double-progression'] : nextByArm.arise;
+    bucket.n++;
+    bucket.sum += delta;
+  }
+  const nextExposureByArm = Object.fromEntries(Object.entries(nextByArm).map(([arm, e])=> [arm, { n: e.n, meanDeltaPct: e.n ? round(e.sum / e.n, 4) : null }]));
+  const followed = assigned.filter(r=> r.outcome.followed === true).length;
+  return {
+    causal: true,
+    evidenceKind: 'assigned-arm-pooled',
+    participants: participantCount,
+    transitions,
+    arise: { key: 'arise', n: ariseTot.n, metCount: ariseTot.met, participants: ariseTot.users, targetAchievementRate: ariseRate, conclusive: ariseConclusive },
+    'double-progression': { key: 'double-progression', n: dpTot.n, metCount: dpTot.met, participants: dpTot.users, targetAchievementRate: dpRate, conclusive: dpConclusive },
+    difference: { metRateDelta, clusteredBootstrap: clustered },
+    adherence: {
+      followedRate: transitions ? round(followed / transitions, 3) : null,
+      unknownAdherence: assigned.filter(r=> r.outcome.followed == null).length,
+      userOverrides: assigned.filter(r=> r.outcome.userOverride).length,
+    },
+    nextExposureByArm,
+    gates: { minParticipants, minTransitions, perArmMinimum: minimum, sufficient, reasons },
+    maturity: sufficient ? 'descriptive' : (transitions > 0 ? 'early' : 'insufficient'),
+    excluded: { ...excluded, duplicatePairs, unidentifiedExports: unidentified.length, unconsentedExports },
+    duplicatePairs,
+    note: sufficient
+      ? `Descriptive pooled read from ${transitions} assigned transitions across ${participantCount} participants: arise-assigned targets met ${ariseRate == null ? '—' : `${Math.round(ariseRate * 100)}%`} vs double-progression ${dpRate == null ? '—' : `${Math.round(dpRate * 100)}%`}. Descriptive only — never proof of superiority.`
+      : `Pooled assigned evidence is insufficient (${reasons.join('; ')}). No comparison is claimed; shadow "would have fit" analyses are never substituted.`,
+  };
+}
 // ── Local field-study status (opt-in, descriptive, never gamified) ─────────
 // What this device is contributing to prospective evidence: enrollment state,
 // gradeable samples, exercises covered, maturity, and exactly what was
@@ -224,20 +339,28 @@ export function fieldStudyStatus({ store = {}, ledger = null, config = null } = 
   const enrollment = store?.studyEnrollment ?? null;
   const consented = store?.preferences?.telemetryEnabled === true;
   const rows = Array.isArray(ledger) ? ledger : [];
-  const comparison = prospectiveFieldComparison(rows, { config });
+  // Assigned-arm primary on this device's own ledger: what was trained under
+  // each arm, ITT, with the same conclusive gate as Coaching evidence.
+  const primary = evaluateLongitudinal(rows, { config }).primaryComparison;
+  const reasons = [];
+  if(primary.transitions < 1) reasons.push('no assigned-arm transitions yet');
+  else{
+    if(primary.participants < 2) reasons.push('only 1 participant on this device (need 2+ for clustered uncertainty)');
+    if(!primary.arise.conclusive || !primary['double-progression'].conclusive) reasons.push('an assigned arm is below the sample gate');
+  }
+  const maturity = primary.transitions < 1 ? 'insufficient' : primary.conclusive ? 'descriptive' : 'early';
   const audit = enrollment ? enrollmentAudit(enrollment) : { ok: false, reason: 'no enrollment' };
   return {
     mode: enrollment ? 'enrolled' : consented ? 'observing' : 'off',
     enrolled: !!enrollment,
     enrollmentOk: audit.ok === true,
     enrolledAtISO: enrollment?.enrolledAtISO ?? null,
-    samples: { gradeable: comparison.gradeable, resolved: comparison.resolved, prospective: comparison.prospective, open: comparison.open },
-    exercises: comparison.exercises,
-    maturity: comparison.maturity,
-    reasons: comparison.sampleSufficiency.reasons,
-    exclusions: comparison.excluded,
+    samples: { assigned: primary.transitions, arise: primary.arise.n, doubleProgression: primary['double-progression'].n, users: primary.participants },
+    maturity,
+    reasons,
+    difference: primary.difference,
     note: enrollment
-      ? 'Enrolled under a pseudonymous study id. Only first-visible, gradeable recommendation→outcome pairs count; everything else is listed under exclusions, never silently dropped.'
+      ? 'Enrolled under a pseudonymous study id. Only assigned-arm recommendation→outcome pairs count toward effectiveness; everything else is excluded, never silently dropped.'
       : consented
         ? 'Observing: local measurements are on but this device has no study enrollment, so nothing here leaves the device as study evidence.'
         : 'Local measurements are off — no prospective evidence is being collected on this device.',
@@ -274,7 +397,11 @@ export function computeFieldStudy(participants, { config = null, minParticipants
   });
   const pooled = { arise: pooledArise, 'double-progression': poolArm('double-progression'), 'linear-progression': poolArm('linear-progression'), flat: poolArm('flat') };
 
-  const transitions = pooledArise.n;
+  // The causal pooled read: genuine assigned-arm prospective outcomes only,
+  // participant-clustered. This — never the retrospective replay above —
+  // drives the gates and the headline claim.
+  const assigned = pooledAssignedComparison(participants, { config, minParticipants, minTransitions });
+  const transitions = assigned.transitions;
   // Breadth is measured in IDENTIFIED PEOPLE, not file arrivals. Legacy
   // exports without a study id are reported separately and never satisfy the
   // participant gate — they cannot be proven distinct from each other.
@@ -286,16 +413,20 @@ export function computeFieldStudy(participants, { config = null, minParticipants
     const targetDelta = base.met ? round((pooledArise.met - base.met) / base.met * 100, 1) : null;
     const successDelta = base.success ? round((pooledArise.success - base.success) / base.success * 100, 1) : null;
     const regressionAbsoluteDelta = base.n ? round((pooledArise.regression / pooledArise.n - base.regression / base.n) * 100, 2) : null;
-    headline[arm] = { targetAchievementDeltaPct: targetDelta, successRateDeltaPct: successDelta, regressionDeltaPctPoints: regressionAbsoluteDelta };
+    headline[arm] = { targetAchievementDeltaPct: targetDelta, successRateDeltaPct: successDelta, regressionDeltaPctPoints: regressionAbsoluteDelta, agreementOnly: true };
   }
 
+  // Headline claim from ASSIGNED arms only, descriptive even when the gates
+  // pass: "training under Arise produced better outcomes" is earned by
+  // assigned treatment, never by shadow "would have fit" agreement.
+  const boot = assigned.difference.clusteredBootstrap || {};
   const claimReady = gatesPassed
-    && pooled['double-progression'].met > 0
-    && headline['double-progression'].targetAchievementDeltaPct != null;
-
+    && assigned.maturity === 'descriptive'
+    && assigned.arise.targetAchievementRate != null
+    && assigned['double-progression'].targetAchievementRate != null;
   const claim = claimReady
     ? {
-        text: `Across ${transitions} real exercise transitions from ${identifiedCount} consenting participants, Arise produced ${headline['double-progression'].targetAchievementDeltaPct}% more successful next-session targets than standard double progression (regression ${(pooledArise.regression / Math.max(1, pooledArise.n) * 100).toFixed(1)}% vs ${(pooled['double-progression'].regression / Math.max(1, pooled['double-progression'].n) * 100).toFixed(1)}%).`,
+        text: `Across ${transitions} assigned transitions from ${assigned.participants} consenting participants, arise-assigned targets were met ${Math.round(assigned.arise.targetAchievementRate * 100)}% vs double-progression ${Math.round(assigned['double-progression'].targetAchievementRate * 100)}% (Δ ${assigned.difference.metRateDelta >= 0 ? '+' : ''}${Math.round(assigned.difference.metRateDelta * 100)}pp${Number.isFinite(boot.low) && Number.isFinite(boot.high) ? `; clustered 95% CI [${Math.round(boot.low * 100)}%, ${Math.round(boot.high * 100)}%] over ${boot.participants} participants` : ''}). Descriptive pooled read — not proof of superiority.`,
         gates: { minParticipants, minTransitions },
       }
     : null;
@@ -366,6 +497,7 @@ export function computeFieldStudy(participants, { config = null, minParticipants
       deloadNormalisedRate: avgNonNull(measures.map(m => m.deload.normalisedWithinTwoWeeksRate)),
       readinessBuckets: { high: poolReadinessBucket('high'), low: poolReadinessBucket('low'), unknown: poolReadinessBucket('unknown') },
       ledgerArms: poolLedgerArms(measures),
+      primaryComparison: assigned,
     },
     pooled,
     headline,
@@ -473,8 +605,10 @@ export function renderFieldReport(result){
     ['Arise targets · readiness unknown', bucketCell(rb.unknown)],
   );
   // Prospective arm ledger (real training; all arms frozen at record time).
+  // SHADOW diagnostic: frozen prescriptions never trained under.
   const la = t.ledgerArms || { arms: {}, pairedVsArise: {} };
   const armNames = Object.keys(la.arms).sort();
+  rows.push(['Ledger arms (shadow diagnostic)', SHADOW_EVIDENCE_LABEL]);
   for(const arm of armNames){
     const a = la.arms[arm];
     const paired = la.pairedVsArise[arm];
@@ -497,7 +631,7 @@ export function renderFieldReport(result){
     let diffCell = '—';
     if(diff.metRateDelta != null && boot?.mean != null){
       diffCell = `${diff.metRateDelta > 0 ? '+' : ''}${Math.round(diff.metRateDelta * 100)}pp arise−DP`;
-      if(boot.low != null) diffCell += ` · clustered 95% CI [${Math.round(boot.low*100)}%, ${Math.round(boot.high*100)}%] over ${boot.participants} participants`;
+      if(Number.isFinite(boot.low) && Number.isFinite(boot.high)) diffCell += ` · clustered 95% CI [${Math.round(boot.low*100)}%, ${Math.round(boot.high*100)}%] over ${boot.participants} participants`;
       else diffCell += ` · ${boot.participants} participant${boot.participants === 1 ? '' : 's'} — clustered CI needs ≥2`;
     }
     rows.push(
@@ -530,11 +664,13 @@ export function renderFieldReport(result){
     L.push(`- ${m.code}: ${m.sessionsLogged} sessions · ${m.weeksObserved}w · ledger ${m.ledger.resolved} pairs${m.ledger.conclusive?' (conclusive)':''} · adherence ${m.adherence.completionRate == null ? '—' : Math.round(m.adherence.completionRate*100)+'%'} · overrides ${m.overrides.overridden}/${m.overrides.adaptedBlocks}`);
   }
   L.push('');
-  // Prospective gradeable comparison: identical transitions only, users as the
-  // unit of evidence. Never a retrospective replay.
+  // Shadow diagnostic: prescription difficulty / decision agreement on
+  // identical transitions. Never a retrospective replay, never causal.
   const fc = result.fieldComparison;
   if(fc){
-    L.push('## Prospective gradeable comparison (identical transitions, users as evidence)');
+    L.push('## Prescription difficulty / decision agreement (shadow diagnostic)');
+    L.push('');
+    L.push(`> ${fc.evidenceLabel || SHADOW_EVIDENCE_LABEL}`);
     L.push('');
     L.push(`Gradeable pairs ${fc.gradeable} (resolved ${fc.resolved}, open ${fc.open}) · users ${fc.users} · exercises ${fc.exercises.length} · maturity **${fc.maturity}**.`);
     for(const [armId, arm] of Object.entries(fc.byBaseline || {})){

@@ -136,14 +136,39 @@ describe('pooled field study + headline gates', ()=>{
   });
 
   it('produces the headline sentence when gates pass, arithmetic intact', ()=>{
-    const result = computeFieldStudy(participants, { config: LOOSE, minParticipants: 3, minTransitions: 3 });
+    // Stamp genuine assigned-arm prospective outcomes onto the fixtures:
+    // live-engine provenance both sides, an assigned arm, a scored assignedMet,
+    // and measurement consent — the only rows the pooled causal read accepts.
+    const assigned = participants.map((p, i)=>{
+      const arm = i % 2 === 0 ? 'arise' : 'double-progression';
+      const met = i !== 1;
+      const store = structuredClone(p.store);
+      store.preferences = { telemetryEnabled: true };
+      store.evaluationLedger = (store.evaluationLedger || []).map((row, j)=> ({
+        ...row,
+        provenance: { origin: 'live-engine' },
+        assignedArm: arm,
+        outcome: {
+          ...row.outcome,
+          assignedMet: met,
+          sessionId: `${p.code}-s${j}`,
+          dateISO: '2026-03-01',
+          arms: { ...(row.outcome?.arms || {}), arise: { metTarget: met } },
+        },
+      }));
+      return { ...p, store };
+    });
+    const result = computeFieldStudy(assigned, { config: LOOSE, minParticipants: 3, minTransitions: 3 });
     assert.equal(result.status, 'sufficient-evidence');
+    assert.equal(result.totals.primaryComparison.transitions, 3);
+    assert.equal(result.totals.primaryComparison.maturity, 'descriptive');
     const p = result.pooled;
-    const perSum = participants.reduce((a,p)=> a + measureParticipant(p, { config: LOOSE }).comparative.arise.met, 0);
+    const perSum = participants.reduce((a,px)=> a + measureParticipant(px, { config: LOOSE }).comparative.arise.met, 0);
     assert.equal(p.arise.met, perSum);
     const h = result.headline['double-progression'];
     assert.notEqual(h.targetAchievementDeltaPct, null);
-    assert.match(result.claim.text, /real exercise transitions from 3 consenting participants/);
+    assert.match(result.claim.text, /assigned transitions from 3 consenting participants/);
+    assert.match(result.claim.text, /Descriptive pooled read/);
     const md = renderFieldReport(result);
     assert.match(md, /\*\*sufficient-evidence\*\*/);
   });
