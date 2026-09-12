@@ -27,7 +27,7 @@ export { EVALUATION_SCHEMA_VERSION, wilsonInterval, EVALUATION_KEY, hasConsent }
 export { RECOMMENDATION_OUTCOME_LABELS, isProspectiveRecord, confidenceBandOf, recommendationTypeOf, shrinkRate, classifyRecommendationOutcome } from './longitudinalCore.js';
 import { withProvenance } from './domain.js';
 import { getDeviceId } from './exportPolicy.js';
-import { evaluateLongitudinal, calibrateRecommendations } from './evaluation.js';
+import { evaluateLongitudinal, calibrateRecommendations, prospectiveFieldComparison } from './evaluation.js';
 export { evaluateLongitudinal, calibrateRecommendations, clusteredBootstrapDifference, clusteredBootstrapWinRate } from './evaluation.js';
 export function markRecommendationOverride({ exerciseId, dueDateISO = null, storage = defaultStorage() } = {}){
   const ledger = loadEvaluationLedger(storage);
@@ -454,9 +454,9 @@ export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore =
 
 
 export function longitudinalSummary({ preferences = null, config = null, storage = defaultStorage() } = {}){
-  if(!hasConsent(preferences)) return { consented: false, evaluation: null, calibration: null };
+  if(!hasConsent(preferences)) return { consented: false, evaluation: null, calibration: null, fieldComparison: null };
   const ledger = loadEvaluationLedger(storage);
-  return { consented: true, evaluation: evaluateLongitudinal(ledger, { config }), calibration: calibrateRecommendations(ledger, { config }) };
+  return { consented: true, evaluation: evaluateLongitudinal(ledger, { config }), calibration: calibrateRecommendations(ledger, { config }), fieldComparison: prospectiveFieldComparison(ledger, { config }) };
 }
 
 // ── Substitution quality validation ─────────────────────────────────────

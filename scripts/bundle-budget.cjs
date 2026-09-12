@@ -32,6 +32,15 @@
 // (largest-lazy 45 → 48). All of it is requested product logic, not incidental
 // dependency growth; headroom above measured (boot 191.2, lazy 45.1, total 335.4).
 //
+// total 340 → 342 kB with the prospective field-validation round: the
+// gradeable prospective field comparison (evaluation.js, also bundled into the
+// analytics worker), pooled prospective comparison + local field-study status
+// (fieldStudy.js), logging-friction stats (telemetry.js), the coaching-evidence
+// selector (product.js) and the two runner instrumentations plus the expert
+// Coaching-evidence / field-study-status surfaces. Requested product logic in
+// boot + worker chunks, not dependency growth; measured boot 194.1 (budget 195
+// unchanged), largest-lazy 46.9 (budget 48 unchanged), total 341.6.
+//
 // The budgets are regression bounds with headroom, not aspirations: a change
 // that crosses one must either undo the bloat or consciously re-baseline here
 // and say why in the PR.
@@ -48,7 +57,7 @@ if(!fs.existsSync(dist)){
 
 const BOOT_BUDGET_KB = 195;
 const CHUNK_BUDGET_KB = 48;
-const TOTAL_BUDGET_KB = 340;
+const TOTAL_BUDGET_KB = 342;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

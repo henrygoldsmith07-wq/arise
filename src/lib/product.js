@@ -660,6 +660,68 @@ export function coachingCalibration(calibration){
 }
 
 /**
+ * Compact, honest "Coaching evidence" model for the expert Progress surface.
+ * Reads a prospectiveFieldComparison result (gradeable, repeated-user-aware)
+ * plus the neighbouring evidence kinds, and formats them so the four sources
+ * can never be confused: personal calibration (your history), retrospective
+ * replay (reconstructed), prospective observation (this device, first-visible)
+ * and external pooled evidence (other consenting users). Pure/deterministic.
+ * Maturity is 'insufficient' | 'early' — a firm cross-arm claim is never
+ * emitted here; that requires pooled multi-user replication.
+ */
+export function coachingEvidence(comparison){
+  const c = comparison || {};
+  const gradeable = Number(c.gradeable) || 0;
+  const arms = Object.entries(c.byBaseline || {}).map(([id, arm])=> ({
+    id,
+    label: arm?.label || id,
+    pairs: arm?.pairs ?? 0,
+    users: arm?.users ?? 0,
+    ariseRate: arm?.ariseRate ?? null,
+    baseRate: arm?.baseRate ?? null,
+    deltaPp: arm?.effectPp ?? null,
+  }));
+  // The headline pair mirrors the task's display contract: the baseline with
+  // the most shared transitions stands in as the "baseline equivalent".
+  const headlineArm = arms.slice().sort((a, b)=> (b.pairs || 0) - (a.pairs || 0))[0] || null;
+  const fmtRate = v=> v == null ? '—' : `${Math.round(v * 100)}%`;
+  const fmtDelta = v=> v == null ? '—' : `${v > 0 ? '+' : ''}${v} percentage points`;
+  const lines = [
+    `Prospective gradeable recommendations: ${gradeable}`,
+    headlineArm
+      ? `Arise target success: ${fmtRate(headlineArm.ariseRate)}`
+      : 'Arise target success: —',
+    headlineArm
+      ? `Baseline equivalent: ${fmtRate(headlineArm.baseRate)}`
+      : 'Baseline equivalent: —',
+    headlineArm
+      ? `Difference: ${fmtDelta(headlineArm.deltaPp)}`
+      : 'Difference: —',
+    `Evidence: ${c.maturity === 'early' ? 'early' : 'insufficient'}${c.maturity === 'early' ? ' / insufficient for a firm conclusion' : ' for a firm conclusion'}`,
+  ];
+  return {
+    status: c.maturity === 'early' ? 'early' : 'insufficient',
+    observed: Number(c.prospective) || 0,
+    resolved: Number(c.resolved) || 0,
+    gradeable,
+    users: Number(c.users) || 0,
+    exercises: Array.isArray(c.exercises) ? c.exercises : [],
+    headlineArm: headlineArm ? { id: headlineArm.id, label: headlineArm.label } : null,
+    arms,
+    realised: c.realised || null,
+    sampleSufficiency: c.sampleSufficiency || null,
+    lines,
+    evidenceKinds: {
+      personal: 'Personal calibration — learned from your own logged history only',
+      replay: 'Retrospective replay — reconstructed recommendations, never proof',
+      prospective: 'Prospective observation — first-visible targets scored on this device',
+      external: 'External pooled evidence — other consenting users, analysed separately',
+    },
+    note: c.note || null,
+  };
+}
+
+/**
  * Session-count streak with honest, healthy framing. Day-level streaks
  * punish rest days; a "weeks with training" run does not. Returned shape
  * powers both the Progress counter and the "no guilt" copy: a lapsed run

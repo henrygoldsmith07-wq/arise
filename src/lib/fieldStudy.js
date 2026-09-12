@@ -12,6 +12,9 @@ import { resolveArisePriors } from './priors.js';
 import { parseImportFile, mergeStores } from './export.js';
 import { isValidStudyParticipantId } from './studyIdentity.js';
 import { evaluateLongitudinal } from './longitudinal.js';
+import { prospectiveFieldComparison, isGradeableOutcome, prospectiveTransitionKey } from './evaluation.js';
+import { isProspectiveRecord, bestSetOfBlock } from './longitudinalCore.js';
+import { enrollmentAudit } from './studyEnrollment.js';
 import { runComparativeStudy, collectDeloadDecisions, validateDeloadDecisions } from './study.js';
 import { recommendationAcceptanceStats, loggingTimeStats } from './telemetry.js';
 
@@ -131,6 +134,113 @@ export function measureParticipant({ code, store }, { config = null } = {}){
     adherence: { scheduled: sessions.length, done, missed, completionRate: pct(done, sessions.length) },
     deload: { decisions: deloadOutcomes.decisions, cutsObservedRate: deloadOutcomes.cutsObservedRate, normalisedWithinTwoWeeksRate: deloadOutcomes.normalisedWithinTwoWeeksRate },
     overrides: { adaptedBlocks, overridden, overrideRate: pct(overridden, adaptedBlocks) },
+  };
+}
+
+// ── Pooled prospective comparison (gradeable, repeated-user-aware) ──────
+// One prospective ledger row is one row; one USER is one unit of evidence.
+// Rows are tagged with their participant code, then scored once through
+// prospectiveFieldComparison, which groups by user, pairs arise against each
+// baseline on identical gradeable transitions, and reports a mean-of-users
+// effect with an observed user band. Unidentified exports cannot be proven
+// distinct people, so they are reported separately and never feed the breadth
+// gate. Retrospective replays are never an input here — this path only ever
+// sees first-visible ledger rows.
+function nextExposureDelta(history, exerciseId, afterISO, excludeSessionId){
+  const ordered = [...(history || [])].sort((a, b)=> String(a?.dateISO || '').localeCompare(String(b?.dateISO || '')));
+  for(const session of ordered){
+    if(excludeSessionId && session?.id === excludeSessionId) continue;
+    if(String(session?.dateISO || '') <= String(afterISO || '')) continue;
+    for(const block of session?.blocks || []){
+      if(block?.exerciseId !== exerciseId) continue;
+      const best = bestSetOfBlock(block);
+      if(best && best.reps > 0) return { e1rm: round(best.score, 2), dateISO: session.dateISO };
+    }
+  }
+  return null;
+}
+
+export function pooledProspectiveComparison(participants, { config = null } = {}){
+  const { groups: deduped, unidentified } = groupParticipantsByIdentity(participants);
+  // Consent is enforced HERE, not assumed upstream: a participant package
+  // whose preferences do not show measurement consent contributes zero rows
+  // and is counted honestly instead of silently vanishing.
+  const consented = deduped.filter(p=> p?.store?.preferences?.telemetryEnabled === true);
+  const unconsentedExports = deduped.length - consented.length;
+  const rows = [];
+  const historiesByCode = {};
+  for(const p of consented){
+    const code = p.code || p.studyParticipantId || 'anonymous';
+    historiesByCode[code] = p.store?.history || [];
+    for(const row of p.store?.evaluationLedger || []){
+      rows.push({ ...row, participantId: row.participantId ?? code });
+    }
+  }
+  const comparison = prospectiveFieldComparison(rows, { config });
+  // Next-exposure performance: the best-set e1RM on the same exercise at the
+  // user's next logged session strictly after the resolved one, per gradeable row.
+  let nextN = 0, nextSum = 0;
+  const nextPerExercise = {};
+  const seenNext = new Set();
+  for(const row of rows){
+    if(!row?.outcome || !isGradeableOutcome(row, resolveArisePriors(config).longitudinal.outcomeLabels)) continue;
+    // Same de-duplication as the comparison itself: a re-recorded transition
+    // contributes one next-exposure delta, never two.
+    const key = prospectiveTransitionKey(row);
+    if(seenNext.has(key)) continue;
+    seenNext.add(key);
+    const history = historiesByCode[row.participantId ?? 'anonymous'] || [];
+    const next = nextExposureDelta(history, row.exerciseId, row.outcome.dateISO, row.outcome.sessionId);
+    if(next == null || !(next.e1rm > 0) || !(row.outcome.e1rm > 0)) continue;
+    const delta = (next.e1rm - row.outcome.e1rm) / row.outcome.e1rm;
+    if(!Number.isFinite(delta)) continue;
+    nextN++;
+    nextSum += delta;
+    const ex = row.exerciseId;
+    if(!nextPerExercise[ex]) nextPerExercise[ex] = { n: 0, sum: 0 };
+    nextPerExercise[ex].n++;
+    nextPerExercise[ex].sum += delta;
+  }
+  const nextExposure = {
+    n: nextN,
+    meanDeltaPct: nextN ? round(nextSum / nextN, 4) : null,
+    byExercise: Object.fromEntries(Object.entries(nextPerExercise).map(([ex, e])=> [ex, { n: e.n, meanDeltaPct: round(e.sum / e.n, 4) }])),
+  };
+  return {
+    ...comparison,
+    users: comparison.users,
+    unidentifiedExports: unidentified.length,
+    unconsentedExports,
+    nextExposure,
+    note: `${comparison.note} Pooled across ${comparison.users} identified consenting ${comparison.users === 1 ? 'user' : 'users'} (${unidentified.length} unidentified export${unidentified.length === 1 ? '' : 's'} excluded from breadth; ${unconsentedExports} unconsented export${unconsentedExports === 1 ? '' : 's'} excluded entirely).`,
+  };
+}
+
+// ── Local field-study status (opt-in, descriptive, never gamified) ─────────
+// What this device is contributing to prospective evidence: enrollment state,
+// gradeable samples, exercises covered, maturity, and exactly what was
+// excluded and why. Static facts only — no streaks, goals, or pressure copy.
+export function fieldStudyStatus({ store = {}, ledger = null, config = null } = {}){
+  const enrollment = store?.studyEnrollment ?? null;
+  const consented = store?.preferences?.telemetryEnabled === true;
+  const rows = Array.isArray(ledger) ? ledger : [];
+  const comparison = prospectiveFieldComparison(rows, { config });
+  const audit = enrollment ? enrollmentAudit(enrollment) : { ok: false, reason: 'no enrollment' };
+  return {
+    mode: enrollment ? 'enrolled' : consented ? 'observing' : 'off',
+    enrolled: !!enrollment,
+    enrollmentOk: audit.ok === true,
+    enrolledAtISO: enrollment?.enrolledAtISO ?? null,
+    samples: { gradeable: comparison.gradeable, resolved: comparison.resolved, prospective: comparison.prospective, open: comparison.open },
+    exercises: comparison.exercises,
+    maturity: comparison.maturity,
+    reasons: comparison.sampleSufficiency.reasons,
+    exclusions: comparison.excluded,
+    note: enrollment
+      ? 'Enrolled under a pseudonymous study id. Only first-visible, gradeable recommendation→outcome pairs count; everything else is listed under exclusions, never silently dropped.'
+      : consented
+        ? 'Observing: local measurements are on but this device has no study enrollment, so nothing here leaves the device as study evidence.'
+        : 'Local measurements are off — no prospective evidence is being collected on this device.',
   };
 }
 
@@ -261,6 +371,10 @@ export function computeFieldStudy(participants, { config = null, minParticipants
     headline,
     claim,
     protocol: buildStudyProtocol({ config }),
+    // Prospective gradeable arise-vs-baseline comparison on identical
+    // transitions, repeated-user-aware (mean-of-users effect + user band).
+    // Descriptive until pooled multi-user replication says otherwise.
+    fieldComparison: pooledProspectiveComparison(participants, { config }),
     participants: measures.map(m => ({ ...m, comparative: undefined })),
   };
 }
@@ -416,6 +530,20 @@ export function renderFieldReport(result){
     L.push(`- ${m.code}: ${m.sessionsLogged} sessions · ${m.weeksObserved}w · ledger ${m.ledger.resolved} pairs${m.ledger.conclusive?' (conclusive)':''} · adherence ${m.adherence.completionRate == null ? '—' : Math.round(m.adherence.completionRate*100)+'%'} · overrides ${m.overrides.overridden}/${m.overrides.adaptedBlocks}`);
   }
   L.push('');
+  // Prospective gradeable comparison: identical transitions only, users as the
+  // unit of evidence. Never a retrospective replay.
+  const fc = result.fieldComparison;
+  if(fc){
+    L.push('## Prospective gradeable comparison (identical transitions, users as evidence)');
+    L.push('');
+    L.push(`Gradeable pairs ${fc.gradeable} (resolved ${fc.resolved}, open ${fc.open}) · users ${fc.users} · exercises ${fc.exercises.length} · maturity **${fc.maturity}**.`);
+    for(const [armId, arm] of Object.entries(fc.byBaseline || {})){
+      L.push(`- ${arm.label}: ${arm.pairs} pairs · arise ${arm.ariseRate == null ? '—' : `${Math.round(arm.ariseRate*100)}%`} vs baseline ${arm.baseRate == null ? '—' : `${Math.round(arm.baseRate*100)}%`} · mean user effect ${arm.effectMean == null ? '—' : `${arm.effectMean > 0 ? '+' : ''}${Math.round(arm.effectMean*100)}pp`} (user band ${arm.effectBand[0] == null ? '—' : `${Math.round(arm.effectBand[0]*100)}…${Math.round(arm.effectBand[1]*100)}pp`})`);
+    }
+    L.push(`- Realised context: failed-set rate ${fc.realised.failedSetRate == null ? '—' : `${Math.round(fc.realised.failedSetRate*100)}%`} · mean e1RM change ${fc.realised.meanChangePct == null ? '—' : `${Math.round(fc.realised.meanChangePct*1000)/10}%`} · over ${fc.realised.overPrescriptionShare == null ? '—' : `${Math.round(fc.realised.overPrescriptionShare*100)}%`} / under ${fc.realised.underPrescriptionShare == null ? '—' : `${Math.round(fc.realised.underPrescriptionShare*100)}%`} · next-exposure ${fc.nextExposure.n ? `n=${fc.nextExposure.n}, mean Δ ${Math.round(fc.nextExposure.meanDeltaPct*1000)/10}%` : 'no follow-up exposures yet'}.`);
+    L.push(`- Excluded: ${fc.excluded.nonProspective} non-prospective · ${fc.excluded.unresolved} unresolved · ${fc.excluded.nonGradeable.unfollowed} unfollowed · ${fc.excluded.nonGradeable.override} overridden · ${fc.excluded.nonGradeable.flagged} pain/technique-flagged · ${fc.unidentifiedExports || 0} unidentified exports.`);
+    L.push('');
+  }
   const proto = result.protocol || {};
   if(proto.protocolVersion != null){
     L.push('## Study protocol (frozen)');

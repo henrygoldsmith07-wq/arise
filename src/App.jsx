@@ -270,6 +270,10 @@ export default function App(){
   },[]);
 
   const handleSaveSession = (payload)=>{
+    // Save-time measurement for the logging-friction stats: the synchronous
+    // payload build + store write only (auto-sync below is fire-and-forget and
+    // deliberately excluded). Consent-gated like every other measurement.
+    const saveStartedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : null;
     let next = { ...store };
     const hist = upsertHistory(next.history || [], payload);
     // Longitudinal evaluation: resolve open recommendation records against this
@@ -339,6 +343,9 @@ export default function App(){
       note: adaptation?.changed ? 'Your next sessions were adjusted from this result.' : null,
     });
     try { recordEvent('session:complete', { sessionId: payload.id, blocks: payload.blocks.length }); } catch {}
+    if(saveStartedAt != null){
+      try{ recordEvent('session:save', { sessionId: payload.id, blocks: payload.blocks.length, durationMs: Math.max(0, Math.round(performance.now() - saveStartedAt)) }); }catch{}
+    }
     if(adaptation?.changed){
       try { recordEvent('programme:adapt', { sessionId: payload.id, changes: adaptation.changes, decision: adaptation.decision }); } catch {}
     }

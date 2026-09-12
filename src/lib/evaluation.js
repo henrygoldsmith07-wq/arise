@@ -364,6 +364,42 @@ function findFrozenArm(row, arm){
   return { frozen, demandedMore, aggressive };
 }
 
+// Baselines compared against the arise prescription on identical gradeable
+// transitions. 'flat' is the hold/repeat baseline (the hold/default
+// comparator); 'fixed-rules' is the fixed decision-list baseline. Arms absent
+// from the data are skipped, never fabricated.
+export const FIELD_BASELINES = [
+  { id: 'double-progression', label: 'double progression' },
+  { id: 'flat', label: 'hold' },
+  { id: 'fixed-rules', label: 'fixed rules' },
+];
+
+// Stable identity of one realised transition for de-duplication: same user,
+// same exercise, same shown prescription, same outcome session. Exported so
+// pooled rollups fold the same repeats the same way. Pure and deterministic.
+export function prospectiveTransitionKey(row){
+  const t = row?.recommendation;
+  let target;
+  if(t && typeof t === 'object'){
+    try{ target = JSON.stringify(t, Object.keys(t).sort()); }catch{ target = String(t); }
+  } else target = String(t ?? '');
+  return [row?.participantId ?? 'anonymous', row?.exerciseId ?? '', target, row?.outcome?.sessionId ?? row?.outcome?.dateISO ?? ''].join('::');
+}
+
+// Gradeable-outcome predicate shared by every prospective rollup: a stored
+// `outcome.gradeable` flag wins; legacy rows without the flag are re-derived
+// with the same conservative rule the recorder applies (followed, no
+// pain/technique/override, and a label that is not insufficient-evidence).
+export function isGradeableOutcome(row, thresholds){
+  const o = row?.outcome;
+  if(!o) return false;
+  if(o.gradeable != null) return o.gradeable === true;
+  if(o.pain === true || o.techniqueWarning === true || o.userOverride === true) return false;
+  if(o.followed !== true) return false;
+  const cls = classifyRecommendationOutcome(row, thresholds);
+  return cls.attempted && cls.label !== 'insufficient-evidence';
+}
+
 // ── Prospective recommendation calibration ───────────────────────────────
 // "Did the recommendation actually work?" Answered only from genuine
 // first-visible (live-engine) prospective records that have since resolved.
@@ -378,18 +414,7 @@ export function calibrateRecommendations(ledger, { config = null } = {}){
   const resolvedRows = prospective.filter(row=> row.outcome);
   const minimum = Math.max(1, Number(cal.minSamplesToTrust) || 1);
 
-  const isGradeable = (row)=>{
-    const o = row.outcome;
-    if(!o) return false;
-    if(o.gradeable != null) return o.gradeable === true;
-    // Legacy outcome without the explicit flag: derive from the same
-    // conservative rule the recorder applies — followed, no pain/technique/
-    // override, and a label that is not insufficient-evidence.
-    if(o.pain === true || o.techniqueWarning === true || o.userOverride === true) return false;
-    if(o.followed !== true) return false;
-    const cls = classifyRecommendationOutcome(row, thresholds);
-    return cls.attempted && cls.label !== 'insufficient-evidence';
-  };
+  const isGradeable = (row)=> isGradeableOutcome(row, thresholds);
 
   const gradeSegment = (rows, key)=>{
     const resolved = rows.filter(row=> row.outcome);
@@ -480,5 +505,155 @@ export function calibrateRecommendations(ledger, { config = null } = {}){
     note: overall.gradeable >= minimum
       ? `Calibrated on ${overall.gradeable} GRADEABLE prospective recommendation→outcome pairs (out of ${resolvedRows.length} resolved; unfollowed, overridden, and pain/technique sessions are excluded from every rate). Reconstructed or imported recommendations are excluded (${(ledger||[]).filter(r=>r&&r.recommendation&&!isProspectiveRecord(r)).length}). Sparse segments are shrunk toward a ${Math.round(cal.defaultSuccessRate*100)}% default and withheld below ${minimum} gradeable pairs.`
       : `Need ${Math.max(0, minimum - overall.gradeable)} more prospective GRADEABLE pairs before any rate is trustworthy (${overall.gradeable} gradeable of ${resolvedRows.length} resolved so far — unfollowed, overridden and pain/technique sessions never count). Reconstructed recommendations are not prospective evidence.`,
+  };
+}
+
+// ── Prospective field comparison ─────────────────────────────────────────
+// "Does Arise improve subsequent training outcomes?" — answered ONLY from
+// genuine first-visible (live-engine) prospective records whose outcome is
+// gradeable, comparing the arise prescription against each baseline's FROZEN
+// arm prescription on the IDENTICAL realised transition. Workouts are not
+// independent observations, so effects are computed per user and aggregated
+// as a mean of user effects (never a naive pooled rate); uncertainty is the
+// observed user band plus a Wilson interval on the pooled wins. Maturity is
+// 'insufficient' or 'early' — this function never declares a firm cross-arm
+// claim; that requires pooled multi-user replication (see fieldStudy.js).
+// Pure and deterministic: same rows in, same result out.
+export function prospectiveFieldComparison(rows, { config = null } = {}){
+  const priors = resolveArisePriors(config);
+  const cal = priors.calibration;
+  const thresholds = priors.longitudinal.outcomeLabels;
+  const gainPct = resolveArisePriors(config).sessionQuality.pr.meaningfulGainPct;
+  const minPairs = Math.max(1, Number(cal.minSamplesToTrust) || 1);
+  const minUsers = 2;
+
+  const list = Array.isArray(rows) ? rows : [];
+  const prospective = list.filter(row=> row && row.recommendation && isProspectiveRecord(row));
+  const resolvedRows = prospective.filter(row=> row.outcome);
+  const gradeableRows = resolvedRows.filter(row=> isGradeableOutcome(row, thresholds));
+
+  // Identical re-recordings of the same realised transition (same user, same
+  // exercise, same shown prescription, same outcome session) score ONCE —
+  // repeats collapse here so neither the sample gates nor the paired wins can
+  // be inflated by recording frequency. Genuinely different weeks have
+  // different outcome sessions and still count separately. The folded count is
+  // reported honestly as duplicatePairs, never silently dropped.
+  const userOf = row=> row.participantId ?? 'anonymous';
+  const seenTransitions = new Set();
+  const gradeable = [];
+  const foldedDuplicates = [];
+  for(const row of gradeableRows){
+    const k = prospectiveTransitionKey(row);
+    if(seenTransitions.has(k)){ foldedDuplicates.push(row); continue; }
+    seenTransitions.add(k);
+    gradeable.push(row);
+  }
+  const users = [...new Set(gradeable.map(userOf))].sort();
+  const exercises = [...new Set(gradeable.map(row=> row.exerciseId).filter(Boolean))].sort();
+
+  // Exclusion accounting: every non-counted row lands in exactly one bucket.
+  const excluded = { nonProspective: 0, unresolved: 0, nonGradeable: { unfollowed: 0, override: 0, flagged: 0, other: 0 } };
+  for(const row of list){
+    if(!(row && row.recommendation) || !isProspectiveRecord(row)){ excluded.nonProspective++; continue; }
+    if(!row.outcome){ excluded.unresolved++; continue; }
+    if(isGradeableOutcome(row, thresholds)) continue;
+    const o = row.outcome;
+    if(o.pain === true || o.techniqueWarning === true) excluded.nonGradeable.flagged++;
+    else if(o.userOverride === true || row.userOverride === true) excluded.nonGradeable.override++;
+    else if(o.followed !== true) excluded.nonGradeable.unfollowed++;
+    else excluded.nonGradeable.other++;
+  }
+
+  // Baselines actually present in the gradeable data — absent arms are
+  // skipped, never fabricated.
+  const presentArms = new Set();
+  for(const row of gradeable) for(const arm of Object.keys(row.outcome?.arms || {})) presentArms.add(arm);
+  const baselines = FIELD_BASELINES.filter(b=> presentArms.has(b.id));
+
+  const byBaseline = {};
+  for(const { id, label } of baselines){
+    let pairs = 0, ariseWins = 0, armWins = 0, both = 0, neither = 0, ariseMet = 0, baseMet = 0;
+    const perUser = new Map();
+    for(const row of gradeable){
+      const a = row.outcome.arms?.arise?.metTarget;
+      const b = row.outcome.arms?.[id]?.metTarget;
+      if(a == null || b == null) continue;
+      pairs++;
+      const u = userOf(row);
+      if(!perUser.has(u)) perUser.set(u, { pairs: 0, ariseWins: 0, armWins: 0 });
+      const e = perUser.get(u);
+      e.pairs++;
+      if(a) ariseMet++;
+      if(b) baseMet++;
+      if(a && !b){ ariseWins++; e.ariseWins++; }
+      else if(!a && b){ armWins++; e.armWins++; }
+      else if(a && b) both++;
+      else neither++;
+    }
+    const usersArr = [...perUser.entries()]
+      .map(([user, e])=> ({ user, pairs: e.pairs, ariseWins: e.ariseWins, armWins: e.armWins, effect: e.pairs ? round((e.ariseWins - e.armWins) / e.pairs, 3) : 0 }))
+      .sort((x, y)=> x.user.localeCompare(y.user));
+    const effectMean = usersArr.length ? round(usersArr.reduce((s, u)=> s + u.effect, 0) / usersArr.length, 3) : null;
+    const effectBand = usersArr.length ? [Math.min(...usersArr.map(u=> u.effect)), Math.max(...usersArr.map(u=> u.effect))] : [null, null];
+    byBaseline[id] = {
+      label, pairs, users: usersArr.length,
+      ariseWins, armWins, bothMetTarget: both, neitherMetTarget: neither,
+      ariseRate: pairs ? round(ariseMet / pairs, 3) : null,
+      baseRate: pairs ? round(baseMet / pairs, 3) : null,
+      effectPp: effectMean != null ? round(effectMean * 100, 1) : null,
+      effectMean, effectBand,
+      winsInterval: wilsonInterval(ariseWins, pairs),
+      perUser: usersArr,
+      // Folded re-recordings that carried this arm's data — scored zero times.
+      duplicatePairs: foldedDuplicates.filter(r=> r.outcome?.arms?.arise?.metTarget != null && r.outcome?.arms?.[id]?.metTarget != null).length,
+    };
+  }
+
+  // Realised context over the SAME gradeable rows (properties of what actually
+  // happened — identical for every arm, so reported once, never per arm).
+  let failedSets = 0, plannedSets = 0, changeSum = 0, changeN = 0, gained = 0;
+  let over = 0, under = 0, adhered = 0;
+  for(const row of gradeable){
+    failedSets += row.outcome.failedSets || 0;
+    plannedSets += row.outcome.sets || 0;
+    if(Number.isFinite(row.outcome.changePct)){ changeSum += row.outcome.changePct; changeN++; if(row.outcome.changePct >= gainPct) gained++; }
+    const cls = classifyRecommendationOutcome(row, thresholds);
+    if(cls.label === 'too-aggressive') over++;
+    else if(cls.label === 'too-conservative') under++;
+    if(row.outcome.followed === true) adhered++;
+  }
+  const realised = {
+    failedSetRate: plannedSets ? round(failedSets / plannedSets, 3) : null,
+    meanChangePct: changeN ? round(changeSum / changeN, 4) : null,
+    meaningfulGainShare: changeN ? round(gained / changeN, 3) : null,
+    overPrescriptionShare: gradeable.length ? round(over / gradeable.length, 3) : null,
+    underPrescriptionShare: gradeable.length ? round(under / gradeable.length, 3) : null,
+    adherenceRate: gradeable.length ? round(adhered / gradeable.length, 3) : null,
+  };
+
+  const reasons = [];
+  if(users.length < minUsers) reasons.push(`only ${users.length} user${users.length === 1 ? '' : 's'} (need ${minUsers}+ for a user-aware read)`);
+  if(gradeable.length < minPairs) reasons.push(`only ${gradeable.length} gradeable pairs (need ${minPairs}+)`);
+  if(!baselines.length) reasons.push('no baseline prescriptions frozen alongside the arise targets');
+  const maturity = reasons.length ? 'insufficient' : 'early';
+
+  return {
+    schemaVersion: EVALUATION_SCHEMA_VERSION,
+    prospective: prospective.length,
+    resolved: resolvedRows.length,
+    gradeable: gradeable.length,
+    open: prospective.length - resolvedRows.length,
+    excluded,
+    duplicatePairs: foldedDuplicates.length,
+    users: users.length,
+    userList: users,
+    exercises,
+    byBaseline,
+    realised,
+    sampleSufficiency: { users: users.length, gradeablePairs: gradeable.length, minUsers, minPairs, sufficient: maturity !== 'insufficient', reasons },
+    maturity,
+    note: maturity === 'insufficient'
+      ? `Prospective gradeable evidence is insufficient (${reasons.join('; ')}). No comparison is claimed; retrospective replays and reconstructed recommendations are never presented as prospective proof.`
+      : `Descriptive only, from ${gradeable.length} gradeable prospective transitions across ${users.length} users: paired arise-vs-baseline wins on identical transitions, aggregated as a mean of per-user effects. Firm cross-arm claims require pooled multi-user replication.`,
   };
 }

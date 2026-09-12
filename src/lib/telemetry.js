@@ -205,6 +205,119 @@ export function loggingTimeStats(events){
   };
 }
 
+// ── Logging-friction measurement ─────────────────────────────────────────
+// Aggregates the discrete interaction events the runners record into honest
+// speed-of-logging metrics. Privacy design notes, enforced by the sanitizer:
+// keystrokes and focus moves are deliberately NEVER instrumented, so
+// taps-per-completed-set counts only discrete logged actions (complete,
+// uncomplete, skip, remove, add) and is therefore a LOWER bound on real taps.
+// All inputs are scalar ids, counts, modes and millisecond durations — any
+// content-bearing key (reps, loads, notes) is stripped at write time and
+// would equally be dropped here. Pure and deterministic over its input.
+function medianOfMs(values){
+  const list=(values||[]).filter(v=> Number.isFinite(v) && v>=0).sort((a,b)=> a-b);
+  if(!list.length) return null;
+  const mid=Math.floor(list.length/2);
+  return Math.round(list.length%2 ? list[mid] : (list[mid-1]+list[mid])/2);
+}
+
+function frictionCore(events, { mode = null } = {}){
+  const all=(events||[]).filter(e=> e && typeof e==='object');
+  const inScope = mode == null ? all : all.filter(e=> e.mode === mode || e.type === 'session:start');
+  const bySession=new Map();
+  for(const e of inScope){
+    if(!e.sessionId || typeof e.sessionId !== 'string') continue;
+    if(!bySession.has(e.sessionId)) bySession.set(e.sessionId, []);
+    bySession.get(e.sessionId).push(e);
+  }
+  let startToFirst=[];
+  let completionMs=[];
+  let completed=0, skipped=0, uncompleted=0, removed=0, failedMarked=0;
+  let interactions=0;
+  let accepted=0, viaApplyAll=0;
+  let swapMs=[], saveMs=[];
+  for(const list of bySession.values()){
+    const byTime=list.slice().sort((a,b)=> String(a.at||'').localeCompare(String(b.at||'')));
+    const start=byTime.find(e=> e.type==='session:start');
+    const firstComplete=byTime.find(e=> e.type==='set:complete');
+    // Per-mode buckets attribute the start→first-set gap by the mode tag on
+    // that first completion; untagged legacy flows count toward the overall
+    // numbers only, never a mode bucket.
+    if(start && firstComplete && (mode == null || firstComplete.mode === mode)){
+      const ms=Date.parse(firstComplete.at)-Date.parse(start.at);
+      if(Number.isFinite(ms) && ms>=0) startToFirst.push(ms);
+    }
+    for(const e of byTime){
+      if(mode != null && e.type !== 'session:start' && e.mode !== mode) continue;
+      if(e.type==='set:complete'){
+        completed++;
+        interactions++;
+        const ms=Number(e.elapsedMs);
+        if(Number.isFinite(ms) && ms>=0) completionMs.push(ms);
+      }
+      else if(e.type==='set:skip'){ skipped++; interactions++; }
+      else if(e.type==='set:uncomplete'){ uncompleted++; interactions++; }
+      else if(e.type==='set:removed'){ removed++; interactions++; }
+      else if(e.type==='set:failed' || e.type==='set:unfailed'){ failedMarked++; interactions++; }
+      else if(e.type==='recommendation:accepted'){
+        accepted++;
+        if(e.via==='apply-all') viaApplyAll++;
+      }
+      else if(e.type==='exercise:swapped'){
+        const ms=Number(e.elapsedMs);
+        if(Number.isFinite(ms) && ms>=0) swapMs.push(ms);
+      }
+      else if(e.type==='session:save'){
+        const ms=Number(e.durationMs);
+        if(Number.isFinite(ms) && ms>=0) saveMs.push(ms);
+      }
+    }
+  }
+  return { sessions: bySession.size, completed, skipped, uncompleted, removed, failedMarked, interactions, accepted, viaApplyAll, startToFirst, completionMs, swapMs, saveMs };
+}
+
+function frictionSummary(core){
+  const startToFirstSetMs = medianOfMs(core.startToFirst);
+  const completionMsMedian = medianOfMs(core.completionMs);
+  const swapMsMedian = medianOfMs(core.swapMs);
+  const saveMsMedian = medianOfMs(core.saveMs);
+  return {
+    sessions: core.sessions,
+    completedSets: core.completed,
+    startToFirstSetMs,
+    completionMsMedian,
+    tapsPerCompletedSet: core.completed ? Math.round(core.interactions / core.completed * 100) / 100 : null,
+    undos: core.uncompleted,
+    removedSets: core.removed,
+    failedMarks: core.failedMarked,
+    applyAll: {
+      accepted: core.accepted,
+      viaApplyAll: core.viaApplyAll,
+      applyAllRate: core.accepted ? Math.round(core.viaApplyAll / core.accepted * 100) / 100 : null,
+    },
+    swapMsMedian,
+    saveMsMedian,
+    // Degraded when nothing loggable produced a timing: legacy telemetry that
+    // only ever marked sessions complete contributes events but no durations,
+    // so every timing median stays null and no speed is ever invented.
+    degraded: startToFirstSetMs == null && completionMsMedian == null && swapMsMedian == null && saveMsMedian == null,
+  };
+}
+
+export function loggingFrictionStats(events){
+  const all=Array.isArray(events) ? events : loadEvents();
+  const byMode = {};
+  for(const mode of ['gym', 'standard', 'guided']){
+    byMode[mode] = frictionSummary(frictionCore(all, { mode }));
+  }
+  const overall = frictionSummary(frictionCore(all));
+  return {
+    ...overall,
+    byMode,
+    note: 'Discrete logged actions only — keystrokes and focus moves are intentionally never instrumented, so taps-per-completed-set is a lower bound on real taps. Per-mode buckets count only events carrying that mode tag; untagged legacy events count toward the overall numbers only.',
+  };
+}
+
 export function telemetrySummary(){
   const events=loadEvents();
   return {

@@ -16,6 +16,7 @@ import { loadEvaluationLedger, loadArchivedEvaluationCount } from '../lib/longit
 import { deriveProgressionModel } from '../lib/progressionModel.js';
 import { getAiSettings, saveAiSettings, clearAiSettings, buildTrainingContext, requestCoachInsight, DEFAULT_MODEL } from '../lib/aiCoach.js';
 import { STUDY_ARMS, studyCoverage, runComparativeStudy, collectDeloadDecisions, validateDeloadDecisions } from '../lib/study.js';
+import { fieldStudyStatus } from '../lib/fieldStudy.js';
 import { voiceSupported } from '../lib/voiceCoach.js';
 import { setRestPreset } from '../lib/gymMode.js';
 import { EXERCISE_BY_ID } from '../lib/data.js';
@@ -66,7 +67,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
       if(pair?.pairs){
         pairedLine = `Paired vs double progression on ${pair.pairs} shared sessions: Arise met target where it didn't ${pair.ariseWins}×; baseline won ${pair.baselineWins}× (both met ${pair.bothMetTarget}, neither ${pair.neitherMetTarget}).`;
       }
-      evidenceData = { coverage, comparative, deloads, model, ledger: loadEvaluationLedger(), archivedCount: loadArchivedEvaluationCount() };
+      evidenceData = { coverage, comparative, deloads, model, ledger: loadEvaluationLedger(), archivedCount: loadArchivedEvaluationCount(), fieldStudy: fieldStudyStatus({ store, ledger: loadEvaluationLedger() }) };
     }catch{ evidenceSummary = 'unavailable'; }
   }
 
@@ -1012,6 +1013,14 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
                     </div>
                   );
                 })()}
+                <div>
+                  <p className="text-xs font-bold">Field-study contribution</p>
+                  <p className="text-[11px] text-ink3 mt-1">{evidenceData.fieldStudy.mode === 'enrolled' ? `Enrolled${evidenceData.fieldStudy.enrollmentOk ? '' : ' (enrollment needs review)'} · ` : evidenceData.fieldStudy.mode === 'observing' ? 'Observing (not enrolled) · ' : 'Off · '}{evidenceData.fieldStudy.samples.gradeable} gradeable pairs · {evidenceData.fieldStudy.samples.resolved} resolved · {evidenceData.fieldStudy.samples.open} awaiting workout · maturity: {evidenceData.fieldStudy.maturity}.</p>
+                  {!!evidenceData.fieldStudy.reasons.length && (
+                    <p className="text-[11px] text-ink3 mt-1">{evidenceData.fieldStudy.reasons.join('; ')}.</p>
+                  )}
+                  <p className="text-[11px] text-ink3 mt-1">{evidenceData.fieldStudy.note}</p>
+                </div>
                 <div>
                   <p className="text-xs font-bold">Progression model capabilities</p>
                   <div className="mt-1 flex flex-wrap gap-1" role="list" aria-label="Progression model capabilities">

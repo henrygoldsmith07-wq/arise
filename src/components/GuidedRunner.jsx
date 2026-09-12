@@ -28,6 +28,10 @@ import ExerciseIllustration from './ExerciseIllustration.jsx';
 // in App.jsx work identically for both modes.
 export default function GuidedRunner({ session, history = [], availableEquipment = [], draft = null, measurementConsent = false, soundCues = true, onToggleSoundCues = null, voiceCoach = false, onToggleVoiceCoach = null, voiceRate = 1, wakeLock = false, gymPrefs = null, onSetRestPreset = null, onDraftChange, onSave, onCancel }){
   const startedAtRef=useRef(draft?.startedAt || new Date().toISOString());
+  // Time of the last logged guided step (complete or skip), for per-step
+  // elapsed times — the same "time since last logged action" contract as the
+  // standard runner's set:complete elapsedMs.
+  const lastStepAtRef=useRef(draft?.startedAt || startedAtRef.current);
   const setSeqRef=useRef(0);
   const makeSetId=()=> `${session.id}:set:${Date.now().toString(36)}:${(setSeqRef.current++).toString(36)}`;
   const [blocks,setBlocks]=useState(()=> initGuidedBlocks(session, history, draft?.blocks));
@@ -235,7 +239,8 @@ export default function GuidedRunner({ session, history = [], availableEquipment
     const set=block.sets[step.setIndex];
     if(skipped){
       updateSet(step.blockIndex, step.setIndex, { skipped: true, completed: false });
-      try { recordEvent('set:skip', { sessionId: session.id, exerciseId: block.exerciseId, setIndex: step.setIndex }); } catch {}
+      try { recordEvent('set:skip', { sessionId: session.id, exerciseId: block.exerciseId, setIndex: step.setIndex, mode: 'guided' }); } catch {}
+      lastStepAtRef.current = new Date().toISOString();
     } else {
       updateSet(step.blockIndex, step.setIndex, { completed: true });
       const now=Date.now();
@@ -244,9 +249,12 @@ export default function GuidedRunner({ session, history = [], availableEquipment
           sessionId: session.id,
           exerciseId: block.exerciseId,
           setIndex: step.setIndex,
+          mode: 'guided',
+          elapsedMs: Math.max(0, now - Date.parse(lastStepAtRef.current)),
           sessionElapsedMs: Math.max(0, now - Date.parse(startedAtRef.current)),
         });
       } catch {}
+      lastStepAtRef.current = new Date(now).toISOString();
     }
     if(!skipped && block.restSec && nextGuidedStep(blocks)) startRest(restPresetFor(gymPrefs, block.exerciseId, block.restSec) || block.restSec, EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId, block.exerciseId);
     haptic(skipped ? 'failedSet' : 'restComplete');

@@ -252,6 +252,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   // (restored sets keep their own id; new ones use a fresh timestamp base).
   const setSeqRef=useRef(0);
   const makeSetId=()=> `${session.id}:set:${Date.now().toString(36)}:${(setSeqRef.current++).toString(36)}`;
+  // When the substitution sheet was opened (for swap-time measurement). Stamp
+  // on open; read + clear on commit. A commit without a stamp is still logged
+  // (elapsedMs omitted) so the swap itself is never lost to a race.
+  const swapOpenedAtRef=useRef(null);
 
   // Escape dismisses only the topmost layer — a stray Esc must never silently
   // destroy a workout with logged sets (a11y baseline: dialogs confirm before
@@ -566,6 +570,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
         sessionId:session.id,
         exerciseId:block.exerciseId,
         setIndex:si,
+        mode: gymMode ? 'gym' : 'standard',
         elapsedMs:Math.max(0,now-Date.parse(lastSetAtRef.current)),
         sessionElapsedMs:Math.max(0,now-Date.parse(startedAtRef.current)),
       });
@@ -595,6 +600,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       // Auto-start the rest countdown unless the user turned it off
       // (preferences.autoRest, default on). Manual Start rest stays as override.
       if(preferences?.autoRest !== false && appPrefs?.autoRest !== false && hasUnfinishedSet(blocks,bi,si)) startRest(restPresetFor(gymPrefs, block.exerciseId, block.restSec) || block.restSec, EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId, block.exerciseId);
+    }else{
+      // Undoing a completion is a correction, recorded as its own fact so
+      // friction metrics can count undos without guessing from missing rows.
+      try{ recordEvent('set:uncomplete', { sessionId:session.id, exerciseId:block.exerciseId, setIndex:si, mode: gymMode ? 'gym' : 'standard' }); }catch{}
     }
   };
   const addSet = (bi)=> setBlocks(prev=> prev.map((b,i)=> i!==bi? b : { ...b, sets: [...b.sets, userAddedSet(newSet('', b.unilateral, b.sets[b.sets.length-1]), makeSetId)] }));
@@ -609,12 +618,21 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     const last=b.sets[b.sets.length-1]; if(!last) return b;
     return { ...b, sets: [...b.sets, userAddedSet({ ...last, side:last.side==='L'?'R':'L', completed:false, failed:false, skipped:false }, makeSetId)] };
   }));
-  const removeSet = (bi,si)=> setBlocks(prev=> prev.map((b,i)=> i!==bi? b : removeSetAt(b, si).block));
+  const removeSet = (bi,si)=>{
+    const set = blocks[bi]?.sets?.[si];
+    if(!set) return;
+    // A removed row is a correction too — record which kind vanished so the
+    // friction stats can count deletions without inspecting content (which the
+    // sanitizer would strip anyway).
+    try{ recordEvent('set:removed', { sessionId:session.id, exerciseId:blocks[bi].exerciseId, setIndex:si, kind: set.origin==='user-added' ? 'user-added' : 'prescribed', mode: gymMode ? 'gym' : 'standard' }); }catch{}
+    setBlocks(prev=> prev.map((b,i)=> i!==bi? b : removeSetAt(b, si).block));
+  };
   // Gym Mode: mark a set failed (attempted, didn't get the reps). Persisted as
   // `failed: true`, which the store already normalises.
   const markFailed = (bi,si)=>{
     if(!blocks[bi]?.sets?.[si]) return;
     updateSet(bi,si,{ failed: true, completed: false });
+    try{ recordEvent('set:failed', { sessionId:session.id, exerciseId:blocks[bi].exerciseId, setIndex:si, mode: gymMode ? 'gym' : 'standard' }); }catch{}
     haptic('failedSet');
   };
 
@@ -638,6 +656,9 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   }, [gymMode, focusIdx, blocks]);
 
   const swapBlock = (bi, option)=>{
+    const startedChoosing = swapOpenedAtRef.current;
+    swapOpenedAtRef.current = null;
+    const fromExerciseId = blocks[bi]?.exerciseId || null;
     setBlocks(prev=>{
       const target = prev[bi];
       if(!target || !option?.id || option.id === target.exerciseId) return prev;
@@ -661,6 +682,17 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       });
     });
     setSwapOpen(null);
+    // Swap time = sheet-open to commit; commit-without-open still logs the swap
+    // itself (elapsedMs omitted) so the substitution is never lost to a race.
+    try{
+      recordEvent('exercise:swapped', {
+        sessionId: session.id,
+        from: fromExerciseId,
+        to: option?.id || null,
+        mode: gymMode ? 'gym' : 'standard',
+        ...(startedChoosing != null ? { elapsedMs: Math.max(0, Date.now() - startedChoosing) } : {}),
+      });
+    }catch{}
   };
 
   const applyRecommendation=(bi,recommendation)=>{
@@ -677,7 +709,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       }),
     }));
     dismissedRecommendationRef.current.add(bi);
-    recordEvent('recommendation:accepted', { sessionId:session.id, exerciseId:block.exerciseId, target });
+    recordEvent('recommendation:accepted', { sessionId:session.id, exerciseId:block.exerciseId, target, via:'single' });
   };
 
   // One-tap "apply all": stamp every un-started block with its engine
@@ -698,7 +730,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       if(!hasTarget && !hasReps) return b;
       applied++;
       dismissedRecommendationRef.current.add(i);
-      recordEvent('recommendation:accepted', { sessionId:session.id, exerciseId:b.exerciseId, target:suggestedTarget(recommendation,b) });
+      recordEvent('recommendation:accepted', { sessionId:session.id, exerciseId:b.exerciseId, target:suggestedTarget(recommendation,b), via:'apply-all' });
       return {
         ...b,
         sets:b.sets.map(s=> ({
@@ -965,7 +997,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     <button onClick={()=> toggleDictation(bi)} aria-pressed={dictating===bi} title="Dictate a set — say the load, then the reps"
                       className={`relative text-xs font-bold px-3 py-1.5 rounded-full border before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-[''] ${dictating===bi ? 'bg-ink text-bg border-ink' : 'border-line bg-surface2'}`}>🎙️</button>
                   )}
-                  <button onClick={()=> setSwapOpen(swapOpen===bi ? null : bi)} aria-expanded={swapOpen===bi} className="relative text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">Swap</button>
+                  <button onClick={()=> { if(swapOpen!==bi) swapOpenedAtRef.current = Date.now(); setSwapOpen(swapOpen===bi ? null : bi); }} aria-expanded={swapOpen===bi} className="relative text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">Swap</button>
                   <button onClick={()=> addSet(bi)} className="relative min-h-[32px] text-xs font-bold px-3 py-1.5 rounded-full bg-ink text-bg before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">+ Set</button>
                   {b.unilateral ? <button onClick={()=> duplicateUnilateral(bi)} className="relative text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">+ other side</button> : null}
                 </div>
@@ -1031,10 +1063,20 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                           gestures never gate an action (WCAG 2.5.6 / 2.1.1). */}
                       {gymMode && !s.completed && (
                         <button
-                          onClick={()=> s.failed ? updateSet(bi,si,{ failed:false }) : markFailed(bi,si)}
+                          onClick={()=> { if(s.failed){ try{ recordEvent('set:unfailed', { sessionId:session.id, exerciseId:b.exerciseId, setIndex:si, mode: gymMode ? 'gym' : 'standard' }); }catch{} updateSet(bi,si,{ failed:false }); } else markFailed(bi,si); }}
                           aria-pressed={s.failed}
                           aria-label={s.failed ? `Unmark set ${si+1} failed` : `Mark set ${si+1} failed`}
                           className={`min-h-12 w-9 grid place-items-center rounded-xl border text-[11px] font-bold ${s.failed?'bg-review text-bg border-review':'bg-surface2 border-line'}`}>{s.failed?'↺':'✗'}</button>
+                      )}
+                      {/* Standard mode gets the same one-tap failure log: a
+                          failed attempt stays a failed attempt in history
+                          instead of being deleted or faked as completed. */}
+                      {!gymMode && !s.completed && (
+                        <button
+                          onClick={()=> { if(s.failed){ try{ recordEvent('set:unfailed', { sessionId:session.id, exerciseId:b.exerciseId, setIndex:si, mode: 'standard' }); }catch{} updateSet(bi,si,{ failed:false }); } else markFailed(bi,si); }}
+                          aria-pressed={s.failed}
+                          aria-label={s.failed ? `Unmark set ${si+1} failed` : `Mark set ${si+1} failed`}
+                          className={`min-h-12 min-w-11 grid place-items-center rounded-xl border text-[11px] font-bold ${s.failed?'bg-review text-bg border-review':'bg-surface2 border-line'}`}>{s.failed?'↺':'✗'}</button>
                       )}
                     </span>
                     {isSetPerformed(s) ? (
