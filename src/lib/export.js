@@ -6,7 +6,7 @@ import { getEventHistory } from './telemetry.js';
 import { loadEvaluationLedger, mergeEvaluationLedgers } from './longitudinal.js';
 import { ensureStudyParticipantId } from './studyIdentity.js';
 import { buildEnvelope, applyFieldPolicy } from './exportPolicy.js';
-import { withProvenance, ensureSourceTags } from './domain.js';
+import { withProvenance, ensureSourceTags, importLedgerProvenance } from './domain.js';
 
 export const EXPORT_VERSION = 4;
 
@@ -216,7 +216,7 @@ export function parseImportFile(text){
   // provenance: source 'import', ledger origin 'imported'.
   const safe = applyFieldPolicy(migrated);
   if(Array.isArray(safe.history)) safe.history = safe.history.map((s)=> ensureSourceTags(s, 'import'));
-  if(Array.isArray(safe.evaluationLedger)) safe.evaluationLedger = safe.evaluationLedger.map((r)=> withProvenance(r, 'imported'));
+  if(Array.isArray(safe.evaluationLedger)) safe.evaluationLedger = safe.evaluationLedger.map((r)=> importLedgerProvenance(r));
   return safe;
 }
 

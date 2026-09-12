@@ -147,6 +147,7 @@ describe('pooled field study + headline gates', ()=>{
       store.evaluationLedger = (store.evaluationLedger || []).map((row, j)=> ({
         ...row,
         provenance: { origin: 'live-engine' },
+        outcomeProvenance: { origin: 'live-engine' },
         assignedArm: arm,
         outcome: {
           ...row.outcome,

@@ -49,6 +49,7 @@ function row(o = {}){
     prescription: { arm: 'arise', load: o.load ?? 25, reps: o.reps ?? 8, assistKg: null },
     audit: { confidence: o.band ? { band: o.band } : null, policy: o.policy || 'standard' },
     provenance: { origin: o.origin || 'live-engine' },
+    outcomeProvenance: { origin: o.outcomeOrigin || 'live-engine' },
     outcome,
   };
 }

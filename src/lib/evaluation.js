@@ -90,9 +90,14 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
   // ── PRIMARY comparison: randomised assigned arms only ──────────────────
   // arise-assigned vs double-progression-assigned transitions, scored by
   // assignedMet (the prescription the product actually enforced). ITT: every
-  // resolved assigned transition counts, compliant or not.
+  // resolved assigned transition counts, compliant or not. Fail closed on
+  // provenance: only live-engine recommendations resolved by live-engine
+  // outcomes are first-party evidence — imported, replayed, seeded, missing
+  // or ambiguous provenance is excluded and can never be promoted.
   const PRIMARY = ['arise', 'double-progression'];
-  const primaryRows = resolvedWithArms.filter(row => PRIMARY.includes(row.assignedArm) && row.outcome.assignedMet != null);
+  const primaryRows = resolvedWithArms.filter(row => PRIMARY.includes(row.assignedArm)
+    && row.outcome.assignedMet != null
+    && isProspectiveRecord(row));
   // Canonical identity: one person/store — never an exercise-derived key. A
   // lone anonymous local store therefore contributes at most ONE participant.
   const participantsInPrimary = new Set(primaryRows.map(participantOf));

@@ -553,40 +553,49 @@ export function loadParticipantFile(text, index){
   // one person would otherwise look like several participants.
   const studyParticipantId = isValidStudyParticipantId(parsed?.studyParticipantId) ? parsed.studyParticipantId : null;
   const code = studyParticipantId ? studyParticipantId.slice(0, 8) : `anon-${String(index + 1).padStart(2, '0')}`;
-  // STUDY LOADER RESTORATION (not a consumer import): the study's frozen
-  // inclusion criteria are the participant's own on-device consent
-  // (preferences.telemetryEnabled in their export) and their own on-device
-  // ledger. The consumer import path strips consent and re-stamps ledger
-  // rows 'imported' — correct for merging into someone's store, fatal for a
-  // dataset whose evidence IS those self-described facts. Here — and only
-  // here, inside the study pipeline — the package's own consent travels and
-  // the ledger keeps the provenance it was recorded with. Rows still pass
-  // every other gate (live-engine both sides, assigned arm, scored met).
+  // STUDY LOADER RESTORATION (not a consumer import). Two things the consumer
+  // import path deliberately changes, and only those two, are restored here:
+  //   1. CONSENT (protocol fact, not evidence): the study's frozen inclusion
+  //      criteria read the participant's exported measurement consent, which
+  //      is device-local for consumers. Consent restoration is NEVER
+  //      permission to touch evidence provenance.
+  //   2. EXACT RAW PROVENANCE: the consumer path downgrades ledger rows to
+  //      'imported' (correct there — imported data must never re-enter as
+  //      first-party). The study loader re-attaches, row by row, the exact
+  //      provenance blocks the export carried — matched by stable ledger
+  //      record id, copied verbatim, origin and capturedAt untouched. It
+  //      NEVER infers, never upgrades: a row exported as imported stays
+  //      imported, replayed stays replayed, seed stays seed, malformed stays
+  //      malformed and excluded, and only genuinely live-engine rows on BOTH
+  //      sides remain eligible. An import → re-export chain can therefore
+  //      never regain live-engine.
   const store = { ...parsed };
-  if(store.preferences && typeof store.preferences === 'object'){
-    // The raw export text is the participant's assertion; restore it.
-    try{
-      const raw = JSON.parse(text);
-      const rawData = raw?.data ?? raw;
-      if(rawData?.preferences && typeof rawData.preferences === 'object'){
-        store.preferences = { ...store.preferences, ...rawData.preferences };
+  try{
+    const rawEnvelope = JSON.parse(text);
+    const rawData = rawEnvelope?.data ?? rawEnvelope;
+    // Consent: restore the participant's exported measurement preferences.
+    if(rawData?.preferences && typeof rawData.preferences === 'object'){
+      store.preferences = { ...store.preferences, ...rawData.preferences };
+    }
+    // Provenance: restore exact blocks by stable record id — verbatim.
+    if(Array.isArray(rawData?.evaluationLedger) && Array.isArray(store.evaluationLedger)){
+      const rawById = new Map();
+      for(const row of rawData.evaluationLedger){
+        if(row && typeof row === 'object' && row.id != null) rawById.set(String(row.id), row);
       }
-    }catch{ /* validated earlier — unreachable */ }
-  }
-  if(Array.isArray(store.evaluationLedger)){
-    store.evaluationLedger = store.evaluationLedger.map((r)=>{
-      if(!r || typeof r !== 'object') return r;
-      // Keep the recorded provenance the export carried (the app writes
-      // live-engine on both sides at record/resolve time). The consumer path
-      // already overwrote it; the original survives nowhere else, so
-      // regenerate from the row's own outcome-provenance contract:
-      const outcomeProvenance = r.outcomeProvenance && r.outcomeProvenance.origin === 'live-engine'
-        ? r.outcomeProvenance
-        : { origin: 'live-engine', capturedAt: r.outcome?.recordedAtISO || new Date(0).toISOString() };
-      const provenance = { origin: 'live-engine', capturedAt: r.recordedAtISO || new Date(0).toISOString(), studyRestored: true };
-      return { ...r, provenance, outcomeProvenance };
-    });
-  }
+      store.evaluationLedger = store.evaluationLedger.map((row)=>{
+        if(!row || typeof row !== 'object' || row.id == null) return row;
+        const rawRow = rawById.get(String(row.id));
+        if(!rawRow) return row; // no raw match: keep the (downgraded) parsed row
+        const restored = { ...row };
+        if('provenance' in rawRow) restored.provenance = rawRow.provenance; // exact copy, never inferred
+        else delete restored.provenance; // absent in the export: absent here
+        if('outcomeProvenance' in rawRow) restored.outcomeProvenance = rawRow.outcomeProvenance;
+        else delete restored.outcomeProvenance;
+        return restored;
+      });
+    }
+  }catch{ /* parseImportFile already validated the text — unreachable */ }
   return { code, studyParticipantId, store };
 }
 

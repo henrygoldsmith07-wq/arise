@@ -112,11 +112,55 @@ export const provenanceSchema = z.object({
   exportVersion: z.number().int().positive().optional(),
 }).passthrough();
 
-/** Attach/refresh provenance on a ledger record (origin defaults to imported). */
-export function withProvenance(record, origin, meta = {}){
+// Trust ordering for the write-once rule: evidence can LOSE trust (import,
+// ambiguity) but can never REGAIN it through inference. A malformed or
+// unknown origin ranks below everything, so no stamp may lift it to trusted.
+export const PROVENANCE_TRUST_RANK = Object.freeze({ 'live-engine': 3, replayed: 2, seed: 1, imported: 0 });
+
+// Stamp ONE provenance field of a record with write-once semantics:
+//   - first write (no existing origin): the requested origin is applied;
+//   - requested rank ≤ existing rank (equal or downgrade): applied;
+//   - requested rank > existing rank (upgrade): DENIED — the recorded origin
+//     stays exactly as it was and only non-trust metadata merges.
+// A malformed provenance block is never parsed into a trusted origin; it is
+// preserved verbatim so downstream gates exclude it.
+function stampProvenanceField(record, field, origin, meta = {}){
   if(!record || typeof record !== 'object') return record;
-  const parsed = provenanceSchema.safeParse({ ...record.provenance, origin, capturedAt: meta.capturedAt || new Date().toISOString(), ...meta });
-  return { ...record, provenance: parsed.success ? parsed.data : { origin, capturedAt: new Date().toISOString() } };
+  const { origin: _dropped, ...safeMeta } = meta || {};
+  const existing = record[field];
+  const existingIsObject = existing != null && typeof existing === 'object' && !Array.isArray(existing);
+  const existingOrigin = existingIsObject ? existing.origin : undefined;
+  const hasExisting = existingOrigin !== undefined && existingOrigin !== null;
+  const requestedRank = PROVENANCE_TRUST_RANK[origin] ?? -1;
+  const existingRank = PROVENANCE_TRUST_RANK[existingOrigin] ?? -1;
+  if(hasExisting && requestedRank > existingRank){
+    // Upgrade attempt on a recorded origin: denied. Preserve the block
+    // verbatim (malformed stays malformed); merge only safe metadata.
+    if(!existingIsObject) return record;
+    return { ...record, [field]: { ...existing, ...safeMeta, origin: existingOrigin } };
+  }
+  const parsed = provenanceSchema.safeParse({ ...(existingIsObject ? existing : {}), origin, capturedAt: safeMeta.capturedAt || new Date().toISOString(), ...safeMeta });
+  return { ...record, [field]: parsed.success ? parsed.data : { origin: hasExisting ? existingOrigin : origin, capturedAt: safeMeta.capturedAt || new Date().toISOString() } };
+}
+
+/** Attach/refresh a ledger record's recommendation provenance (write-once). */
+export function withProvenance(record, origin, meta = {}){
+  return stampProvenanceField(record, 'provenance', origin, meta);
+}
+
+/** Attach/refresh a ledger record's outcome provenance (write-once). */
+export function withOutcomeProvenance(record, origin, meta = {}){
+  return stampProvenanceField(record, 'outcomeProvenance', origin, meta);
+}
+
+/**
+ * Import stamp for ledger rows: BOTH sides downgrade to 'imported' (or stay
+ * lower). This is the import → re-export chain guarantee — a row that landed
+ * on another device keeps 'imported' through every later export and can never
+ * re-enter study analysis as live-engine evidence.
+ */
+export function importLedgerProvenance(record){
+  return withOutcomeProvenance(withProvenance(record, 'imported'), 'imported');
 }
 
 // ── Soft delete & tombstones ────────────────────────────────────────────────

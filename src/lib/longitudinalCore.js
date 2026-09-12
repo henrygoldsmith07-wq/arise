@@ -123,14 +123,13 @@ export const RECOMMENDATION_OUTCOME_LABELS = Object.freeze([
 ]);
 
 // A prospective record is only first-party evidence when BOTH the recommendation
-// and the attached outcome were produced live on this device. Replayed/imported
-// recommendations, or outcomes re-measured elsewhere, are excluded from every
-// prospective calibration rollup. Legacy rows without provenance are treated
-// as unknown and excluded from the *prospective* count (never fabricated).
+// AND the attached outcome were produced live on this device. Fail closed:
+// replayed/imported/seeded recommendations, outcomes re-measured elsewhere,
+// and rows with missing or ambiguous provenance on EITHER side are excluded
+// from every prospective rollup — an unknown origin is never trusted by
+// default and there is no path that upgrades one to live-engine.
 export function isProspectiveRecord(record){
-  const recOrigin = record?.provenance?.origin;
-  const outOrigin = record?.outcomeProvenance?.origin;
-  return recOrigin === 'live-engine' && (outOrigin == null || outOrigin === 'live-engine');
+  return record?.provenance?.origin === 'live-engine' && record?.outcomeProvenance?.origin === 'live-engine';
 }
 
 // Confidence band from the frozen decision audit (object or string forms).

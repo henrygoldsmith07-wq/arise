@@ -18,6 +18,7 @@ function gradeRow({
     recommendation: { ...target },
     recommendedAction: 'add_load',
     provenance: { ...LIVE },
+    outcomeProvenance: { ...LIVE },
     exerciseId: exercise,
     participantId: user,
     outcome: { followed: true, metTarget: ariseMet, gradeable, sessionId: session, dateISO: date, arms },
