@@ -203,10 +203,10 @@ describe('recommendation calibration aggregation', ()=>{
 describe('conservative personalisation learned from logged history only', ()=>{
   // History blocks carry a frozen first-visible prescription + the performed set.
   const presc = load => Object.freeze({ prescriptionId: 'x:r1', prescribedReps: 8, prescribedLoadKg: load, prescribedAssistKg: null });
-  const perf = (weightKg, rpe) => ({ reps: '8', weightKg: String(weightKg), rpe: String(rpe), completed: true, skipped: false, failed: false, assistedKg: 0 });
+  const perf = (weightKg, rpe, reps = '8') => ({ reps: String(reps), weightKg: String(weightKg), rpe: String(rpe), completed: true, skipped: false, failed: false, assistedKg: 0 });
 
-  function sessionsWith(exposure){ // exposure: [{prescribe, performed}] with rising dates
-    return exposure.map((e, i)=> ({ id: `d${i}`, dateISO: `2026-02-0${i + 1}`, blocks: [{ exerciseId: 'bench-press-dumbbell', prescription: presc(e.prescribe), sets: [perf(e.performed, e.rpe ?? 8.5)] }] }));
+  function sessionsWith(exposure){ // exposure: [{prescribe, performed, rpe?, reps?}] with rising dates
+    return exposure.map((e, i)=> ({ id: `d${i}`, dateISO: `2026-02-0${i + 1}`, blocks: [{ exerciseId: 'bench-press-dumbbell', prescription: presc(e.prescribe), sets: [perf(e.performed, e.rpe ?? 8.5, e.reps ?? '8')] }] }));
   }
 
   it('sparse history keeps the default stance (never learns from a couple sessions)', ()=>{
@@ -216,9 +216,11 @@ describe('conservative personalisation learned from logged history only', ()=>{
     assert.equal(pc.samples, 1);
   });
   it('repeated over-prescription shrinks future jumps', ()=>{
+    // Genuine misses AT the shown setup (25×6 vs 25×8): the prescription was
+    // attempted, so it is graded — unlike a deliberate back-off to a lighter load.
     const history = sessionsWith([
-      { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 },
-      { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 },
+      { prescribe: 25, performed: 25, reps: '6' }, { prescribe: 25, performed: 25, reps: '6' }, { prescribe: 25, performed: 25, reps: '6' },
+      { prescribe: 25, performed: 25, reps: '6' }, { prescribe: 25, performed: 25, reps: '6' }, { prescribe: 25, performed: 25, reps: '6' },
     ]);
     const pc = personalCalibrationFromHistory(history, { exerciseId: 'bench-press-dumbbell' });
     assert.equal(pc.active, true);
@@ -228,9 +230,10 @@ describe('conservative personalisation learned from logged history only', ()=>{
     assert.match(pc.headline, /Smaller increase/);
   });
   it('repeated easy, successful gains nudge progression slightly bolder (bounded)', ()=>{
+    // Performed load MATCHES the shown load each time; gains came easy.
     const history = sessionsWith([
-      { prescribe: 20, performed: 22, rpe: 5 }, { prescribe: 22, performed: 24, rpe: 5 }, { prescribe: 24, performed: 26, rpe: 5 },
-      { prescribe: 26, performed: 28, rpe: 5 }, { prescribe: 28, performed: 30, rpe: 5 },
+      { prescribe: 20, performed: 20, rpe: 5 }, { prescribe: 22, performed: 22, rpe: 5 }, { prescribe: 24, performed: 24, rpe: 5 },
+      { prescribe: 26, performed: 26, rpe: 5 }, { prescribe: 28, performed: 28, rpe: 5 },
     ]);
     const pc = personalCalibrationFromHistory(history, { exerciseId: 'bench-press-dumbbell' });
     assert.equal(pc.active, true);
@@ -249,13 +252,13 @@ describe('conservative personalisation learned from logged history only', ()=>{
     assert.equal(pc.active, false);
   });
   it('respects the prior-only cut (asOfDateISO)', ()=>{
-    const history = sessionsWith([{ prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }]);
+    const history = sessionsWith([{ prescribe: 25, performed: 25, reps: '6' }, { prescribe: 25, performed: 25, reps: '6' }, { prescribe: 25, performed: 25, reps: '6' }, { prescribe: 25, performed: 25, reps: '6' }, { prescribe: 25, performed: 25, reps: '6' }]);
     const pc = personalCalibrationFromHistory(history, { exerciseId: 'bench-press-dumbbell', asOfDateISO: '2026-02-02' });
     assert.equal(pc.samples, 2);
     assert.equal(pc.active, false);
   });
   it('is deterministic', ()=>{
-    const history = sessionsWith([{ prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }]);
+    const history = sessionsWith([{ prescribe: 25, performed: 25, reps: '6' }, { prescribe: 25, performed: 25, reps: '6' }, { prescribe: 25, performed: 25, reps: '6' }, { prescribe: 25, performed: 25, reps: '6' }, { prescribe: 25, performed: 25, reps: '6' }]);
     assert.deepEqual(personalCalibrationFromHistory(history, { exerciseId: 'bench-press-dumbbell' }), personalCalibrationFromHistory(history, { exerciseId: 'bench-press-dumbbell' }));
   });
 });
@@ -297,6 +300,116 @@ describe('prospective → outcome end-to-end through the real recorder', ()=>{
     const legacy = [{ id: 'l', exerciseId: 'bench-press-dumbbell', recommendation: { load: 25, reps: 8 }, outcome: { followed: true, metTarget: true, changePct: 0.03 } }];
     assert.equal(isProspectiveRecord(legacy[0]), false);
     assert.equal(calibrateRecommendations(legacy, { config: null }).prospective, 0);
+  });
+});
+
+describe('attempt adherence is recorded separately from target achievement', ()=>{
+  // Shared scaffolding: a prior 20×8 exposure; the engine truly shows the given
+  // recommendation; then one performed session is attached and graded.
+  function resolveShown({ rec, performed, due = '2026-01-05', rpe = '9' }){
+    const storage = memoryStorage();
+    const history = [
+      { id: 'h0', dateISO: '2026-01-01', blocks: [{ exerciseId: 'bench-press-dumbbell', sets: [{ reps: '8', weightKg: '20', rpe: '7' }] }] },
+    ];
+    recordRecommendation({ exerciseId: 'bench-press-dumbbell', recommendation: rec, history, dueDateISO: due, preferences: CONSENT, targetReps: '8', storage });
+    const [resolved] = attachOutcome({
+      sessionId: 's1', dateISO: due,
+      blocks: [{ exerciseId: 'bench-press-dumbbell', sets: [{ reps: String(performed.reps), weightKg: String(performed.weightKg), rpe, completed: true, skipped: false, failed: !!performed.failed }] }],
+      sessionMeta: { dateISO: due, note: '' },
+      preferences: CONSENT, storage,
+    });
+    return resolved;
+  }
+  it('correct load + missed reps → followed, gradeable, too-aggressive (25×8 shown, 25×6 done)', ()=>{
+    const resolved = resolveShown({ rec: { load: 25, reps: 8, reason: 't' }, performed: { reps: 6, weightKg: 25 } });
+    assert.equal(resolved.outcome.followed, true, 'attempting the shown setup counts as followed');
+    assert.equal(resolved.outcome.metTarget, false, 'missing reps is still a miss');
+    assert.equal(resolved.outcome.gradeable, true);
+    assert.equal(resolved.outcome.label, 'too-aggressive');
+  });
+  it('correct assistance + missed reps → followed and gradeable', ()=>{
+    const storage = memoryStorage();
+    const history = [
+      { id: 'h0', dateISO: '2026-01-01', blocks: [{ exerciseId: 'pull-up', sets: [{ reps: '8', weightKg: '0', assistedKg: '12', rpe: '8' }] }] },
+    ];
+    recordRecommendation({ exerciseId: 'pull-up', recommendation: { reps: 8, assistKg: 10, reason: 't' }, history, dueDateISO: '2026-01-05', preferences: CONSENT, targetReps: '8', storage });
+    const [resolved] = attachOutcome({
+      sessionId: 's1', dateISO: '2026-01-05',
+      blocks: [{ exerciseId: 'pull-up', sets: [{ reps: '6', weightKg: '0', assistedKg: '10', rpe: '8', completed: true, skipped: false, failed: false }] }],
+      sessionMeta: { dateISO: '2026-01-05', note: '' },
+      preferences: CONSENT, storage,
+    });
+    assert.equal(resolved.outcome.followed, true, 'matched assistance + real reps counts as an attempt');
+    assert.equal(resolved.outcome.metTarget, false);
+    assert.equal(resolved.outcome.gradeable, true);
+  });
+  it('bodyweight rep miss → followed and gradeable (performing counts as an attempt)', ()=>{
+    const storage = memoryStorage();
+    const history = [
+      { id: 'h0', dateISO: '2026-01-01', blocks: [{ exerciseId: 'push-up', sets: [{ reps: '8', weightKg: '0', rpe: '7' }] }] },
+    ];
+    recordRecommendation({ exerciseId: 'push-up', recommendation: { reps: 10, reason: 't' }, history, dueDateISO: '2026-01-05', preferences: CONSENT, targetReps: '10', storage });
+    const [resolved] = attachOutcome({
+      sessionId: 's1', dateISO: '2026-01-05',
+      blocks: [{ exerciseId: 'push-up', sets: [{ reps: '6', weightKg: '0', rpe: '8', completed: true, skipped: false, failed: false }] }],
+      sessionMeta: { dateISO: '2026-01-05', note: '' },
+      preferences: CONSENT, storage,
+    });
+    assert.equal(resolved.outcome.followed, true);
+    assert.equal(resolved.outcome.metTarget, false);
+    assert.equal(resolved.outcome.gradeable, true);
+    assert.equal(resolved.outcome.label, 'too-aggressive');
+  });
+  it('wrong load (20×8 vs 25×8) → unfollowed and non-gradeable', ()=>{
+    const resolved = resolveShown({ rec: { load: 25, reps: 8, reason: 't' }, performed: { reps: 8, weightKg: 20 } });
+    assert.equal(resolved.outcome.followed, false, 'a deliberate lighter load is not the shown prescription');
+    assert.equal(resolved.outcome.gradeable, false);
+    assert.equal(resolved.outcome.label, 'insufficient-evidence');
+  });
+  it('an explicit manual override → followed=false, non-gradeable, never graded', ()=>{
+    const storage = memoryStorage();
+    const history = [
+      { id: 'h0', dateISO: '2026-01-01', blocks: [{ exerciseId: 'bench-press-dumbbell', sets: [{ reps: '8', weightKg: '20', rpe: '7' }] }] },
+    ];
+    recordRecommendation({ exerciseId: 'bench-press-dumbbell', recommendation: { load: 25, reps: 8, reason: 't' }, history, dueDateISO: '2026-01-05', preferences: CONSENT, targetReps: '8', storage });
+    markRecommendationOverride({ exerciseId: 'bench-press-dumbbell', dueDateISO: '2026-01-05', storage });
+    const [resolved] = attachOutcome({
+      sessionId: 's1', dateISO: '2026-01-05',
+      blocks: [{ exerciseId: 'bench-press-dumbbell', sets: [{ reps: '8', weightKg: '25', rpe: '8', completed: true, skipped: false, failed: false }] }],
+      sessionMeta: { dateISO: '2026-01-05', note: '' },
+      preferences: CONSENT, storage,
+    });
+    assert.equal(resolved.outcome.userOverride, true);
+    assert.equal(resolved.outcome.followed, false);
+    assert.equal(resolved.outcome.gradeable, false);
+    assert.equal(resolved.outcome.label, 'insufficient-evidence');
+  });
+  it('a failed set at the prescribed setup is gradeable and counts in the denominator', ()=>{
+    const resolved = resolveShown({ rec: { load: 25, reps: 8, reason: 't' }, performed: { reps: 6, weightKg: 25, failed: true } });
+    assert.equal(resolved.outcome.followed, true);
+    assert.equal(resolved.outcome.gradeable, true);
+    assert.equal(resolved.outcome.label, 'too-aggressive');
+    const storage = memoryStorage();
+    const history = [
+      { id: 'h0', dateISO: '2026-01-01', blocks: [{ exerciseId: 'bench-press-dumbbell', sets: [{ reps: '8', weightKg: '20', rpe: '7' }] }] },
+    ];
+    recordRecommendation({ exerciseId: 'bench-press-dumbbell', recommendation: { load: 25, reps: 8, reason: 't' }, history, dueDateISO: '2026-01-05', preferences: CONSENT, targetReps: '8', storage });
+    attachOutcome({
+      sessionId: 's1', dateISO: '2026-01-05',
+      blocks: [{ exerciseId: 'bench-press-dumbbell', sets: [{ reps: '6', weightKg: '25', rpe: '10', completed: false, skipped: false, failed: true }] }],
+      sessionMeta: { dateISO: '2026-01-05', note: '' },
+      preferences: CONSENT, storage,
+    });
+    const cal = calibrateRecommendations(loadEvaluationLedger(storage), { config: null });
+    assert.equal(cal.resolved, 1);
+    assert.equal(cal.gradeable, 1, 'a genuine failed attempt moves the denominator');
+  });
+  it('met target stays successful with the setup rule', ()=>{
+    const resolved = resolveShown({ rec: { load: 22, reps: 8, reason: 't' }, performed: { reps: 8, weightKg: 22 } });
+    assert.equal(resolved.outcome.followed, true);
+    assert.equal(resolved.outcome.metTarget, true);
+    assert.equal(resolved.outcome.gradeable, true);
+    assert.equal(resolved.outcome.label, 'successful');
   });
 });
 
@@ -420,22 +533,30 @@ describe('gradeable vs non-gradeable outcomes', ()=>{
 
 describe('personalisation ignores overridden and ungradeable exposures', ()=>{
   const presc = load => ({ prescriptionId: 'pc:r1', prescribedReps: 8, prescribedLoadKg: load, prescribedAssistKg: null });
-  const done = (weightKg, rpe) => ({ reps: '8', weightKg: String(weightKg), rpe: String(rpe), completed: true, skipped: false, failed: false, assistedKg: 0 });
-  const exposures = rows => rows.map((e, i)=> ({ id: `d${i}`, dateISO: `2026-03-0${i + 1}`, blocks: [{ exerciseId: 'bench-press-dumbbell', prescription: presc(e.prescribe), sets: [done(e.performed, e.rpe ?? 8)] }] }));
+  const done = (weightKg, rpe, reps = '8') => ({ reps: String(reps), weightKg: String(weightKg), rpe: String(rpe), completed: true, skipped: false, failed: false, assistedKg: 0 });
+  const exposures = rows => rows.map((e, i)=> ({ id: `d${i}`, dateISO: `2026-03-0${i + 1}`, blocks: [{ exerciseId: 'bench-press-dumbbell', prescription: presc(e.prescribe), sets: [done(e.performed, e.rpe ?? 8, e.reps ?? '8')] }] }));
   it('overridden exposures do not count toward the sample', ()=>{
-    const base = exposures([{ prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }]);
+    const base = exposures([{ prescribe: 25, performed: 25, reps: '6' }, { prescribe: 25, performed: 25, reps: '6' }]);
     base[0].blocks[0].prescriptionOverridden = true;
     assert.equal(personalCalibrationFromHistory(base, { exerciseId: 'bench-press-dumbbell' }).samples, 1);
   });
   it('a run that is majority overridden never activates', ()=>{
-    const h = exposures([{ prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }, { prescribe: 25, performed: 20 }]);
+    const h = exposures([{ prescribe: 25, performed: 25, reps: '6' }, { prescribe: 25, performed: 25, reps: '6' }, { prescribe: 25, performed: 25, reps: '6' }, { prescribe: 25, performed: 25, reps: '6' }, { prescribe: 25, performed: 25, reps: '6' }, { prescribe: 25, performed: 25, reps: '6' }]);
     h.slice(0, 4).forEach(b=> { b.blocks[0].prescriptionOverridden = true; });
     assert.equal(personalCalibrationFromHistory(h, { exerciseId: 'bench-press-dumbbell' }).active, false);
   });
   it('without overrides, 6 missed increases still activate caution (regression guard)', ()=>{
-    const h = exposures(Array.from({ length: 6 }, ()=> ({ prescribe: 25, performed: 20 })));
+    const h = exposures(Array.from({ length: 6 }, ()=> ({ prescribe: 25, performed: 25, reps: '6' })));
     const pc = personalCalibrationFromHistory(h, { exerciseId: 'bench-press-dumbbell' });
     assert.equal(pc.samples, 6);
+    assert.equal(pc.active, true);
+    assert.ok(pc.jumpMultiplier < 1);
+  });
+  it('genuine failed attempts at the shown setup still teach (never silently dropped)', ()=>{
+    const mk = (k)=> ({ id: `f${k}`, dateISO: `2026-03-0${k + 1}`, blocks: [{ exerciseId: 'bench-press-dumbbell', prescription: presc(25), sets: [{ reps: '6', weightKg: '25', rpe: '10', completed: false, skipped: false, failed: true, assistedKg: 0 }] }] });
+    const h = Array.from({ length: 6 }, (_, k)=> mk(k));
+    const pc = personalCalibrationFromHistory(h, { exerciseId: 'bench-press-dumbbell' });
+    assert.equal(pc.samples, 6, 'failed-at-setup attempts are gradeable evidence');
     assert.equal(pc.active, true);
     assert.ok(pc.jumpMultiplier < 1);
   });

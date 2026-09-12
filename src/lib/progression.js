@@ -484,13 +484,16 @@ export function personalCalibrationFromHistory(history, { exerciseId = null, con
       const rx = block.prescription;
       if(!rx || typeof rx !== 'object') continue;
       const sets = block.sets || [];
+      // The SHOWN prescription only governs its own slots — user-added rows
+      // stay user data and can neither confirm nor refute the engine's target.
+      const governedSets = sets.filter(s=> s && s.origin !== 'user-added');
       // Not attempted at all → grade nothing (never blame, never learn).
-      if(!sets.some(s=> s && (s.completed || s.failed || Number(String(s.reps).match(/\d+/)?.[0] || s.reps) > 0))) continue;
+      if(!governedSets.some(s=> s && (s.completed || s.failed || Number(String(s.reps).match(/\d+/)?.[0] || s.reps) > 0))) continue;
       // Pain or a technique change makes this exposure unfit to calibrate on.
       if(session.painDiscomfort || (session.noteTags||[]).includes('pain-discomfort')
         || sets.some(s=> s && s.pain) || sets.some(s=> s && s.rom && TECH.test(String(s.rom)))) continue;
       let best = null;
-      for(const s of sets){
+      for(const s of governedSets){
         const reps = Number(String(s.reps).match(/\d+/)?.[0] || s.reps) || 0;
         const weightKg = Number(s.weightKg) || 0;
         const assistedKg = Number(s.assistedKg) || 0;
@@ -509,6 +512,19 @@ export function personalCalibrationFromHistory(history, { exerciseId = null, con
       // and must still be graded, so it is never dropped here.
       const establishedTargets = repsTarget != null || loadTarget != null || assistTarget != null;
       if(!establishedTargets || rx.userOverride === true || block.prescriptionOverridden === true) continue;
+      // Attempt adherence ≠ achievement (same rule as the ledger): the exposure
+      // only teaches the engine when the SHOWN setup was genuinely tried — a
+      // non-skipped set at the prescribed load (and assistance) with real reps
+      // logged. Skipped rows are never attempts; rows with no flags at all
+      // (legacy imports) are judged on their values. A deliberate back-off is
+      // an override: skip it without moving the sample count or any rate, so
+      // it can be neither blamed nor learned from.
+      const loadTol = loadTarget != null ? Math.max(0.5, loadTarget * 0.02) : null;
+      const attemptedSetup = governedSets.some(s=> s && s.skipped !== true
+        && (loadTarget == null || (Number(s.weightKg) > 0 && Math.abs(Number(s.weightKg) - loadTarget) <= loadTol))
+        && (assistTarget == null || Math.abs(Number(s.assistedKg || 0) - assistTarget) <= 1)
+        && Number(String(s.reps).match(/\d+/)?.[0] || s.reps) > 0);
+      if(!attemptedSetup) continue;
       samples++;
       const repsMet = repsTarget == null || best.reps >= repsTarget;
       const loadMet = loadTarget == null || best.weightKg >= loadTarget;
@@ -519,7 +535,7 @@ export function personalCalibrationFromHistory(history, { exerciseId = null, con
       const gained = changePct != null && changePct >= gainPct;
       const aggressive = loadTarget != null && previousBest != null && loadTarget > previousBest * aggro;
       const easy = best.rpe != null && String(best.rpe).trim() !== '' && Number(best.rpe) <= easyRpe;
-      if(!met || regressed) over++;
+      if(!met || regressed || best.failed) over++;
       else if(!aggressive && easy && gained) under++;
       else if(met) success++;
       previousBest = best.val;

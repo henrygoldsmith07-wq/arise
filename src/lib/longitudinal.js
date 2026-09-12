@@ -348,10 +348,24 @@ export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore =
       const aReps = rx.reps != null ? Number(rx.reps) : null;
       const aAssist = rx.assistKg != null ? Number(rx.assistKg) : null;
       deviationKg = aLoad != null && best.weightKg > 0 ? round(Math.abs(best.weightKg - aLoad), 2) : null;
-      const loadOk = aLoad == null || (deviationKg != null && deviationKg <= Math.max(0.5, aLoad * 0.02));
-      const repsOk = aReps == null || best.reps >= aReps;
-      const assistOk = aAssist == null || best.assistedKg <= aAssist;
-      followed = loadOk && repsOk && assistOk;
+      // ATTEMPT ADHERENCE ≠ target achievement. The prescription counts as
+      // followed when the SHOWN setup was genuinely tried: a non-skipped set
+      // with the load (and assistance) close to what was shown and real reps
+      // logged — even when the target itself was missed. Skipped rows are never
+      // attempts; rows with no flags at all (legacy imports) are judged on
+      // their values. A deliberately different load is an override, not an
+      // attempt: it is graded as unfollowed so a miss can never be mistaken
+      // for compliance.
+      let setupMatched = false;
+      const outcomeBlock = (blocks || []).find(b=> b && b.exerciseId === record.exerciseId);
+      for(const s of outcomeBlock?.sets || []){
+        if(!s || s.skipped) continue;
+        const w = Number(s.weightKg) || 0, r = parseReps(s.reps), a = Number(s.assistedKg) || 0;
+        const wOk = aLoad == null || (w > 0 && Math.abs(w - aLoad) <= Math.max(0.5, (aLoad || 0) * 0.02));
+        const aOk = aAssist == null || Math.abs(a - aAssist) <= 1;
+        if(wOk && aOk && r > 0){ setupMatched = true; break; }
+      }
+      followed = setupMatched;
       assignedMet = meetsPrescription(best, { reps: aReps, load: aLoad, assistKg: aAssist });
     }
     // A manual override means the user substituted their own target for the
