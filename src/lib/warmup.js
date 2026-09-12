@@ -46,6 +46,33 @@ export function recommendedRest({ exerciseId, load, rpe, setIndex, totalSets }){
   return base;
 }
 
+// Live session pace from actual logging speed: elapsed time per resolved set
+// × remaining sets. Returns null until at least one set is resolved or when
+// nothing remains (no pace to project). aheadBehind compares the projected
+// total against the pre-session plan with a ±5 min dead band so the chip
+// doesn't flicker between states mid-workout. Pure and deterministic.
+export function sessionPace({ startedAtMs, nowMs, completedSets, totalSets, plannedMin = null }){
+  const done = Math.max(0, Number(completedSets) || 0);
+  const total = Math.max(0, Number(totalSets) || 0);
+  const elapsedSec = (Number(nowMs) - Number(startedAtMs)) / 1000;
+  if(!(done >= 1) || !(total > done) || !(elapsedSec > 0)) return null;
+  const remainingSec = (elapsedSec / done) * (total - done);
+  const remainingMin = Math.max(1, Math.round(remainingSec / 60));
+  let aheadBehind = null, deltaMin = null;
+  if(Number.isFinite(Number(plannedMin)) && Number(plannedMin) > 0){
+    const deltaSec = (elapsedSec + remainingSec) - Number(plannedMin) * 60;
+    deltaMin = Math.round(deltaSec / 60);
+    aheadBehind = deltaSec <= -300 ? 'ahead' : deltaSec >= 300 ? 'behind' : 'on-track';
+  }
+  return {
+    remainingSets: total - done,
+    remainingMin,
+    etaMs: Number(nowMs) + Math.round(remainingSec) * 1000,
+    aheadBehind,
+    deltaMin,
+  };
+}
+
 // Predict session duration (minutes) from blocks + warm-ups + rests
 export function predictSessionDuration(blocks){
   let totalSec = 0;

@@ -19,6 +19,7 @@ import { haptic } from '../lib/haptics.js';
 import { announce } from '../lib/a11y.js';
 import { createWakeLock } from '../lib/wakeLock.js';
 import { restPresetFor } from '../lib/gymMode.js';
+import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
 import { RestDock } from './GymModePanel.jsx';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
 
@@ -214,6 +215,14 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   },[activeBlockIndex, session]);
 
   const elapsed = sessionElapsedMs(startedAtRef.current, clock);
+  // Live pace vs the pre-session plan — display-only, never telemetered.
+  const pace = useMemo(()=>{
+    try{
+      const plannedMin = predictSessionDuration(blocks.map(b=> ({ sets: b.sets.length, restSec: b.restSec, warmups: b.warmups })));
+      return sessionPace({ startedAtMs: Date.parse(startedAtRef.current), nowMs: clock, completedSets: progress.completed + progress.skipped, totalSets: progress.total, plannedMin });
+    }catch{ return null; }
+  },[blocks, clock, progress]);
+  const paceLabel = pace ? `About ${pace.remainingMin} minutes left, estimated finish ${new Date(pace.etaMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${pace.aheadBehind === 'ahead' ? ', ahead of plan' : pace.aheadBehind === 'behind' ? ', behind plan' : ''}` : null;
 
   const currentBlock = step ? blocks[step.blockIndex] : null;
   const currentSet = currentBlock && step ? currentBlock.sets[step.setIndex] : null;
@@ -311,6 +320,9 @@ export default function GuidedRunner({ session, history = [], availableEquipment
           )}
           <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums" aria-label={`Elapsed time ${formatElapsed(elapsed)}`}>⏱ {formatElapsed(elapsed)}</span>
           <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums">{progress.completed + progress.skipped}/{progress.total} sets • {volume} kg</span>
+          {pace && (
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums" aria-label={paceLabel} title={paceLabel}>🏁 ≈{pace.remainingMin} min</span>
+          )}
         </div>
         <div aria-hidden className="absolute inset-x-0 bottom-0 h-1 bg-surface2">
           <div className="h-full bg-success bar-anim" style={{ width: `${progress.pct}%` }} />

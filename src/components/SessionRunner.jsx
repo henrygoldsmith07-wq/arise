@@ -12,6 +12,7 @@ import { recordEvent, trackFieldFocus, fieldCommitted } from '../lib/telemetry.j
 import { recordRecommendation, markRecommendationOverride } from '../lib/longitudinal.js';
 import { quickJumps, applyQuickJump, skipTo, restPresetFor, visiblePrescriptionIndexes } from '../lib/gymMode.js';
 import { SESSION_QUALITY_OPTIONS, sessionQualityLabel } from '../lib/gymMode.js';
+import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
 import { createWakeLock } from '../lib/wakeLock.js';
 import { announce } from '../lib/a11y.js';
 import { restStartCue, restCompleteCue } from '../lib/audioCues.js';
@@ -522,6 +523,15 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   },[blocks]);
   const totalSets = blocks.reduce((n,b)=> n+b.sets.length, 0);
   const completedSets = blocks.reduce((n,b)=> n+b.sets.filter(s=> s.completed).length, 0);
+  // Live pace vs the pre-session plan: estimated minutes left and finish time
+  // from actual logging speed. Display-only — never telemetered.
+  const pace = useMemo(()=>{
+    try{
+      const plannedMin = predictSessionDuration(blocks.map(b=> ({ sets: b.sets.length, restSec: b.restSec, warmups: b.warmups })));
+      return sessionPace({ startedAtMs: Date.parse(startedAtRef.current), nowMs: clock, completedSets, totalSets, plannedMin });
+    }catch{ return null; }
+  },[blocks, clock, completedSets, totalSets]);
+  const paceLabel = pace ? `About ${pace.remainingMin} minutes left, estimated finish ${new Date(pace.etaMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${pace.aheadBehind === 'ahead' ? ', ahead of plan' : pace.aheadBehind === 'behind' ? ', behind plan' : ''}` : null;
 
   // Gym Mode skip-to: index into the full block list for the first match.
   const skipTarget = useMemo(()=> skipTo(blocks, skipQuery), [blocks, skipQuery]);
@@ -881,6 +891,9 @@ export default function SessionRunner({ session, history = [], availableEquipmen
             className={`min-h-11 min-w-11 grid place-items-center rounded-full border text-base ${gymMode ? 'bg-ink text-bg border-ink' : 'border-line bg-surface2'}`}
           >🏋️</button>
           <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums">{completedSets}/{totalSets} sets • {volume} kg</span>
+          {pace && (
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums" aria-label={paceLabel} title={paceLabel}>🏁 ≈{pace.remainingMin} min</span>
+          )}
         </div>
         <div aria-hidden className="absolute inset-x-0 bottom-0 h-1 bg-surface2">
           <div className="h-full bg-success bar-anim" style={{ width: `${totalSets ? Math.round(completedSets/totalSets*100) : 0}%` }} />
