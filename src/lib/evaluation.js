@@ -9,7 +9,7 @@ import { resolveArisePriors } from './priors.js';
 import { STUDY_VERSION } from './studyEnrollment.js';
 import { STUDY_DESIGN } from './study.js';
 import { EVALUATION_SCHEMA_VERSION, round, wilsonInterval } from './longitudinalCore.js';
-import { isProspectiveRecord, realisedSuccess, confidenceBandOf, recommendationTypeOf, shrinkRate, classifyRecommendationOutcome } from './longitudinalCore.js';
+import { isProspectiveRecord, realisedSuccess, confidenceBandOf, recommendationTypeOf, shrinkRate, classifyRecommendationOutcome, participantOf, ANONYMOUS_LOCAL_PARTICIPANT } from './longitudinalCore.js';
 
 // ── Aggregation ─────────────────────────────────────────────────────────
 
@@ -93,13 +93,15 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
   // resolved assigned transition counts, compliant or not.
   const PRIMARY = ['arise', 'double-progression'];
   const primaryRows = resolvedWithArms.filter(row => PRIMARY.includes(row.assignedArm) && row.outcome.assignedMet != null);
-  const participantsInPrimary = new Set(primaryRows.map(r => r.participantId || r.exerciseId + '::anonymous'));
+  // Canonical identity: one person/store — never an exercise-derived key. A
+  // lone anonymous local store therefore contributes at most ONE participant.
+  const participantsInPrimary = new Set(primaryRows.map(participantOf));
   const armStatsFor = (arm)=>{
     const rows = primaryRows.filter(r => r.assignedArm === arm);
     const n = rows.length;
     const metCount = rows.filter(r => r.outcome.assignedMet).length;
     const stats = {
-      key: arm, n, participants: new Set(rows.map(r => r.participantId || 'anonymous')).size,
+      key: arm, n, participants: new Set(rows.map(participantOf)).size,
       metCount,
       conclusive: false,
       targetAchievementRate: n ? round(metCount / n, 3) : null,
@@ -129,18 +131,24 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
   // Participant-clustered bootstrap on the difference of met rates between
   // assigned arms — the prespecified uncertainty analysis.
   const bootPairs = primaryRows.map(r => ({
-    participant: r.participantId || 'anonymous',
+    participant: participantOf(r),
     group: r.assignedArm,
     met: r.outcome.assignedMet === true,
   }));
   const clusteredDifference = clusteredBootstrapDifference(bootPairs, { seed: `primary-diff-v${STUDY_VERSION}` });
+  // Conclusive-evidence hardening: an anonymous LOCAL store can contribute at
+  // most ONE independent participant — canonical identity already collapses
+  // it — so a requirement for multiple participants can never be satisfied by
+  // exercise count, session count or any other store-internal multiplication.
+  const independentParticipants = [...participantsInPrimary].filter(id => id !== ANONYMOUS_LOCAL_PARTICIPANT).length
+    + (participantsInPrimary.has(ANONYMOUS_LOCAL_PARTICIPANT) ? 1 : 0);
   const primaryComparison = {
     designVersion: STUDY_DESIGN.designVersion,
     studyVersion: STUDY_VERSION,
     unitOfAssignment: STUDY_DESIGN.unitOfAssignment,
-    participants: participantsInPrimary.size,
+    participants: independentParticipants,
     transitions: primaryRows.length,
-    conclusive: ariseStats.conclusive && dpStats.conclusive && participantsInPrimary.size >= 2,
+    conclusive: ariseStats.conclusive && dpStats.conclusive && independentParticipants >= 2,
     arise: ariseStats,
     'double-progression': dpStats,
     difference: {
@@ -253,11 +261,16 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
 
 // Participant-clustered bootstrap: DIFFERENCE of met rates between the two
 // assigned arms (arise − double-progression), resampling participants.
+// Works for both designs honestly:
+//   within-person (participant has both arms)  → paired per-person difference;
+//   between-person (each person in ONE arm)    → resampled participant
+//     contributes to its arm's rate; the iteration difference is
+//     mean(arise resample) − mean(dp resample), still participant-clustered.
 export function clusteredBootstrapDifference(pairs, { seed = 'primary-diff-v1', iterations = 500 } = {}){
   if(!Array.isArray(pairs) || !pairs.length) return null;
   const acc = new Map(); // participant -> { arise:{n,met}, dp:{n,met} }
   for(const p of pairs){
-    const code = p?.participant ?? 'anonymous';
+    const code = participantOf(p);
     if(!acc.has(code)) acc.set(code, { arise: { n:0, met:0 }, dp: { n:0, met:0 } });
     const e = acc.get(code);
     const bucket = p.group === 'double-progression' ? e.dp : e.arise;
@@ -275,15 +288,25 @@ export function clusteredBootstrapDifference(pairs, { seed = 'primary-diff-v1', 
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
   const rate = (e)=> e.n ? e.met / e.n : null;
+  // Per-iteration clustered difference: resample participants WITH
+  // replacement; a resampled participant contributes their arm rate to that
+  // arm only (between-person) or both (within-person crossover).
   const diffs = [];
+  let pairedMode = false;
+  for(const e of acc.values()){ if(e.arise.n && e.dp.n){ pairedMode = true; break; } }
   for(let i = 0; i < iterations; i++){
-    let sum = 0, count = 0;
-    for(let j = 0; j < participants.length; j++){
-      const e = acc.get(participants[Math.floor(rng() * participants.length)]);
+    const seenIds = participants.map(()=> Math.floor(rng() * participants.length));
+    const armRates = { arise: [], dp: [] };
+    for(const idx of seenIds){
+      const e = acc.get(participants[idx]);
       const a = rate(e.arise), d = rate(e.dp);
-      if(a != null && d != null){ sum += a - d; count++; }
+      if(a != null) armRates.arise.push(a);
+      if(d != null) armRates.dp.push(d);
     }
-    if(count) diffs.push(sum / count);
+    if(armRates.arise.length && armRates.dp.length){
+      const mean = (arr)=> arr.reduce((s, v)=> s + v, 0) / arr.length;
+      diffs.push(mean(armRates.arise) - mean(armRates.dp));
+    }
   }
   diffs.sort((a,b)=> a-b);
   const overallArise = rate(aggregate(acc, 'arise'));
@@ -292,6 +315,7 @@ export function clusteredBootstrapDifference(pairs, { seed = 'primary-diff-v1', 
     participants: participants.length,
     ariseMetRate: overallArise,
     doubleProgressionMetRate: overallDp,
+    design: pairedMode ? 'within-person' : 'between-person',
     mean: round(diffs.reduce((a,b)=> a+b, 0) / Math.max(1, diffs.length), 3),
     low: round(diffs[Math.floor(diffs.length * 0.025)] ?? NaN, 3),
     high: round(diffs[Math.min(diffs.length - 1, Math.ceil(diffs.length * 0.975))] ?? NaN, 3),
@@ -314,7 +338,7 @@ export function clusteredBootstrapWinRate(pairs, { seed = 'arise-clustered-v1', 
   if(!Array.isArray(pairs) || !pairs.length) return null;
   const byP = new Map();
   for(const p of pairs){
-    const code = p?.participant ?? 'single';
+    const code = participantOf(p);
     if(!byP.has(code)) byP.set(code, { wins: 0, n: 0 });
     const e = byP.get(code);
     e.n++;
@@ -394,7 +418,7 @@ export function prospectiveTransitionKey(row){
   if(t && typeof t === 'object'){
     try{ target = JSON.stringify(t, Object.keys(t).sort()); }catch{ target = String(t); }
   } else target = String(t ?? '');
-  return [row?.participantId ?? 'anonymous', row?.exerciseId ?? '', target, row?.outcome?.sessionId ?? row?.outcome?.dateISO ?? ''].join('::');
+  return [participantOf(row), row?.exerciseId ?? '', target, row?.outcome?.sessionId ?? row?.outcome?.dateISO ?? ''].join('::');
 }
 
 // Gradeable-outcome predicate shared by every prospective rollup: a stored
@@ -549,7 +573,7 @@ export function prospectiveFieldComparison(rows, { config = null } = {}){
   // be inflated by recording frequency. Genuinely different weeks have
   // different outcome sessions and still count separately. The folded count is
   // reported honestly as duplicatePairs, never silently dropped.
-  const userOf = row=> row.participantId ?? 'anonymous';
+  const userOf = participantOf;
   const seenTransitions = new Set();
   const gradeable = [];
   const foldedDuplicates = [];

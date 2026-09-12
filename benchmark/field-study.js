@@ -69,6 +69,92 @@ function syntheticParticipant(index){
     });
     eventHistory.push({ id: `fx${index}-log-${s}`, type: 'set:complete', elapsedMs: 2500 + Math.round(rng() * 6500), at: new Date(eventAt += 60000).toISOString() });
   }
+  // Assigned-arm evaluation ledger: the assigned-arm pipeline needs genuine
+  // prospective rows to exercise (recorded before each session, resolved by
+  // it, provenance live-engine on both sides). Deterministic per (person,
+  // session, exercise): half the people are assigned arise, the other half
+  // double progression (the actual randomised design), with per-row seeds so
+  // assignment is stable across regenerations. The prescription is the
+  // previous session's realised load +ε (what the engine would show); the
+  // outcome scores the SAME realised set, so metTarget is honest arithmetic —
+  // no fabricated wins.
+  const evaluationLedger = [];
+  const armFor = (personIdx)=> personIdx % 2 === 0 ? 'arise' : 'double-progression';
+  for(let s = 1; s < FIXTURE_SESSIONS; s++){
+    const prevEntry = history[s - 1];
+    const curEntry = history[s];
+    const prevByExercise = new Map(prevEntry.blocks.map(b=> [b.exerciseId, b]));
+    for(const [ei, { exerciseId }] of FIXTURE_EXERCISES.entries()){
+      const prev = prevByExercise.get(exerciseId);
+      const realised = curEntry.blocks.find(b=> b.exerciseId === exerciseId);
+      if(!prev || !realised) continue;
+      const prevLoad = Number(prev.sets[0].weightKg) || 0;
+      const prevReps = Number(prev.sets[0].reps) || 8;
+      const rowRng = makeRng(`arise-field-fixture-ledger-${index}-${s}-${ei}`);
+      // Shown target: hold or +2.5 kg, as the policy would decide.
+      const hold = rowRng() < 0.3;
+      const rx = { load: hold ? prevLoad : prevLoad + 2.5, reps: prevReps };
+      const curLoad = Number(realised.sets[0].weightKg) || 0;
+      const curReps = Number(realised.sets[0].reps) || 0;
+      const assignedMet = curLoad >= rx.load && curReps >= rx.reps;
+      evaluationLedger.push({
+        id: `fx${index}-ledger-${s}-${ei}`,
+        schemaVersion: 2,
+        recordedAtISO: new Date(Date.parse(`${prevEntry.dateISO}T12:00:00Z`)).toISOString(),
+        dueDateISO: curEntry.dateISO,
+        exerciseId,
+        movementPattern: 'unknown',
+        equipmentClass: 'free-weights',
+        programId: 'field-fixture',
+        programVersion: 1,
+        recommendation: { load: rx.load, reps: rx.reps, assistKg: null, reason: 'fixture', strategy: 'fixture' },
+        audit: { policy: 'field-fixture', confidence: { band: 'medium' } },
+        participantId: null, // stamped from the store's study id at aggregation
+        assignedArm: armFor(index),
+        prescription: { arm: armFor(index), load: rx.load, reps: rx.reps, assistKg: null },
+        arms: {
+          arise: { load: rx.load, reps: rx.reps, assistKg: null },
+          'double-progression': { load: rx.load, reps: rx.reps, assistKg: null },
+        },
+        policy: { id: 'arise-engine', priorsVersion: 1, modelVersion: 1 },
+        recommendedAction: hold ? 'hold' : 'add_load',
+        basis: {
+          visibleSessions: s,
+          previousBest: { reps: prevReps, weightKg: prevLoad, assistedKg: null, e1rm: Math.round(prevLoad * (1 + prevReps / 30) * 100) / 100 },
+          trainingAgePhase: 'novice',
+          priorsVersion: 1,
+        },
+        outcome: {
+          sessionId: curEntry.id,
+          dateISO: curEntry.dateISO,
+          recordedAtISO: new Date(Date.parse(`${curEntry.dateISO}T12:00:00Z`) + 3600000).toISOString(),
+          load: curLoad, reps: curReps, assistedKg: null, rpe: realised.sets[0].rpe,
+          sets: 1, failedSets: 0, volumeKg: Math.round(curLoad * curReps),
+          e1rm: Math.round(curLoad * (1 + curReps / 30) * 100) / 100,
+          previousE1rm: Math.round(prevLoad * (1 + prevReps / 30) * 100) / 100,
+          changePct: Math.round(((curLoad * (1 + curReps / 30)) / (prevLoad * (1 + prevReps / 30)) - 1) * 10000) / 10000,
+          metTarget: assignedMet,
+          assignedMet,
+          assignedArm: armFor(index),
+          followed: true,
+          deviationKg: Math.abs(curLoad - rx.load),
+          userOverride: false,
+          pain: false,
+          techniqueWarning: false,
+          classification: assignedMet ? 'progression-success' : 'target-missed',
+          gradeable: true,
+          label: assignedMet ? 'successful' : 'too-aggressive',
+          labelReason: 'fixture',
+          attempted: true,
+          arms: {
+            arise: { metTarget: assignedMet, loadErrorKg: Math.abs(curLoad - rx.load), repError: Math.max(0, rx.reps - curReps) },
+          },
+        },
+        provenance: { origin: 'live-engine' },
+        outcomeProvenance: { origin: 'live-engine' },
+      });
+    }
+  }
   return {
     app: 'arise',
     version: 1,
@@ -84,6 +170,7 @@ function syntheticParticipant(index){
     history,
     readinessLog,
     eventHistory,
+    evaluationLedger,
     activeSchedule: {
       programId: 'field-fixture',
       availableEquipment: ['dumbbells', 'bench', 'cable', 'bodyweight'],

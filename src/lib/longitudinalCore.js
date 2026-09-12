@@ -31,6 +31,43 @@ export function wilsonInterval(successes, n, z = 1.96){
 
 export const EVALUATION_KEY = 'arise.evaluation.v1';
 
+// ── Canonical participant identity ───────────────────────────────────────
+// ONE helper decides who counts as a participant, everywhere: recording,
+// primary assigned-arm analysis, pooled field-study aggregation, confidence
+// gates and clustering. The invariant it enforces:
+//   a participant identity is a PERSON/STORE, never an exercise or session —
+//   one person must never become multiple statistical participants simply
+//   because they performed multiple exercises.
+//
+// Rules (canonical, no local overrides):
+//   row.participantId present (string, non-empty) → that id, trimmed;
+//   otherwise                        → ONE shared anonymous-local participant
+//     ('anonymous-local'), because a single store with no study id is one
+//     person by construction.
+// Pooled/imported datasets stamp each store's rows with its participant id
+// BEFORE aggregation, so store boundaries — the only honest unit of
+// independence available — remain distinct participants there. Exercise- or
+// session-derived fallbacks (e.g. `exerciseId::anonymous`) are forbidden;
+// they inflate participant counts, clustered CIs and gates per exercise.
+export const ANONYMOUS_LOCAL_PARTICIPANT = 'anonymous-local';
+export function participantOf(record){
+  const id = record?.participantId;
+  if(typeof id === 'string' && id.trim() !== '') return id.trim();
+  // Legacy/foreign shapes: participantId carried under participant (pooled
+  // bootstrap pairs). Same rule — present id or the single anonymous store.
+  const alt = record?.participant;
+  if(typeof alt === 'string' && alt.trim() !== '') return alt.trim();
+  return ANONYMOUS_LOCAL_PARTICIPANT;
+}
+// Pooled store stamping: an imported store IS one participant (its study id
+// when present, else a store-scoped anonymous id). Distinct stores stay
+// distinct; rows from the same store always cluster together.
+export function participantOfStore(store, fallback = 'store-anonymous'){
+  const id = store?.studyParticipantId ?? store?.participantId;
+  if(typeof id === 'string' && id.trim() !== '') return id.trim();
+  return String(fallback);
+}
+
 const SCALE = 100;
 
 export function round(value, digits = 3){

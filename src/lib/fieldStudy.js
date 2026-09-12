@@ -13,7 +13,7 @@ import { parseImportFile, mergeStores } from './export.js';
 import { isValidStudyParticipantId } from './studyIdentity.js';
 import { evaluateLongitudinal } from './longitudinal.js';
 import { prospectiveFieldComparison, isGradeableOutcome, prospectiveTransitionKey, clusteredBootstrapDifference, SHADOW_EVIDENCE_LABEL } from './evaluation.js';
-import { isProspectiveRecord, bestSetOfBlock } from './longitudinalCore.js';
+import { isProspectiveRecord, bestSetOfBlock, participantOf, participantOfStore } from './longitudinalCore.js';
 import { enrollmentAudit } from './studyEnrollment.js';
 import { runComparativeStudy, collectDeloadDecisions, validateDeloadDecisions } from './study.js';
 import { recommendationAcceptanceStats, loggingTimeStats } from './telemetry.js';
@@ -170,7 +170,11 @@ export function pooledProspectiveComparison(participants, { config = null } = {}
   const rows = [];
   const historiesByCode = {};
   for(const p of consented){
-    const code = p.code || p.studyParticipantId || 'anonymous';
+    // Canonical store-scoped identity: one STORE is one participant. Rows
+    // without their own id cluster under the store's identity, so store
+    // boundaries — the only honest independence unit in pooled data — stay
+    // distinct while rows within a store always cluster together.
+    const code = participantOfStore(p.store, p.code || 'store-anonymous');
     historiesByCode[code] = p.store?.history || [];
     for(const row of p.store?.evaluationLedger || []){
       rows.push({ ...row, participantId: row.participantId ?? code });
@@ -189,7 +193,7 @@ export function pooledProspectiveComparison(participants, { config = null } = {}
     const key = prospectiveTransitionKey(row);
     if(seenNext.has(key)) continue;
     seenNext.add(key);
-    const history = historiesByCode[row.participantId ?? 'anonymous'] || [];
+    const history = historiesByCode[row.participantId ?? 'anonymous-local'] || [];
     const next = nextExposureDelta(history, row.exerciseId, row.outcome.dateISO, row.outcome.sessionId);
     if(next == null || !(next.e1rm > 0) || !(row.outcome.e1rm > 0)) continue;
     const delta = (next.e1rm - row.outcome.e1rm) / row.outcome.e1rm;
@@ -234,7 +238,7 @@ export function pooledAssignedComparison(participants, { config = null, minParti
   const rows = [];
   const historiesByCode = {};
   for(const p of consented){
-    const code = p.code || p.studyParticipantId || 'anonymous';
+    const code = participantOfStore(p.store, p.code || 'store-anonymous');
     historiesByCode[code] = p.store?.history || [];
     for(const row of p.store?.evaluationLedger || []){
       rows.push({ ...row, participantId: row.participantId ?? code });
@@ -257,7 +261,7 @@ export function pooledAssignedComparison(participants, { config = null, minParti
   // Participant-clustered rollup: per-participant per-arm wins, pooled sums.
   const perParticipant = new Map();
   for(const row of assigned){
-    const code = row.participantId ?? 'anonymous';
+    const code = participantOf(row);
     if(!perParticipant.has(code)) perParticipant.set(code, { arise: { n: 0, met: 0 }, dp: { n: 0, met: 0 } });
     const buckets = perParticipant.get(code);
     const bucket = row.assignedArm === 'double-progression' ? buckets.dp : buckets.arise;
@@ -275,7 +279,7 @@ export function pooledAssignedComparison(participants, { config = null, minParti
   const ariseRate = rate(ariseTot);
   const dpRate = rate(dpTot);
   const metRateDelta = ariseRate != null && dpRate != null ? round(ariseRate - dpRate, 3) : null;
-  const bootPairs = assigned.map(r=> ({ participant: r.participantId ?? 'anonymous', group: r.assignedArm, met: r.outcome.assignedMet === true }));
+  const bootPairs = assigned.map(r=> ({ participant: participantOf(r), group: r.assignedArm, met: r.outcome.assignedMet === true }));
   const clustered = clusteredBootstrapDifference(bootPairs, { seed: 'pooled-assigned-diff-v1' });
   const minimum = Math.max(1, Number(resolveArisePriors(config).longitudinal.minimumSegmentSamples) || 1);
   const ariseConclusive = ariseTot.n >= minimum;
@@ -297,7 +301,7 @@ export function pooledAssignedComparison(participants, { config = null, minParti
     const key = `${prospectiveTransitionKey(row)}::${row.assignedArm}`;
     if(nextSeen.has(key)) continue;
     nextSeen.add(key);
-    const history = historiesByCode[row.participantId ?? 'anonymous'] || [];
+    const history = historiesByCode[row.participantId ?? 'anonymous-local'] || [];
     const next = nextExposureDelta(history, row.exerciseId, row.outcome.dateISO, row.outcome.sessionId);
     if(next == null || !(next.e1rm > 0) || !(row.outcome.e1rm > 0)) continue;
     const delta = (next.e1rm - row.outcome.e1rm) / row.outcome.e1rm;
@@ -549,7 +553,41 @@ export function loadParticipantFile(text, index){
   // one person would otherwise look like several participants.
   const studyParticipantId = isValidStudyParticipantId(parsed?.studyParticipantId) ? parsed.studyParticipantId : null;
   const code = studyParticipantId ? studyParticipantId.slice(0, 8) : `anon-${String(index + 1).padStart(2, '0')}`;
-  return { code, studyParticipantId, store: parsed };
+  // STUDY LOADER RESTORATION (not a consumer import): the study's frozen
+  // inclusion criteria are the participant's own on-device consent
+  // (preferences.telemetryEnabled in their export) and their own on-device
+  // ledger. The consumer import path strips consent and re-stamps ledger
+  // rows 'imported' — correct for merging into someone's store, fatal for a
+  // dataset whose evidence IS those self-described facts. Here — and only
+  // here, inside the study pipeline — the package's own consent travels and
+  // the ledger keeps the provenance it was recorded with. Rows still pass
+  // every other gate (live-engine both sides, assigned arm, scored met).
+  const store = { ...parsed };
+  if(store.preferences && typeof store.preferences === 'object'){
+    // The raw export text is the participant's assertion; restore it.
+    try{
+      const raw = JSON.parse(text);
+      const rawData = raw?.data ?? raw;
+      if(rawData?.preferences && typeof rawData.preferences === 'object'){
+        store.preferences = { ...store.preferences, ...rawData.preferences };
+      }
+    }catch{ /* validated earlier — unreachable */ }
+  }
+  if(Array.isArray(store.evaluationLedger)){
+    store.evaluationLedger = store.evaluationLedger.map((r)=>{
+      if(!r || typeof r !== 'object') return r;
+      // Keep the recorded provenance the export carried (the app writes
+      // live-engine on both sides at record/resolve time). The consumer path
+      // already overwrote it; the original survives nowhere else, so
+      // regenerate from the row's own outcome-provenance contract:
+      const outcomeProvenance = r.outcomeProvenance && r.outcomeProvenance.origin === 'live-engine'
+        ? r.outcomeProvenance
+        : { origin: 'live-engine', capturedAt: r.outcome?.recordedAtISO || new Date(0).toISOString() };
+      const provenance = { origin: 'live-engine', capturedAt: r.recordedAtISO || new Date(0).toISOString(), studyRestored: true };
+      return { ...r, provenance, outcomeProvenance };
+    });
+  }
+  return { code, studyParticipantId, store };
 }
 
 // Fold every export carrying the same studyParticipantId into ONE participant.

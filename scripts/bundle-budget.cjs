@@ -49,6 +49,14 @@
 // (telemetry.js), and field-commit/swap/add instrumentation in both runners.
 // Measured boot 195.0, largest-lazy 47.0 (budget 48 unchanged), total 343.0.
 //
+// total 344 → 345 kB with the participant-identity integrity pass: the
+// canonical participantOf/participantOfStore helpers in longitudinalCore
+// (imported from both evaluation and fieldStudy, boot + worker chunks), the
+// between-person clustered-bootstrap branch, and the study-loader
+// restoration of participant-consented exports. Zero identity drift — one
+// person is one participant everywhere. Boot and largest-lazy budgets
+// unchanged (195.1 / 47.1); measured total 344.1.
+//
 // The budgets are regression bounds with headroom, not aspirations: a change
 // that crosses one must either undo the bloat or consciously re-baseline here
 // and say why in the PR.
@@ -65,7 +73,7 @@ if(!fs.existsSync(dist)){
 
 const BOOT_BUDGET_KB = 196;
 const CHUNK_BUDGET_KB = 48;
-const TOTAL_BUDGET_KB = 344;
+const TOTAL_BUDGET_KB = 345;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;
