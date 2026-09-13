@@ -54,7 +54,9 @@ function participantFixture(code){
         { id:'e4', type:'set:complete', elapsedMs: 4200 },
       ],
       evaluationLedger: [
-        { id:'l1', recommendation:{ load:22.5, reps:9 }, outcome:{ metTarget:true, classification:'progression-success', changePct:.06, loadErrorKg:0, repError:0 }, exerciseId:'bench-press-dumbbell', basis:{ trainingAgePhase:'novice' } },
+        // Observed-evidence fixture: honest live/live provenance, since the
+        // trust model excludes provenance-less rows from observed metrics.
+        { id:'l1', recommendation:{ load:22.5, reps:9 }, outcome:{ metTarget:true, classification:'progression-success', changePct:.06, loadErrorKg:0, repError:0 }, exerciseId:'bench-press-dumbbell', basis:{ trainingAgePhase:'novice' }, provenance:{ origin:'live-engine' }, outcomeProvenance:{ origin:'live-engine' } },
       ],
       readinessLog: [ { score:75 }, { score:81 } ],
       customTemplates: [],

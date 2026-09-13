@@ -9,7 +9,7 @@ import { resolveArisePriors } from './priors.js';
 import { STUDY_VERSION } from './studyEnrollment.js';
 import { STUDY_DESIGN } from './study.js';
 import { EVALUATION_SCHEMA_VERSION, round, wilsonInterval } from './longitudinalCore.js';
-import { isProspectiveRecord, isProspectiveRecommendation, realisedSuccess, confidenceBandOf, recommendationTypeOf, shrinkRate, classifyRecommendationOutcome, participantOf, ANONYMOUS_LOCAL_PARTICIPANT } from './longitudinalCore.js';
+import { isProspectiveRecord, isProspectiveRecommendation, allRecords, prospectiveRecommendations, trustedResolvedRecords, realisedSuccess, confidenceBandOf, recommendationTypeOf, shrinkRate, classifyRecommendationOutcome, participantOf, ANONYMOUS_LOCAL_PARTICIPANT } from './longitudinalCore.js';
 
 // ── Aggregation ─────────────────────────────────────────────────────────
 
@@ -69,11 +69,16 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
   const cfg = resolveArisePriors(config).longitudinal;
   const gainPct = resolveArisePriors(config).sessionQuality.pr.meaningfulGainPct;
   const minimum = Math.max(1, Number(cfg.minimumSegmentSamples) || 1);
-  const records = (ledger || []).filter(row=> row && row.recommendation);
-  const overall = summarise(records, minimum);
+  const records = allRecords(ledger);
+  // Observed coaching evidence draws from TRUSTED live→live pairs only.
+  // Imported, replayed, seeded and ambiguous rows never move an observed
+  // rate or sample gate; they remain visible under evidenceScopes for audit.
+  const trusted = trustedResolvedRecords(ledger);
+  const openProspective = prospectiveRecommendations(ledger).filter(row=> !row.outcome).length;
+  const overall = summarise(trusted, minimum);
   const dimension = keyFn=> {
     const output = {};
-    for(const [key, group] of groupBy(records, keyFn)){
+    for(const [key, group] of groupBy(trusted, keyFn)){
       const summary = summarise(group, minimum);
       summary.key = key;
       // Subgroup slices are EXPLORATORY: with dozens of them, some will look
@@ -84,7 +89,7 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
     return output;
   };
 
-  const resolvedWithArms = records.filter(row=> row.outcome?.arms && row.outcome.arms.arise);
+  const resolvedWithArms = trusted.filter(row=> row.outcome?.arms && row.outcome.arms.arise);
   const armNames = [...new Set(resolvedWithArms.flatMap(row=> Object.keys(row.outcome.arms)))].sort();
 
   // ── PRIMARY comparison: randomised assigned arms only ──────────────────
@@ -247,6 +252,15 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
     minimumSegmentSamples: minimum,
     totalRecords: records.length,
     openRecords: records.filter(row=> !row.outcome).length,
+    // Scope partition (never combined into one denominator): trusted
+    // observed outcomes drive every rate and gate below; live open rows
+    // await their workout; imported/replayed/ambiguous rows are
+    // diagnostic-only.
+    evidenceScopes: {
+      trustedObserved: trusted.length,
+      openProspective,
+      diagnosticRecords: records.length - trusted.length - openProspective,
+    },
     overall,
     byArm,
     pairedVsArise,
@@ -259,7 +273,7 @@ export function evaluateLongitudinal(ledger, { config = null } = {}){
     byEquipmentClass: dimension(row=> row.equipmentClass),
     byProgramme: dimension(row=> row.programId ? `${row.programId}@v${row.programVersion == null ? '?' : row.programVersion}` : null),
     note: records.length
-      ? `Segments with fewer than ${minimum} resolved recommendation→outcome pairs withhold their rates (conclusive:false). All arms were frozen at record time from the same prior-only history. byArm/pairedVsArise are SHADOW decision-agreement analyses; causal comparison lives in primaryComparison (assigned arms, ITT). Evaluation data is stored separately from training history and never calibrates recommendations from future sessions.${mixedPolicyVersions.length > 1 ? ` WARNING: ${mixedPolicyVersions.length} engine versions present (${mixedPolicyVersions.join(' vs ')}) — analyse each separately; never merge treatments across versions.` : ''}`
+      ? `Segments with fewer than ${minimum} resolved recommendation→outcome pairs withhold their rates (conclusive:false). Observed summaries count trusted live→live pairs only (${trusted.length} trusted, ${openProspective} awaiting workout, ${records.length - trusted.length - openProspective} imported/replayed diagnostic — never mixed). All arms were frozen at record time from the same prior-only history. byArm/pairedVsArise are SHADOW decision-agreement analyses; causal comparison lives in primaryComparison (assigned arms, ITT). Evaluation data is stored separately from training history and never calibrates recommendations from future sessions.${mixedPolicyVersions.length > 1 ? ` WARNING: ${mixedPolicyVersions.length} engine versions present (${mixedPolicyVersions.join(' vs ')}) — analyse each separately; never merge treatments across versions.` : ''}`
       : 'No consented recommendation→outcome pairs recorded yet.',
   };
 }

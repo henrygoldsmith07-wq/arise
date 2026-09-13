@@ -8,7 +8,7 @@
 //   - records with no outcome are excluded from outcome metrics
 //   - synthetic/replayed data never masquerades as real evidence (caller labels)
 
-import { wilsonInterval, round } from './longitudinalCore.js';
+import { wilsonInterval, round, allRecords, prospectiveRecommendations, trustedResolvedRecords } from './longitudinalCore.js';
 
 const DAY = 86400000;
 
@@ -194,34 +194,43 @@ export function evidenceBand(resolvedCount){
 }
 
 export function evidenceDashboard(records = [], options = {}){
-  const list = Array.isArray(records) ? records : [];
-  const resolvedCount = list.filter(r=> r.outcome).length;
+  const list = allRecords(records);
+  // Observed coaching evidence draws from TRUSTED live→live pairs only.
+  // Imported, replayed, seeded and ambiguous rows are disclosed below as
+  // diagnostic records and never move a rate, a band, or a gate.
+  const trusted = trustedResolvedRecords(records);
+  const openProspective = prospectiveRecommendations(records).filter(r=> !r.outcome).length;
+  const diagnosticRecords = list.length - trusted.length - openProspective;
+  const resolvedCount = trusted.length;
   const policyMix = {};
-  for(const row of list){
+  for(const row of trusted){
     const p = row.audit?.policy || 'unknown';
     policyMix[p] = (policyMix[p] || 0) + 1;
   }
   const policies = Object.keys(policyMix);
+  const acceptance = acceptanceMetrics(trusted);
   return {
     generatedAtISO: new Date().toISOString(),
     totalRecords: list.length,
     resolvedCount,
+    openProspective,
+    diagnosticRecords,
     sampleGate: evidenceBand(resolvedCount),
     policyMix,
     mixedPolicyWarning: policies.length > 1
       ? `Records span ${policies.length} policies (${policies.join(', ')}) — compare within a policy, not across.`
       : null,
-    acceptance: acceptanceMetrics(list),
-    adherence: adherenceMetrics(list),
-    agreement: agreementMetrics(list),
-    calibration: calibrationMetrics(list),
-    overshoot: overshootMetrics(list),
-    deloadUsefulness: deloadUsefulnessMetrics(list, options),
-    plateauResolution: plateauResolutionMetrics(list),
+    acceptance: { ...acceptance, openDecisions: openProspective },
+    adherence: adherenceMetrics(trusted),
+    agreement: agreementMetrics(trusted),
+    calibration: calibrationMetrics(trusted),
+    overshoot: overshootMetrics(trusted),
+    deloadUsefulness: deloadUsefulnessMetrics(trusted, options),
+    plateauResolution: plateauResolutionMetrics(trusted),
     archivedCount: options.archivedCount ?? null,
-    // Scope disclaimer: observational, on-device, synthetic data excluded by
-    // the caller. Never causal language anywhere downstream of this module.
-    disclaimer: 'On-device observational analysis of your own logged sessions. Correlation, not causation — no control group, no external validity.',
+    // Scope disclaimer: observational, on-device, trusted-evidence-only.
+    // Never causal language anywhere downstream of this module.
+    disclaimer: 'On-device observational analysis of your own trusted sessions (live recommendation → live outcome). Correlation, not causation — no control group, no external validity.',
   };
 }
 
@@ -251,7 +260,7 @@ export function renderEvidenceReportMarkdown(dash){
   lines.push('');
   lines.push(`_Generated ${new Date(dash.generatedAtISO).toISOString().slice(0, 16).replace('T', ' ')} UTC · ${dash.disclaimer}_`);
   lines.push('');
-  lines.push(`**Sample:** ${dash.resolvedCount} resolved decisions of ${dash.totalRecords} recorded${dash.archivedCount != null ? ` (+${dash.archivedCount} archived)` : ''}.`);
+  lines.push(`**Sample:** ${dash.resolvedCount} trusted observed outcomes · ${dash.openProspective ?? 0} awaiting workout · ${dash.diagnosticRecords ?? 0} imported/replayed diagnostic records (excluded from every figure)${dash.archivedCount != null ? ` (+${dash.archivedCount} archived)` : ''}.`);
   lines.push('');
   lines.push(`**Evidence band:** ${dash.sampleGate.label} — ${dash.sampleGate.hint}`);
   if(dash.mixedPolicyWarning) lines.push('');
@@ -295,6 +304,6 @@ export function renderEvidenceReportMarkdown(dash){
   lines.push(`- Still stagnant: ${p(dash.plateauResolution.stillStagnant)}`);
   lines.push('');
   lines.push('---');
-  lines.push('_Synthetic benchmarks and replay corpora are excluded from this report by construction; every figure derives from on-device decision records._');
+  lines.push('_Synthetic benchmarks and replay corpora are excluded from this report by construction; every figure derives from trusted live recommendation → live outcome pairs on this device._');
   return lines.join('\n');
 }

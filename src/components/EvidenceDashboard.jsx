@@ -61,7 +61,7 @@ export default function EvidenceDashboard({ records = [], archivedCount = null }
         <p className="text-xs font-bold">Your decision record</p>
         <span className={`ml-auto px-2 py-0.5 rounded-full border text-[10px] font-bold ${BAND_STYLE[band.band]}`}>{band.label}</span>
       </div>
-      <p className="text-[11px] text-ink3">{band.hint} {dash.totalRecords} decisions recorded ({dash.acceptance.openDecisions} awaiting their workout){dash.archivedCount != null && dash.archivedCount > 0 ? ` · ${dash.archivedCount} older archived` : ''}.</p>
+      <p className="text-[11px] text-ink3">{band.hint} {dash.resolvedCount} trusted observed outcomes · {dash.acceptance.openDecisions} awaiting their workout · {dash.diagnosticRecords} imported/replayed diagnostic records (not counted){dash.archivedCount != null && dash.archivedCount > 0 ? ` · ${dash.archivedCount} older archived` : ''}.</p>
       {dash.mixedPolicyWarning && (
         <p className="text-[11px] text-review bg-reviewsoft border border-review/30 rounded-lg px-2 py-1.5">⚠ {dash.mixedPolicyWarning}</p>
       )}

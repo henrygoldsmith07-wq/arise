@@ -57,6 +57,13 @@
 // person is one participant everywhere. Boot and largest-lazy budgets
 // unchanged (195.1 / 47.1); measured total 344.1.
 //
+// total 345 → 346 kB with the observed-evidence scoping pass: the shared
+// all/prospective/trusted scope helpers, trusted-only observed summaries and
+// shadow gates in evaluation, and the trusted-scoped dashboard metrics with
+// separate diagnostic disclosure in evidenceMetrics. Requested product logic
+// in boot + worker chunks, not dependency growth; boot (195.5) and
+// largest-lazy (47.4) budgets unchanged; measured total 345.3.
+//
 // The budgets are regression bounds with headroom, not aspirations: a change
 // that crosses one must either undo the bloat or consciously re-baseline here
 // and say why in the PR.
@@ -73,7 +80,7 @@ if(!fs.existsSync(dist)){
 
 const BOOT_BUDGET_KB = 196;
 const CHUNK_BUDGET_KB = 48;
-const TOTAL_BUDGET_KB = 345;
+const TOTAL_BUDGET_KB = 346;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

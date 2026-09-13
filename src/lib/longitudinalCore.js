@@ -144,6 +144,22 @@ export function isProspectiveRecord(record){
   return isResolvedProspectiveEvidence(record);
 }
 
+// ── Evidence scopes (row-list filters, one canonical partition) ─────────
+// Every user-facing observed metric must draw from trustedResolvedRecords:
+// live-engine recommendations resolved by live-engine outcomes. Imported,
+// replayed, seeded and ambiguous rows stay available for audit/diagnostic
+// display but must never move an observed rate or sample gate. The three
+// scopes partition the ledger: trusted + open-prospective + diagnostic.
+export function allRecords(ledger){
+  return (ledger || []).filter(row=> row && row.recommendation);
+}
+export function prospectiveRecommendations(ledger){
+  return allRecords(ledger).filter(isProspectiveRecommendation);
+}
+export function trustedResolvedRecords(ledger){
+  return allRecords(ledger).filter(isProspectiveRecord);
+}
+
 // Confidence band from the frozen decision audit (object or string forms).
 export function confidenceBandOf(record){
   const c = record?.audit?.confidence ?? record?.recommendation?.confidence ?? null;

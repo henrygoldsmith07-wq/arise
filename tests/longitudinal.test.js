@@ -221,6 +221,11 @@ describe('longitudinal validation — segmentation and sample gates', ()=>{
         exerciseId, movementPattern: pattern, equipmentClass,
         recommendation: { load: 30, reps: 8, assistKg: null, reason: 'test', strategy: 'hypertrophy' },
         recommendedAction: met ? 'add_load' : 'hold',
+        // Observed-evidence fixtures carry honest live/live provenance: the
+        // trust model excludes provenance-less rows from every observed
+        // rate, so a fixture that means "genuinely observed" must say so.
+        provenance: { origin: 'live-engine' },
+        outcomeProvenance: { origin: 'live-engine' },
         basis: { visibleSessions: 5, previousBest: { reps: 8, weightKg: 27.5, assistedKg: 0, e1rm: 33 }, trainingAgePhase: phase, priorsVersion: 1 },
         outcome: {
           sessionId: `s-${i}`, dateISO: '2026-01-02', load: met ? 30 : 25, reps: met ? 8 : 5,
