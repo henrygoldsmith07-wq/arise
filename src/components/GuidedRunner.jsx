@@ -330,9 +330,9 @@ export default function GuidedRunner({ session, history = [], availableEquipment
           <p className="font-bold truncate">{session.title} • {session.dateISO}</p>
         </div>
         <div className="ml-auto flex items-center gap-2 shrink-0">
-          <button onClick={toggleSound} aria-pressed={soundOn} aria-label={soundOn ? 'Sound cues on' : 'Sound cues off'} title={soundOn ? 'Sound cues on' : 'Sound cues off'} className={`min-h-9 min-w-9 px-1.5 grid place-items-center rounded-full border text-sm leading-none ${soundOn ? 'border-ink bg-ink text-bg' : 'border-line bg-surface2 text-ink3'}`}>{soundOn ? '🔊' : '🔇'}</button>
+          <button onClick={toggleSound} aria-pressed={soundOn} aria-label={soundOn ? 'Sound cues on' : 'Sound cues off'} title={soundOn ? 'Sound cues on' : 'Sound cues off'} className={`min-h-11 min-w-11 px-1.5 grid place-items-center rounded-full border text-sm leading-none ${soundOn ? 'border-ink bg-ink text-bg' : 'border-line bg-surface2 text-ink3'}`}>{soundOn ? '🔊' : '🔇'}</button>
           {voiceSupported() && (
-            <button onClick={toggleVoice} aria-pressed={voiceOn} aria-label={voiceOn ? 'Voice coach on' : 'Voice coach off'} title={voiceOn ? 'Voice coach on' : 'Voice coach off'} className={`min-h-9 min-w-9 px-1.5 grid place-items-center rounded-full border text-sm leading-none ${voiceOn ? 'border-ink bg-ink text-bg' : 'border-line bg-surface2 text-ink3'}`}>🗣️</button>
+            <button onClick={toggleVoice} aria-pressed={voiceOn} aria-label={voiceOn ? 'Voice coach on' : 'Voice coach off'} title={voiceOn ? 'Voice coach on' : 'Voice coach off'} className={`min-h-11 min-w-11 px-1.5 grid place-items-center rounded-full border text-sm leading-none ${voiceOn ? 'border-ink bg-ink text-bg' : 'border-line bg-surface2 text-ink3'}`}>🗣️</button>
           )}
           <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums" aria-label={`Elapsed time ${formatElapsed(elapsed)}`}>⏱ {formatElapsed(elapsed)}</span>
           <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums">{progress.completed + progress.skipped}/{progress.total} sets • {volume} kg</span>

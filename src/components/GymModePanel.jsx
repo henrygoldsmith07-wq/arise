@@ -235,7 +235,7 @@ export function RestDock({ endsAt, clock, label, onChange, exerciseId, exerciseN
               if(onSetRestPreset && exerciseId) onSetRestPreset(exerciseId, sec);
             }}
             aria-pressed={presetSeconds === sec}
-            className={`min-h-9 px-2.5 rounded-full text-[11px] font-bold tabular-nums ${presetSeconds === sec ? 'bg-bg text-ink' : 'bg-bg/15'}`}>
+            className={`min-h-11 min-w-11 px-2.5 rounded-full text-[11px] font-bold tabular-nums ${presetSeconds === sec ? 'bg-bg text-ink' : 'bg-bg/15'}`}>
             {sec < 60 ? `${sec}s` : `${sec / 60}m`}
           </button>
         ))}

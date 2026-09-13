@@ -1,0 +1,26 @@
+{
+  "_comment": "Durable friction baselines: fixed-script E2E flows measured BEFORE the logging-speed round (workspace at 2d50778: no guided carry-forward, unconditional auto-focus, no swap resume). Each probe in friction-baseline.spec.js runs the identical script and must come in AT or UNDER every baseline metric — regressions fail the suite. Wall-clock timings are apparatus timings (Playwright speed), never human-performance claims, so only deterministic action/focus counts are gated here.",
+  "version": 1,
+  "flows": {
+    "standard-two-set": {
+      "inputFocus": 4,
+      "focusin": 8,
+      "loadCommits": 1,
+      "rirCommits": 2,
+      "completes": 2
+    },
+    "gym-two-set": {
+      "inputFocus": 4,
+      "focusin": 8,
+      "loadCommits": 1,
+      "rirCommits": 2,
+      "completes": 2
+    },
+    "guided-two-step": {
+      "inputFocus": 2,
+      "focusin": 7,
+      "loadCommits": 2,
+      "completes": 2
+    }
+  }
+}

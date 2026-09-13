@@ -257,6 +257,12 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   // on open; read + clear on commit. A commit without a stamp is still logged
   // (elapsedMs omitted) so the swap itself is never lost to a race.
   const swapOpenedAtRef=useRef(null);
+  // Post-swap resume target: the REPLACEMENT block's index in the committed
+  // array. A partial swap splits bi into [performed-original, replacement],
+  // so resuming by the old index would focus the finished original block.
+  // Resolved from the committed array by the swap's own stamp, never by
+  // assuming the replacement landed at bi or bi+1.
+  const swapResumeRef=useRef(null);
   // Load-keypad baseline: the keypad edits per keystroke without blur, so the
   // commit is measured at close against the value at open — still value-free.
   const keypadBaselineRef=useRef(null);
@@ -744,15 +750,20 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     const startedChoosing = swapOpenedAtRef.current;
     swapOpenedAtRef.current = null;
     const fromExerciseId = blocks[bi]?.exerciseId || null;
+    // Identity stamp for THIS swap: buildBlock freezes substitutedAt from
+    // nowISO, so the replacement is findable in the committed array even
+    // after a partial split reshuffles indexes. Millisecond precision is
+    // unique per human tap; the match also requires the new exercise id.
+    const swapNowISO = new Date().toISOString();
     setBlocks(prev=>{
       const target = prev[bi];
-      if(!target || !option?.id || option.id === target.exerciseId) return prev;
+      if(!target || !option?.id || option.id === target.exerciseId){ swapResumeRef.current = null; return prev; }
       const plan = Number.isInteger(target.planIndex) ? target.planIndex : bi;
       const recommendation = getRecommendation({ exerciseId: option.id, reps: target.reps || session.blocks?.[plan]?.reps }, history, session.dateISO, plateConfig, study, assignmentFor(studyEnrollment, option.id), appPolicy, appExplanationMode);
       // applySwapToBlocks splits a partially-completed block so done work keeps
       // its original exercise + prescription, or replaces it in place if nothing
       // has been performed yet. Either way the swap stays a single tap.
-      return applySwapToBlocks({
+      const next = applySwapToBlocks({
         blocks: prev,
         index: bi,
         option,
@@ -761,18 +772,26 @@ export default function SessionRunner({ session, history = [], availableEquipmen
         priorSets: lastExerciseSets(history, option.id)?.sets || [],
         planIndex: plan,
         policy: appPolicy,
-        nowISO: new Date().toISOString(),
+        nowISO: swapNowISO,
         newSet,
         makeId: makeSetId,
       });
+      const replacementIdx = next.findIndex(b=> b && b.exerciseId === option.id && b.substitutedAt === swapNowISO);
+      swapResumeRef.current = replacementIdx !== -1 ? replacementIdx : null;
+      return next;
     });
     setSwapOpen(null);
     setRirSuggest(null); // swapped exercise, fresh rows — stale suggestions must not linger
-    // Logging resumes where the swap landed: bring the swapped block into
-    // view and focus its first unfinished reps field, so the substitution
-    // costs no hunt-and-tap to resume. Same auto-advance contract as Done.
+    // Resume inside the REPLACEMENT block (never the old index: a partial
+    // split leaves the performed original at bi). Falls back to bi only when
+    // no replacement was created (no-op or freeze-only swap). The index is
+    // read INSIDE the frame callback: setBlocks updaters run at commit time,
+    // so only post-paint is the committed array guaranteed visible.
     requestAnimationFrame(()=>{
-      const container = rootRef.current?.querySelector(`#block-${bi}`);
+      const resumeIdx = swapResumeRef.current;
+      swapResumeRef.current = null;
+      const focusIdx = Number.isInteger(resumeIdx) ? resumeIdx : bi;
+      const container = rootRef.current?.querySelector(`#block-${focusIdx}`);
       container?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       // React keeps input values on the property, not the attribute — read
       // .value so a prefilled-then-cleared field still counts as empty.
@@ -985,7 +1004,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           <div className="rounded-2xl border border-line bg-surface px-3 py-2 flex items-center gap-2">
             <span className="text-base" aria-hidden>🎯</span>
             <span className="text-xs flex-1 min-w-0"><strong>Engine targets ready</strong> — one tap fills every un-started exercise with this week's prescription.</span>
-            <button onClick={applyAllRecommendations} className="btn btn-primary shrink-0 min-h-9 rounded-xl px-3 text-xs font-bold">Apply all</button>
+            <button onClick={applyAllRecommendations} className="btn btn-primary shrink-0 min-h-11 rounded-xl px-3 text-xs font-bold">Apply all</button>
           </div>
         )}
         {applyAllNote && <p role="status" className="text-[11px] font-semibold text-success px-1 -mt-2">✓ {applyAllNote}</p>}
@@ -1098,9 +1117,9 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     <button onClick={()=> toggleDictation(bi)} aria-pressed={dictating===bi} title="Dictate a set — say the load, then the reps"
                       className={`relative text-xs font-bold px-3 py-1.5 rounded-full border before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-[''] ${dictating===bi ? 'bg-ink text-bg border-ink' : 'border-line bg-surface2'}`}>🎙️</button>
                   )}
-                  <button onClick={()=> { if(swapOpen!==bi){ swapOpenedAtRef.current = Date.now(); try{ recordEvent('swap-open', { sessionId:session.id, exerciseId:blocks[bi]?.exerciseId, mode: gymMode ? 'gym' : 'standard' }); }catch{} } setSwapOpen(swapOpen===bi ? null : bi); }} aria-expanded={swapOpen===bi} className="relative text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">Swap</button>
-                  <button onClick={()=> addSet(bi)} className="relative min-h-[32px] text-xs font-bold px-3 py-1.5 rounded-full bg-ink text-bg before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">+ Set</button>
-                  {b.unilateral ? <button onClick={()=> duplicateUnilateral(bi)} className="relative text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">+ other side</button> : null}
+                  <button onClick={()=> { if(swapOpen!==bi){ swapOpenedAtRef.current = Date.now(); try{ recordEvent('swap-open', { sessionId:session.id, exerciseId:blocks[bi]?.exerciseId, mode: gymMode ? 'gym' : 'standard' }); }catch{} } setSwapOpen(swapOpen===bi ? null : bi); }} aria-expanded={swapOpen===bi} className="text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 min-h-11">Swap</button>
+                  <button onClick={()=> addSet(bi)} className="text-xs font-bold px-3 py-1.5 rounded-full bg-ink text-bg min-h-11">+ Set</button>
+                  {b.unilateral ? <button onClick={()=> duplicateUnilateral(bi)} className="text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 min-h-11">+ other side</button> : null}
                 </div>
               </div>
 
@@ -1145,14 +1164,14 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     <div className="min-w-0 flex items-center gap-1">
                       <input type="number" min="0" step="0.5" inputMode="decimal" value={s.weightKg} onChange={e=> updateSet(bi,si,{weightKg:e.target.value})} {...commitProps('load-field-commit', b.exerciseId, si)} placeholder={supportsWeighted?'22':'bw'} aria-label={`Load set ${si+1} in kilograms`} className={`min-w-0 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
                       {supportsWeighted && !s.completed && (
-                        <button onClick={()=> openKeypad(bi,si)} aria-label={`Open load keypad for set ${si+1}`} title="Load keypad" className="shrink-0 w-9 h-9 grid place-items-center rounded-xl border border-line bg-surface2 text-sm font-black">✛</button>
+                        <button onClick={()=> openKeypad(bi,si)} aria-label={`Open load keypad for set ${si+1}`} title="Load keypad" className="shrink-0 w-11 h-11 grid place-items-center rounded-xl border border-line bg-surface2 text-sm font-black">✛</button>
                       )}
                     </div>
                     {isActive ? (
                       <div className="flex items-center gap-1 min-w-0">
-                        <StepperButton label="−" ariaLabel={`Decrease reps set ${si+1}`} onStep={()=> adjustReps(bi,si,-1)} className="w-9 px-0" />
+                        <StepperButton label="−" ariaLabel={`Decrease reps set ${si+1}`} onStep={()=> adjustReps(bi,si,-1)} className="min-w-11 px-0" />
                         <input type="number" min="0" step="1" inputMode="numeric" value={s.reps} onChange={e=> updateSet(bi,si,{reps:e.target.value})} {...commitProps('reps-field-commit', b.exerciseId, si)} placeholder="9" aria-label={`Reps set ${si+1}`} className={`min-w-0 flex-1 rounded-xl border border-line bg-surface2 px-1 py-2 text-xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
-                        <StepperButton label="+" ariaLabel={`Increase reps set ${si+1}`} onStep={()=> adjustReps(bi,si,1)} className="w-9 px-0" />
+                        <StepperButton label="+" ariaLabel={`Increase reps set ${si+1}`} onStep={()=> adjustReps(bi,si,1)} className="min-w-11 px-0" />
                       </div>
                     ) : (
                     <input type="number" min="0" step="1" inputMode="numeric" value={s.reps} onChange={e=> updateSet(bi,si,{reps:e.target.value})} {...commitProps('reps-field-commit', b.exerciseId, si)} placeholder="9" aria-label={`Reps set ${si+1}`} className={`min-w-0 rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />

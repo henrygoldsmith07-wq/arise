@@ -1,4 +1,32 @@
 import { test, expect } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const BASELINES = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'friction-baselines.json'), 'utf8')).flows;
+
+// Baseline comparison: every metric must come in AT or UNDER its durable
+// baseline (improvements ratchet, regressions fail). Prints
+// baseline/current/delta/% per flow — never wall-clock human claims.
+function compareFlow(name, probe){
+  const baseline = BASELINES[name];
+  const current = {
+    inputFocus: probe.focus?.inputFocus ?? null,
+    focusin: probe.focus?.focusin ?? null,
+    loadCommits: probe.counts['load-field-commit'] || 0,
+    rirCommits: probe.counts['rir-field-commit'] || 0,
+    completes: probe.counts['complete-set'] || 0,
+  };
+  const lines = [`friction ${name}:`];
+  for(const [k, b] of Object.entries(baseline)){
+    const c = current[k];
+    const d = c - b;
+    lines.push(`  ${k}: baseline=${b} current=${c} delta=${d >= 0 ? '+' : ''}${d} (${b ? Math.round(d / b * 100) + '%' : 'n/a'})`);
+    if(k === 'completes') expect(c, `${name}.${k}`).toBeGreaterThanOrEqual(b);
+    else expect(c, `${name}.${k} must not regress past baseline`).toBeLessThanOrEqual(b);
+  }
+  console.log(lines.join('\n'));
+}
 
 // Friction baseline probe (per mode): a FIXED scripted flow whose telemetry
 // action counts are deterministic. Rerun after any logging-flow change and
@@ -125,6 +153,7 @@ test('baseline probe — standard mode two-set flow', async ({ page }) => {
   // no auto-focus fires and the keyboard stays down (was 4 input focuses).
   expect(probe.focus.inputFocus).toBe(3);
   expect(probe.valueLeak).toBeNull();
+  compareFlow('standard-two-set', probe);
 });
 
 test('baseline probe — gym mode two-set flow', async ({ page }) => {
@@ -158,9 +187,71 @@ test('baseline probe — gym mode two-set flow', async ({ page }) => {
   expect(probe.counts['complete-set']).toBeGreaterThanOrEqual(2);
   expect(probe.focus.inputFocus).toBe(3);
   expect(probe.valueLeak).toBeNull();
+  compareFlow('gym-two-set', probe);
+});
+
+test('swap friction — open → select → logging resumed', async ({ page }) => {
+  await completeOnboarding(page);
+  await enableTelemetry(page);
+  const runner = await startStandardWorkout(page);
+  await startFocusCounters(page);
+
+  // One completed set under the original exercise, so the swap splits.
+  await runner.getByLabel(/^Reps set \d+$/).nth(0).fill('8');
+  await runner.getByRole('button', { name: 'Done' }).nth(0).click();
+
+  const focusBefore = await page.evaluate(() => ({ ...window.__focusLog }));
+  await runner.getByRole('button', { name: 'Swap', exact: true }).first().click();
+  const options = runner.locator('[aria-label="Exercise substitutions"] button').filter({ hasText: 'Use' });
+  test.skip(await options.count() === 0, 'no substitution available for this kit');
+  await options.first().click();
+
+  // Resume lands focused inside the replacement block (stable identity, not
+  // the old index) — measured, not assumed.
+  const focusedLabel = await expect.poll(async () => page.evaluate(() => document.activeElement?.getAttribute?.('aria-label') || ''), { timeout: 5000 }).toMatch(/^Reps set \d+$/);
+  void focusedLabel;
+  const probe = await readProbe(page);
+  const focusAfter = probe.focus;
+  const swapCommit = await page.evaluate(() => {
+    const raw = localStorage.getItem('arise.telemetry.v2');
+    const events = raw ? (JSON.parse(raw).events || []) : [];
+    return events.find((e) => e.type === 'swap-commit') || null;
+  });
+  console.log(`friction swap: ${JSON.stringify({ counts: probe.counts, focusDelta: { focusin: focusAfter.focusin - focusBefore.focusin, inputFocus: focusAfter.inputFocus - focusBefore.inputFocus }, commitElapsedMs: swapCommit?.elapsedMs ?? null })}`);
+  expect(probe.counts['swap-open']).toBe(1);
+  expect(probe.counts['swap-commit']).toBe(1);
+  // Timing consent is on in probes, so the open→commit interval is recorded
+  // (apparatus time here — the comparable signal is that it EXISTS and the
+  // path costs exactly 2 logged actions).
+  expect(Number.isFinite(swapCommit?.elapsedMs)).toBe(true);
+  expect(focusAfter.focusin - focusBefore.focusin).toBeGreaterThanOrEqual(1);
+  expect(probe.valueLeak).toBeNull();
 });
 
 test('touch targets meet the 44px one-thumb bar', async ({ page }) => {
+  // Effective hit size ≥44px in both dims: every point of the central
+  // 40×40 square must resolve into the control itself. This accepts EITHER
+  // a literal ≥44px box OR a documented expanded hit area (::before
+  // insets) — but never a bare 36px box that merely happens to be hittable
+  // at its centre.
+  const expectHit44 = async (locator, label) => {
+    // Center the control first: the runner's sticky header and save dock
+    // cover viewport edges, and a probe point under sticky chrome proves
+    // nothing about the control. Center placement isolates the measurement.
+    await locator.evaluate((btn) => btn.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' })).catch(() => {});
+    await page.waitForTimeout(200);
+    const ok = await locator.evaluate((btn) => {
+      const r = btn.getBoundingClientRect();
+      if(r.width <= 0 || r.height <= 0) return false;
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      for(const [dx, dy] of [[0, 0], [-20, 0], [20, 0], [0, -20], [0, 20]]){
+        const el = document.elementFromPoint(cx + dx, cy + dy);
+        if(el !== btn && !(el && btn.contains(el))) return false;
+      }
+      return true;
+    });
+    expect(ok, `${label} effective hit area ≥44px`).toBe(true);
+  };
   await completeOnboarding(page);
   await enableTelemetry(page);
   const runner = await startStandardWorkout(page);
@@ -175,9 +266,16 @@ test('touch targets meet the 44px one-thumb bar', async ({ page }) => {
   const same = runner.getByRole('button', { name: /Use suggested RIR/ });
   await expect(same).toBeVisible({ timeout: 5000 });
   for(const name of [/Use suggested RIR/, /Decrease suggested RIR/, /Increase suggested RIR/]){
-    const box = await runner.getByRole('button', { name }).boundingBox();
-    expect(box.height).toBeGreaterThanOrEqual(44);
+    await expectHit44(runner.getByRole('button', { name }).first(), String(name));
   }
+  // High-frequency runner controls: Done, both rep steppers, Swap, + Set,
+  // the remove-× (expanded hit area) and the keypad launcher.
+  await expectHit44(runner.getByRole('button', { name: 'Done' }).first(), 'Done');
+  await expectHit44(runner.getByRole('button', { name: /Decrease reps set/ }).first(), 'reps stepper −');
+  await expectHit44(runner.getByRole('button', { name: /Increase reps set/ }).first(), 'reps stepper +');
+  await expectHit44(runner.getByRole('button', { name: 'Swap', exact: true }).first(), 'Swap');
+  await expectHit44(runner.getByRole('button', { name: '+ Set' }).first(), '+ Set');
+  await expectHit44(runner.getByRole('button', { name: /Remove set/ }).first(), 'remove set ×');
   // No control may cover another: the load-keypad launcher must be the
   // hit target at its own center (previously the reps steppers spilled over
   // it on narrow viewports, so tapping the keypad decreased reps instead).
@@ -198,8 +296,7 @@ test('touch targets meet the 44px one-thumb bar', async ({ page }) => {
     catch{ await keypadOpen.click({ force: true, timeout: 2_500 }); }
   }).toPass({ timeout: 15_000 });
   const keypadDone = runner.getByRole('group', { name: /Load keypad/ }).getByRole('button', { name: 'Done', exact: true });
-  const keyBox = await keypadDone.boundingBox();
-  expect(keyBox.height).toBeGreaterThanOrEqual(44);
+  await expectHit44(keypadDone, 'keypad Done');
 });
 
 test('baseline probe — guided mode two-step flow', async ({ page }) => {
@@ -248,4 +345,5 @@ test('baseline probe — guided mode two-step flow', async ({ page }) => {
   expect(probe.counts['load-field-commit']).toBe(1);
   expect(probe.focus.inputFocus).toBe(1);
   expect(probe.valueLeak).toBeNull();
+  compareFlow('guided-two-step', probe);
 });

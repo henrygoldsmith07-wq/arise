@@ -438,6 +438,34 @@ test.describe('Prospective prescription capture', () => {
     // substitution costs no hunt-and-tap to continue from.
     await expect.poll(async () => page.evaluate(() => document.activeElement?.getAttribute?.('aria-label') || ''), { timeout: 5000, message: 'focus lands on a reps field after swap' }).toMatch(/^Reps set \d+$/);
 
+    // Focus must be inside the REPLACEMENT block (B), never the performed
+    // original (A): a partial split leaves A at the old index, so an
+    // index-based resume would focus finished work.
+    const focusBlock = await page.evaluate(async () => {
+      const { loadStore } = await import('/src/lib/store.js');
+      const active = document.activeElement;
+      const container = active?.closest?.('[id^="block-"]');
+      const idx = container ? Number(String(container.id).replace('block-', '')) : null;
+      const blocks = loadStore().activeWorkout?.blocks || [];
+      const block = Number.isInteger(idx) ? blocks[idx] : null;
+      return {
+        exerciseId: block?.exerciseId || null,
+        completedInBlock: (block?.sets || []).filter((s)=> s.completed).length,
+        totalInBlock: (block?.sets || []).length,
+        setIds: (block?.sets || []).map((s)=> s.setId || null),
+      };
+    });
+    const replacementId = await page.evaluate(async (orig) => {
+      const { loadStore } = await import('/src/lib/store.js');
+      const blocks = loadStore().activeWorkout?.blocks || [];
+      const other = blocks.find((b)=> b.exerciseId !== orig);
+      return other ? other.exerciseId : null;
+    }, original);
+    expect(replacementId).toBeTruthy();
+    expect(focusBlock.exerciseId).toBe(replacementId);
+    expect(focusBlock.completedInBlock).toBe(0);
+    expect(focusBlock.totalInBlock).toBeGreaterThan(0);
+
     // Save the session.
     await runner.getByRole('button', { name: 'Save session' }).click();
 
@@ -450,17 +478,41 @@ test.describe('Prospective prescription capture', () => {
       return {
         ids: blocks.map((b)=> b.exerciseId),
         keepHasCompleted: !!keep?.sets?.some((s)=> s.completed),
+        keepSetCount: (keep?.sets || []).length,
+        otherCompletedCount: (other?.sets || []).filter((s)=> s.completed).length,
+        otherSetCount: (other?.sets || []).length,
         keepPrescriptionId: keep?.prescription?.prescriptionId || null,
         keepPrescriptionExercise: keep?.prescription?.exerciseId || null,
         otherPrescriptionChange: other?.prescription?.changeReason || null,
         otherSupersedes: other?.prescription?.supersedesPrescriptionId || null,
+        keepSetIds: (keep?.sets || []).map((s)=> s.setId || null),
+        otherSetIds: (other?.sets || []).map((s)=> s.setId || null),
       };
     }, original);
     expect(saved.ids.filter((id)=> id !== original).length).toBeGreaterThan(0, 'a replacement block exists');
     expect(saved.keepHasCompleted).toBe(true, 'completed work stays under the original exercise');
+    expect(saved.keepSetCount).toBe(1, 'the original block keeps only its performed set');
+    expect(saved.otherCompletedCount).toBe(0, 'the replacement block contains only remaining work');
+    expect(saved.otherSetCount).toBeGreaterThan(0);
     expect(saved.keepPrescriptionExercise).toBe(original, 'the original prescription keeps its exercise');
     expect(saved.otherPrescriptionChange).toBe('exercise-substituted');
     expect(saved.otherSupersedes).toBe(saved.keepPrescriptionId);
+    // Set identity: no id appears on both sides of the split.
+    expect(saved.keepSetIds.filter((id)=> id && saved.otherSetIds.includes(id))).toEqual([]);
+
+    // Reload: the split survives as saved history.
+    await page.reload();
+    const reloaded = await page.evaluate(async (orig) => {
+      const { loadStore } = await import('/src/lib/store.js');
+      const last = loadStore().history[loadStore().history.length - 1];
+      const blocks = last.blocks || [];
+      return {
+        ids: blocks.map((b)=> b.exerciseId),
+        keepHasCompleted: !!blocks.find((b)=> b.exerciseId === orig)?.sets?.some((s)=> s.completed),
+      };
+    }, original);
+    expect(reloaded.ids.filter((id)=> id !== original).length).toBeGreaterThan(0);
+    expect(reloaded.keepHasCompleted).toBe(true);
   });
 });
 
