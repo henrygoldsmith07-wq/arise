@@ -153,6 +153,46 @@ test('Same confirms in one tap; load/reps carry stays automatic', async ({ page 
   expect(counts['rir-suggestion-confirmed'] || 0).toBe(1);
 });
 
+test('crash recovery restores work without resurrecting suggestions', async ({ page }) => {
+  await completeOnboarding(page);
+  await enableTelemetry(page);
+  const runner = await startWorkout(page);
+  const rirInputs = await logFirstSet(runner);
+  await expect(runner.getByRole('group', { name: 'Suggested RIR 2 for set 2' })).toBeVisible({ timeout: 5000 });
+
+  // Crash mid-suggestion: reload, resume from the draft.
+  await page.reload();
+  await expect(page.getByText('Resume your workout?')).toBeVisible({ timeout: 8000 });
+  await page.getByRole('button', { name: 'Resume' }).click();
+  const resumed = page.getByRole('dialog', { name: /Session —/ });
+  await expect(resumed).toBeVisible({ timeout: 8000 });
+
+  // Completed work survives; the unconfirmed suggestion does not come back
+  // as an observation — set 2's RIR is empty and no suggestion bar shows.
+  const resumedRir = resumed.getByLabel(/Reps in reserve set/);
+  await expect(resumedRir.nth(1)).toHaveValue('');
+  await expect(resumed.getByRole('group', { name: /Suggested RIR/ })).toHaveCount(0);
+
+  // Finish without touching RIR: nothing may be inferred from Done.
+  await resumed.getByRole('button', { name: 'Done' }).nth(1).click();
+  const repsInputs = resumed.getByLabel(/^Reps set \d+$/);
+  const n = await repsInputs.count();
+  for(let i = 0; i < n; i++){
+    if(!(await repsInputs.nth(i).inputValue())) await repsInputs.nth(i).fill('8');
+  }
+  const saveBtn = resumed.getByRole('button', { name: 'Save session' });
+  await expect(saveBtn).toBeEnabled({ timeout: 5000 });
+  await saveBtn.click();
+  await expect(resumed).toBeHidden({ timeout: 8000 });
+
+  const sets = await savedSets(page);
+  expect(sets[0].rpe).toBe('8');
+  expect(sets[1].rpe).toBe('');
+  const { counts } = await eventCounts(page);
+  console.log(`friction counts (recovery): ${JSON.stringify(counts)}`);
+  expect(counts['rir-suggestion-confirmed'] || 0).toBe(0);
+});
+
 test('a typed RIR edit persists normally without confirming', async ({ page }) => {
   await completeOnboarding(page);
   await enableTelemetry(page);

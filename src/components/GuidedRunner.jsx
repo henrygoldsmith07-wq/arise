@@ -252,6 +252,22 @@ export default function GuidedRunner({ session, history = [], availableEquipment
       lastStepAtRef.current = new Date().toISOString();
     } else {
       updateSet(step.blockIndex, step.setIndex, { completed: true });
+      // Carry-forward within one exercise: the next step's empty load/reps
+      // arrive prefilled from the set just logged, so steady-state guided
+      // steps cost one tap (Done). Same-exercise only, empty-fields only —
+      // the same safe prefill contract as the standard runner. No RIR field
+      // exists in guided mode, so nothing effort-related is ever carried.
+      // (Computed against post-completion state: the closure's blocks still
+      // show the current step unfinished, which would resolve to itself.)
+      const afterBlocks = blocks.map((b,bi)=> bi!==step.blockIndex ? b : { ...b, sets: b.sets.map((s,si)=> si!==step.setIndex ? s : { ...s, completed: true }) });
+      const nxt = nextGuidedStep(afterBlocks);
+      if(nxt && blocks[nxt.blockIndex]?.exerciseId === block.exerciseId){
+        const ns = blocks[nxt.blockIndex].sets[nxt.setIndex];
+        const carry = {};
+        if(ns && String(ns.reps ?? '').trim()==='' && String(set.reps ?? '').trim()!=='') carry.reps = set.reps;
+        if(ns && String(ns.weightKg ?? '').trim()==='' && String(set.weightKg ?? '').trim()!=='') carry.weightKg = set.weightKg;
+        if(Object.keys(carry).length) updateSet(nxt.blockIndex, nxt.setIndex, carry);
+      }
       const now=Date.now();
       try {
         recordEvent('complete-set', {

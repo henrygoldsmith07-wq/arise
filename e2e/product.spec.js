@@ -434,6 +434,10 @@ test.describe('Prospective prescription capture', () => {
       return blocks.length >= 2 && keep?.sets?.some((s)=> s.completed) && blocks.some((b)=> b.exerciseId !== orig);
     }, original), { timeout: 8000, message: 'block split with original work preserved' }).toBeTruthy();
 
+    // Logging resumes where the swap landed: a reps field is focused so the
+    // substitution costs no hunt-and-tap to continue from.
+    await expect.poll(async () => page.evaluate(() => document.activeElement?.getAttribute?.('aria-label') || ''), { timeout: 5000, message: 'focus lands on a reps field after swap' }).toMatch(/^Reps set \d+$/);
+
     // Save the session.
     await runner.getByRole('button', { name: 'Save session' }).click();
 

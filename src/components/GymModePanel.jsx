@@ -113,7 +113,7 @@ export function LoadNumpad({ value, onChange, onClose, equipment = 'barbell', pl
       <div className="flex items-center gap-2">
         <span className="text-[11px] font-bold uppercase tracking-widest text-ink3">Load kg</span>
         <span className="ml-auto text-2xl font-black tabular-nums">{value || '—'}</span>
-        <button onClick={onClose} className="min-h-9 px-3 rounded-full border border-line bg-surface text-xs font-bold">Done</button>
+        <button onClick={onClose} className="min-h-11 px-3 rounded-full border border-line bg-surface text-xs font-bold">Done</button>
       </div>
       <div className="grid grid-cols-4 gap-1.5">
         {inc.map(j=> (

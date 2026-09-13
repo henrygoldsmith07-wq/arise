@@ -645,22 +645,36 @@ export default function SessionRunner({ session, history = [], availableEquipmen
         if(Object.keys(carry).length) updateSet(bi,nextIdx,carry,{ userEdit: false });
       }
       const nextRpeEmpty = nextIdx !== -1 && rirFromRpe(block.sets[nextIdx].rpe).trim()==='' && !block.sets[nextIdx].completed;
-      if(nextRpeEmpty && String(set.rpe ?? '').trim()!==''){
+      const suggested = nextRpeEmpty && String(set.rpe ?? '').trim()!=='';
+      if(suggested){
         const suggestion = rirFromRpe(set.rpe);
         setRirSuggest({ bi, si: nextIdx, value: suggestion, exerciseId: block.exerciseId });
         try{ recordEvent('rir-suggestion-shown', { sessionId:session.id, exerciseId:block.exerciseId, setIndex:nextIdx, mode: gymMode ? 'gym' : 'standard' }); }catch{}
       }
       // One-thumb flow: the field you edit between sets is the NEXT set's
-      // reps. Auto-advance focus there so the keyboard is up and its content
-      // selected during the rest countdown — a new number, or a stepper tap,
-      // lands without hunting for the row.
+      // reps — with one exception. When that row is fully prefilled AND just
+      // gained an RIR suggestion, there is nothing to type: auto-focusing
+      // would pop the keyboard open only for the user to dismiss it before
+      // tapping Same + Done. So the keyboard stays down and both actions are
+      // one tap away; if the row still needs typing, focus lands as before.
       const nextSet = blocks[bi]?.sets?.findIndex((s,j)=> j>si && !s.completed);
       if(nextSet !== -1 && nextSet != null){
-        requestAnimationFrame(()=> {
-          const el = rootRef.current?.querySelector(`input[aria-label="Reps set ${nextSet + 1}"]`);
-          el?.focus({ preventScroll: false });
-          el?.select?.();
-        });
+        const target = blocks[bi].sets[nextSet];
+        // `blocks` is pre-carry state here: account for the prefill applied
+        // above, or a carried row would still read as needing typing.
+        const effReps = (nextSet===nextIdx && String(target.reps).trim()==='') ? set.reps : target.reps;
+        const effLoad = (nextSet===nextIdx && String(target.weightKg).trim()==='') ? set.weightKg : target.weightKg;
+        const needsTyping = String(effReps ?? '').trim()==='' || String(effLoad ?? '').trim()==='';
+        const suggestionPending = suggested && nextSet === nextIdx;
+        if(needsTyping || !suggestionPending){
+          requestAnimationFrame(()=> {
+            const el = rootRef.current?.querySelector(`input[aria-label="Reps set ${nextSet + 1}"]`);
+            el?.focus({ preventScroll: false });
+            el?.select?.();
+          });
+        }else if(document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)){
+          document.activeElement.blur();
+        }
       }
       // Auto-start the rest countdown unless the user turned it off
       // (preferences.autoRest, default on). Manual Start rest stays as override.
@@ -754,6 +768,19 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     });
     setSwapOpen(null);
     setRirSuggest(null); // swapped exercise, fresh rows — stale suggestions must not linger
+    // Logging resumes where the swap landed: bring the swapped block into
+    // view and focus its first unfinished reps field, so the substitution
+    // costs no hunt-and-tap to resume. Same auto-advance contract as Done.
+    requestAnimationFrame(()=>{
+      const container = rootRef.current?.querySelector(`#block-${bi}`);
+      container?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      // React keeps input values on the property, not the attribute — read
+      // .value so a prefilled-then-cleared field still counts as empty.
+      const inputs = [...(container?.querySelectorAll('input[aria-label^="Reps set"]') || [])];
+      const target = inputs.find(i=> String(i.value ?? '').trim()==='') || inputs[0];
+      target?.focus({ preventScroll: true });
+      target?.select?.();
+    });
     // Swap time = sheet-open to commit; commit-without-open still logs the swap
     // itself (elapsedMs omitted) so the substitution is never lost to a race.
     try{
@@ -1094,7 +1121,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
               )}
 
               <div className="space-y-2.5">
-                <div className="grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] gap-1.5 text-[10px] font-bold uppercase tracking-widest text-ink3 px-1">
+                <div className="grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)] gap-1 text-[10px] font-bold uppercase tracking-widest text-ink3 px-1 sm:hidden" aria-hidden>
+                  <span>#</span><span>Load kg</span><span>Reps</span>
+                </div>
+                <div className="hidden sm:grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] gap-1.5 text-[10px] font-bold uppercase tracking-widest text-ink3 px-1">
                   <span>#</span><span>Load kg</span><span>Reps</span><span>RIR</span><span>{b.unilateral?'L/R':''}</span><span>Done</span><span></span>
                 </div>
                 {b.sets.map((s,si)=> {
@@ -1110,7 +1140,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                   return (
                   <Fragment key={si}>
                   <div {...(gestures ? { onPointerDown:gestures.onPointerDown, onPointerMove:gestures.onPointerMove, onPointerUp:gestures.onPointerUp, onPointerLeave:gestures.onPointerLeave, onPointerCancel:gestures.onPointerCancel } : {})} style={gestures?.style}
-                    className={`grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] gap-1.5 items-center rounded-xl ${s.failed ? 'bg-reviewsoft border border-review/30' : ''}`}>
+                    className={`grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)] gap-1 sm:grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] sm:gap-1.5 items-center rounded-xl ${s.failed ? 'bg-reviewsoft border border-review/30' : ''}`}>
                     <span className={`w-7 h-7 grid place-items-center rounded-full border text-xs font-bold tabular-nums ${s.completed?'bg-success text-bg border-success':s.failed?'bg-review text-bg border-review':'bg-surface2 border-line'}`}>{si+1}</span>
                     <div className="min-w-0 flex items-center gap-1">
                       <input type="number" min="0" step="0.5" inputMode="decimal" value={s.weightKg} onChange={e=> updateSet(bi,si,{weightKg:e.target.value})} {...commitProps('load-field-commit', b.exerciseId, si)} placeholder={supportsWeighted?'22':'bw'} aria-label={`Load set ${si+1} in kilograms`} className={`min-w-0 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
@@ -1127,6 +1157,11 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     ) : (
                     <input type="number" min="0" step="1" inputMode="numeric" value={s.reps} onChange={e=> updateSet(bi,si,{reps:e.target.value})} {...commitProps('reps-field-commit', b.exerciseId, si)} placeholder="9" aria-label={`Reps set ${si+1}`} className={`min-w-0 rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
                     )}
+                    {/* Second line on narrow screens (RIR + side + actions); on
+                        sm+ this wrapper dissolves (display:contents) so the
+                        children join the single 7-column desktop grid in DOM
+                        order — desktop layout is pixel-identical. */}
+                    <div className="col-span-3 row-start-2 grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-1 items-center sm:contents sm:col-auto sm:row-auto">
                     <input type="number" min="0" max="10" step="1" inputMode="numeric" value={rirFromRpe(s.rpe)} onChange={e=> updateSet(bi,si,{rpe:rpeFromRir(e.target.value)})} {...commitProps('rir-field-commit', b.exerciseId, si)} placeholder="—" aria-label={`Reps in reserve set ${si+1}`} className={`min-w-0 rounded-xl border border-line bg-surface2 px-1 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
                     {b.unilateral ? (
                       <select value={s.side||'L'} onChange={e=> updateSet(bi,si,{side:e.target.value})} aria-label={`Side set ${si+1}`} className="min-w-0 rounded-xl border border-line bg-surface2 px-1 py-3 text-xs font-bold"><option value="L">L</option><option value="R">R</option></select>
@@ -1159,6 +1194,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     ) : (
                       <button onClick={()=> removeSet(bi,si)} aria-label={`Remove set ${si+1}`} className="relative w-9 h-9 grid place-items-center rounded-full border border-line text-ink3 before:absolute before:-inset-1.5 before:rounded-full before:content-['']">×</button>
                     )}
+                    </div>
                   </div>
                   {/* RIR suggestion: the previous set's RIR offered for one-tap
                       confirm — never written until confirmed or typed. Hidden
@@ -1167,10 +1203,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                   {rirSuggest && rirSuggest.bi===bi && rirSuggest.si===si && !s.completed && rirFromRpe(s.rpe).trim()==='' && (
                     <div role="group" aria-label={`Suggested RIR ${rirSuggest.value} for set ${si+1}`} className="flex items-center gap-1.5 rounded-xl border border-dashed border-line bg-surface2 px-2.5 py-1.5 -mt-1">
                       <span className="text-[11px] text-ink3 flex-1 min-w-0">RIR {rirSuggest.value} suggested from last set</span>
-                      <button onClick={()=> confirmRirSuggestion(rirSuggest.value)} aria-label={`Use suggested RIR ${rirSuggest.value} for set ${si+1}`} className="min-h-9 px-3 rounded-full bg-ink text-bg text-xs font-bold">Same</button>
-                      <button onClick={()=> confirmRirSuggestion(stepRir(rirSuggest.value,-1))} aria-label={`Decrease suggested RIR for set ${si+1}`} className="min-h-9 min-w-9 grid place-items-center rounded-full border border-line bg-surface text-sm font-black">−</button>
+                      <button onClick={()=> confirmRirSuggestion(rirSuggest.value)} aria-label={`Use suggested RIR ${rirSuggest.value} for set ${si+1}`} className="min-h-11 px-3 rounded-full bg-ink text-bg text-xs font-bold">Same</button>
+                      <button onClick={()=> confirmRirSuggestion(stepRir(rirSuggest.value,-1))} aria-label={`Decrease suggested RIR for set ${si+1}`} className="min-h-11 min-w-11 grid place-items-center rounded-full border border-line bg-surface text-sm font-black">−</button>
                       <span aria-hidden className="text-xs font-black tabular-nums w-6 text-center">{rirSuggest.value}</span>
-                      <button onClick={()=> confirmRirSuggestion(stepRir(rirSuggest.value,1))} aria-label={`Increase suggested RIR for set ${si+1}`} className="min-h-9 min-w-9 grid place-items-center rounded-full border border-line bg-surface text-sm font-black">+</button>
+                      <button onClick={()=> confirmRirSuggestion(stepRir(rirSuggest.value,1))} aria-label={`Increase suggested RIR for set ${si+1}`} className="min-h-11 min-w-11 grid place-items-center rounded-full border border-line bg-surface text-sm font-black">+</button>
                     </div>
                   )}
                   </Fragment>
