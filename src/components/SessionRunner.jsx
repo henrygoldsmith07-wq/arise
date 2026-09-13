@@ -608,12 +608,16 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       lastSetAtRef.current=new Date(now).toISOString();
       if(audioCueOn){ try{ const ctx=new (window.AudioContext||window.webkitAudioContext)(); const o=ctx.createOscillator(); const g=ctx.createGain(); o.connect(g); g.connect(ctx.destination); o.frequency.value=880; g.gain.setValueAtTime(0.08, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.18); o.start(); o.stop(ctx.currentTime+0.2); setTimeout(()=> ctx.close(), 300); }catch{} }
       // Carry-forward: prefill the next unfinished row with what you just did,
-      // so between-set logging is one tap (Done) per set.
-      const nextIdx = block.sets.findIndex((s,j)=> j>si && !s.completed && (String(s.reps).trim()==='' || String(s.weightKg).trim()===''));
+      // so between-set logging is one tap (Done) per set. Reps, load AND RIR
+      // all carry — but only into empty fields, and flagged as non-user edits
+      // exactly like the existing reps/load prefill (RIR never feeds grading
+      // or override detection, which watch load only).
+      const nextIdx = block.sets.findIndex((s,j)=> j>si && !s.completed && (String(s.reps).trim()==='' || String(s.weightKg).trim()==='' || rirFromRpe(s.rpe).trim()===''));
       if(nextIdx !== -1){
         const carry = {};
         if(String(block.sets[nextIdx].reps).trim()==='') carry.reps = set.reps;
         if(String(block.sets[nextIdx].weightKg).trim()==='') carry.weightKg = set.weightKg;
+        if(rirFromRpe(block.sets[nextIdx].rpe).trim()==='' && String(set.rpe ?? '').trim()!=='') carry.rpe = set.rpe;
         if(Object.keys(carry).length) updateSet(bi,nextIdx,carry,{ userEdit: false });
       }
       // One-thumb flow: the field you edit between sets is the NEXT set's
