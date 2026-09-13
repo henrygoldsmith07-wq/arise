@@ -30,20 +30,22 @@ describe('prospectiveFieldComparison — gradeable prospective evidence only', (
     const rows = [
       gradeRow({ user: 'u1', session: 's1' }),
       gradeRow({ user: 'u2', session: 's2' }),
-      { ...gradeRow({ user: 'u1', session: 's3' }), outcome: undefined }, // unresolved → open
+      { ...gradeRow({ user: 'u1', session: 's3' }), outcome: undefined, outcomeProvenance: undefined }, // live open: prospective + open, never excluded
       { ...gradeRow({ user: 'u1', session: 's4' }), provenance: { origin: 'replay' } }, // reconstructed
       { ...gradeRow({ user: 'u2', session: 's5' }), outcome: { ...gradeRow().outcome, followed: false, gradeable: undefined, sessionId: 's5', arms: undefined } }, // unfollowed
       { ...gradeRow({ user: 'u2', session: 's6' }), outcome: { ...gradeRow().outcome, userOverride: true, gradeable: undefined, sessionId: 's6', arms: undefined } }, // override
       { ...gradeRow({ user: 'u1', session: 's7' }), outcome: { ...gradeRow().outcome, pain: true, gradeable: undefined, sessionId: 's7', arms: undefined } }, // flagged
       { ...gradeRow({ user: 'u1', session: 's8' }), outcome: { ...gradeRow().outcome, gradeable: false, sessionId: 's8', arms: undefined } }, // stored not-gradeable, followed, unflagged → other
+      { ...gradeRow({ user: 'u2', session: 's9' }), outcomeProvenance: { origin: 'imported' } }, // live rec, imported outcome → excluded once resolved
     ];
     const c = prospectiveFieldComparison(rows);
-    assert.equal(c.prospective, 7);
+    assert.equal(c.prospective, 8);
     assert.equal(c.resolved, 6);
     assert.equal(c.gradeable, 2);
     assert.equal(c.open, 1);
     assert.equal(c.excluded.nonProspective, 1);
-    assert.equal(c.excluded.unresolved, 1);
+    assert.equal(c.excluded.unprovenOutcome, 1);
+    assert.ok(!('unresolved' in c.excluded), 'open rows are prospective, never an exclusion bucket');
     assert.deepEqual(c.excluded.nonGradeable, { unfollowed: 1, override: 1, flagged: 1, other: 1 });
     assert.equal(c.maturity, 'insufficient');
   });

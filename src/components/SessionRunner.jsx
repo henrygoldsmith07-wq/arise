@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, Fragment } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { lastExerciseSets } from '../lib/store.js';
 import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, applySwapToBlocks, attributePrescribedSets, userAddedSet, removeSetAt, isSetPerformed, personalCalibrationFromHistory } from '../lib/progression.js';
@@ -39,6 +39,9 @@ function parseNum(v){ const n=Number(v); return Number.isFinite(n)? n : 0; }
 // "2 RIR" ↔ rpe 8. Blank stays blank.
 function rirFromRpe(rpe){ const t=String(rpe ?? '').trim(); if(t==='') return ''; const n=Number(t); if(!Number.isFinite(n)) return ''; return String(Math.max(0, Math.min(10, Math.round((10-n)*2)/2))); }
 function rpeFromRir(rir){ const t=String(rir ?? '').trim(); if(t==='') return ''; const n=Number(t); if(!Number.isFinite(n)) return ''; return String(Math.max(0, Math.min(10, Math.round((10-n)*2)/2))); }
+// Step a suggested RIR value by whole points, clamped to the 0–10 scale.
+// Pure — the suggestion bar adjusts without ever reading entered values.
+function stepRir(rir, delta){ const n=Number(rir); if(!Number.isFinite(n)) return rir; return String(Math.max(0, Math.min(10, Math.round((n+delta)*2)/2))); }
 function fmtRest(s){ const m=Math.floor(s/60); const r=s%60; return m? `${m}:${String(r).padStart(2,'0')}` : `${r}s`; }
 function firstInt(reps){ const m=String(reps).match(/\d+/); return m? m[0] : ''; }
 
@@ -181,6 +184,11 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   const [restExerciseId,setRestExerciseId]=useState(()=> draft?.restExerciseId || null);
   const [clock,setClock]=useState(()=> Date.now());
   const [swapOpen,setSwapOpen]=useState(null);
+  // RIR suggestion (never a silent observation): { bi, si, value, exerciseId }
+  // set when a set completes with a measured RIR and the next row has none.
+  // The suggestion writes NOTHING until the user confirms (Same/stepper) or
+  // types in the field — Done alone never confirms it.
+  const [rirSuggest,setRirSuggest]=useState(null);
   const [discardConfirmOpen,setDiscardConfirmOpen]=useState(false);
   const [restAnnouncement,setRestAnnouncement]=useState('');
   const [qualityRating,setQualityRating]=useState(()=> draft?.quality || null);
@@ -589,6 +597,20 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     onFocus: trackFieldFocus,
     onBlur: (e)=> { if(fieldCommitted(e)) logFieldCommit(kind, exerciseId, setIndex); },
   });
+  // Explicit RIR confirmation: writes the suggested (or stepped) value as a
+  // genuine user edit. This is the ONLY path by which a suggestion becomes
+  // an observation — typing in the field is the other, via the normal
+  // onChange. Steppers adjust AND confirm in one tap (the user acted on the
+  // value deliberately); Done never calls this.
+  const confirmRirSuggestion = (rirValue)=>{
+    if(!rirSuggest) return;
+    const { bi, si, exerciseId } = rirSuggest;
+    const rpe = rpeFromRir(rirValue);
+    if(rpe === '') return;
+    updateSet(bi, si, { rpe }, { userEdit: true });
+    try{ recordEvent('rir-suggestion-confirmed', { sessionId:session.id, exerciseId, setIndex:si, mode: gymMode ? 'gym' : 'standard' }); }catch{}
+    setRirSuggest(null);
+  };
   const completeSet = (bi,si)=>{
     const block=blocks[bi];
     const set=block?.sets?.[si];
@@ -608,17 +630,25 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       lastSetAtRef.current=new Date(now).toISOString();
       if(audioCueOn){ try{ const ctx=new (window.AudioContext||window.webkitAudioContext)(); const o=ctx.createOscillator(); const g=ctx.createGain(); o.connect(g); g.connect(ctx.destination); o.frequency.value=880; g.gain.setValueAtTime(0.08, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.18); o.start(); o.stop(ctx.currentTime+0.2); setTimeout(()=> ctx.close(), 300); }catch{} }
       // Carry-forward: prefill the next unfinished row with what you just did,
-      // so between-set logging is one tap (Done) per set. Reps, load AND RIR
-      // all carry — but only into empty fields, and flagged as non-user edits
-      // exactly like the existing reps/load prefill (RIR never feeds grading
-      // or override detection, which watch load only).
-      const nextIdx = block.sets.findIndex((s,j)=> j>si && !s.completed && (String(s.reps).trim()==='' || String(s.weightKg).trim()==='' || rirFromRpe(s.rpe).trim()===''));
+      // so between-set logging stays one tap (Done) per set for load and
+      // reps — both flagged as non-user edits, exactly as before.
+      // RIR is deliberately NOT carried: a carried RIR is a SUGGESTION, not
+      // an observation, and silently persisting it would feed unmeasured
+      // effort into progression, grading and coaching. Instead the next row
+      // gets a one-tap suggestion bar (Same / − / +); only an explicit
+      // confirm or a typed edit writes rpe. Done alone never confirms.
+      const nextIdx = block.sets.findIndex((s,j)=> j>si && !s.completed && (String(s.reps).trim()==='' || String(s.weightKg).trim()===''));
       if(nextIdx !== -1){
         const carry = {};
         if(String(block.sets[nextIdx].reps).trim()==='') carry.reps = set.reps;
         if(String(block.sets[nextIdx].weightKg).trim()==='') carry.weightKg = set.weightKg;
-        if(rirFromRpe(block.sets[nextIdx].rpe).trim()==='' && String(set.rpe ?? '').trim()!=='') carry.rpe = set.rpe;
         if(Object.keys(carry).length) updateSet(bi,nextIdx,carry,{ userEdit: false });
+      }
+      const nextRpeEmpty = nextIdx !== -1 && rirFromRpe(block.sets[nextIdx].rpe).trim()==='' && !block.sets[nextIdx].completed;
+      if(nextRpeEmpty && String(set.rpe ?? '').trim()!==''){
+        const suggestion = rirFromRpe(set.rpe);
+        setRirSuggest({ bi, si: nextIdx, value: suggestion, exerciseId: block.exerciseId });
+        try{ recordEvent('rir-suggestion-shown', { sessionId:session.id, exerciseId:block.exerciseId, setIndex:nextIdx, mode: gymMode ? 'gym' : 'standard' }); }catch{}
       }
       // One-thumb flow: the field you edit between sets is the NEXT set's
       // reps. Auto-advance focus there so the keyboard is up and its content
@@ -665,6 +695,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     // friction stats can count deletions without inspecting content (which the
     // sanitizer would strip anyway).
     try{ recordEvent('remove-set', { sessionId:session.id, exerciseId:blocks[bi].exerciseId, setIndex:si, kind: set.origin==='user-added' ? 'user-added' : 'prescribed', mode: gymMode ? 'gym' : 'standard' }); }catch{}
+    setRirSuggest(null); // row indexes shift — never point a suggestion at the wrong row
     setBlocks(prev=> prev.map((b,i)=> i!==bi? b : removeSetAt(b, si).block));
   };
   // Gym Mode: mark a set failed (attempted, didn't get the reps). Persisted as
@@ -722,6 +753,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       });
     });
     setSwapOpen(null);
+    setRirSuggest(null); // swapped exercise, fresh rows — stale suggestions must not linger
     // Swap time = sheet-open to commit; commit-without-open still logs the swap
     // itself (elapsedMs omitted) so the substitution is never lost to a race.
     try{
@@ -1076,7 +1108,8 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     onLongPress: ()=> openKeypad(bi,si),
                   }) : null;
                   return (
-                  <div key={si} {...(gestures ? { onPointerDown:gestures.onPointerDown, onPointerMove:gestures.onPointerMove, onPointerUp:gestures.onPointerUp, onPointerLeave:gestures.onPointerLeave, onPointerCancel:gestures.onPointerCancel } : {})} style={gestures?.style}
+                  <Fragment key={si}>
+                  <div {...(gestures ? { onPointerDown:gestures.onPointerDown, onPointerMove:gestures.onPointerMove, onPointerUp:gestures.onPointerUp, onPointerLeave:gestures.onPointerLeave, onPointerCancel:gestures.onPointerCancel } : {})} style={gestures?.style}
                     className={`grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] gap-1.5 items-center rounded-xl ${s.failed ? 'bg-reviewsoft border border-review/30' : ''}`}>
                     <span className={`w-7 h-7 grid place-items-center rounded-full border text-xs font-bold tabular-nums ${s.completed?'bg-success text-bg border-success':s.failed?'bg-review text-bg border-review':'bg-surface2 border-line'}`}>{si+1}</span>
                     <div className="min-w-0 flex items-center gap-1">
@@ -1127,6 +1160,20 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                       <button onClick={()=> removeSet(bi,si)} aria-label={`Remove set ${si+1}`} className="relative w-9 h-9 grid place-items-center rounded-full border border-line text-ink3 before:absolute before:-inset-1.5 before:rounded-full before:content-['']">×</button>
                     )}
                   </div>
+                  {/* RIR suggestion: the previous set's RIR offered for one-tap
+                      confirm — never written until confirmed or typed. Hidden
+                      once the row carries any RIR (confirmed, edited) or is
+                      done: Done alone must never persist a suggestion. */}
+                  {rirSuggest && rirSuggest.bi===bi && rirSuggest.si===si && !s.completed && rirFromRpe(s.rpe).trim()==='' && (
+                    <div role="group" aria-label={`Suggested RIR ${rirSuggest.value} for set ${si+1}`} className="flex items-center gap-1.5 rounded-xl border border-dashed border-line bg-surface2 px-2.5 py-1.5 -mt-1">
+                      <span className="text-[11px] text-ink3 flex-1 min-w-0">RIR {rirSuggest.value} suggested from last set</span>
+                      <button onClick={()=> confirmRirSuggestion(rirSuggest.value)} aria-label={`Use suggested RIR ${rirSuggest.value} for set ${si+1}`} className="min-h-9 px-3 rounded-full bg-ink text-bg text-xs font-bold">Same</button>
+                      <button onClick={()=> confirmRirSuggestion(stepRir(rirSuggest.value,-1))} aria-label={`Decrease suggested RIR for set ${si+1}`} className="min-h-9 min-w-9 grid place-items-center rounded-full border border-line bg-surface text-sm font-black">−</button>
+                      <span aria-hidden className="text-xs font-black tabular-nums w-6 text-center">{rirSuggest.value}</span>
+                      <button onClick={()=> confirmRirSuggestion(stepRir(rirSuggest.value,1))} aria-label={`Increase suggested RIR for set ${si+1}`} className="min-h-9 min-w-9 grid place-items-center rounded-full border border-line bg-surface text-sm font-black">+</button>
+                    </div>
+                  )}
+                  </Fragment>
                   );
                 })}
                 {(supportsAssisted || b.unilateral) && b.sets.length>0 && (

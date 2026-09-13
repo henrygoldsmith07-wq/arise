@@ -265,10 +265,16 @@ const APPLY_ALL_EVENTS = ['apply-all'];
 const SWAP_OPEN_EVENTS = ['swap-open'];
 const SWAP_COMMIT_EVENTS = ['swap-commit', 'exercise:swapped'];
 const ACCEPT_EVENTS = ['recommendation:accepted', 'recommendation:dismissed'];
+// RIR suggestion lifecycle: `-shown` is display (like session:start — never
+// an interaction); `-confirmed` is the user's one-tap confirm and counts as
+// the single action it is. Neither ever carries the RIR value itself.
+const RIR_SUGGESTION_SHOWN_EVENTS = ['rir-suggestion-shown'];
+const RIR_CONFIRM_EVENTS = ['rir-suggestion-confirmed'];
 const INTERACTION_EVENTS = [
   ...COMPLETE_EVENTS, ...UNDO_EVENTS, ...ADD_EVENTS, ...REMOVE_EVENTS,
   ...SKIP_EVENTS, ...FAILED_EVENTS, ...FIELD_COMMIT_EVENTS, ...APPLY_ALL_EVENTS,
   ...SWAP_OPEN_EVENTS, ...SWAP_COMMIT_EVENTS, ...ACCEPT_EVENTS,
+  ...RIR_CONFIRM_EVENTS,
 ];
 // Value-free field-commit tracking for set-editor inputs. Call onFocus on
 // focus and fieldCommitted on blur: it reports true only when the value
@@ -308,6 +314,7 @@ function frictionCore(events, { mode = null } = {}){
   let completionMs=[];
   let completed=0, skipped=0, undos=0, added=0, removed=0, failedMarked=0;
   let fieldLoad=0, fieldReps=0, fieldRir=0;
+  let rirShown=0, rirConfirmed=0;
   let interactions=0;
   let accepted=0, viaApplyAll=0;
   let swapOpens=0, swapCommits=0, swapMs=[], saveMs=[];
@@ -343,6 +350,13 @@ function frictionCore(events, { mode = null } = {}){
         else if(e.type==='reps-field-commit') fieldReps++;
         else fieldRir++;
       }
+      else if(inType(e, RIR_SUGGESTION_SHOWN_EVENTS)){
+        rirShown++; // display only — never an interaction
+      }
+      else if(inType(e, RIR_CONFIRM_EVENTS)){
+        rirConfirmed++;
+        interactions++;
+      }
       else if(inType(e, APPLY_ALL_EVENTS) || (e.type==='recommendation:accepted' && e.via==='apply-all')){
         accepted++;
         viaApplyAll++;
@@ -365,7 +379,7 @@ function frictionCore(events, { mode = null } = {}){
       }
     }
   }
-  return { sessions: bySession.size, completed, skipped, undos, added, removed, failedMarked, fieldLoad, fieldReps, fieldRir, interactions, accepted, viaApplyAll, swapOpens, swapCommits, startToFirst, completionMs, swapMs, saveMs };
+  return { sessions: bySession.size, completed, skipped, undos, added, removed, failedMarked, fieldLoad, fieldReps, fieldRir, rirShown, rirConfirmed, interactions, accepted, viaApplyAll, swapOpens, swapCommits, startToFirst, completionMs, swapMs, saveMs };
 }
 
 function frictionSummary(core){
@@ -389,6 +403,10 @@ function frictionSummary(core){
     failedMarks: core.failedMarked,
     skippedSets: core.skipped,
     fieldCommits: { total: fieldCommits, load: core.fieldLoad, reps: core.fieldReps, rir: core.fieldRir },
+    // RIR suggestion cost comparison: shown (offered) vs confirmed (one tap)
+    // vs typed (a field commit). A confirm costs exactly one value-free
+    // action and never carries the value.
+    rirSuggestions: { shown: core.rirShown, confirmed: core.rirConfirmed },
     startToFirstSetMs,
     loggingMsMedian,
     applyAll: {

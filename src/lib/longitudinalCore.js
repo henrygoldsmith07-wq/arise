@@ -122,14 +122,26 @@ export const RECOMMENDATION_OUTCOME_LABELS = Object.freeze([
   'insufficient-evidence',
 ]);
 
-// A prospective record is only first-party evidence when BOTH the recommendation
-// AND the attached outcome were produced live on this device. Fail closed:
-// replayed/imported/seeded recommendations, outcomes re-measured elsewhere,
-// and rows with missing or ambiguous provenance on EITHER side are excluded
-// from every prospective rollup — an unknown origin is never trusted by
-// default and there is no path that upgrades one to live-engine.
+// Prospective vs resolved-evidence, split into two helpers so open
+// recommendations are never mislabelled:
+//   isProspectiveRecommendation — the RECOMMENDATION was recorded live
+//     (live-engine). True the moment it is recorded, open or resolved.
+//   isProspectiveRecord — RESOLVED first-party evidence: a live recorded
+//     recommendation PLUS a live measured outcome. This is the gate every
+//     calibration/study rollup must use; open rows and rows whose outcome
+//     arrived by import/replay/seed (or is missing) never pass it.
+// Core invariant: prospective begins when a live recommendation is recorded;
+// trusted resolved evidence requires both live sides.
+export function isProspectiveRecommendation(record){
+  return record?.provenance?.origin === 'live-engine';
+}
+export function isResolvedProspectiveEvidence(record){
+  return record?.provenance?.origin === 'live-engine'
+    && record?.outcome != null
+    && record?.outcomeProvenance?.origin === 'live-engine';
+}
 export function isProspectiveRecord(record){
-  return record?.provenance?.origin === 'live-engine' && record?.outcomeProvenance?.origin === 'live-engine';
+  return isResolvedProspectiveEvidence(record);
 }
 
 // Confidence band from the frozen decision audit (object or string forms).

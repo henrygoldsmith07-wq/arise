@@ -9,7 +9,7 @@ import { resolveArisePriors } from './priors.js';
 import { STUDY_VERSION } from './studyEnrollment.js';
 import { STUDY_DESIGN } from './study.js';
 import { EVALUATION_SCHEMA_VERSION, round, wilsonInterval } from './longitudinalCore.js';
-import { isProspectiveRecord, realisedSuccess, confidenceBandOf, recommendationTypeOf, shrinkRate, classifyRecommendationOutcome, participantOf, ANONYMOUS_LOCAL_PARTICIPANT } from './longitudinalCore.js';
+import { isProspectiveRecord, isProspectiveRecommendation, realisedSuccess, confidenceBandOf, recommendationTypeOf, shrinkRate, classifyRecommendationOutcome, participantOf, ANONYMOUS_LOCAL_PARTICIPANT } from './longitudinalCore.js';
 
 // ── Aggregation ─────────────────────────────────────────────────────────
 
@@ -450,11 +450,22 @@ export function calibrateRecommendations(ledger, { config = null } = {}){
   const priors = resolveArisePriors(config);
   const cal = priors.calibration;
   const thresholds = priors.longitudinal.outcomeLabels;
-  const prospective = (ledger || []).filter(row=> row && row.recommendation && isProspectiveRecord(row));
-  const resolvedRows = prospective.filter(row=> row.outcome);
+  // Prospective begins at live recording: every live-recorded recommendation
+  // counts as prospective AND open, whether or not its outcome has arrived.
+  const prospective = (ledger || []).filter(row=> row && row.recommendation && isProspectiveRecommendation(row));
+  // Resolved evidence stays gated on BOTH live sides: a resolved row whose
+  // outcome arrived by import/replay/seed (or is missing its provenance) is
+  // excluded from every rate — never graded, never calibrated on.
+  const resolvedRows = prospective.filter(row=> isProspectiveRecord(row));
+  const unprovenOutcome = prospective.filter(row=> row.outcome && !isProspectiveRecord(row)).length;
   const minimum = Math.max(1, Number(cal.minSamplesToTrust) || 1);
 
   const isGradeable = (row)=> isGradeableOutcome(row, thresholds);
+
+  // Grading runs on eligible resolved evidence ONLY — open rows are awaiting
+  // their workout and unproven-outcome rows are excluded, so neither can move
+  // a rate, a gate, or the calibration error.
+  const eligible = prospective.filter(row=> isProspectiveRecord(row));
 
   const gradeSegment = (rows, key)=>{
     const resolved = rows.filter(row=> row.outcome);
@@ -498,14 +509,14 @@ export function calibrateRecommendations(ledger, { config = null } = {}){
   };
   const dimension = (label, keyFn)=>{
     const out = {};
-    for(const [groupKey, rows] of groupBy(prospective, keyFn)){
+    for(const [groupKey, rows] of groupBy(eligible, keyFn)){
       const seg = gradeSegment(rows, groupKey);
       out[groupKey] = seg;
     }
     return out;
   };
 
-  const overall = gradeSegment(prospective, 'all');
+  const overall = gradeSegment(eligible, 'all');
   const policyKey = row => row.audit?.policy || (row.policy ? `priors-v${row.policy.priorsVersion}` : 'unknown');
   const experienceKey = row => row.basis?.trainingAgePhase || 'unknown';
 
@@ -531,8 +542,9 @@ export function calibrateRecommendations(ledger, { config = null } = {}){
     prospective: prospective.length,
     resolved: resolvedRows.length,
     gradeable: overall.gradeable,
-    open: prospective.length - resolvedRows.length,
-    excludedReconstructed: (ledger || []).filter(row=> row && row.recommendation && !isProspectiveRecord(row)).length,
+    open: prospective.filter(row=> !row.outcome).length,
+    excludedReconstructed: (ledger || []).filter(row=> row && row.recommendation && !isProspectiveRecommendation(row)).length,
+    excludedUnprovenOutcome: unprovenOutcome,
     overall,
     byConfidenceBand: dimension('band', row=> confidenceBandOf(row)),
     byExercise: dimension('exercise', row=> row.exerciseId),
@@ -543,7 +555,7 @@ export function calibrateRecommendations(ledger, { config = null } = {}){
     confidenceQuality,
     tendency,
     note: overall.gradeable >= minimum
-      ? `Calibrated on ${overall.gradeable} GRADEABLE prospective recommendation→outcome pairs (out of ${resolvedRows.length} resolved; unfollowed, overridden, and pain/technique sessions are excluded from every rate). Reconstructed or imported recommendations are excluded (${(ledger||[]).filter(r=>r&&r.recommendation&&!isProspectiveRecord(r)).length}). Sparse segments are shrunk toward a ${Math.round(cal.defaultSuccessRate*100)}% default and withheld below ${minimum} gradeable pairs.`
+      ? `Calibrated on ${overall.gradeable} GRADEABLE prospective recommendation→outcome pairs (out of ${resolvedRows.length} resolved with live outcomes on both sides; unfollowed, overridden, and pain/technique sessions are excluded from every rate). Reconstructed or imported recommendations are excluded (${(ledger||[]).filter(r=>r&&r.recommendation&&!isProspectiveRecommendation(r)).length}); ${unprovenOutcome} resolved without a live outcome never grade. Sparse segments are shrunk toward a ${Math.round(cal.defaultSuccessRate*100)}% default and withheld below ${minimum} gradeable pairs.`
       : `Need ${Math.max(0, minimum - overall.gradeable)} more prospective GRADEABLE pairs before any rate is trustworthy (${overall.gradeable} gradeable of ${resolvedRows.length} resolved so far — unfollowed, overridden and pain/technique sessions never count). Reconstructed recommendations are not prospective evidence.`,
   };
 }
@@ -568,8 +580,12 @@ export function prospectiveFieldComparison(rows, { config = null } = {}){
   const minUsers = 2;
 
   const list = Array.isArray(rows) ? rows : [];
-  const prospective = list.filter(row=> row && row.recommendation && isProspectiveRecord(row));
-  const resolvedRows = prospective.filter(row=> row.outcome);
+  // Prospective begins at live recording: live-recorded recommendations count
+  // as prospective + open while their outcome is still outstanding.
+  const prospective = list.filter(row=> row && row.recommendation && isProspectiveRecommendation(row));
+  const openRows = prospective.filter(row=> !row.outcome);
+  // Resolved evidence stays gated on both live sides.
+  const resolvedRows = prospective.filter(row=> isProspectiveRecord(row));
   const gradeableRows = resolvedRows.filter(row=> isGradeableOutcome(row, thresholds));
 
   // Identical re-recordings of the same realised transition (same user, same
@@ -592,10 +608,15 @@ export function prospectiveFieldComparison(rows, { config = null } = {}){
   const exercises = [...new Set(gradeable.map(row=> row.exerciseId).filter(Boolean))].sort();
 
   // Exclusion accounting: every non-counted row lands in exactly one bucket.
-  const excluded = { nonProspective: 0, unresolved: 0, nonGradeable: { unfollowed: 0, override: 0, flagged: 0, other: 0 } };
+  // Open live recommendations are NOT excluded — they are prospective and
+  // awaiting their workout, reported under `open`, never under a
+  // reconstructed/imported/non-prospective bucket. Resolved rows whose
+  // outcome lacks live provenance are excluded once resolved.
+  const excluded = { nonProspective: 0, unprovenOutcome: 0, nonGradeable: { unfollowed: 0, override: 0, flagged: 0, other: 0 } };
   for(const row of list){
-    if(!(row && row.recommendation) || !isProspectiveRecord(row)){ excluded.nonProspective++; continue; }
-    if(!row.outcome){ excluded.unresolved++; continue; }
+    if(!(row && row.recommendation) || !isProspectiveRecommendation(row)){ excluded.nonProspective++; continue; }
+    if(!row.outcome) continue; // open: prospective + awaiting, never excluded
+    if(!isProspectiveRecord(row)){ excluded.unprovenOutcome++; continue; }
     if(isGradeableOutcome(row, thresholds)) continue;
     const o = row.outcome;
     if(o.pain === true || o.techniqueWarning === true) excluded.nonGradeable.flagged++;
@@ -682,7 +703,7 @@ export function prospectiveFieldComparison(rows, { config = null } = {}){
     prospective: prospective.length,
     resolved: resolvedRows.length,
     gradeable: gradeable.length,
-    open: prospective.length - resolvedRows.length,
+    open: openRows.length,
     excluded,
     duplicatePairs: foldedDuplicates.length,
     // Shadow diagnostic, never causal: prescription difficulty and decision
@@ -698,7 +719,7 @@ export function prospectiveFieldComparison(rows, { config = null } = {}){
     sampleSufficiency: { users: users.length, gradeablePairs: gradeable.length, minUsers, minPairs, sufficient: maturity !== 'insufficient', reasons },
     maturity,
     note: maturity === 'insufficient'
-      ? `Prospective gradeable evidence is insufficient (${reasons.join('; ')}). No comparison is claimed; retrospective replays and reconstructed recommendations are never presented as prospective proof.`
+      ? `Prospective gradeable evidence is insufficient (${reasons.join('; ')}). ${openRows.length} live recommendation${openRows.length === 1 ? '' : 's'} awaiting ${openRows.length === 1 ? 'its' : 'their'} workout; ${excluded.unprovenOutcome} resolved without a live outcome never grade. No comparison is claimed; retrospective replays and reconstructed recommendations are never presented as prospective proof.`
       : `Descriptive only, from ${gradeable.length} gradeable prospective transitions across ${users.length} users: paired arise-vs-baseline wins on identical transitions, aggregated as a mean of per-user effects. Firm cross-arm claims require pooled multi-user replication.`,
   };
 }

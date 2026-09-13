@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/test';
 
-// Measured logging friction: a scripted two-set flow counts the value-free
-// interaction events the app records in localStorage. Target: the RIR field.
-// Every new set starts with an empty RIR (`rpe: ''` in newSet), so logging
-// RIR costs one `rir-field-commit` per set unless carry-forward prefills it
-// from the set just completed — the same prefill contract reps/load already
-// enjoy. This spec first pins the baseline, then the improvement.
+// RIR suggestion friction + measurement semantics. A carried RIR is a
+// suggestion, never an observation: completing a set with a measured RIR
+// offers it on the next row (Same / − / +), but NOTHING persists until the
+// user confirms or types. Done alone never confirms. Load/reps carry stays
+// fully automatic. Event counts below are the measured interaction cost:
+// Same-confirm costs exactly one value-free action; typing costs one commit.
 
 async function completeOnboarding(page){
   await page.goto('/');
@@ -68,41 +68,111 @@ async function eventCounts(page){
   });
 }
 
-test('RIR carry-forward removes one field-commit per set', async ({ page }) => {
-  await completeOnboarding(page);
-  await enableTelemetry(page);
-  const runner = await startWorkout(page);
+async function fillRemainingReps(runner){
+  const repsInputs = runner.getByLabel(/^Reps set \d+$/);
+  const n = await repsInputs.count();
+  for(let i = 0; i < n; i++){
+    if(!(await repsInputs.nth(i).inputValue())) await repsInputs.nth(i).fill('8');
+  }
+}
 
+async function savedSets(page){
+  return page.evaluate(async () => {
+    const { loadStore } = await import('/src/lib/store.js');
+    const store = loadStore();
+    return store.history[store.history.length - 1]?.blocks?.[0]?.sets || null;
+  });
+}
+
+async function logFirstSet(runner){
   const rirInputs = runner.getByLabel(/Reps in reserve set/);
   await expect(rirInputs.first()).toBeVisible({ timeout: 5000 });
   expect(await rirInputs.count()).toBeGreaterThanOrEqual(2);
-
-  // Set 1: full entry — reps, load, RIR — then Done.
-  const repsInputs = runner.getByLabel(/^Reps set \d+$/);
-  const loadInputs = runner.getByLabel(/Load set \d+ in kilograms/);
-  await repsInputs.nth(0).fill('8');
-  await loadInputs.nth(0).fill('20');
+  await runner.getByLabel(/^Reps set \d+$/).nth(0).fill('8');
+  await runner.getByLabel(/Load set \d+ in kilograms/).nth(0).fill('20');
   await rirInputs.nth(0).fill('2');
   await runner.getByRole('button', { name: 'Done' }).nth(0).click();
+  return rirInputs;
+}
 
-  // The next set's RIR arrives prefilled from the set just completed.
-  await expect(rirInputs.nth(1)).toHaveValue('2', { timeout: 5000 });
+test('an unconfirmed RIR suggestion never reaches saved history', async ({ page }) => {
+  await completeOnboarding(page);
+  await enableTelemetry(page);
+  const runner = await startWorkout(page);
+  const rirInputs = await logFirstSet(runner);
 
-  // Complete set 2 without touching RIR, then fill the rest so save enables.
+  // The suggestion is offered — but the input stays empty (no observation).
+  const suggestion = runner.getByRole('group', { name: 'Suggested RIR 2 for set 2' });
+  await expect(suggestion).toBeVisible({ timeout: 5000 });
+  await expect(rirInputs.nth(1)).toHaveValue('');
+
+  // Done WITHOUT confirming: the set completes with no RIR recorded.
   await runner.getByRole('button', { name: 'Done' }).nth(1).click();
-  const repsCount = await repsInputs.count();
-  for(let i = 0; i < repsCount; i++){
-    if(!(await repsInputs.nth(i).inputValue())) await repsInputs.nth(i).fill('8');
-  }
+  await fillRemainingReps(runner);
   const saveBtn = runner.getByRole('button', { name: 'Save session' });
   await expect(saveBtn).toBeEnabled({ timeout: 5000 });
   await saveBtn.click();
   await expect(runner).toBeHidden({ timeout: 8000 });
 
-  // Measurement: exactly ONE rir-field-commit for two identically-logged
-  // sets (set 1's entry). Before carry-forward this was two — one per set.
+  const sets = await savedSets(page);
+  expect(sets[0].rpe).toBe('8'); // RIR 2 → RPE 8, typed on set 1
+  expect(sets[1].rpe).toBe('');  // suggestion ignored → unrecorded, never inferred
   const { counts } = await eventCounts(page);
-  console.log(`friction counts: ${JSON.stringify(counts)}`);
-  expect(counts['rir-field-commit'] || 0).toBe(1);
-  expect(counts['complete-set'] || 0).toBeGreaterThanOrEqual(2);
+  console.log(`friction counts (unconfirmed): ${JSON.stringify(counts)}`);
+  expect(counts['rir-suggestion-shown'] || 0).toBeGreaterThanOrEqual(1);
+  expect(counts['rir-suggestion-confirmed'] || 0).toBe(0);
+  expect(counts['rir-field-commit'] || 0).toBe(1); // only set 1's typed entry
+});
+
+test('Same confirms in one tap; load/reps carry stays automatic', async ({ page }) => {
+  await completeOnboarding(page);
+  await enableTelemetry(page);
+  const runner = await startWorkout(page);
+  const rirInputs = await logFirstSet(runner);
+
+  // Load + reps still arrive prefilled automatically.
+  await expect(runner.getByLabel(/^Reps set \d+$/).nth(1)).toHaveValue('8');
+  await expect(runner.getByLabel(/Load set \d+ in kilograms/).nth(1)).toHaveValue('20');
+
+  // One tap confirms the suggestion; the input fills and the bar retires.
+  await runner.getByRole('button', { name: 'Use suggested RIR 2 for set 2' }).click();
+  await expect(rirInputs.nth(1)).toHaveValue('2');
+  await expect(runner.getByRole('group', { name: 'Suggested RIR 2 for set 2' })).toBeHidden();
+
+  await runner.getByRole('button', { name: 'Done' }).nth(1).click();
+  await fillRemainingReps(runner);
+  const saveBtn = runner.getByRole('button', { name: 'Save session' });
+  await expect(saveBtn).toBeEnabled({ timeout: 5000 });
+  await saveBtn.click();
+  await expect(runner).toBeHidden({ timeout: 8000 });
+
+  const sets = await savedSets(page);
+  expect(sets[1].rpe).toBe('8'); // confirmed RIR 2 persists as an observation
+  const { counts } = await eventCounts(page);
+  console.log(`friction counts (Same-confirm): ${JSON.stringify(counts)}`);
+  expect(counts['rir-suggestion-confirmed'] || 0).toBe(1);
+});
+
+test('a typed RIR edit persists normally without confirming', async ({ page }) => {
+  await completeOnboarding(page);
+  await enableTelemetry(page);
+  const runner = await startWorkout(page);
+  const rirInputs = await logFirstSet(runner);
+
+  await expect(runner.getByRole('group', { name: 'Suggested RIR 2 for set 2' })).toBeVisible({ timeout: 5000 });
+  // Typing a different value overrides the suggestion — no confirm needed.
+  await rirInputs.nth(1).fill('3');
+  await runner.getByRole('button', { name: 'Done' }).nth(1).click();
+  await fillRemainingReps(runner);
+  const saveBtn = runner.getByRole('button', { name: 'Save session' });
+  await expect(saveBtn).toBeEnabled({ timeout: 5000 });
+  await saveBtn.click();
+  await expect(runner).toBeHidden({ timeout: 8000 });
+
+  const sets = await savedSets(page);
+  expect(sets[1].rpe).toBe('7'); // typed RIR 3 → RPE 7
+  const { counts } = await eventCounts(page);
+  console.log(`friction counts (typed-edit): ${JSON.stringify(counts)}`);
+  expect(counts['rir-suggestion-confirmed'] || 0).toBe(0);
+  expect(counts['rir-field-commit'] || 0).toBe(2); // one typed entry per set
 });

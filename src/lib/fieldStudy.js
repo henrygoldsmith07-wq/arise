@@ -13,7 +13,7 @@ import { parseImportFile, mergeStores } from './export.js';
 import { isValidStudyParticipantId } from './studyIdentity.js';
 import { evaluateLongitudinal } from './longitudinal.js';
 import { prospectiveFieldComparison, isGradeableOutcome, prospectiveTransitionKey, clusteredBootstrapDifference, SHADOW_EVIDENCE_LABEL } from './evaluation.js';
-import { isProspectiveRecord, bestSetOfBlock, participantOf, participantOfStore } from './longitudinalCore.js';
+import { isProspectiveRecord, isProspectiveRecommendation, isResolvedProspectiveEvidence, bestSetOfBlock, participantOf, participantOfStore } from './longitudinalCore.js';
 import { enrollmentAudit } from './studyEnrollment.js';
 import { runComparativeStudy, collectDeloadDecisions, validateDeloadDecisions } from './study.js';
 import { recommendationAcceptanceStats, loggingTimeStats } from './telemetry.js';
@@ -187,7 +187,7 @@ export function pooledProspectiveComparison(participants, { config = null } = {}
   const nextPerExercise = {};
   const seenNext = new Set();
   for(const row of rows){
-    if(!row?.outcome || !isGradeableOutcome(row, resolveArisePriors(config).longitudinal.outcomeLabels)) continue;
+    if(!row?.outcome || !isResolvedProspectiveEvidence(row) || !isGradeableOutcome(row, resolveArisePriors(config).longitudinal.outcomeLabels)) continue;
     // Same de-duplication as the comparison itself: a re-recorded transition
     // contributes one next-exposure delta, never two.
     const key = prospectiveTransitionKey(row);
@@ -244,13 +244,18 @@ export function pooledAssignedComparison(participants, { config = null, minParti
       rows.push({ ...row, participantId: row.participantId ?? code });
     }
   }
-  const excluded = { nonProspective: 0, unresolved: 0, unassigned: 0, noAssignedMet: 0 };
+  const excluded = { nonProspective: 0, unprovenOutcome: 0, unassigned: 0, noAssignedMet: 0 };
   const seen = new Set();
   const assigned = [];
   let duplicatePairs = 0;
+  let openRows = 0;
   for(const row of rows){
-    if(!(row && row.recommendation) || !isProspectiveRecord(row)){ excluded.nonProspective++; continue; }
-    if(!row.outcome){ excluded.unresolved++; continue; }
+    if(!(row && row.recommendation) || !isProspectiveRecommendation(row)){ excluded.nonProspective++; continue; }
+    // Live open recommendations are prospective and awaiting — counted under
+    // `open`, never under an exclusion bucket.
+    if(!row.outcome){ openRows++; continue; }
+    // Resolved without a live outcome: excluded once resolved, never graded.
+    if(!isProspectiveRecord(row)){ excluded.unprovenOutcome++; continue; }
     if(!ASSIGNED_PRIMARY_ARMS.includes(row.assignedArm)){ excluded.unassigned++; continue; }
     if(row.outcome.assignedMet == null){ excluded.noAssignedMet++; continue; }
     const key = `${prospectiveTransitionKey(row)}::${row.assignedArm}`;
@@ -317,6 +322,7 @@ export function pooledAssignedComparison(participants, { config = null, minParti
     evidenceKind: 'assigned-arm-pooled',
     participants: participantCount,
     transitions,
+    open: openRows,
     arise: { key: 'arise', n: ariseTot.n, metCount: ariseTot.met, participants: ariseTot.users, targetAchievementRate: ariseRate, conclusive: ariseConclusive },
     'double-progression': { key: 'double-progression', n: dpTot.n, metCount: dpTot.met, participants: dpTot.users, targetAchievementRate: dpRate, conclusive: dpConclusive },
     difference: { metRateDelta, clusteredBootstrap: clustered },
@@ -724,7 +730,7 @@ export function renderFieldReport(result){
       L.push(`- ${arm.label}: ${arm.pairs} pairs · arise ${arm.ariseRate == null ? '—' : `${Math.round(arm.ariseRate*100)}%`} vs baseline ${arm.baseRate == null ? '—' : `${Math.round(arm.baseRate*100)}%`} · mean user effect ${arm.effectMean == null ? '—' : `${arm.effectMean > 0 ? '+' : ''}${Math.round(arm.effectMean*100)}pp`} (user band ${arm.effectBand[0] == null ? '—' : `${Math.round(arm.effectBand[0]*100)}…${Math.round(arm.effectBand[1]*100)}pp`})`);
     }
     L.push(`- Realised context: failed-set rate ${fc.realised.failedSetRate == null ? '—' : `${Math.round(fc.realised.failedSetRate*100)}%`} · mean e1RM change ${fc.realised.meanChangePct == null ? '—' : `${Math.round(fc.realised.meanChangePct*1000)/10}%`} · over ${fc.realised.overPrescriptionShare == null ? '—' : `${Math.round(fc.realised.overPrescriptionShare*100)}%`} / under ${fc.realised.underPrescriptionShare == null ? '—' : `${Math.round(fc.realised.underPrescriptionShare*100)}%`} · next-exposure ${fc.nextExposure.n ? `n=${fc.nextExposure.n}, mean Δ ${Math.round(fc.nextExposure.meanDeltaPct*1000)/10}%` : 'no follow-up exposures yet'}.`);
-    L.push(`- Excluded: ${fc.excluded.nonProspective} non-prospective · ${fc.excluded.unresolved} unresolved · ${fc.excluded.nonGradeable.unfollowed} unfollowed · ${fc.excluded.nonGradeable.override} overridden · ${fc.excluded.nonGradeable.flagged} pain/technique-flagged · ${fc.unidentifiedExports || 0} unidentified exports.`);
+    L.push(`- Excluded: ${fc.excluded.nonProspective} non-prospective · ${fc.excluded.unprovenOutcome} resolved without a live outcome · ${fc.excluded.nonGradeable.unfollowed} unfollowed · ${fc.excluded.nonGradeable.override} overridden · ${fc.excluded.nonGradeable.flagged} pain/technique-flagged · ${fc.unidentifiedExports || 0} unidentified exports. Open live recommendations (${fc.open}) await their workout and are never excluded.`);
     L.push('');
   }
   const proto = result.protocol || {};
