@@ -502,12 +502,23 @@ test.describe('Prospective prescription capture', () => {
 
     // Reload: the split survives as saved history. Durability is gated on
     // the app's own write queue (whenPersisted) — reloading before the
-    // async persist drains would test timing luck, not the split.
+    // async persist drains would test timing luck, not the split. Two
+    // animation frames first: React persists from a passive effect, so the
+    // write must be ENQUEUED (not merely state-committed) before waiting.
     await page.evaluate(async () => {
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const { whenPersisted } = await import('/src/lib/storage.js');
       await whenPersisted();
     });
     await page.reload();
+    // Boot hydration is async (IndexedDB): the freshly loaded page reads an
+    // empty store until it completes, so the split assertion must wait for
+    // the saved session to reappear — otherwise the test measures boot
+    // timing, not split durability.
+    await expect.poll(async () => page.evaluate(async () => {
+      const { loadStore } = await import('/src/lib/store.js');
+      return loadStore().history.length;
+    }), { timeout: 15000, message: 'saved history rehydrates after reload' }).toBeGreaterThan(0);
     const reloaded = await page.evaluate(async (orig) => {
       const { loadStore } = await import('/src/lib/store.js');
       const last = loadStore().history[loadStore().history.length - 1];

@@ -163,8 +163,11 @@ test('crash recovery restores work without resurrecting suggestions', async ({ p
   await expect(runner.getByRole('group', { name: 'Suggested RIR 2 for set 2' })).toBeVisible({ timeout: 5000 });
 
   // Crash mid-suggestion: reload, resume from the draft. Durability is gated
-  // on the app's own write queue so the test asserts recovery, not timing.
+  // on the app's own write queue so the test asserts recovery, not timing
+  // (two frames first: persistence runs from a passive effect, so the draft
+  // write must be enqueued before waiting on it).
   await page.evaluate(async () => {
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     const { whenPersisted } = await import('/src/lib/storage.js');
     await whenPersisted();
   });

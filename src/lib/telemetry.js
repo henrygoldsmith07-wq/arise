@@ -316,13 +316,6 @@ function frictionCore(events, { mode = null } = {}){
     seenIds.add(e.id);
     return true;
   });
-  const inScope = mode == null ? unique : unique.filter(e=> e.mode === mode || e.type === 'session:start');
-  const bySession=new Map();
-  for(const e of inScope){
-    if(!e.sessionId || typeof e.sessionId !== 'string') continue;
-    if(!bySession.has(e.sessionId)) bySession.set(e.sessionId, []);
-    bySession.get(e.sessionId).push(e);
-  }
   const inType = (e, list)=> list.includes(e.type);
   // Net completion identity: stable setId where present (survives swaps and
   // block moves); legacy fallback is session+exercise+setIndex. Events with
@@ -333,6 +326,41 @@ function frictionCore(events, { mode = null } = {}){
     if(e.exerciseId != null && e.setIndex != null) return `pos:${e.sessionId}\n${String(e.exerciseId)}\n${String(e.setIndex)}`;
     return null;
   };
+  // ── Global reconstruction FIRST (no mode filter): every session's events
+  // in time order fold into per-set final state. Mode buckets must never
+  // replay history independently — a cross-mode undo would otherwise leave
+  // stale completed work behind in the mode that logged the completion.
+  // Each final-completed set remembers the completion event that established
+  // it, so work attributes to the mode that produced it.
+  const sessionsAll=new Map();
+  for(const e of unique){
+    if(!e.sessionId || typeof e.sessionId !== 'string') continue;
+    if(!sessionsAll.has(e.sessionId)) sessionsAll.set(e.sessionId, []);
+    sessionsAll.get(e.sessionId).push(e);
+  }
+  const netGlobal=new Map(); // key -> { completed, event }
+  for(const list of sessionsAll.values()){
+    const byTime=list.slice().sort((a,b)=> String(a.at||'').localeCompare(String(b.at||'')));
+    for(const e of byTime){
+      const key=setKey(e);
+      if(key == null) continue;
+      if(inType(e, COMPLETE_EVENTS)) netGlobal.set(key, { completed: true, event: e });
+      else if(inType(e, UNDO_EVENTS) || inType(e, FAILED_EVENTS)){
+        const cur=netGlobal.get(key);
+        if(cur && cur.completed === true) netGlobal.set(key, { completed: false, event: null });
+      }
+    }
+  }
+  // ── Scoped counting: actions stay attributed to the mode where they
+  // happened, even when the work they touched nets elsewhere.
+  const inScope = mode == null ? unique : unique.filter(e=> e.mode === mode || e.type === 'session:start');
+  const bySession=new Map();
+  const sessionHasInteraction=new Map();
+  for(const e of inScope){
+    if(!e.sessionId || typeof e.sessionId !== 'string') continue;
+    if(!bySession.has(e.sessionId)) bySession.set(e.sessionId, []);
+    bySession.get(e.sessionId).push(e);
+  }
   let startToFirst=[];
   let completionMs=[];
   let completed=0, skipped=0, undos=0, added=0, removed=0, failedMarked=0;
@@ -341,11 +369,6 @@ function frictionCore(events, { mode = null } = {}){
   let interactions=0;
   let accepted=0, viaApplyAll=0, applyPrev=0;
   let swapOpens=0, swapCommits=0, swapMs=[], saveMs=[];
-  // Net completion state per set identity: a set that is completed, undone
-  // and re-completed is ONE net set (corrections raise friction, never work).
-  // A set left failed is not left completed. Stray undos with no matching
-  // completion change nothing — ambiguity never invents or destroys work.
-  const netState=new Map();
   for(const list of bySession.values()){
     const byTime=list.slice().sort((a,b)=> String(a.at||'').localeCompare(String(b.at||'')));
     const start=byTime.find(e=> e.type==='session:start');
@@ -361,29 +384,18 @@ function frictionCore(events, { mode = null } = {}){
     }
     for(const e of byTime){
       if(mode != null && e.type !== 'session:start' && e.mode !== mode) continue;
+      const interactionsBefore = interactions;
       if(inType(e, COMPLETE_EVENTS)){
         completed++;
         interactions++;
-        const key=setKey(e);
-        if(key != null) netState.set(key, true);
         const ms=Number(e.elapsedMs);
         if(Number.isFinite(ms) && ms>=0) completionMs.push(ms);
       }
-      else if(inType(e, UNDO_EVENTS)){
-        undos++;
-        interactions++;
-        const key=setKey(e);
-        if(key != null && netState.get(key) === true) netState.set(key, false);
-      }
+      else if(inType(e, UNDO_EVENTS)){ undos++; interactions++; }
       else if(inType(e, ADD_EVENTS)){ added++; interactions++; }
       else if(inType(e, REMOVE_EVENTS)){ removed++; interactions++; }
       else if(inType(e, SKIP_EVENTS)){ skipped++; interactions++; }
-      else if(inType(e, FAILED_EVENTS)){
-        failedMarked++;
-        interactions++;
-        const key=setKey(e);
-        if(key != null && netState.get(key) === true) netState.set(key, false);
-      }
+      else if(inType(e, FAILED_EVENTS)){ failedMarked++; interactions++; }
       else if(inType(e, FIELD_COMMIT_EVENTS)){
         interactions++;
         if(e.type==='load-field-commit') fieldLoad++;
@@ -421,11 +433,28 @@ function frictionCore(events, { mode = null } = {}){
         const ms=Number(e.durationMs);
         if(Number.isFinite(ms) && ms>=0) saveMs.push(ms);
       }
+      if(interactions !== interactionsBefore) sessionHasInteraction.set(e.sessionId, true);
     }
   }
+  // Net work for THIS scope, attributed from the global reconstruction: a
+  // final-completed set counts for the mode whose completion established it
+  // (untagged legacy completions count toward overall only). Actions above
+  // stay attributed to the mode where they happened.
   let netCompleted=0;
-  for(const leftCompleted of netState.values()) if(leftCompleted === true) netCompleted++;
-  return { sessions: bySession.size, completed, netCompleted, skipped, undos, added, removed, failedMarked, fieldLoad, fieldReps, fieldRir, rirShown, rirConfirmed, applyPrev, interactions, accepted, viaApplyAll, swapOpens, swapCommits, startToFirst, completionMs, swapMs, saveMs };
+  for(const entry of netGlobal.values()){
+    if(entry.completed !== true) continue;
+    if(mode == null) netCompleted++;
+    else if(entry.event && entry.event.mode === mode) netCompleted++;
+  }
+  // Session denominator: a session counts toward a mode only if it holds at
+  // least one interaction for that mode — a bare session:start must never
+  // put a session into every mode bucket. Overall keeps every session.
+  let sessions = bySession.size;
+  if(mode != null){
+    sessions = 0;
+    for(const id of bySession.keys()) if(sessionHasInteraction.get(id) === true) sessions++;
+  }
+  return { sessions, completed, netCompleted, skipped, undos, added, removed, failedMarked, fieldLoad, fieldReps, fieldRir, rirShown, rirConfirmed, applyPrev, interactions, accepted, viaApplyAll, swapOpens, swapCommits, startToFirst, completionMs, swapMs, saveMs };
 }
 
 function frictionSummary(core){
@@ -487,7 +516,7 @@ export function loggingFrictionStats(events){
   return {
     ...overall,
     byMode,
-    note: 'Discrete committed actions only — keystrokes and focus moves are intentionally never instrumented, so actions-per-completed-set is a lower bound on real taps. Completed sets are net unique sets left completed (a corrected and re-completed set counts once, as work, with its correction counted as friction). Durations persist only with the sessionTimings refinement on; otherwise timing medians degrade to null. Per-mode buckets count only events carrying that mode tag; untagged legacy events count toward the overall numbers only.',
+    note: 'Discrete committed actions only — keystrokes and focus moves are intentionally never instrumented, so actions-per-completed-set is a lower bound on real taps. Completed sets are net unique sets left completed (a corrected and re-completed set counts once, as work, with its correction counted as friction). Set state is reconstructed globally first, then final completed work attributes to the mode whose completion established it — actions always stay in the mode where they happened, and a session counts toward a mode only if it holds an interaction there. Durations persist only with the sessionTimings refinement on; otherwise timing medians degrade to null. Per-mode buckets count only events carrying that mode tag; untagged legacy events count toward the overall numbers only.',
   };
 }
 

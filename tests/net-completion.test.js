@@ -175,6 +175,113 @@ describe('denominators and mode segmentation use net completions', ()=>{
   });
 });
 
+describe('mode buckets attribute final work globally, actions locally', ()=>{
+  it('Gym complete → Standard undo leaves no stale work in Gym', ()=>{
+    const s = loggingFrictionStats([
+      complete('s1', { setId: 'a1', exerciseId: 'e1', setIndex: 0 }, { mode: 'gym' }),
+      undo('s1', { setId: 'a1', exerciseId: 'e1', setIndex: 0 }, { mode: 'standard' }),
+    ]);
+    assert.equal(s.completedSets, 0);
+    assert.equal(s.completionEvents, 1);
+    assert.equal(s.byMode.gym.completedSets, 0);
+    assert.equal(s.byMode.gym.completionEvents, 1); // the action stays where it happened
+    assert.equal(s.byMode.standard.completedSets, 0);
+    assert.equal(s.byMode.standard.undos, 1); // ...and so does the correction
+  });
+
+  it('Gym complete → Standard undo → Standard re-complete attributes work to Standard', ()=>{
+    const s = loggingFrictionStats([
+      complete('s1', { setId: 'a1', exerciseId: 'e1', setIndex: 0 }, { mode: 'gym' }),
+      undo('s1', { setId: 'a1', exerciseId: 'e1', setIndex: 0 }, { mode: 'standard' }),
+      complete('s1', { setId: 'a1', exerciseId: 'e1', setIndex: 0 }, { mode: 'standard' }),
+    ]);
+    assert.equal(s.completedSets, 1);
+    assert.equal(s.completionEvents, 2);
+    assert.equal(s.byMode.gym.completedSets, 0);
+    assert.equal(s.byMode.standard.completedSets, 1);
+    assert.equal(s.actionsPerCompletedSet, 3); // gym complete + standard undo + standard complete, over 1 net set
+  });
+
+  it('Standard complete → Gym undo → Gym re-complete attributes work to Gym', ()=>{
+    const s = loggingFrictionStats([
+      complete('s1', { setId: 'a1', exerciseId: 'e1', setIndex: 0 }, { mode: 'standard' }),
+      undo('s1', { setId: 'a1', exerciseId: 'e1', setIndex: 0 }, { mode: 'gym' }),
+      complete('s1', { setId: 'a1', exerciseId: 'e1', setIndex: 0 }, { mode: 'gym' }),
+    ]);
+    assert.equal(s.completedSets, 1);
+    assert.equal(s.byMode.standard.completedSets, 0);
+    assert.equal(s.byMode.gym.completedSets, 1);
+  });
+
+  it('multiple sets across modes attribute independently', ()=>{
+    const s = loggingFrictionStats([
+      complete('s1', { setId: 'a1', exerciseId: 'e1', setIndex: 0 }, { mode: 'gym' }),
+      complete('s1', { setId: 'a2', exerciseId: 'e1', setIndex: 1 }, { mode: 'standard' }),
+      undo('s1', { setId: 'a1', exerciseId: 'e1', setIndex: 0 }, { mode: 'standard' }),
+    ]);
+    assert.equal(s.completedSets, 1);
+    assert.equal(s.byMode.gym.completedSets, 0);
+    assert.equal(s.byMode.standard.completedSets, 1);
+  });
+
+  it('undo after a swap nets against the same stable set', ()=>{
+    const s = loggingFrictionStats([
+      complete('s1', { setId: 'a1', exerciseId: 'bench-press', setIndex: 0 }, { mode: 'gym' }),
+      // Same set undone after its block was swapped: new exercise, same id.
+      undo('s1', { setId: 'a1', exerciseId: 'dumbbell-press', setIndex: 0 }, { mode: 'gym' }),
+    ]);
+    assert.equal(s.completedSets, 0);
+    assert.equal(s.completionEvents, 1);
+    assert.equal(s.undos, 1);
+  });
+});
+
+describe('resumed sessions keep one continuous set history', ()=>{
+  it('same sessionId later in time continues the same net state', ()=>{
+    const s = loggingFrictionStats([
+      complete('s1', { setId: 'a1', exerciseId: 'e1', setIndex: 0 }),
+      // Resume: same session id, later timestamps.
+      undo('s1', { setId: 'a1', exerciseId: 'e1', setIndex: 0 }),
+      complete('s1', { setId: 'a1', exerciseId: 'e1', setIndex: 0 }),
+    ]);
+    assert.equal(s.completedSets, 1);
+    assert.equal(s.completionEvents, 2);
+  });
+
+  it('the same setId in a different session is different work', ()=>{
+    const s = loggingFrictionStats([
+      complete('s1', { setId: 'a1', exerciseId: 'e1', setIndex: 0 }),
+      complete('s2', { setId: 'a1', exerciseId: 'e1', setIndex: 0 }),
+    ]);
+    assert.equal(s.completedSets, 2);
+    assert.equal(s.sessions, 2);
+  });
+});
+
+describe('mode session denominators require a real interaction', ()=>{
+  it('sessions that never use Gym do not enter the Gym denominator', ()=>{
+    const s = loggingFrictionStats([
+      { type: 'session:start', sessionId: 's1', at: at(0) },
+      complete('s1', { setId: 'a1', exerciseId: 'e1', setIndex: 0 }, { mode: 'standard' }),
+      undo('s1', { setId: 'a1', exerciseId: 'e1', setIndex: 0 }, { mode: 'standard' }),
+    ]);
+    assert.equal(s.sessions, 1);
+    assert.equal(s.byMode.standard.sessions, 1);
+    assert.equal(s.byMode.gym.sessions, 0);
+    assert.equal(s.byMode.guided.sessions, 0);
+    assert.equal(s.byMode.standard.correctionsPerSession, 1);
+    assert.equal(s.byMode.gym.correctionsPerSession, null);
+  });
+
+  it('a bare session:start puts the session in no mode bucket', ()=>{
+    const s = loggingFrictionStats([{ type: 'session:start', sessionId: 's1', at: at(0) }]);
+    assert.equal(s.sessions, 1);
+    assert.equal(s.byMode.gym.sessions, 0);
+    assert.equal(s.byMode.standard.sessions, 0);
+    assert.equal(s.byMode.guided.sessions, 0);
+  });
+});
+
 describe('setId survives the write path (call-site wiring guard)', ()=>{
   it('recordEvent persists stable set identity alongside the other ids', ()=>{
     setConsent(true, { sessionTimings: true });
