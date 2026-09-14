@@ -53,6 +53,17 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   const rootRef=useRef(null);
   const closeRef=useRef(null);
   void measurementConsent;
+  // Mode-entry timing anchor for guided mode (value-free, same contract as
+  // the standard runner's mount/toggle anchors). Guided sessions never
+  // switch modes, so one entry covers the whole session; a genuine remount
+  // (resume after reload) starts a new interval.
+  const modeEnterEmittedRef=useRef(false);
+  useEffect(()=>{
+    if(modeEnterEmittedRef.current) return;
+    modeEnterEmittedRef.current = true;
+    try{ recordEvent('mode:enter', { sessionId: session.id, mode: 'guided' }); }catch{}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
 
   // Escape exits only via the guarded cancel path — never silently destroys
   // a workout with logged sets.

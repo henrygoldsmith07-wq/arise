@@ -64,6 +64,11 @@
 // in boot + worker chunks, not dependency growth; boot (195.5) and
 // largest-lazy (47.4) budgets unchanged; measured total 345.3.
 //
+// total 346 → 347 kB with the per-mode timing pass: value-free mode:enter
+// anchors (runner mount + gym toggle) and the latest-entry anchor lookup in
+// the friction core. Requested product logic, not dependency growth; boot
+// (195.5) and largest-lazy (47.4) budgets unchanged; measured total 346.0.
+//
 // The budgets are regression bounds with headroom, not aspirations: a change
 // that crosses one must either undo the bloat or consciously re-baseline here
 // and say why in the PR.
@@ -80,7 +85,7 @@ if(!fs.existsSync(dist)){
 
 const BOOT_BUDGET_KB = 196;
 const CHUNK_BUDGET_KB = 48;
-const TOTAL_BUDGET_KB = 346;
+const TOTAL_BUDGET_KB = 347;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

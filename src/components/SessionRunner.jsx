@@ -199,6 +199,22 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   // numpad is open (null = closed) — long-press or the field's ✛ opens it.
   // Persisted choice wins (resume), else the More → Gym mode default.
   const [gymMode,setGymMode]=useState(()=> draft?.gymMode != null ? draft.gymMode === true : appPrefs?.focusDefault === true);
+  // Mode-entry timing anchor (value-free: session/mode/timestamp only — no
+  // loads, reps, RIR, targets or exercise content). Emitted on mount for the
+  // starting mode and on every gym toggle, so per-mode first-set timing
+  // measures from when THAT mode started, never from workout start. The
+  // ref guard collapses StrictMode's dev double-mount into one anchor; a
+  // genuine remount (e.g. resume after reload) is a new interval and emits.
+  // Like session:start this needs only master telemetry consent — the
+  // DERIVED interval additionally requires sessionTimings durations, so
+  // nothing timed leaks when that refinement is off.
+  const modeEnterEmittedRef=useRef(false);
+  useEffect(()=>{
+    if(modeEnterEmittedRef.current) return;
+    modeEnterEmittedRef.current = true;
+    try{ recordEvent('mode:enter', { sessionId: session.id, mode: gymMode ? 'gym' : 'standard' }); }catch{}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
   // Voice dictation (hands-free logging): one shared recognizer; the block it
   // targets lives in a ref so results apply to the set being logged.
   const [dictating,setDictating]=useState(null);
@@ -972,7 +988,11 @@ export default function SessionRunner({ session, history = [], availableEquipmen
         </div>
         <div className="ml-auto flex items-center gap-2 shrink-0">
           <button
-            onClick={()=> setGymMode(v=> !v)}
+            onClick={()=> {
+              const next = !gymMode;
+              setGymMode(next);
+              try{ recordEvent('mode:enter', { sessionId: session.id, mode: next ? 'gym' : 'standard' }); }catch{}
+            }}
             aria-pressed={gymMode}
             title={gymMode ? 'Gym mode: focus on — one exercise at a time' : 'Gym mode: focus off'}
             className={`min-h-11 min-w-11 grid place-items-center rounded-full border text-base ${gymMode ? 'bg-ink text-bg border-ink' : 'border-line bg-surface2'}`}

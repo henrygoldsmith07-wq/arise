@@ -378,9 +378,29 @@ function frictionCore(events, { mode = null } = {}){
     // durations are never persisted, so the interval degrades to null instead
     // of being reconstructed from bare timestamps.
     const anchorMs = firstComplete == null ? NaN : Number(firstComplete.elapsedMs);
-    if(start && firstComplete && Number.isFinite(anchorMs) && anchorMs >= 0 && (mode == null || firstComplete.mode === mode)){
-      const ms=Date.parse(firstComplete.at)-Date.parse(start.at);
-      if(Number.isFinite(ms) && ms>=0) startToFirst.push(ms);
+    if(mode == null){
+      if(start && firstComplete && Number.isFinite(anchorMs) && anchorMs >= 0){
+        const ms=Date.parse(firstComplete.at)-Date.parse(start.at);
+        if(Number.isFinite(ms) && ms>=0) startToFirst.push(ms);
+      }
+    }else{
+      // Per-mode anchor: the most recent mode:enter for THIS mode at or
+      // before the first completion in that mode. Repeated switching gives
+      // each interval its own anchor; a completion belongs to its currently
+      // active interval, never a stale previous entry — and with no entry
+      // at all (legacy telemetry) the interval degrades to null instead of
+      // being fabricated from session:start.
+      let entryAt=null;
+      if(firstComplete && firstComplete.mode === mode && firstComplete.at != null){
+        for(const e of byTime){
+          if(e.type !== 'mode:enter' || e.mode !== mode || e.at == null) continue;
+          if(String(e.at) <= String(firstComplete.at)) entryAt=e.at;
+        }
+      }
+      if(entryAt != null && Number.isFinite(anchorMs) && anchorMs >= 0){
+        const ms=Date.parse(firstComplete.at)-Date.parse(entryAt);
+        if(Number.isFinite(ms) && ms>=0) startToFirst.push(ms);
+      }
     }
     for(const e of byTime){
       if(mode != null && e.type !== 'session:start' && e.mode !== mode) continue;
@@ -516,7 +536,7 @@ export function loggingFrictionStats(events){
   return {
     ...overall,
     byMode,
-    note: 'Discrete committed actions only — keystrokes and focus moves are intentionally never instrumented, so actions-per-completed-set is a lower bound on real taps. Completed sets are net unique sets left completed (a corrected and re-completed set counts once, as work, with its correction counted as friction). Set state is reconstructed globally first, then final completed work attributes to the mode whose completion established it — actions always stay in the mode where they happened, and a session counts toward a mode only if it holds an interaction there. Durations persist only with the sessionTimings refinement on; otherwise timing medians degrade to null. Per-mode buckets count only events carrying that mode tag; untagged legacy events count toward the overall numbers only.',
+    note: 'Discrete committed actions only — keystrokes and focus moves are intentionally never instrumented, so actions-per-completed-set is a lower bound on real taps. Completed sets are net unique sets left completed (a corrected and re-completed set counts once, as work, with its correction counted as friction). Set state is reconstructed globally first, then final completed work attributes to the mode whose completion established it — actions always stay in the mode where they happened, and a session counts toward a mode only if it holds an interaction there. First-set timing measures from session start overall, but per mode from that mode entry onward, never from workout start. Durations persist only with the sessionTimings refinement on; otherwise timing medians degrade to null. Per-mode buckets count only events carrying that mode tag; untagged legacy events count toward the overall numbers only.',
   };
 }
 

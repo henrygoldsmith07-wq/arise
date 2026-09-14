@@ -154,6 +154,13 @@ test('baseline probe — standard mode two-set flow', async ({ page }) => {
   // no auto-focus fires and the keyboard stays down (was 4 input focuses).
   expect(probe.focus.inputFocus).toBe(3);
   expect(probe.valueLeak).toBeNull();
+  // A standard entry is recorded at runner mount (value-free ids only).
+  const standardModes = await page.evaluate(() => {
+    const raw = localStorage.getItem('arise.telemetry.v2');
+    const events = raw ? (JSON.parse(raw).events || []) : [];
+    return events.filter((e)=> e.type === 'mode:enter').map((e)=> e.mode);
+  });
+  expect(standardModes).toContain('standard');
   console.log(formatReport(checkLive(DOC, 'standard-two-set', liveCounts(probe))));
 });
 
@@ -188,6 +195,21 @@ test('baseline probe — gym mode two-set flow', async ({ page }) => {
   expect(probe.counts['complete-set']).toBeGreaterThanOrEqual(2);
   expect(probe.focus.inputFocus).toBe(3);
   expect(probe.valueLeak).toBeNull();
+  // Both entries exist (standard at mount, gym at toggle); per-mode timing
+  // attributes to the bucket where the work happened — gym resolves, while
+  // standard stays null with no standard completion behind its entry.
+  const gymStats = await page.evaluate(async () => {
+    const { loggingFrictionStats } = await import('/src/lib/telemetry.js');
+    const raw = localStorage.getItem('arise.telemetry.v2');
+    const events = raw ? (JSON.parse(raw).events || []) : [];
+    const modes = events.filter((e)=> e.type === 'mode:enter').map((e)=> e.mode);
+    const s = loggingFrictionStats(events);
+    return { modes, gym: s.byMode.gym.startToFirstSetMs, standard: s.byMode.standard.startToFirstSetMs };
+  });
+  expect(gymStats.modes).toContain('standard');
+  expect(gymStats.modes).toContain('gym');
+  expect(Number.isFinite(gymStats.gym)).toBe(true);
+  expect(gymStats.standard).toBe(null);
   console.log(formatReport(checkLive(DOC, 'gym-two-set', liveCounts(probe))));
 });
 
@@ -345,5 +367,15 @@ test('baseline probe — guided mode two-step flow', async ({ page }) => {
   expect(probe.counts['load-field-commit']).toBe(1);
   expect(probe.focus.inputFocus).toBe(1);
   expect(probe.valueLeak).toBeNull();
+  // Guided entry recorded at runner mount; guided timing resolves end to end.
+  const guidedStats = await page.evaluate(async () => {
+    const { loggingFrictionStats } = await import('/src/lib/telemetry.js');
+    const raw = localStorage.getItem('arise.telemetry.v2');
+    const events = raw ? (JSON.parse(raw).events || []) : [];
+    const modes = events.filter((e)=> e.type === 'mode:enter').map((e)=> e.mode);
+    return { modes, guided: loggingFrictionStats(events).byMode.guided.startToFirstSetMs };
+  });
+  expect(guidedStats.modes).toContain('guided');
+  expect(Number.isFinite(guidedStats.guided)).toBe(true);
   console.log(formatReport(checkLive(DOC, 'guided-two-step', liveCounts(probe))));
 });
