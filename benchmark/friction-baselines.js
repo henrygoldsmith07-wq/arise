@@ -116,3 +116,42 @@ export function formatReport(report){
   }
   return lines.join('\n');
 }
+
+// Synthetic mode expectation, derived — never hand-written. Maps each
+// documented flow to its mode, takes the median documented improvement
+// magnitude per mode, and predicts the cheapest observed mode. Consumed by
+// the real-user report's directional agreement check; the mapping is
+// explicit so a renamed flow fails loudly in tests instead of drifting.
+const FLOW_MODES = Object.freeze({
+  'standard-two-set': 'standard',
+  'gym-two-set': 'gym',
+  'guided-two-step': 'guided',
+});
+
+function medianOf(values){
+  const list=(values||[]).filter(v=> typeof v === 'number' && Number.isFinite(v)).sort((a,b)=> a-b);
+  if(!list.length) return null;
+  const mid=Math.floor(list.length/2);
+  return list.length % 2 ? list[mid] : (list[mid-1] + list[mid]) / 2;
+}
+
+export function syntheticModeExpectation(doc){
+  if(!doc || typeof doc !== 'object' || !doc.flows || typeof doc.flows !== 'object'){
+    throw new Error('friction baselines: synthetic expectation needs a validated baselines document');
+  }
+  const cuts={};
+  for(const [flow, mode] of Object.entries(FLOW_MODES)){
+    const metrics=doc.flows[flow]?.metrics;
+    if(!metrics || typeof metrics !== 'object') continue;
+    const improvements=Object.values(metrics)
+      .map(m=> m?.deltaPct)
+      .filter(v=> typeof v === 'number' && Number.isFinite(v) && v < 0);
+    if(improvements.length) cuts[mode]=medianOf(improvements);
+  }
+  const ranked=Object.entries(cuts).sort((a,b)=> a[1]-b[1]).map(([mode])=> mode);
+  return {
+    expectedCheapestMode: ranked[0] ?? null,
+    ranked,
+    basis: 'docs/friction-baseline.json flow improvement magnitudes (median documented cut per mode)',
+  };
+}

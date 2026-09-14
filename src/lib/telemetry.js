@@ -305,6 +305,34 @@ function medianOfMs(values){
   return Math.round(list.length%2 ? list[mid] : (list[mid-1]+list[mid])/2);
 }
 
+// First-set milliseconds per mode-entry interval, oldest first. Pure —
+// shared by the friction core and the hierarchical report so both read
+// intervals identically: every mode:enter opens an interval (closed by the
+// next entry of any mode, or session end); an interval contributes its first
+// completion carrying that interval's mode and a persisted duration, else
+// nothing. Untagged legacy completions and duration-less flows contribute
+// nothing here, exactly as in the core.
+export function modeIntervalFirstSets(sessionEvents){
+  const ordered=(sessionEvents||[]).filter(e=> e && typeof e==='object')
+    .slice().sort((a,b)=> String(a.at||'').localeCompare(String(b.at||'')));
+  const isComplete=(e)=> COMPLETE_EVENTS.includes(e.type);
+  const entries=ordered.filter(e=> e.type==='mode:enter' && e.at != null);
+  const out=[];
+  for(let i=0;i<entries.length;i++){
+    const en=entries[i];
+    if(en.mode == null) continue;
+    const endAt=i+1 < entries.length ? entries[i+1].at : null;
+    const first=ordered.find(e=> isComplete(e) && e.mode === en.mode && e.at != null
+      && String(e.at) >= String(en.at) && (endAt == null || String(e.at) < String(endAt)));
+    if(!first) continue;
+    const dur=Number(first.elapsedMs);
+    if(!Number.isFinite(dur) || dur < 0) continue;
+    const ms=Date.parse(first.at)-Date.parse(en.at);
+    if(Number.isFinite(ms) && ms>=0) out.push({ mode: en.mode, ms });
+  }
+  return out;
+}
+
 function frictionCore(events, { mode = null } = {}){
   const all=(events||[]).filter(e=> e && typeof e==='object');
   // Duplicate event ids (re-imported/merged telemetry) count once, matching
@@ -384,28 +412,17 @@ function frictionCore(events, { mode = null } = {}){
         if(Number.isFinite(ms) && ms>=0) startToFirst.push(ms);
       }
     }else{
-      // Interval-based per-mode timing: EVERY mode:enter opens an interval —
-      // closed by the next entry of any mode, or session end — and each
-      // interval independently contributes its first in-mode completion. A
-      // reload/resume entry therefore starts a FRESH interval even for the
-      // same mode: earlier completions are never reused, and intervals with
-      // no completion (or no duration anchor) contribute nothing. Legacy
-      // sessions without entries degrade to null instead of fabricating
-      // from session:start.
+      // Interval-based per-mode timing via the shared helper: EVERY
+      // mode:enter opens an interval — closed by the next entry of any
+      // mode, or session end — and each interval independently contributes
+      // its first in-mode completion. A reload/resume entry therefore
+      // starts a FRESH interval even for the same mode: earlier completions
+      // are never reused, and intervals with no completion (or no duration
+      // anchor) contribute nothing. Legacy sessions without entries degrade
+      // to null instead of fabricating from session:start.
       const source=sessionsAll.get(sid) || [];
-      const ordered=source.slice().sort((a,b)=> String(a.at||'').localeCompare(String(b.at||'')));
-      const entries=ordered.filter(e=> e.type==='mode:enter' && e.at != null);
-      for(let i=0;i<entries.length;i++){
-        const en=entries[i];
-        if(en.mode !== mode) continue;
-        const endAt=i+1 < entries.length ? entries[i+1].at : null;
-        const first=ordered.find(e=> inType(e, COMPLETE_EVENTS) && e.mode === mode && e.at != null
-          && String(e.at) >= String(en.at) && (endAt == null || String(e.at) < String(endAt)));
-        if(!first) continue;
-        const dur=Number(first.elapsedMs);
-        if(!Number.isFinite(dur) || dur < 0) continue;
-        const ms=Date.parse(first.at)-Date.parse(en.at);
-        if(Number.isFinite(ms) && ms>=0) startToFirst.push(ms);
+      for(const { mode: m, ms } of modeIntervalFirstSets(source)){
+        if(m === mode) startToFirst.push(ms);
       }
     }
     for(const e of byTime){
@@ -496,6 +513,9 @@ function frictionSummary(core){
     // sets. Raw completion actions stay available as completionEvents.
     completedSets: core.netCompleted,
     completionEvents: core.completed,
+    // Raw interaction count (additive diagnostic so hierarchical rollups can
+    // sum work without re-implementing the taxonomy — no behavior change).
+    interactions: core.interactions,
     // Actions per NET completed set: every discrete value-free interaction
     // over net work. Corrections raise the numerator without inflating the
     // denominator, so fiddly sessions read friction-heavy, as they are.

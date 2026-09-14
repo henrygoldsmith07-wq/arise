@@ -263,6 +263,16 @@ test.describe('Progress assessment', () => {
 test.describe('Prospective prescription capture', () => {
   test.beforeEach(async ({ page }) => completeOnboarding(page));
 
+  // The undecided-consent card appears inline and shifts layout mid-flow;
+  // dismiss it up front so taps land where aimed (same as guided-mode.spec).
+  async function dismissConsentCard(page){
+    const consent = page.getByRole('dialog', { name: 'Local measurement consent' });
+    if(await consent.isVisible().catch(() => false)){
+      await consent.getByRole('button', { name: 'No thanks' }).click();
+    }
+    await expect(consent).toBeHidden();
+  }
+
   test('freezes the shown prescription at display time, persists it to the draft, and copies it at save', async ({ page }) => {
     await page.getByRole('button', { name: 'Train' }).click();
     const recCard = page.locator('[aria-label="Recommended for you"]');
@@ -392,6 +402,7 @@ test.describe('Prospective prescription capture', () => {
   });
 
   test('a swap after completed work splits the block instead of relabelling it', async ({ page }) => {
+    await dismissConsentCard(page);
     await page.getByRole('button', { name: 'Train' }).click();
     const recCard = page.locator('[aria-label="Recommended for you"]');
     if (await recCard.getByRole('button', { name: 'Start programme' }).isVisible().catch(() => false)) {
@@ -466,12 +477,17 @@ test.describe('Prospective prescription capture', () => {
     expect(focusBlock.completedInBlock).toBe(0);
     expect(focusBlock.totalInBlock).toBeGreaterThan(0);
 
-    // Save the session.
+    // Save the session, then wait until the save is actually visible in the
+    // store: React commits state and persists asynchronously, so reading
+    // history immediately after the click races the commit. The read itself
+    // is polled (not just its presence) so save-commit timing can never
+    // make the test read a half-committed history entry.
     await runner.getByRole('button', { name: 'Save session' }).click();
-
-    const saved = await page.evaluate(async (orig) => {
+    let saved = null;
+    await expect.poll(async () => { saved = await page.evaluate(async (orig) => {
       const { loadStore } = await import('/src/lib/store.js');
       const last = loadStore().history[loadStore().history.length - 1];
+      if(!last) return null;
       const blocks = last.blocks || [];
       const keep = blocks.find((b)=> b.exerciseId === orig);
       const other = blocks.find((b)=> b.exerciseId !== orig);
@@ -488,7 +504,7 @@ test.describe('Prospective prescription capture', () => {
         keepSetIds: (keep?.sets || []).map((s)=> s.setId || null),
         otherSetIds: (other?.sets || []).map((s)=> s.setId || null),
       };
-    }, original);
+    }, original); return saved; }, { timeout: 10000, message: 'saved split lands in history' }).not.toBeNull();
     expect(saved.ids.filter((id)=> id !== original).length).toBeGreaterThan(0, 'a replacement block exists');
     expect(saved.keepHasCompleted).toBe(true, 'completed work stays under the original exercise');
     expect(saved.keepSetCount).toBe(1, 'the original block keeps only its performed set');
@@ -512,22 +528,19 @@ test.describe('Prospective prescription capture', () => {
     });
     await page.reload();
     // Boot hydration is async (IndexedDB): the freshly loaded page reads an
-    // empty store until it completes, so the split assertion must wait for
-    // the saved session to reappear — otherwise the test measures boot
-    // timing, not split durability.
-    await expect.poll(async () => page.evaluate(async () => {
-      const { loadStore } = await import('/src/lib/store.js');
-      return loadStore().history.length;
-    }), { timeout: 15000, message: 'saved history rehydrates after reload' }).toBeGreaterThan(0);
-    const reloaded = await page.evaluate(async (orig) => {
+    // empty store until it completes, so the whole reloaded read is polled
+    // — otherwise the test measures boot timing, not split durability.
+    let reloaded = null;
+    await expect.poll(async () => { reloaded = await page.evaluate(async (orig) => {
       const { loadStore } = await import('/src/lib/store.js');
       const last = loadStore().history[loadStore().history.length - 1];
+      if(!last) return null;
       const blocks = last.blocks || [];
       return {
         ids: blocks.map((b)=> b.exerciseId),
         keepHasCompleted: !!blocks.find((b)=> b.exerciseId === orig)?.sets?.some((s)=> s.completed),
       };
-    }, original);
+    }, original); return reloaded; }, { timeout: 15000, message: 'saved history rehydrates after reload' }).not.toBeNull();
     expect(reloaded.ids.filter((id)=> id !== original).length).toBeGreaterThan(0);
     expect(reloaded.keepHasCompleted).toBe(true);
   });
