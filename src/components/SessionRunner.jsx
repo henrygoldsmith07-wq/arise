@@ -629,6 +629,9 @@ export default function SessionRunner({ session, history = [], availableEquipmen
         sessionId:session.id,
         exerciseId:block.exerciseId,
         setIndex:si,
+        // Stable set identity (value-free id, never workout content) so
+        // friction metrics can tell a re-completed set from a new one.
+        ...(set?.setId ? { setId: set.setId } : {}),
         mode: gymMode ? 'gym' : 'standard',
         elapsedMs:Math.max(0,now-Date.parse(lastSetAtRef.current)),
         sessionElapsedMs:Math.max(0,now-Date.parse(startedAtRef.current)),
@@ -688,7 +691,9 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     }else{
       // Undoing a completion is a correction, recorded as its own fact so
       // friction metrics can count undos without guessing from missing rows.
-      try{ recordEvent('undo-set', { sessionId:session.id, exerciseId:block.exerciseId, setIndex:si, mode: gymMode ? 'gym' : 'standard' }); }catch{}
+      // Carries the same stable set identity so the undo nets against the
+      // completion instead of looking like a different set.
+      try{ recordEvent('undo-set', { sessionId:session.id, exerciseId:block.exerciseId, setIndex:si, ...(block.sets?.[si]?.setId ? { setId: block.sets[si].setId } : {}), mode: gymMode ? 'gym' : 'standard' }); }catch{}
     }
   };
   const addSet = (bi)=>{
@@ -723,7 +728,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   const markFailed = (bi,si)=>{
     if(!blocks[bi]?.sets?.[si]) return;
     updateSet(bi,si,{ failed: true, completed: false });
-    try{ recordEvent('set:failed', { sessionId:session.id, exerciseId:blocks[bi].exerciseId, setIndex:si, mode: gymMode ? 'gym' : 'standard' }); }catch{}
+    try{ recordEvent('set:failed', { sessionId:session.id, exerciseId:blocks[bi].exerciseId, setIndex:si, ...(blocks[bi]?.sets?.[si]?.setId ? { setId: blocks[bi].sets[si].setId } : {}), mode: gymMode ? 'gym' : 'standard' }); }catch{}
     haptic('failedSet');
   };
 
@@ -1192,7 +1197,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                           gestures never gate an action (WCAG 2.5.6 / 2.1.1). */}
                       {gymMode && !s.completed && (
                         <button
-                          onClick={()=> { if(s.failed){ try{ recordEvent('undo-set', { sessionId:session.id, exerciseId:b.exerciseId, setIndex:si, mode: gymMode ? 'gym' : 'standard' }); }catch{} updateSet(bi,si,{ failed:false }); } else markFailed(bi,si); }}
+                          onClick={()=> { if(s.failed){ try{ recordEvent('undo-set', { sessionId:session.id, exerciseId:b.exerciseId, setIndex:si, ...(s.setId ? { setId: s.setId } : {}), mode: gymMode ? 'gym' : 'standard' }); }catch{} updateSet(bi,si,{ failed:false }); } else markFailed(bi,si); }}
                           aria-pressed={s.failed}
                           aria-label={s.failed ? `Unmark set ${si+1} failed` : `Mark set ${si+1} failed`}
                           className={`min-h-12 w-9 grid place-items-center rounded-xl border text-[11px] font-bold ${s.failed?'bg-review text-bg border-review':'bg-surface2 border-line'}`}>{s.failed?'↺':'✗'}</button>
@@ -1202,7 +1207,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                           instead of being deleted or faked as completed. */}
                       {!gymMode && !s.completed && (
                         <button
-                          onClick={()=> { if(s.failed){ try{ recordEvent('undo-set', { sessionId:session.id, exerciseId:b.exerciseId, setIndex:si, mode: 'standard' }); }catch{} updateSet(bi,si,{ failed:false }); } else markFailed(bi,si); }}
+                          onClick={()=> { if(s.failed){ try{ recordEvent('undo-set', { sessionId:session.id, exerciseId:b.exerciseId, setIndex:si, ...(s.setId ? { setId: s.setId } : {}), mode: 'standard' }); }catch{} updateSet(bi,si,{ failed:false }); } else markFailed(bi,si); }}
                           aria-pressed={s.failed}
                           aria-label={s.failed ? `Unmark set ${si+1} failed` : `Mark set ${si+1} failed`}
                           className={`min-h-12 min-w-11 grid place-items-center rounded-xl border text-[11px] font-bold ${s.failed?'bg-review text-bg border-review':'bg-surface2 border-line'}`}>{s.failed?'↺':'✗'}</button>

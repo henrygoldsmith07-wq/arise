@@ -307,7 +307,16 @@ function medianOfMs(values){
 
 function frictionCore(events, { mode = null } = {}){
   const all=(events||[]).filter(e=> e && typeof e==='object');
-  const inScope = mode == null ? all : all.filter(e=> e.mode === mode || e.type === 'session:start');
+  // Duplicate event ids (re-imported/merged telemetry) count once, matching
+  // the store layer's keep-first dedup. Id-less events always count.
+  const seenIds=new Set();
+  const unique=all.filter(e=>{
+    if(e.id == null) return true;
+    if(seenIds.has(e.id)) return false;
+    seenIds.add(e.id);
+    return true;
+  });
+  const inScope = mode == null ? unique : unique.filter(e=> e.mode === mode || e.type === 'session:start');
   const bySession=new Map();
   for(const e of inScope){
     if(!e.sessionId || typeof e.sessionId !== 'string') continue;
@@ -315,6 +324,15 @@ function frictionCore(events, { mode = null } = {}){
     bySession.get(e.sessionId).push(e);
   }
   const inType = (e, list)=> list.includes(e.type);
+  // Net completion identity: stable setId where present (survives swaps and
+  // block moves); legacy fallback is session+exercise+setIndex. Events with
+  // no usable identity count as actions but never invent a net set.
+  const setKey = (e)=>{
+    if(!e.sessionId || typeof e.sessionId !== 'string') return null;
+    if(typeof e.setId === 'string' && e.setId !== '') return `id:${e.sessionId}\n${e.setId}`;
+    if(e.exerciseId != null && e.setIndex != null) return `pos:${e.sessionId}\n${String(e.exerciseId)}\n${String(e.setIndex)}`;
+    return null;
+  };
   let startToFirst=[];
   let completionMs=[];
   let completed=0, skipped=0, undos=0, added=0, removed=0, failedMarked=0;
@@ -323,6 +341,11 @@ function frictionCore(events, { mode = null } = {}){
   let interactions=0;
   let accepted=0, viaApplyAll=0, applyPrev=0;
   let swapOpens=0, swapCommits=0, swapMs=[], saveMs=[];
+  // Net completion state per set identity: a set that is completed, undone
+  // and re-completed is ONE net set (corrections raise friction, never work).
+  // A set left failed is not left completed. Stray undos with no matching
+  // completion change nothing — ambiguity never invents or destroys work.
+  const netState=new Map();
   for(const list of bySession.values()){
     const byTime=list.slice().sort((a,b)=> String(a.at||'').localeCompare(String(b.at||'')));
     const start=byTime.find(e=> e.type==='session:start');
@@ -341,14 +364,26 @@ function frictionCore(events, { mode = null } = {}){
       if(inType(e, COMPLETE_EVENTS)){
         completed++;
         interactions++;
+        const key=setKey(e);
+        if(key != null) netState.set(key, true);
         const ms=Number(e.elapsedMs);
         if(Number.isFinite(ms) && ms>=0) completionMs.push(ms);
       }
-      else if(inType(e, UNDO_EVENTS)){ undos++; interactions++; }
+      else if(inType(e, UNDO_EVENTS)){
+        undos++;
+        interactions++;
+        const key=setKey(e);
+        if(key != null && netState.get(key) === true) netState.set(key, false);
+      }
       else if(inType(e, ADD_EVENTS)){ added++; interactions++; }
       else if(inType(e, REMOVE_EVENTS)){ removed++; interactions++; }
       else if(inType(e, SKIP_EVENTS)){ skipped++; interactions++; }
-      else if(inType(e, FAILED_EVENTS)){ failedMarked++; interactions++; }
+      else if(inType(e, FAILED_EVENTS)){
+        failedMarked++;
+        interactions++;
+        const key=setKey(e);
+        if(key != null && netState.get(key) === true) netState.set(key, false);
+      }
       else if(inType(e, FIELD_COMMIT_EVENTS)){
         interactions++;
         if(e.type==='load-field-commit') fieldLoad++;
@@ -388,7 +423,9 @@ function frictionCore(events, { mode = null } = {}){
       }
     }
   }
-  return { sessions: bySession.size, completed, skipped, undos, added, removed, failedMarked, fieldLoad, fieldReps, fieldRir, rirShown, rirConfirmed, applyPrev, interactions, accepted, viaApplyAll, swapOpens, swapCommits, startToFirst, completionMs, swapMs, saveMs };
+  let netCompleted=0;
+  for(const leftCompleted of netState.values()) if(leftCompleted === true) netCompleted++;
+  return { sessions: bySession.size, completed, netCompleted, skipped, undos, added, removed, failedMarked, fieldLoad, fieldReps, fieldRir, rirShown, rirConfirmed, applyPrev, interactions, accepted, viaApplyAll, swapOpens, swapCommits, startToFirst, completionMs, swapMs, saveMs };
 }
 
 function frictionSummary(core){
@@ -399,11 +436,16 @@ function frictionSummary(core){
   const fieldCommits = core.fieldLoad + core.fieldReps + core.fieldRir;
   return {
     sessions: core.sessions,
-    completedSets: core.completed,
-    // Actions per completed set: every discrete value-free interaction over
-    // completions. Keystrokes are never instrumented, so this stays a lower
-    // bound on real taps.
-    actionsPerCompletedSet: core.completed ? Math.round(core.interactions / core.completed * 100) / 100 : null,
+    // Net completed sets: unique sets LEFT completed after undos. A corrected
+    // and re-completed set is one set of work with extra friction — never two
+    // sets. Raw completion actions stay available as completionEvents.
+    completedSets: core.netCompleted,
+    completionEvents: core.completed,
+    // Actions per NET completed set: every discrete value-free interaction
+    // over net work. Corrections raise the numerator without inflating the
+    // denominator, so fiddly sessions read friction-heavy, as they are.
+    // Keystrokes are never instrumented, so this stays a lower bound.
+    actionsPerCompletedSet: core.netCompleted ? Math.round(core.interactions / core.netCompleted * 100) / 100 : null,
     // Corrections per session: undoing a completion or a failed-mark.
     correctionsPerSession: core.sessions ? Math.round(core.undos / core.sessions * 100) / 100 : null,
     undos: core.undos,
@@ -445,7 +487,7 @@ export function loggingFrictionStats(events){
   return {
     ...overall,
     byMode,
-    note: 'Discrete committed actions only — keystrokes and focus moves are intentionally never instrumented, so actions-per-completed-set is a lower bound on real taps. Durations persist only with the sessionTimings refinement on; otherwise timing medians degrade to null. Per-mode buckets count only events carrying that mode tag; untagged legacy events count toward the overall numbers only.',
+    note: 'Discrete committed actions only — keystrokes and focus moves are intentionally never instrumented, so actions-per-completed-set is a lower bound on real taps. Completed sets are net unique sets left completed (a corrected and re-completed set counts once, as work, with its correction counted as friction). Durations persist only with the sessionTimings refinement on; otherwise timing medians degrade to null. Per-mode buckets count only events carrying that mode tag; untagged legacy events count toward the overall numbers only.',
   };
 }
 

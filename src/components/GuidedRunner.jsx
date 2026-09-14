@@ -274,6 +274,9 @@ export default function GuidedRunner({ session, history = [], availableEquipment
           sessionId: session.id,
           exerciseId: block.exerciseId,
           setIndex: step.setIndex,
+          // Stable set identity (value-free id) so a re-completed step nets
+          // against its completion instead of counting as a second set.
+          ...(set?.setId ? { setId: set.setId } : {}),
           mode: 'guided',
           elapsedMs: Math.max(0, now - Date.parse(lastStepAtRef.current)),
           sessionElapsedMs: Math.max(0, now - Date.parse(startedAtRef.current)),

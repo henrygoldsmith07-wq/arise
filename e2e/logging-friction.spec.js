@@ -107,7 +107,9 @@ test('an unconfirmed RIR suggestion never reaches saved history', async ({ page 
   await expect(rirInputs.nth(1)).toHaveValue('');
 
   // Done WITHOUT confirming: the set completes with no RIR recorded.
-  await runner.getByRole('button', { name: 'Done' }).nth(1).click();
+  // NOTE: after set 1 completes its button reads ✓, so set 2's Done is
+  // nth(0) among Done-named buttons — nth indices shift as sets complete.
+  await runner.getByRole('button', { name: 'Done' }).nth(0).click();
   await fillRemainingReps(runner);
   const saveBtn = runner.getByRole('button', { name: 'Save session' });
   await expect(saveBtn).toBeEnabled({ timeout: 5000 });
@@ -139,7 +141,7 @@ test('Same confirms in one tap; load/reps carry stays automatic', async ({ page 
   await expect(rirInputs.nth(1)).toHaveValue('2');
   await expect(runner.getByRole('group', { name: 'Suggested RIR 2 for set 2' })).toBeHidden();
 
-  await runner.getByRole('button', { name: 'Done' }).nth(1).click();
+  await runner.getByRole('button', { name: 'Done' }).nth(0).click();
   await fillRemainingReps(runner);
   const saveBtn = runner.getByRole('button', { name: 'Save session' });
   await expect(saveBtn).toBeEnabled({ timeout: 5000 });
@@ -179,7 +181,8 @@ test('crash recovery restores work without resurrecting suggestions', async ({ p
   await expect(resumed.getByRole('group', { name: /Suggested RIR/ })).toHaveCount(0);
 
   // Finish without touching RIR: nothing may be inferred from Done.
-  await resumed.getByRole('button', { name: 'Done' }).nth(1).click();
+  // (Set 1 shows ✓, so set 2's Done is nth(0).)
+  await resumed.getByRole('button', { name: 'Done' }).nth(0).click();
   const repsInputs = resumed.getByLabel(/^Reps set \d+$/);
   const n = await repsInputs.count();
   for(let i = 0; i < n; i++){
@@ -207,7 +210,7 @@ test('a typed RIR edit persists normally without confirming', async ({ page }) =
   await expect(runner.getByRole('group', { name: 'Suggested RIR 2 for set 2' })).toBeVisible({ timeout: 5000 });
   // Typing a different value overrides the suggestion — no confirm needed.
   await rirInputs.nth(1).fill('3');
-  await runner.getByRole('button', { name: 'Done' }).nth(1).click();
+  await runner.getByRole('button', { name: 'Done' }).nth(0).click();
   await fillRemainingReps(runner);
   const saveBtn = runner.getByRole('button', { name: 'Save session' });
   await expect(saveBtn).toBeEnabled({ timeout: 5000 });
@@ -220,4 +223,48 @@ test('a typed RIR edit persists normally without confirming', async ({ page }) =
   console.log(`friction counts (typed-edit): ${JSON.stringify(counts)}`);
   expect(counts['rir-suggestion-confirmed'] || 0).toBe(0);
   expect(counts['rir-field-commit'] || 0).toBe(2); // one typed entry per set
+});
+
+test('undo then re-complete nets to one set under a stable identity', async ({ page }) => {
+  await completeOnboarding(page);
+  await enableTelemetry(page);
+  const runner = await startWorkout(page);
+  await logFirstSet(runner);
+
+  // Undo set 1 via its ✓ button (the only completed set — deterministic),
+  // then re-complete it via its Done button (first in DOM order again).
+  await runner.getByRole('button', { name: '✓', exact: true }).click();
+  await runner.getByRole('button', { name: 'Done' }).nth(0).click();
+  await fillRemainingReps(runner);
+  const saveBtn = runner.getByRole('button', { name: 'Save session' });
+  await expect(saveBtn).toBeEnabled({ timeout: 5000 });
+  await saveBtn.click();
+  await expect(runner).toBeHidden({ timeout: 8000 });
+
+  // Saved history shows one completed set; every completion/undo event for
+  // it shares the saved set's stable id — the netting has real identity to
+  // work with, not positional guessing.
+  const sets = await savedSets(page);
+  const done = sets.filter((s)=> s.completed);
+  expect(done.length).toBe(1);
+  const stats = await page.evaluate(async () => {
+    const { loadStore } = await import('/src/lib/store.js');
+    const { loggingFrictionStats } = await import('/src/lib/telemetry.js');
+    const store = loadStore();
+    const last = store.history[store.history.length - 1];
+    const savedId = (last.blocks?.[0]?.sets || []).find((s)=> s.completed)?.setId || null;
+    const raw = localStorage.getItem('arise.telemetry.v2');
+    const events = raw ? (JSON.parse(raw).events || []) : [];
+    const setEvents = events.filter((e)=> e.type === 'complete-set' || e.type === 'undo-set');
+    return {
+      savedId,
+      eventIds: setEvents.map((e)=> e.setId || null),
+      friction: loggingFrictionStats(events),
+    };
+  });
+  expect(stats.savedId).toBeTruthy();
+  expect(stats.eventIds.length).toBeGreaterThanOrEqual(3);
+  for(const id of stats.eventIds) expect(id).toBe(stats.savedId);
+  expect(stats.friction.completionEvents).toBeGreaterThanOrEqual(2);
+  expect(stats.friction.completedSets).toBe(1); // corrections raise friction, never work
 });

@@ -217,7 +217,8 @@ describe('loggingFrictionStats — instrumented where possible, degraded never i
       { type: 'apply-all', sessionId: 's1', exerciseId: 'e2', mode: 'standard', at: at(t0, 120000) },
     ];
     const s = loggingFrictionStats(events);
-    assert.equal(s.completedSets, 1);
+    assert.equal(s.completedSets, 0); // completed then undone: no net work left
+    assert.equal(s.completionEvents, 1); // ...but the completion action still counts
     assert.deepEqual(s.fieldCommits, { total: 2, load: 1, reps: 1, rir: 0 });
     assert.equal(s.undos, 1);
     assert.equal(s.correctionsPerSession, 1);
@@ -225,8 +226,11 @@ describe('loggingFrictionStats — instrumented where possible, degraded never i
     assert.equal(s.removedSets, 1);
     assert.equal(s.swap.opens, 1);
     assert.equal(s.swap.commits, 1);
-    // 9 value-free actions over 1 completed set.
-    assert.equal(s.actionsPerCompletedSet, 9);
+    // The only completed set was undone: 9 value-free actions over 0 net
+    // sets, so no per-set rate is invented — while the raw event count stays
+    // available diagnostically.
+    assert.equal(s.completionEvents, 1);
+    assert.equal(s.actionsPerCompletedSet, null);
     assert.equal(s.loggingMsMedian, 5000);
     assert.equal(s.startToFirstSetMs, 60000);
   });

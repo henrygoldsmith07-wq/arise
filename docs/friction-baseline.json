@@ -7,7 +7,8 @@
     "conclusion": "Real-user claims require aggregated OBSERVED telemetry across users. Nothing in this file is a user finding."
   },
   "metricMap": {
-    "actionsPerCompletedSet": "loggingFrictionStats.actionsPerCompletedSet — discrete value-free actions per completion (lower bound on taps; keystrokes never instrumented).",
+    "actionsPerCompletedSet": "loggingFrictionStats.actionsPerCompletedSet — discrete value-free actions per NET completed set (unique sets left completed; a corrected and re-completed set counts once as work, its correction as friction). Lower bound on taps; keystrokes never instrumented.",
+    "completionEvents": "loggingFrictionStats.completionEvents — raw completion actions, kept diagnostically alongside net completedSets.",
     "correctionsPerSession": "loggingFrictionStats.correctionsPerSession — undo-set actions per session.",
     "timeToFirstSet": "loggingFrictionStats.startToFirstSetMs — session:start to first completion carrying its own duration (null unless sessionTimings consented).",
     "setToSetInterval": "loggingFrictionStats.loggingMsMedian — median per-completion elapsedMs, i.e. time since the previously logged action.",

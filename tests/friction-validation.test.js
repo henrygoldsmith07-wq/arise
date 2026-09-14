@@ -182,13 +182,15 @@ describe('real-user measurement mapping (synthetic → observed → conclusion)'
   }
   it('one aggregate exposes every listed measurement, segmented by mode', ()=>{
     const s = loggingFrictionStats(syntheticSession());
-    assert.equal(s.actionsPerCompletedSet, 3); // 6 actions / 2 completions
+    assert.equal(s.completionEvents, 2); // both completion actions count
+    assert.equal(s.completedSets, 1); // ...but the undone-then-redone set is one net set
+    assert.equal(s.actionsPerCompletedSet, 6); // 6 actions / 1 net set: corrections raise friction, never work
     assert.equal(s.correctionsPerSession, 1);
     assert.equal(s.startToFirstSetMs, 90000);
     assert.equal(s.loggingMsMedian, 6000); // set-to-set interval
     assert.deepEqual([s.swap.opens, s.swap.commits, s.swap.msMedian], [1, 1, 9000]);
     assert.equal(s.applyAll.viaApplyAll, 1);
-    assert.equal(s.byMode.gym.completedSets, 2);
+    assert.equal(s.byMode.gym.completedSets, 1);
     assert.equal(s.byMode.standard.completedSets, 0);
     assert.equal(s.byMode.guided.completedSets, 0);
     assert.equal(s.saveMsMedian, 40);
