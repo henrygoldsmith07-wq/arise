@@ -115,6 +115,62 @@ describe('per-mode first-set timing anchors on mode entry', ()=>{
   });
 });
 
+describe('mode intervals measure independently across reload and repeats', ()=>{
+  it('reload/resume in the same mode produces two intervals, never reuses completion A', ()=>{
+    const s = loggingFrictionStats([
+      enter('s1', 'gym', 0), complete('s1', 'gym', 1200, 'a1'),
+      // Reload: same session continues, fresh entry, new set.
+      enter('s1', 'gym', 1800), complete('s1', 'gym', 2400, 'b1'),
+    ]);
+    // Intervals [20min, 10min] aggregate by median, exactly as reported.
+    assert.equal(s.byMode.gym.startToFirstSetMs, 900000);
+    assert.equal(s.completedSets, 2);
+    assert.equal(s.completionEvents, 2);
+  });
+
+  it('repeated Gym entries in one session each contribute their interval', ()=>{
+    const s = loggingFrictionStats([
+      start('s1', 0),
+      enter('s1', 'gym', 0), complete('s1', 'gym', 600, 'a1'),
+      enter('s1', 'gym', 1200), complete('s1', 'gym', 1500, 'b1'),
+    ]);
+    assert.equal(s.byMode.gym.startToFirstSetMs, 450000); // median of 10min and 5min
+    assert.equal(s.startToFirstSetMs, 600000); // overall still session start → first set
+  });
+
+  it('Standard → Gym → Gym-after-resume attributes every interval', ()=>{
+    const s = loggingFrictionStats([
+      start('s1', 0),
+      enter('s1', 'standard', 5), complete('s1', 'standard', 305, 'a1'),
+      enter('s1', 'gym', 600), complete('s1', 'gym', 660, 'a2'),
+      enter('s1', 'gym', 1200), complete('s1', 'gym', 1500, 'a3'),
+    ]);
+    assert.equal(s.byMode.standard.startToFirstSetMs, 300000);
+    assert.equal(s.byMode.gym.startToFirstSetMs, 180000); // median of 1min and 5min
+    assert.equal(s.completedSets, 3);
+  });
+
+  it('Guided remount starts a fresh guided interval', ()=>{
+    const s = loggingFrictionStats([
+      start('s1', 0),
+      enter('s1', 'guided', 5), complete('s1', 'guided', 125, 'g1'),
+      enter('s1', 'guided', 600), complete('s1', 'guided', 660, 'g2'),
+    ]);
+    assert.equal(s.byMode.guided.startToFirstSetMs, 90000); // median of 2min and 1min
+  });
+
+  it('an interval with no completion contributes nothing', ()=>{
+    const s = loggingFrictionStats([
+      start('s1', 0),
+      enter('s1', 'gym', 5),
+      enter('s1', 'standard', 100), complete('s1', 'standard', 160, 'a1'),
+    ]);
+    assert.equal(s.byMode.gym.startToFirstSetMs, null);
+    assert.equal(s.byMode.standard.startToFirstSetMs, 60000);
+    assert.equal(s.completedSets, 1);
+  });
+});
+
 describe('mode:enter respects consent and stays content-free', ()=>{
   it('persists as an ordering anchor without timing consent, but yields no intervals', ()=>{
     setConsent(true, {}); // master on, sessionTimings off

@@ -10,7 +10,7 @@
     "actionsPerCompletedSet": "loggingFrictionStats.actionsPerCompletedSet — discrete value-free actions per NET completed set (unique sets left completed; a corrected and re-completed set counts once as work, its correction as friction). Lower bound on taps; keystrokes never instrumented.",
     "completionEvents": "loggingFrictionStats.completionEvents — raw completion actions, kept diagnostically alongside net completedSets.",
     "correctionsPerSession": "loggingFrictionStats.correctionsPerSession — undo-set actions per session.",
-    "timeToFirstSet": "loggingFrictionStats.startToFirstSetMs — session:start to first completion carrying its own duration (null unless sessionTimings consented).",
+    "timeToFirstSet": "loggingFrictionStats.startToFirstSetMs — overall: session:start to first completion carrying its own duration (null unless sessionTimings consented). Per mode (byMode.*.startToFirstSetMs): each mode:enter opens an interval closed by the next entry; only first completions inside it count (reload/resume starts fresh; median across intervals).",
     "setToSetInterval": "loggingFrictionStats.loggingMsMedian — median per-completion elapsedMs, i.e. time since the previously logged action.",
     "swapFriction": "loggingFrictionStats.swap { opens, commits, msMedian } — open→commit path plus sheet-open→commit interval (null unless sessionTimings consented).",
     "applyAllUsage": "loggingFrictionStats.applyAll { accepted, viaApplyAll, applyAllRate }.",
