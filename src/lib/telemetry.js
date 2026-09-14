@@ -262,6 +262,11 @@ const SKIP_EVENTS = ['set:skip'];
 const FAILED_EVENTS = ['set:failed'];
 const FIELD_COMMIT_EVENTS = ['load-field-commit', 'reps-field-commit', 'rir-field-commit'];
 const APPLY_ALL_EVENTS = ['apply-all'];
+// 'apply-previous' is a RESERVED taxonomy name with no emitting control (the
+// carry-forward prefill is automatic, not a user action). It is counted here
+// so usage is honestly 0 until a control emits it — never assumed, never
+// fabricated.
+const APPLY_PREVIOUS_EVENTS = ['apply-previous'];
 const SWAP_OPEN_EVENTS = ['swap-open'];
 const SWAP_COMMIT_EVENTS = ['swap-commit', 'exercise:swapped'];
 const ACCEPT_EVENTS = ['recommendation:accepted', 'recommendation:dismissed'];
@@ -274,7 +279,7 @@ const INTERACTION_EVENTS = [
   ...COMPLETE_EVENTS, ...UNDO_EVENTS, ...ADD_EVENTS, ...REMOVE_EVENTS,
   ...SKIP_EVENTS, ...FAILED_EVENTS, ...FIELD_COMMIT_EVENTS, ...APPLY_ALL_EVENTS,
   ...SWAP_OPEN_EVENTS, ...SWAP_COMMIT_EVENTS, ...ACCEPT_EVENTS,
-  ...RIR_CONFIRM_EVENTS,
+  ...RIR_CONFIRM_EVENTS, ...APPLY_PREVIOUS_EVENTS,
 ];
 // Value-free field-commit tracking for set-editor inputs. Call onFocus on
 // focus and fieldCommitted on blur: it reports true only when the value
@@ -316,7 +321,7 @@ function frictionCore(events, { mode = null } = {}){
   let fieldLoad=0, fieldReps=0, fieldRir=0;
   let rirShown=0, rirConfirmed=0;
   let interactions=0;
-  let accepted=0, viaApplyAll=0;
+  let accepted=0, viaApplyAll=0, applyPrev=0;
   let swapOpens=0, swapCommits=0, swapMs=[], saveMs=[];
   for(const list of bySession.values()){
     const byTime=list.slice().sort((a,b)=> String(a.at||'').localeCompare(String(b.at||'')));
@@ -357,6 +362,10 @@ function frictionCore(events, { mode = null } = {}){
         rirConfirmed++;
         interactions++;
       }
+      else if(inType(e, APPLY_PREVIOUS_EVENTS)){
+        applyPrev++;
+        interactions++;
+      }
       else if(inType(e, APPLY_ALL_EVENTS) || (e.type==='recommendation:accepted' && e.via==='apply-all')){
         accepted++;
         viaApplyAll++;
@@ -379,7 +388,7 @@ function frictionCore(events, { mode = null } = {}){
       }
     }
   }
-  return { sessions: bySession.size, completed, skipped, undos, added, removed, failedMarked, fieldLoad, fieldReps, fieldRir, rirShown, rirConfirmed, interactions, accepted, viaApplyAll, swapOpens, swapCommits, startToFirst, completionMs, swapMs, saveMs };
+  return { sessions: bySession.size, completed, skipped, undos, added, removed, failedMarked, fieldLoad, fieldReps, fieldRir, rirShown, rirConfirmed, applyPrev, interactions, accepted, viaApplyAll, swapOpens, swapCommits, startToFirst, completionMs, swapMs, saveMs };
 }
 
 function frictionSummary(core){
@@ -414,6 +423,9 @@ function frictionSummary(core){
       viaApplyAll: core.viaApplyAll,
       applyAllRate: core.accepted ? Math.round(core.viaApplyAll / core.accepted * 100) / 100 : null,
     },
+    // Apply-previous usage: reserved taxonomy name, no emitting control —
+    // honestly 0 until a control emits it.
+    applyPrevious: { count: core.applyPrev },
     swap: { opens: core.swapOpens, commits: core.swapCommits, msMedian: swapMsMedian },
     saveMsMedian,
     // Degraded when nothing loggable produced a timing: legacy telemetry that

@@ -160,7 +160,12 @@ test('crash recovery restores work without resurrecting suggestions', async ({ p
   const rirInputs = await logFirstSet(runner);
   await expect(runner.getByRole('group', { name: 'Suggested RIR 2 for set 2' })).toBeVisible({ timeout: 5000 });
 
-  // Crash mid-suggestion: reload, resume from the draft.
+  // Crash mid-suggestion: reload, resume from the draft. Durability is gated
+  // on the app's own write queue so the test asserts recovery, not timing.
+  await page.evaluate(async () => {
+    const { whenPersisted } = await import('/src/lib/storage.js');
+    await whenPersisted();
+  });
   await page.reload();
   await expect(page.getByText('Resume your workout?')).toBeVisible({ timeout: 8000 });
   await page.getByRole('button', { name: 'Resume' }).click();

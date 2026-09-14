@@ -1,31 +1,32 @@
 import { test, expect } from '@playwright/test';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { loadBaselines, checkLive, formatReport } from '../benchmark/friction-baselines.js';
+import { measureHitArea, gateVerdict } from './hit-target.js';
 
-const BASELINES = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'friction-baselines.json'), 'utf8')).flows;
+// Executable baselines: docs/friction-baseline.json is validated on load
+// (schema + every derived delta/%/direction recomputed — hand-maintained
+// claims that disagree fail before any probe runs), and each probe's live
+// metrics are checked against its guardrails. Reports print the validated
+// stored claims; wall-clock timings are apparatus timings, never gated and
+// never presented as human performance.
+const DOC = loadBaselines();
 
-// Baseline comparison: every metric must come in AT or UNDER its durable
-// baseline (improvements ratchet, regressions fail). Prints
-// baseline/current/delta/% per flow — never wall-clock human claims.
-function compareFlow(name, probe){
-  const baseline = BASELINES[name];
-  const current = {
-    inputFocus: probe.focus?.inputFocus ?? null,
-    focusin: probe.focus?.focusin ?? null,
+function liveCounts(probe){
+  return {
+    inputFocus: probe.focus?.inputFocus ?? NaN,
+    focusin: probe.focus?.focusin ?? NaN,
     loadCommits: probe.counts['load-field-commit'] || 0,
     rirCommits: probe.counts['rir-field-commit'] || 0,
     completes: probe.counts['complete-set'] || 0,
   };
-  const lines = [`friction ${name}:`];
-  for(const [k, b] of Object.entries(baseline)){
-    const c = current[k];
-    const d = c - b;
-    lines.push(`  ${k}: baseline=${b} current=${c} delta=${d >= 0 ? '+' : ''}${d} (${b ? Math.round(d / b * 100) + '%' : 'n/a'})`);
-    if(k === 'completes') expect(c, `${name}.${k}`).toBeGreaterThanOrEqual(b);
-    else expect(c, `${name}.${k} must not regress past baseline`).toBeLessThanOrEqual(b);
-  }
-  console.log(lines.join('\n'));
+}
+
+// True 44px gate, shared with hit-target-gate.spec.js (which calibrates it
+// against known-geometry synthetic controls): effective span ≥43.5 plus
+// central-42px coverage probes.
+async function expectHit44(page, locator, label){
+  const measured = await measureHitArea(page, locator);
+  const verdict = gateVerdict(measured);
+  expect(verdict, `${label} true 44px gate (span ${Math.round(measured.w * 10) / 10}×${Math.round(measured.h * 10) / 10}, probes ${measured.hits.map(Number).join('')})`).toBe('pass');
 }
 
 // Friction baseline probe (per mode): a FIXED scripted flow whose telemetry
@@ -153,7 +154,7 @@ test('baseline probe — standard mode two-set flow', async ({ page }) => {
   // no auto-focus fires and the keyboard stays down (was 4 input focuses).
   expect(probe.focus.inputFocus).toBe(3);
   expect(probe.valueLeak).toBeNull();
-  compareFlow('standard-two-set', probe);
+  console.log(formatReport(checkLive(DOC, 'standard-two-set', liveCounts(probe))));
 });
 
 test('baseline probe — gym mode two-set flow', async ({ page }) => {
@@ -187,7 +188,7 @@ test('baseline probe — gym mode two-set flow', async ({ page }) => {
   expect(probe.counts['complete-set']).toBeGreaterThanOrEqual(2);
   expect(probe.focus.inputFocus).toBe(3);
   expect(probe.valueLeak).toBeNull();
-  compareFlow('gym-two-set', probe);
+  console.log(formatReport(checkLive(DOC, 'gym-two-set', liveCounts(probe))));
 });
 
 test('swap friction — open → select → logging resumed', async ({ page }) => {
@@ -218,45 +219,26 @@ test('swap friction — open → select → logging resumed', async ({ page }) =
     return events.find((e) => e.type === 'swap-commit') || null;
   });
   console.log(`friction swap: ${JSON.stringify({ counts: probe.counts, focusDelta: { focusin: focusAfter.focusin - focusBefore.focusin, inputFocus: focusAfter.inputFocus - focusBefore.inputFocus }, commitElapsedMs: swapCommit?.elapsedMs ?? null })}`);
-  expect(probe.counts['swap-open']).toBe(1);
-  expect(probe.counts['swap-commit']).toBe(1);
+  // Guardrailed against the executable baseline (2 logged actions minimum by
+  // construction; resume focus measured, never assumed).
+  console.log(formatReport(checkLive(DOC, 'swap-resume', {
+    swapOpens: probe.counts['swap-open'] || 0,
+    swapCommits: probe.counts['swap-commit'] || 0,
+    resumeFocus: focusAfter.focusin - focusBefore.focusin,
+  })));
   // Timing consent is on in probes, so the open→commit interval is recorded
   // (apparatus time here — the comparable signal is that it EXISTS and the
   // path costs exactly 2 logged actions).
   expect(Number.isFinite(swapCommit?.elapsedMs)).toBe(true);
-  expect(focusAfter.focusin - focusBefore.focusin).toBeGreaterThanOrEqual(1);
   expect(probe.valueLeak).toBeNull();
 });
 
 test('touch targets meet the 44px one-thumb bar', async ({ page }) => {
-  // Effective hit size ≥44px in both dims: every point of the central
-  // 40×40 square must resolve into the control itself. This accepts EITHER
-  // a literal ≥44px box OR a documented expanded hit area (::before
-  // insets) — but never a bare 36px box that merely happens to be hittable
-  // at its centre.
-  const expectHit44 = async (locator, label) => {
-    // Center the control first: the runner's sticky header and save dock
-    // cover viewport edges, and a probe point under sticky chrome proves
-    // nothing about the control. Center placement isolates the measurement.
-    await locator.evaluate((btn) => btn.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' })).catch(() => {});
-    await page.waitForTimeout(200);
-    const ok = await locator.evaluate((btn) => {
-      const r = btn.getBoundingClientRect();
-      if(r.width <= 0 || r.height <= 0) return false;
-      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-      for(const [dx, dy] of [[0, 0], [-20, 0], [20, 0], [0, -20], [0, 20]]){
-        const el = document.elementFromPoint(cx + dx, cy + dy);
-        if(el !== btn && !(el && btn.contains(el))) return false;
-      }
-      return true;
-    });
-    expect(ok, `${label} effective hit area ≥44px`).toBe(true);
-  };
   await completeOnboarding(page);
   await enableTelemetry(page);
   const runner = await startStandardWorkout(page);
 
-  // RIR suggestion bar: Same / − / + must each be ≥44px tall.
+  // RIR suggestion bar: Same / − / + must each clear a true 44×44.
   const rirInputs = runner.getByLabel(/Reps in reserve set/);
   await expect(rirInputs.first()).toBeVisible({ timeout: 5000 });
   await runner.getByLabel(/^Reps set \d+$/).nth(0).fill('8');
@@ -266,16 +248,16 @@ test('touch targets meet the 44px one-thumb bar', async ({ page }) => {
   const same = runner.getByRole('button', { name: /Use suggested RIR/ });
   await expect(same).toBeVisible({ timeout: 5000 });
   for(const name of [/Use suggested RIR/, /Decrease suggested RIR/, /Increase suggested RIR/]){
-    await expectHit44(runner.getByRole('button', { name }).first(), String(name));
+    await expectHit44(page, runner.getByRole('button', { name }).first(), String(name));
   }
   // High-frequency runner controls: Done, both rep steppers, Swap, + Set,
   // the remove-× (expanded hit area) and the keypad launcher.
-  await expectHit44(runner.getByRole('button', { name: 'Done' }).first(), 'Done');
-  await expectHit44(runner.getByRole('button', { name: /Decrease reps set/ }).first(), 'reps stepper −');
-  await expectHit44(runner.getByRole('button', { name: /Increase reps set/ }).first(), 'reps stepper +');
-  await expectHit44(runner.getByRole('button', { name: 'Swap', exact: true }).first(), 'Swap');
-  await expectHit44(runner.getByRole('button', { name: '+ Set' }).first(), '+ Set');
-  await expectHit44(runner.getByRole('button', { name: /Remove set/ }).first(), 'remove set ×');
+  await expectHit44(page, runner.getByRole('button', { name: 'Done' }).first(), 'Done');
+  await expectHit44(page, runner.getByRole('button', { name: /Decrease reps set/ }).first(), 'reps stepper −');
+  await expectHit44(page, runner.getByRole('button', { name: /Increase reps set/ }).first(), 'reps stepper +');
+  await expectHit44(page, runner.getByRole('button', { name: 'Swap', exact: true }).first(), 'Swap');
+  await expectHit44(page, runner.getByRole('button', { name: '+ Set' }).first(), '+ Set');
+  await expectHit44(page, runner.getByRole('button', { name: /Remove set/ }).first(), 'remove set ×');
   // No control may cover another: the load-keypad launcher must be the
   // hit target at its own center (previously the reps steppers spilled over
   // it on narrow viewports, so tapping the keypad decreased reps instead).
@@ -296,7 +278,17 @@ test('touch targets meet the 44px one-thumb bar', async ({ page }) => {
     catch{ await keypadOpen.click({ force: true, timeout: 2_500 }); }
   }).toPass({ timeout: 15_000 });
   const keypadDone = runner.getByRole('group', { name: /Load keypad/ }).getByRole('button', { name: 'Done', exact: true });
-  await expectHit44(keypadDone, 'keypad Done');
+  await expectHit44(page, keypadDone, 'keypad Done');
+});
+
+test('touch targets — gym and guided high-frequency controls', async ({ page }) => {
+  await completeOnboarding(page);
+  await enableTelemetry(page);
+  const runner = await startStandardWorkout(page);
+  // Gym parity: the same row controls render in focus mode — same bar.
+  await runner.locator('button[title*="Gym mode"]').click();
+  await expectHit44(page, runner.getByRole('button', { name: 'Done' }).first(), 'gym Done');
+  await expectHit44(page, runner.getByRole('button', { name: 'Swap', exact: true }).first(), 'gym Swap');
 });
 
 test('baseline probe — guided mode two-step flow', async ({ page }) => {
@@ -320,6 +312,11 @@ test('baseline probe — guided mode two-step flow', async ({ page }) => {
   await page.getByRole('button', { name: 'Guided mode' }).click();
   const runner = page.getByRole('dialog', { name: /Guided session/ });
   await expect(runner).toBeVisible({ timeout: 8000 });
+  // Guided header + step controls clear the same 44px bar.
+  await expectHit44(page, runner.getByRole('button', { name: /Sound cues/ }), 'guided sound cues');
+  const voiceBtn = runner.getByRole('button', { name: /Voice coach/ });
+  if(await voiceBtn.isVisible().catch(() => false)) await expectHit44(page, voiceBtn, 'guided voice coach');
+  await expectHit44(page, runner.getByRole('button', { name: 'Done — next' }), 'guided Done-next');
   await startFocusCounters(page);
 
   page.on('dialog', (d) => d.accept());
@@ -330,7 +327,10 @@ test('baseline probe — guided mode two-step flow', async ({ page }) => {
     if(await reps.isVisible().catch(() => false) && !(await reps.inputValue())) await reps.fill('8');
     await runner.getByRole('button', { name: 'Done — next' }).click();
     const skip = runner.getByRole('button', { name: 'Skip rest' });
-    if(await skip.isVisible().catch(() => false)) await skip.click();
+    if(await skip.isVisible().catch(() => false)){
+      if(step === 0) await expectHit44(page, skip, 'guided Skip rest');
+      await skip.click();
+    }
   }
   const saveBtn = runner.getByRole('button', { name: 'Save session' });
   await expect(saveBtn).toBeEnabled({ timeout: 5000 });
@@ -345,5 +345,5 @@ test('baseline probe — guided mode two-step flow', async ({ page }) => {
   expect(probe.counts['load-field-commit']).toBe(1);
   expect(probe.focus.inputFocus).toBe(1);
   expect(probe.valueLeak).toBeNull();
-  compareFlow('guided-two-step', probe);
+  console.log(formatReport(checkLive(DOC, 'guided-two-step', liveCounts(probe))));
 });

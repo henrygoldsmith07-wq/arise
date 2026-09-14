@@ -1,0 +1,59 @@
+{
+  "_comment": "Executable friction baselines (SOURCE DATA — benchmark/friction-baselines.js validates every derived statistic and fails CI on disagreement). Pre-change values were measured on the workspace at 2d50778 with the fixed scripts in e2e/friction-baseline.spec.js; current values are the last verified measurements. Wall-clock timings are apparatus timings (Playwright speed), never human-performance claims, so only deterministic action/focus counts are gated. Layers: synthetic benchmark (this file + scripted probes) → observed product telemetry (value-free loggingFrictionStats events on consenting devices) → real-user conclusion (only from aggregated observed telemetry, never from these synthetic numbers).",
+  "version": 1,
+  "layers": {
+    "synthetic": "Fixed-script Playwright flows in e2e/friction-baseline.spec.js. Deterministic action/focus counts; timings informational only.",
+    "observed": "Value-free loggingFrictionStats aggregates from consenting devices (telemetryEnabled; durations additionally require sessionTimings). No entered loads, reps, RIR, targets or prescription content — ever.",
+    "conclusion": "Real-user claims require aggregated OBSERVED telemetry across users. Nothing in this file is a user finding."
+  },
+  "metricMap": {
+    "actionsPerCompletedSet": "loggingFrictionStats.actionsPerCompletedSet — discrete value-free actions per completion (lower bound on taps; keystrokes never instrumented).",
+    "correctionsPerSession": "loggingFrictionStats.correctionsPerSession — undo-set actions per session.",
+    "timeToFirstSet": "loggingFrictionStats.startToFirstSetMs — session:start to first completion carrying its own duration (null unless sessionTimings consented).",
+    "setToSetInterval": "loggingFrictionStats.loggingMsMedian — median per-completion elapsedMs, i.e. time since the previously logged action.",
+    "swapFriction": "loggingFrictionStats.swap { opens, commits, msMedian } — open→commit path plus sheet-open→commit interval (null unless sessionTimings consented).",
+    "applyAllUsage": "loggingFrictionStats.applyAll { accepted, viaApplyAll, applyAllRate }.",
+    "applyPreviousUsage": "loggingFrictionStats.applyPrevious.count — reserved taxonomy name ('apply-previous'); no control emits it yet, so honest usage is 0 until one does.",
+    "byMode": "loggingFrictionStats.byMode.{gym,standard,guided} — every aggregate segmented; untagged legacy events count to overall only."
+  },
+  "flows": {
+    "standard-two-set": {
+      "script": "Onboard → start workout → set 1 full entry (reps/load/RIR) → Same-confirm suggested RIR on set 2 → complete → fill rest → save.",
+      "metrics": {
+        "inputFocus": { "baseline": 4, "current": 3, "deltaAbs": -1, "deltaPct": -25, "direction": "improvement", "maxAllowed": 3 },
+        "focusin": { "baseline": 8, "current": 7, "deltaAbs": -1, "deltaPct": -12, "direction": "improvement", "maxAllowed": 7 },
+        "loadCommits": { "baseline": 1, "current": 1, "deltaAbs": 0, "deltaPct": 0, "direction": "held", "maxAllowed": 1 },
+        "rirCommits": { "baseline": 2, "current": 1, "deltaAbs": -1, "deltaPct": -50, "direction": "improvement", "maxAllowed": 1 },
+        "completes": { "baseline": 2, "current": 2, "deltaAbs": 0, "deltaPct": 0, "direction": "held", "minAllowed": 2 }
+      }
+    },
+    "gym-two-set": {
+      "script": "Same script as standard-two-set with gym mode toggled on before logging.",
+      "metrics": {
+        "inputFocus": { "baseline": 4, "current": 3, "deltaAbs": -1, "deltaPct": -25, "direction": "improvement", "maxAllowed": 3 },
+        "focusin": { "baseline": 8, "current": 7, "deltaAbs": -1, "deltaPct": -12, "direction": "improvement", "maxAllowed": 7 },
+        "loadCommits": { "baseline": 1, "current": 1, "deltaAbs": 0, "deltaPct": 0, "direction": "held", "maxAllowed": 1 },
+        "rirCommits": { "baseline": 2, "current": 1, "deltaAbs": -1, "deltaPct": -50, "direction": "improvement", "maxAllowed": 1 },
+        "completes": { "baseline": 2, "current": 2, "deltaAbs": 0, "deltaPct": 0, "direction": "held", "minAllowed": 2 }
+      }
+    },
+    "guided-two-step": {
+      "script": "Onboard → start guided session → two steps (fill load/reps only if empty, Done, skip rest) → save.",
+      "metrics": {
+        "inputFocus": { "baseline": 2, "current": 1, "deltaAbs": -1, "deltaPct": -50, "direction": "improvement", "maxAllowed": 1 },
+        "focusin": { "baseline": 7, "current": 6, "deltaAbs": -1, "deltaPct": -14, "direction": "improvement", "maxAllowed": 6 },
+        "loadCommits": { "baseline": 2, "current": 1, "deltaAbs": -1, "deltaPct": -50, "direction": "improvement", "maxAllowed": 1 },
+        "rirCommits": { "baseline": 0, "current": 0, "deltaAbs": 0, "deltaPct": null, "direction": "held", "maxAllowed": 0 },
+        "completes": { "baseline": 2, "current": 2, "deltaAbs": 0, "deltaPct": 0, "direction": "held", "minAllowed": 2 }
+      }
+    },
+    "swap-resume": {
+      "script": "Onboard → start workout → complete set 1 → open Swap → choose first alternative. First measured after the identity-based resume landed; no pre-change data exists (the pre-change path was 2 logged actions minimum by construction: open + commit).",
+      "metrics": {
+        "swapOpens": { "baseline": null, "current": 1, "deltaAbs": null, "deltaPct": null, "direction": "new", "maxAllowed": 1 },
+        "swapCommits": { "baseline": null, "current": 1, "deltaAbs": null, "deltaPct": null, "direction": "new", "maxAllowed": 1 },
+        "resumeFocus": { "baseline": null, "current": 3, "deltaAbs": null, "deltaPct": null, "direction": "new", "maxAllowed": 3 }
+      }
+    }
+  }
+}

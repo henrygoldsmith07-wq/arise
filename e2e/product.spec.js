@@ -500,7 +500,13 @@ test.describe('Prospective prescription capture', () => {
     // Set identity: no id appears on both sides of the split.
     expect(saved.keepSetIds.filter((id)=> id && saved.otherSetIds.includes(id))).toEqual([]);
 
-    // Reload: the split survives as saved history.
+    // Reload: the split survives as saved history. Durability is gated on
+    // the app's own write queue (whenPersisted) — reloading before the
+    // async persist drains would test timing luck, not the split.
+    await page.evaluate(async () => {
+      const { whenPersisted } = await import('/src/lib/storage.js');
+      await whenPersisted();
+    });
     await page.reload();
     const reloaded = await page.evaluate(async (orig) => {
       const { loadStore } = await import('/src/lib/store.js');
