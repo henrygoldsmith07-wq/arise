@@ -105,22 +105,33 @@ export function withGuidedStepPrescription(session, blocks, activeIndex, shownAt
   return attached === current ? blocks : blocks.map((b, i)=> i === activeIndex ? attached : b);
 }
 
-// Execute the double-progression treatment on first reveal of its step: the
-// guided flow has no per-block "Use" button (there is only ever one active
-// step), so the assigned prescription fills the sets the user has not started
-// yet. Untouched here: completed/failed/skipped sets, and every exercise
-// without a double-progression assignment — normal product behaviour and the
-// ordinary schedule prefill stay in charge for those.
+// Execute a randomised treatment on first reveal of its step — both assigned
+// arms use this one path, so what the participant sees, what the ledger
+// records, and what they perform are the same prescription. The guided flow
+// has no per-block "Use" button (there is only ever one active step), so the
+// assigned prescription fills the sets the user has not started yet.
+// Untouched here: completed/failed/skipped sets — performed work is history
+// and is never rewritten — and exercises without an assignment (null arm),
+// which keep the normal schedule-driven Guided behaviour and are excluded
+// from the randomised analysis. Stable set identity (setId, plannedSlot,
+// governingPrescriptionId) rides along on the spread untouched.
 export function applyGuidedTreatment(blocks, activeIndex, assignedArm, recommendation){
-  if(assignedArm !== 'double-progression' || !recommendation) return blocks;
+  if(assignedArm !== 'arise' && assignedArm !== 'double-progression') return blocks;
+  if(!recommendation) return blocks;
   const current = blocks?.[activeIndex];
   if(!current) return blocks;
+  const ex = EXERCISE_BY_ID[current.exerciseId];
   const reps = recommendation.reps != null ? String(recommendation.reps) : null;
   const load = recommendation.load != null && Number(recommendation.load) > 0 ? String(recommendation.load) : null;
-  const next = current.sets.map(s=> (s.completed || s.failed || s.skipped) ? s : {
-    ...s,
-    ...(reps != null ? { reps } : {}),
-    ...(load != null ? { weightKg: load } : {}),
+  const assist = ex?.supportsAssisted && recommendation.assistKg != null ? String(recommendation.assistKg) : null;
+  const next = current.sets.map(s=>{
+    if(s.completed || s.failed || s.skipped) return s;
+    const patch = {
+      ...(reps != null && String(s.reps ?? '') !== reps ? { reps } : {}),
+      ...(load != null && String(s.weightKg ?? '') !== load ? { weightKg: load } : {}),
+      ...(assist != null && String(s.assistedKg ?? '') !== assist ? { assistedKg: assist } : {}),
+    };
+    return Object.keys(patch).length ? { ...s, ...patch } : s;
   });
   const changed = next.some((s, i)=> s !== current.sets[i]);
   return changed ? blocks.map((b, i)=> i === activeIndex ? { ...b, sets: next } : b) : blocks;

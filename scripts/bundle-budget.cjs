@@ -69,6 +69,14 @@
 // the friction core. Requested product logic, not dependency growth; boot
 // (195.5) and largest-lazy (47.4) budgets unchanged; measured total 346.0.
 //
+// total 357 → 358 kB with the guided both-arms treatment pass: one shared
+// application path in guidedMode (reps/load/assistance, value-diffed so
+// re-application is a no-op), the generalised study-policy disclosure line,
+// and the treatment.js extraction. Guided now executes whichever arm it was
+// assigned — the same prescription recorded, displayed and performed. Requested
+// product logic, no dependency growth; boot (196.1) and largest-lazy (47.4)
+// unchanged; measured total 357.1.
+//
 // boot 196 → 197 kB and total 347 → 357 kB with the competitive-gaps pass:
 // the exercise teaching layer (derived setup/execution/breathing/mistakes/
 // safety/progressions content + the lazy TeachingPanel chunk + richer browser
@@ -95,7 +103,7 @@ if(!fs.existsSync(dist)){
 
 const BOOT_BUDGET_KB = 197;
 const CHUNK_BUDGET_KB = 48;
-const TOTAL_BUDGET_KB = 357;
+const TOTAL_BUDGET_KB = 358;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

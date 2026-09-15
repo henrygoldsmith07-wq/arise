@@ -42,10 +42,10 @@ async function scheduleProgram(page){
 }
 
 // Enroll with exactly ONE assignment: the first scheduled exercise is forced
-// to double-progression. Every other exercise stays never-randomised, which
-// must yield assignedArm null in the ledger.
-async function enrollGuidedStudy(page, { consent = true } = {}){
-  return page.evaluate(async ({ consent }) => {
+// to the given arm. Every other exercise stays never-randomised, which must
+// yield assignedArm null in the ledger.
+async function enrollGuidedStudy(page, { consent = true, arm = 'double-progression' } = {}){
+  return page.evaluate(async ({ consent, arm }) => {
     const { loadStore, saveStore } = await import('/src/lib/store.js');
     const { enrollParticipant } = await import('/src/lib/studyEnrollment.js');
     const s = loadStore();
@@ -54,13 +54,13 @@ async function enrollGuidedStudy(page, { consent = true } = {}){
     const participantId = 'ab'.repeat(8);
     const exIds = sess.blocks.map(b=> b.exerciseId);
     const base = enrollParticipant({ participantId, exerciseIds: exIds });
-    const enrollment = { ...base, assignments: { [exIds[0]]: { arm: 'double-progression', assignmentVersion: base.studyVersion || 'v1', assignedAtISO: new Date().toISOString() } } };
+    const enrollment = { ...base, assignments: { [exIds[0]]: { arm, assignmentVersion: base.studyVersion || 'v1', assignedAtISO: new Date().toISOString() } } };
     s.preferences = { ...(s.preferences || {}), telemetryEnabled: consent };
     s.studyParticipantId = participantId;
     s.studyEnrollment = enrollment;
     saveStore(s);
-    return { firstExercise: exIds[0], otherExercise: exIds.find(e=> e !== exIds[0]), participantId };
-  }, { consent });
+    return { firstExercise: exIds[0], otherExercise: exIds.find(e=> e !== exIds[0]), participantId, arm };
+  }, { consent, arm });
 }
 
 async function startGuided(page){
@@ -138,4 +138,50 @@ test('guided without measurement consent: treatment still enforced, zero evidenc
   await runner.getByRole('button', { name: 'Done — next' }).click();
   const rows = await page.evaluate(() => import('/src/lib/longitudinal.js').then(m=> m.loadEvaluationLedger().length));
   expect(rows).toBe(0);
+});
+
+test('guided applies the ARISE assignment too: displayed = recorded = performed', async ({ page }) => {
+  page.on('dialog', (d) => d.accept());
+  await completeOnboarding(page);
+  await scheduleProgram(page);
+  const info = await enrollGuidedStudy(page, { consent: true, arm: 'arise' });
+  test.skip(!info, 'no multi-exercise scheduled session');
+  await page.reload();
+  const runner = await startGuided(page);
+  await expect(runner.getByText(/Study policy — Arise/)).toBeVisible({ timeout: 8000 });
+
+  // What the participant SEES on the active step (treated prefill):
+  const shownReps = await runner.getByLabel('Reps', { exact: true }).inputValue();
+  const shownLoad = await runner.getByLabel('Load in kilograms').inputValue().catch(() => '');
+
+  await runner.getByRole('button', { name: 'Done — next' }).click();
+  for(let i = 0; i < 60; i++){
+    const dn = runner.getByRole('button', { name: 'Done — next' });
+    if(await dn.isVisible().catch(() => false)) await dn.click();
+    const skip = runner.getByRole('button', { name: 'Skip rest' });
+    if(await skip.isVisible().catch(() => false)) await skip.click();
+    const sv = runner.getByRole('button', { name: 'Save session' });
+    if(await sv.isEnabled().catch(() => false)){ await sv.click(); break; }
+  }
+  await expect(runner).toBeHidden({ timeout: 10000 });
+  await page.evaluate(async () => { const { whenPersisted } = await import('/src/lib/storage.js'); await whenPersisted(); });
+
+  const compare = await page.evaluate(async (info) => {
+    const { loadStore } = await import('/src/lib/store.js');
+    const { loadEvaluationLedger } = await import('/src/lib/longitudinal.js');
+    const last = loadStore().history[loadStore().history.length - 1];
+    const performed = last.blocks.find(b=> b.exerciseId === info.firstExercise)?.sets?.[0] || null;
+    const ledgerRow = loadEvaluationLedger().find(r=> r.exerciseId === info.firstExercise) || null;
+    return { performed, ledgerRow };
+  }, info);
+  expect(compare.ledgerRow, 'arise arm recorded').toBeTruthy();
+  expect(compare.ledgerRow.assignedArm).toBe('arise');
+  const rec = compare.ledgerRow.recommendation;
+  expect(String(rec.reps)).toBe(shownReps, 'recorded prescription matches the displayed target');
+  expect(String(compare.performed.reps)).toBe(shownReps, 'performed work matches the displayed target');
+  if(rec.load != null && Number(rec.load) > 0){
+    expect(String(rec.load)).toBe(shownLoad);
+    expect(String(compare.performed.weightKg)).toBe(shownLoad);
+  }
+  expect(compare.ledgerRow.outcome?.assignedMet, 'outcome resolved against the applied target').toBe(true);
 });

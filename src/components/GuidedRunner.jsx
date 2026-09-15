@@ -472,7 +472,11 @@ export default function GuidedRunner({ session, history = [], availableEquipment
                     {currentBlock.loadHint ? <span className="text-ink3"> · {currentBlock.loadHint}</span> : null}
                   </p>
                   {currentExercise?.cues?.[0] && <p className="text-[11px] text-ink3 mt-1">Cue: {currentExercise.cues[0]}</p>}
-                  {activeArm === 'double-progression' && activeRec && <p className="text-[11px] text-ink3 mt-1">Study policy — double progression: {activeRec.reps ?? '—'} reps{activeRec.load ? ` at ${activeRec.load} kg` : ''}.</p>}
+                  {activeArm && activeRec && (
+                    <p className="text-[11px] text-ink3 mt-1">
+                      Study policy — {activeArm === 'double-progression' ? 'double progression' : 'Arise'}: {activeRec.reps ?? '—'} reps{activeRec.load ? ` at ${activeRec.load} kg` : ''}{activeRec.assistKg != null ? ` (assisted ${activeRec.assistKg} kg)` : ''}.
+                    </p>
+                  )}
                   {currentBlock.why && <p className="text-[11px] text-ink3 italic mt-0.5">Prescribed: {currentBlock.why}</p>}
                 </div>
               </div>
