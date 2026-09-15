@@ -78,12 +78,15 @@ export function initGuidedBlocks(session, history = [], draftBlocks = null){
 // the block that is currently the active step, the moment it is shown. Idempotent
 // (a block that already carries a snapshot is returned unchanged, and the same
 // array reference comes back when nothing changed so no render loop can start).
-// The guided runner shows the scheduled target, not an engine one, so this
-// records source 'schedule' without inventing engine fields. Each planned set is
-// then bound to that revision with a stable id + slot, exactly as in the
+// A study-assigned exercise supplies its treatment recommendation (the same
+// resolver the standard runner uses), so the snapshot records source 'engine'
+// exactly as in Standard/Gym; without one the guided runner shows the
+// scheduled target and the snapshot stays source 'schedule'. Either way the
+// SAME frozen assignment applies regardless of workout mode. Each planned set
+// is then bound to that revision with a stable id + slot, exactly as in the
 // standard runner, so guided histories use the identified analytics path rather
 // than the legacy position fallback.
-export function withGuidedStepPrescription(session, blocks, activeIndex, shownAt = null, makeId = null){
+export function withGuidedStepPrescription(session, blocks, activeIndex, shownAt = null, makeId = null, recommendation = null, policy = 'standard'){
   if(!session || !Array.isArray(blocks) || activeIndex == null) return blocks;
   const current = blocks[activeIndex];
   if(!current || current.prescription) return blocks;
@@ -92,13 +95,35 @@ export function withGuidedStepPrescription(session, blocks, activeIndex, shownAt
     session,
     block: { ...planned, exerciseId: current.exerciseId, sets: current.sets },
     blockIndex: activeIndex,
-    recommendation: null,
+    recommendation: recommendation || null,
     shownAt: shownAt || session.startedAt || null,
+    policy,
   });
   if(!snapshot) return blocks;
   const attributed = attributePrescribedSets(current, snapshot.prescriptionId, makeId);
   const attached = attachPrescription(attributed, snapshot);
   return attached === current ? blocks : blocks.map((b, i)=> i === activeIndex ? attached : b);
+}
+
+// Execute the double-progression treatment on first reveal of its step: the
+// guided flow has no per-block "Use" button (there is only ever one active
+// step), so the assigned prescription fills the sets the user has not started
+// yet. Untouched here: completed/failed/skipped sets, and every exercise
+// without a double-progression assignment — normal product behaviour and the
+// ordinary schedule prefill stay in charge for those.
+export function applyGuidedTreatment(blocks, activeIndex, assignedArm, recommendation){
+  if(assignedArm !== 'double-progression' || !recommendation) return blocks;
+  const current = blocks?.[activeIndex];
+  if(!current) return blocks;
+  const reps = recommendation.reps != null ? String(recommendation.reps) : null;
+  const load = recommendation.load != null && Number(recommendation.load) > 0 ? String(recommendation.load) : null;
+  const next = current.sets.map(s=> (s.completed || s.failed || s.skipped) ? s : {
+    ...s,
+    ...(reps != null ? { reps } : {}),
+    ...(load != null ? { weightKg: load } : {}),
+  });
+  const changed = next.some((s, i)=> s !== current.sets[i]);
+  return changed ? blocks.map((b, i)=> i === activeIndex ? { ...b, sets: next } : b) : blocks;
 }
 
 // The current step: the first set that is neither completed nor skipped.

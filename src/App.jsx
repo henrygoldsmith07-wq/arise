@@ -555,6 +555,10 @@ export default function App(){
           voiceCoach={store.preferences?.voiceCoach === true}
           onToggleVoiceCoach={(v)=> setStore(prev=> ({ ...prev, preferences:{ ...(prev.preferences||{}), voiceCoach: v } }))}
           voiceRate={Number(store.preferences?.voiceRate) || 1}
+          plateConfig={store.onboarding?.plateConfig || null}
+          appPrefs={store.preferences || null}
+          studyEnrollment={store.studyEnrollment || null}
+          participantId={store.studyParticipantId || null}
           onDraftChange={handleDraftChange}
           onSave={handleSaveSession}
           onCancel={handleCancelSession}

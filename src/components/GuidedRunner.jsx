@@ -11,8 +11,14 @@ import {
   formatElapsed,
   buildGuidedPayload,
   withGuidedStepPrescription,
+  applyGuidedTreatment,
 } from '../lib/guidedMode.js';
 import { recordEvent, trackFieldFocus, fieldCommitted } from '../lib/telemetry.js';
+import { recordRecommendation } from '../lib/longitudinal.js';
+import { runComparativeStudy } from '../lib/study.js';
+import { studyArmFor } from '../lib/studyEnrollment.js';
+import { POLICY_ORDER } from '../lib/progressionPolicies.js';
+import { treatmentRecommendation } from '../lib/treatment.js';
 import { restStartCue, restTickCue, restCompleteCue } from '../lib/audioCues.js';
 import { speak, cancelSpeech, voiceSupported } from '../lib/voiceCoach.js';
 import { haptic } from '../lib/haptics.js';
@@ -28,7 +34,7 @@ const TeachingPanel = lazy(() => import('./TeachingPanel.jsx'));
 // Reuses the same draft persistence contract as SessionRunner (onDraftChange
 // with { session, blocks, ... }), so crash recovery and cross-tab protection
 // in App.jsx work identically for both modes.
-export default function GuidedRunner({ session, history = [], availableEquipment = [], draft = null, measurementConsent = false, soundCues = true, onToggleSoundCues = null, voiceCoach = false, onToggleVoiceCoach = null, voiceRate = 1, wakeLock = false, gymPrefs = null, onSetRestPreset = null, onDraftChange, onSave, onCancel }){
+export default function GuidedRunner({ session, history = [], availableEquipment = [], draft = null, measurementConsent = false, soundCues = true, onToggleSoundCues = null, voiceCoach = false, onToggleVoiceCoach = null, voiceRate = 1, wakeLock = false, gymPrefs = null, onSetRestPreset = null, studyEnrollment = null, participantId = null, plateConfig = null, appPrefs = null, onDraftChange, onSave, onCancel }){
   const startedAtRef=useRef(draft?.startedAt || new Date().toISOString());
   // Time of the last logged guided step (complete or skip), for per-step
   // elapsed times — the same "time since last logged action" contract as the
@@ -53,7 +59,19 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   const draftRef=useRef(null);
   const rootRef=useRef(null);
   const closeRef=useRef(null);
-  void measurementConsent;
+  // Randomised field study: the SAME frozen arm assignment the standard
+  // runner enforces (shared studyArmFor + treatmentRecommendation), so
+  // treatment follows the exercise and participant, never the workout mode.
+  // Exercises never randomised resolve to null: normal product behaviour,
+  // excluded from the study — never a silent default to Arise.
+  const appPolicy = POLICY_ORDER.includes(appPrefs?.progressionPolicy) ? appPrefs.progressionPolicy : 'standard';
+  const study = useMemo(()=>{
+    try{ return runComparativeStudy(history); }catch{ return null; }
+  },[history]);
+  // Shown/exercised once per exercise across remounts: the set survives a
+  // dev double-effect and is re-seeded from the draft, so a crash-recovery
+  // resume never records a second prospective row for the same exercise.
+  const shownRecommendationRef = useRef(new Set(Array.isArray(draft?.recordedExercises) ? draft.recordedExercises : []));
   // Mode-entry timing anchor for guided mode (value-free, same contract as
   // the standard runner's mount/toggle anchors). Guided sessions never
   // switch modes, so one entry covers the whole session; a genuine remount
@@ -189,6 +207,9 @@ export default function GuidedRunner({ session, history = [], availableEquipment
       restLabel,
       restExerciseId,
       startedAt: startedAtRef.current,
+      // Which exercises' prospective evidence was already recorded — a resume
+      // after crash/reload re-seeds shownRecommendationRef from this.
+      recordedExercises: [...shownRecommendationRef.current],
       updatedAt: new Date().toISOString(),
     };
     draftRef.current = nextDraft;
@@ -216,17 +237,66 @@ export default function GuidedRunner({ session, history = [], availableEquipment
     spokenStepRef.current = stepKey;
     speakCurrentStep(step, blocks, voiceOn);
   }, [stepKey, voiceOn]);
-  // The guided runner shows one step at a time, so freeze a block's schedule
-  // prescription the moment it becomes the active step — not at session start.
-  // Idempotent and array-stable (see withGuidedStepPrescription), so a rerender
-  // that changes nothing does not loop, and set/skip edits never re-stamp it.
+  // Per-exercise arm + treatment, computed once per change exactly like the
+  // standard runner's blockMeta — the shown prescription, the frozen snapshot
+  // and the recorded evidence all read from this single source.
+  const guidedMeta = useMemo(()=>{
+    const arms = new Map(), recs = new Map();
+    for(const b of blocks){
+      if(arms.has(b.exerciseId)) continue;
+      const arm = studyArmFor(studyEnrollment, b.exerciseId);
+      arms.set(b.exerciseId, arm);
+      recs.set(b.exerciseId, treatmentRecommendation({ block: b, history, asOfDateISO: session.dateISO, plateConfig, study, assignedArm: arm, policy: appPolicy }));
+    }
+    return { arms, recs };
+  },[blocks, history, session.dateISO, plateConfig, study, studyEnrollment, appPolicy]);
+
+  // The guided runner shows one step at a time, so freeze a block's
+  // prescription (and record its prospective evidence) the moment it becomes
+  // the active step — not at session start, matching the deferred-capture
+  // contract. Idempotent and array-stable, so a rerender that changes nothing
+  // does not loop, and set/skip edits never re-stamp it.
   const activeBlockIndex = step ? step.blockIndex : null;
   useEffect(()=>{
     if(activeBlockIndex == null) return;
-    setBlocks(prev=> withGuidedStepPrescription(session, prev, activeBlockIndex, new Date().toISOString(), makeSetId));
+    const block = blocks[activeBlockIndex];
+    if(!block) return;
+    const arm = guidedMeta.arms.get(block.exerciseId) ?? null;
+    const rec = guidedMeta.recs.get(block.exerciseId) || null;
+    setBlocks(prev=> applyGuidedTreatment(
+      withGuidedStepPrescription(session, prev, activeBlockIndex, new Date().toISOString(), makeSetId, rec, appPolicy),
+      activeBlockIndex, arm, rec,
+    ));
+    if(rec && !shownRecommendationRef.current.has(block.exerciseId)){
+      shownRecommendationRef.current.add(block.exerciseId);
+      try{ recordEvent('recommendation:shown', { sessionId: session.id, exerciseId: block.exerciseId, assignedArm: arm ?? null, mode: 'guided' }); }catch{}
+      try{
+        recordRecommendation({
+          exerciseId: block.exerciseId,
+          recommendation: rec,
+          history,
+          dueDateISO: session.dateISO,
+          programId: session.programId || null,
+          programVersion: session.programVersion ?? null,
+          targetReps: block.reps || undefined,
+          assignedArm: arm ?? null,
+          participantId,
+          preferences: measurementConsent === true ? { telemetryEnabled: true } : null,
+        });
+      }catch{}
+      // Carry the "already shown" markers into the draft so a resume after
+      // reload or crash never records the same exercise twice.
+      if(draftRef.current) onDraftChange?.({ ...draftRef.current, recordedExercises: [...shownRecommendationRef.current], updatedAt: new Date().toISOString() });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   },[activeBlockIndex, session]);
 
   const elapsed = sessionElapsedMs(startedAtRef.current, clock);
+  // The active step's arm/treatment, for honest on-screen disclosure when the
+  // randomised assignment changes the target.
+  const activeExerciseId = activeBlockIndex != null ? blocks[activeBlockIndex]?.exerciseId : null;
+  const activeArm = activeExerciseId ? (guidedMeta.arms.get(activeExerciseId) ?? null) : null;
+  const activeRec = activeExerciseId ? (guidedMeta.recs.get(activeExerciseId) || null) : null;
   // Live pace vs the pre-session plan — display-only, never telemetered.
   const pace = useMemo(()=>{
     try{
@@ -402,6 +472,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
                     {currentBlock.loadHint ? <span className="text-ink3"> · {currentBlock.loadHint}</span> : null}
                   </p>
                   {currentExercise?.cues?.[0] && <p className="text-[11px] text-ink3 mt-1">Cue: {currentExercise.cues[0]}</p>}
+                  {activeArm === 'double-progression' && activeRec && <p className="text-[11px] text-ink3 mt-1">Study policy — double progression: {activeRec.reps ?? '—'} reps{activeRec.load ? ` at ${activeRec.load} kg` : ''}.</p>}
                   {currentBlock.why && <p className="text-[11px] text-ink3 italic mt-0.5">Prescribed: {currentBlock.why}</p>}
                 </div>
               </div>

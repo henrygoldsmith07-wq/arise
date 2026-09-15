@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState, Fragment, lazy, Suspense } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { lastExerciseSets } from '../lib/store.js';
-import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, applySwapToBlocks, attributePrescribedSets, userAddedSet, removeSetAt, isSetPerformed, personalCalibrationFromHistory } from '../lib/progression.js';
-import { recommendNextWithPolicy, POLICY_ORDER } from '../lib/progressionPolicies.js';
-import { runComparativeStudy, doubleProgressionRec } from '../lib/study.js';
+import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, applySwapToBlocks, attributePrescribedSets, userAddedSet, removeSetAt, isSetPerformed } from '../lib/progression.js';
+import { POLICY_ORDER } from '../lib/progressionPolicies.js';
+import { runComparativeStudy } from '../lib/study.js';
 import { studyArmFor } from '../lib/studyEnrollment.js';
-import { recommendNextWithModel } from '../lib/progressionModel.js';
+import { treatmentRecommendation } from '../lib/treatment.js';
 import { formatPlateStack } from '../lib/plates.js';
 import { substitutionOptions } from '../lib/substitutions.js';
 import { recordEvent, trackFieldFocus, fieldCommitted } from '../lib/telemetry.js';
@@ -132,40 +132,10 @@ function transitionChip(rec, prevSummary){
   return null;
 }
 
+// The randomised-treatment resolver lives in lib/treatment.js so Guided mode
+// enforces the identical assignment from the identical code path.
 function getRecommendation(block, history, asOfDateISO, plateConfig = null, study = null, assignedArm = null, policy = 'standard', explanationMode = 'standard'){
-  try{
-    // ── Randomised trial enforcement ──
-    // A double-progression assignment IS the treatment: the product displays
-    // and logs the DP prescription. Arise never runs for that exercise, so
-    // the comparison is between policies actually followed.
-    if(assignedArm === 'double-progression'){
-      const visible = history.filter(h=> String(h?.dateISO || '') <= String(asOfDateISO || '9999'));
-      const rec = doubleProgressionRec({ history: visible, exerciseId: block.exerciseId, targetReps: block.reps || '8–12' });
-      return {
-        load: rec.load ?? null,
-        reps: rec.reps,
-        assistKg: null,
-        reason: 'Study policy — double progression (randomised).',
-        __studyArm: 'double-progression',
-      };
-    }
-    // Evidence-gated model: recommendNextWithModel derives the progression
-    // model from history + study; capabilities stay inert unless their sample
-    // gates AND a proven baseline weakness open them. Falls back to the plain
-    // engine on any error.
-    if(study){
-      const modelled = recommendNextWithModel({ exerciseId:block.exerciseId, history, targetReps:block.reps || '8–12', asOfDateISO, plateConfig, study });
-      if(modelled) return modelled;
-    }
-    // plateConfig is safe for every equipment type: the engine dispatches
-    // barbells through plates and dumbbells/machines through their own
-    // achievable increments. The policy layer wraps the modelled/plain engine
-    // with the user's chosen policy, confidence scoring and explanations.
-    // A conservative personal stance is learned from this lifter's OWN logged
-    // history (frozen prescription snapshots), never the evaluation ledger.
-    const personalCalibration = personalCalibrationFromHistory(history, { exerciseId: block.exerciseId, asOfDateISO });
-    return recommendNextWithPolicy({ exerciseId:block.exerciseId, history, targetReps:block.reps || '8–12', asOfDateISO, plateConfig, study, policy, personalCalibration: personalCalibration.active ? personalCalibration : null });
-  }catch{ return null; }
+  return treatmentRecommendation({ block, history, asOfDateISO, plateConfig, study, assignedArm, policy });
 }
 
 function hasUnfinishedSet(blocks, bi, si){
