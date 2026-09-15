@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, Fragment } from 'react';
+import { useEffect, useMemo, useRef, useState, Fragment, lazy, Suspense } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { lastExerciseSets } from '../lib/store.js';
 import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, applySwapToBlocks, attributePrescribedSets, userAddedSet, removeSetAt, isSetPerformed, personalCalibrationFromHistory } from '../lib/progression.js';
@@ -19,6 +19,9 @@ import { restStartCue, restCompleteCue } from '../lib/audioCues.js';
 import { speak, cancelSpeech } from '../lib/voiceCoach.js';
 import { LoadNumpad, RestDock, swipeRowHandlers } from './GymModePanel.jsx';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
+// Teaching opens on a deliberate tap, so the panel + its derived content
+// ride their own lazy chunk — boot logging weight is untouched.
+const TeachingPanel = lazy(() => import('./TeachingPanel.jsx'));
 import StepperButton from './StepperButton.jsx';
 import { tracePhase, traceStart, traceEnd } from '../lib/perfTrace.js';
 import { haptic } from '../lib/haptics.js';
@@ -1091,6 +1094,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                   <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                     <span className="text-xl font-black tabular-nums leading-none">{clearTarget.text}</span>
                     {recommendation && <button onClick={()=> applyRecommendation(bi,recommendation)} className="relative text-[10px] font-bold underline underline-offset-2 shrink-0 before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']">Use</button>}
+                    <Suspense fallback={null}><TeachingPanel exerciseId={b.exerciseId} variant="inline" /></Suspense>
                   </div>
                   {(changeChip || recommendation?.reason) && (
                     <p className="text-[11px] mt-1 leading-snug">

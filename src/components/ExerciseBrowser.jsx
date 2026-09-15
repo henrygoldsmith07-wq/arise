@@ -1,15 +1,9 @@
 import { useMemo, useState } from 'react';
 import { MUSCLES, LEVELS, EQUIPMENT, EXERCISE_TAGS, searchExercises, EXERCISE_BY_ID } from '../lib/data.js';
 import { hasExerciseImage, getExerciseMeta } from '../lib/exerciseImages.js';
+import { teachingFor } from '../lib/exerciseTeaching.js';
 import { ALTERNATIVE_KINDS, alternativesFor, classifyExercise, isDeprecated } from '../lib/exerciseTaxonomy.js';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
-
-// Instruction sentence: the row's own steps when present, otherwise derived
-// from cues so every exercise has a usable "how to do it" line.
-function instructionsFor(ex){
-  if(Array.isArray(ex.instructions) && ex.instructions.length) return ex.instructions.join(' ');
-  return `Set up for the ${ex.name.toLowerCase()}, then: ${ex.cues.join('; ')}.`;
-}
 
 // Derived training-science chips: pattern, stability demand, fatigue cost,
 // joint stress. Small, factual, and color-safe (text labels, not color).
@@ -140,16 +134,36 @@ export default function ExerciseBrowser({ availableEquipment }){
                 <div className="flex items-start gap-3">
                   {hasExerciseImage(ex.id) && <ExerciseIllustration exerciseId={ex.id} size="lg" />}
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold">How to do it</p>
-                  <p className="text-xs text-ink2">{instructionsFor(ex)}</p>
-                  <p className="text-xs font-semibold mt-2">Coaching cues</p>
-                  <ul className="list-disc pl-5 text-xs text-ink2 space-y-1">{ex.cues.map((c,i)=> <li key={i}>{c}</li>)}</ul>
-                  {ex.mistakes?.length > 0 && (
-                    <>
-                      <p className="text-xs font-semibold mt-2">Common mistakes</p>
-                      <ul className="list-disc pl-5 text-xs text-ink2 space-y-1">{ex.mistakes.map((m,i)=> <li key={i}>{m}</li>)}</ul>
-                    </>
-                  )}
+                  {(() => {
+                    const t = teachingFor(ex.id);
+                    return (
+                      <>
+                        <p className="text-xs font-semibold">Set-up</p>
+                        <p className="text-xs text-ink2">{t.setup}</p>
+                        <p className="text-xs font-semibold mt-2">Execution</p>
+                        <ul className="list-disc pl-5 text-xs text-ink2 space-y-1">{t.execution.map((line, i)=> <li key={i}>{line}</li>)}</ul>
+                        <p className="text-xs font-semibold mt-2">Breathing &amp; bracing</p>
+                        <p className="text-xs text-ink2">{t.breathing}</p>
+                        <p className="text-xs font-semibold mt-2">Stay in control</p>
+                        <p className="text-xs text-ink2">{t.safety}</p>
+                        <p className="text-xs font-semibold mt-2">Coaching cues</p>
+                        <ul className="list-disc pl-5 text-xs text-ink2 space-y-1">{ex.cues.map((c,i)=> <li key={i}>{c}</li>)}</ul>
+                        {t.mistakes?.length > 0 && (
+                          <>
+                            <p className="text-xs font-semibold mt-2">Common mistakes</p>
+                            <ul className="list-disc pl-5 text-xs text-ink2 space-y-1">{t.mistakes.map((m,i)=> <li key={i}>{m}</li>)}</ul>
+                          </>
+                        )}
+                        {(t.regressions.length > 0 || t.progressions.length > 0 || t.equipmentVariations.length > 0) && (
+                          <p className="text-xs text-ink2 mt-2">
+                            {t.regressions.length > 0 && <>Easier: {t.regressions.slice(0, 3).map(r=> r.name).join(', ')}. </>}
+                            {t.progressions.length > 0 && <>Harder: {t.progressions.slice(0, 3).map(r=> r.name).join(', ')}. </>}
+                            {t.equipmentVariations.length > 0 && <>With other kit: {t.equipmentVariations.slice(0, 4).map(v=> v.name).join(', ')}.</>}
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
                   {(() => {
                     const meta = getExerciseMeta(ex.id);
                     if(!meta) return null;

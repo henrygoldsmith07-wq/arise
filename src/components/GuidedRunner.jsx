@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import {
   NOTE_PROMPTS,
@@ -22,6 +22,7 @@ import { restPresetFor } from '../lib/gymMode.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
 import { RestDock } from './GymModePanel.jsx';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
+const TeachingPanel = lazy(() => import('./TeachingPanel.jsx'));
 
 // GuidedRunner — the guided workout mode: one set at a time, full-screen.
 // Reuses the same draft persistence contract as SessionRunner (onDraftChange
@@ -393,6 +394,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
                 <div className="min-w-0 flex-1">
                   <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Step {progress.completed + progress.skipped + 1} of {progress.total} · Set {step.setIndex + 1} of {currentBlock.sets.length}</p>
                   <p className="text-xl font-black tracking-tight">{currentExercise?.name || currentBlock.exerciseId}{currentBlock.unilateral ? <span className="text-xs font-semibold text-ink3"> (per side — {currentSet?.side || 'L'} first)</span> : null}</p>
+                  <div className="mt-1"><Suspense fallback={null}><TeachingPanel exerciseId={currentBlock.exerciseId} variant="inline" /></Suspense></div>
                   <p className="text-sm text-ink2 mt-1 tabular-nums">
                     <span className="font-black text-ink">{currentSet?.weightKg?.trim() ? `${currentSet.weightKg} kg` : (currentExercise?.supportsWeighted ? 'log load' : 'bodyweight')}</span>
                     {' × '}

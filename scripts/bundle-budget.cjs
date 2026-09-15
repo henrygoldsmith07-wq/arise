@@ -69,6 +69,16 @@
 // the friction core. Requested product logic, not dependency growth; boot
 // (195.5) and largest-lazy (47.4) budgets unchanged; measured total 346.0.
 //
+// boot 196 → 197 kB and total 347 → 357 kB with the competitive-gaps pass:
+// the exercise teaching layer (derived setup/execution/breathing/mistakes/
+// safety/progressions content + the lazy TeachingPanel chunk + richer browser
+// detail), the template editor (rest, reorder, duplicate, kit preview —
+// isolated in a lazy templateEditor module so boot never pays for it), the
+// peer-device sync registry, the study self-onboarding card, and the
+// participant-balanced friction report wiring. All requested product
+// content/logic in existing chunks, no new dependencies; largest-lazy
+// unchanged (47.4 ≤ 48); measured boot 196.1, total 356.1.
+//
 // The budgets are regression bounds with headroom, not aspirations: a change
 // that crosses one must either undo the bloat or consciously re-baseline here
 // and say why in the PR.
@@ -83,9 +93,9 @@ if(!fs.existsSync(dist)){
   process.exit(2);
 }
 
-const BOOT_BUDGET_KB = 196;
+const BOOT_BUDGET_KB = 197;
 const CHUNK_BUDGET_KB = 48;
-const TOTAL_BUDGET_KB = 347;
+const TOTAL_BUDGET_KB = 357;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

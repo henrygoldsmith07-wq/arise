@@ -16,6 +16,9 @@ import { loadEvaluationLedger, loadArchivedEvaluationCount } from '../lib/longit
 import { deriveProgressionModel } from '../lib/progressionModel.js';
 import { getAiSettings, saveAiSettings, clearAiSettings, buildTrainingContext, requestCoachInsight, DEFAULT_MODEL } from '../lib/aiCoach.js';
 import { STUDY_ARMS, studyCoverage, runComparativeStudy, collectDeloadDecisions, validateDeloadDecisions } from '../lib/study.js';
+import { enrollParticipant, enrollmentAudit } from '../lib/studyEnrollment.js';
+import { ensureStudyParticipantId, isValidStudyParticipantId } from '../lib/studyIdentity.js';
+import { scheduledExerciseIds } from '../lib/studyEnrollment.js';
 import { fieldStudyStatus } from '../lib/fieldStudy.js';
 import { voiceSupported } from '../lib/voiceCoach.js';
 import { setRestPreset } from '../lib/gymMode.js';
@@ -951,6 +954,60 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
       <section id="sec-evidence" className="rounded-2xl border border-line bg-surface p-4 space-y-2">
         <h3 className="text-sm font-bold">Progression evidence</h3>
         <p className="text-xs text-ink3">Arise records each recommendation before the workout (with your measurement consent) and scores it against what you actually did next — compared against simple double progression, linear progression and a flat baseline on the same sessions.</p>
+        {(() => {
+          // Plain-language study onboarding: eligibility is checked against
+          // real local data, joining creates the frozen pseudonymous
+          // enrollment, and leaving only stops new assignments — recorded
+          // pairs are history, never deleted by a toggle.
+          const enrolled = Boolean(store.studyEnrollment);
+          const consented = store.preferences?.telemetryEnabled === true;
+          const logged = (store.history || []).length;
+          const exerciseIds = (store.activeSchedule ? scheduledExerciseIds(store.activeSchedule) : []).length
+            ? scheduledExerciseIds(store.activeSchedule)
+            : [...new Set((store.history || []).flatMap(h => (h.blocks || []).map(b => b.exerciseId).filter(Boolean)))];
+          const eligibility = [
+            consented ? null : 'Turn on local measurements first (Privacy & data below).',
+            logged >= 3 ? null : 'Log at least 3 workouts first — the study needs real training, not intent.',
+            exerciseIds.length ? null : 'Finish onboarding or start a programme so there is something to assign.',
+          ].filter(Boolean);
+          const audit = enrolled ? enrollmentAudit(store.studyEnrollment) : null;
+          return (
+            <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2" aria-label="Real-world study onboarding">
+              <p className="text-xs font-bold">Take part in the real-world study</p>
+              <p className="text-[11px] text-ink3">
+                What is kept: the target shown before each workout, and what you actually did next. What is never kept: your name,
+                health data or anything you do not log. It all stays on this device; you decide if anything is shared by
+                exporting a backup to the study tooling yourself. Pseudonymous participant id:{' '}
+                <span className="font-semibold text-ink2">{isValidStudyParticipantId(store.studyParticipantId) ? `${String(store.studyParticipantId).slice(0, 8)}…` : 'created when you join'}</span>
+              </p>
+              {enrolled ? (
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-semibold text-success">✓ Enrolled{audit?.ok ? '' : ' (assignment audit needs review)'} — new workouts get frozen arm assignments.</p>
+                  <p className="text-[11px] text-ink3">Weekly: More → Backup &amp; portability → Export. Each export folds back into one participant — repeated files are the same person.</p>
+                  <button onClick={()=> { if(!confirm('Leave the study? Recorded pairs stay on this device as your own history; new workouts stop getting assignments.')) return; setStore({ ...store, studyEnrollment: null }); }}
+                    className="btn btn-secondary min-h-9 rounded-lg px-2.5 text-[11px]">Leave study</button>
+                </div>
+              ) : eligibility.length ? (
+                <ul className="text-[11px] text-ink3 list-disc pl-5 space-y-0.5" aria-label="Study eligibility">
+                  {eligibility.map((r, i)=> <li key={i}>{r}</li>)}
+                </ul>
+              ) : (
+                <button
+                  onClick={()=> {
+                    try{
+                      const withId = ensureStudyParticipantId(store);
+                      const participantId = withId.studyParticipantId;
+                      const enrollment = enrollParticipant({ participantId, schedule: store.activeSchedule || null, exerciseIds });
+                      setStore({ ...withId, studyEnrollment: enrollment });
+                      setMsg('Joined the study — pseudonymous, on this device only.'); setTimeout(()=> setMsg(null), 4000);
+                    }catch(err){ setMsg(`Could not enroll: ${String(err?.message || err)}`); setTimeout(()=> setMsg(null), 5000); }
+                  }}
+                  className="btn btn-primary min-h-9 rounded-lg px-3 text-[11px]">Join the study</button>
+              )}
+              <p className="text-[11px] text-ink3">Until enough participants and sessions exist, reports say <span className="font-semibold">“Insufficient real-user evidence”</span> and rank nothing — synthetic tests are never presented as real-world results.</p>
+            </div>
+          );
+        })()}
         {store.preferences?.telemetryEnabled !== true ? (
           <p className="text-xs text-ink3">Enable local measurements above to start collecting recommendation→outcome pairs. Pairs stay on this device and are included in your backup file.</p>
         ) : (

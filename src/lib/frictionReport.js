@@ -19,11 +19,16 @@ import { loggingFrictionStats, modeIntervalFirstSets } from './telemetry.js';
 
 // Prespecified sample-quality gates for cohort conclusions. Conservative by
 // design: below any of these the report says "Insufficient real-user
-// evidence" instead of ranking modes.
+// evidence" instead of ranking modes. The per-mode gates are the same rule
+// one level down: ONE participant (however productive) must never make a
+// mode look sufficient — a mode needs its own participants, sessions and
+// net completed sets before it may be compared at all.
 export const FRICTION_COHORT_GATES = Object.freeze({
   minParticipants: 5,
   minSessions: 10,
   minSessionsPerParticipant: 2, // median across participants
+  minModeParticipants: 3, // participants with net work in this mode
+  minModeSessions: 5, // sessions this mode appears in
   minModeNetSets: 10, // net completed sets behind any ranked mode
 });
 
@@ -172,7 +177,10 @@ export function summariseCohort(participants, { gates = FRICTION_COHORT_GATES, s
     participants: summaries.length,
     sessions: totalSessions,
     medianSessionsPerParticipant,
-    missingTimingRate: totalSessions ? Math.round(summaries.reduce((n, p)=> n + (p.sessionCount - p.totals.timingObservedSessions), 0) / totalSessions * 1000) / 1000 : null,
+    // Share of COHORT sessions (all modes) whose timing data was missing —
+    // an observation-availability rate, not a workout outcome.
+    missingTimingObservationRate: totalSessions ? Math.round(summaries.reduce((n, p)=> n + (p.sessionCount - p.totals.timingObservedSessions), 0) / totalSessions * 1000) / 1000 : null,
+    sessionCompletionRate: totalSessions ? Math.round(summaries.reduce((n, p)=> n + p.totals.completedSessions, 0) / totalSessions * 1000) / 1000 : null,
   };
   if(reasons.length){
     return { ...base, reasons, note: 'Insufficient real-user evidence — no mode ranking is made.' };
@@ -185,9 +193,17 @@ export function summariseCohort(participants, { gates = FRICTION_COHORT_GATES, s
     const actionsValues=withWork.map(p=> p.modes[m].actionsPerNetSet).filter(v=> Number.isFinite(v));
     const corrValues=withSessions.map(p=> p.modes[m].correctionsPerSession).filter(v=> Number.isFinite(v));
     const netSets=withWork.reduce((n, p)=> n + p.modes[m].netSets, 0);
+    // Mode-specific completion: of THIS mode's sessions that reached a
+    // terminal state, how many completed? Cohort-wide completion lives on
+    // the base object as sessionCompletionRate — never mixed in here.
+    const modeSessionsRows=summaries.flatMap(p=> p.sessions.filter(s=> (s.modes || []).includes(m)));
+    const modeTerminal=modeSessionsRows.filter(s=> s.completed || s.abandoned);
+    const modeCompleted=modeTerminal.filter(s=> s.completed).length;
+    const modeParticipants=withWork.length;
+    const modeSessionTotal=withSessions.reduce((n, p)=> n + p.modes[m].sessions, 0);
     modes[m]={
-      participants: withWork.length,
-      sessions: withSessions.reduce((n, p)=> n + p.modes[m].sessions, 0),
+      participants: modeParticipants,
+      sessions: modeSessionTotal,
       netSets,
       actionsPerNetSet: { median: median(actionsValues), ...quartileSpread(actionsValues), n: actionsValues.length },
       correctionsPerSession: { median: median(corrValues), n: corrValues.length },
@@ -208,8 +224,12 @@ export function summariseCohort(participants, { gates = FRICTION_COHORT_GATES, s
         accepted: withSessions.reduce((n, p)=> n + p.modes[m].applyAll.accepted, 0),
         viaApplyAll: withSessions.reduce((n, p)=> n + p.modes[m].applyAll.viaApplyAll, 0),
       },
-      completionRate: totalSessions ? Math.round(summaries.reduce((n, p)=> n + p.totals.completedSessions, 0) / totalSessions * 1000) / 1000 : null,
-      belowGate: netSets < (gates.minModeNetSets ?? 0),
+      completionRate: modeTerminal.length ? Math.round(modeCompleted / modeTerminal.length * 1000) / 1000 : null,
+      // A mode is rankable only when its OWN breadth clears every gate —
+      // one prolific participant can never carry a mode past these alone.
+      belowGate: modeParticipants < (gates.minModeParticipants ?? 0)
+        || modeSessionTotal < (gates.minModeSessions ?? 0)
+        || netSets < (gates.minModeNetSets ?? 0),
     };
   }
   const comparison=synthetic != null ? compareWithSynthetic(modes, synthetic) : null;

@@ -15,6 +15,7 @@ import { useState } from 'react';
 import { runSync, drainQueue, sanitizeSyncConfig, syncStatusLabel, enqueueOffline } from '../lib/syncEngine.js';
 import { makeWebdavAdapter, webdavCheck } from '../lib/webdav.js';
 import { buildExportPayload } from '../lib/export.js';
+import { getDeviceId } from '../lib/exportPolicy.js';
 
 function StatusPill({ label }){
   const tone = label === 'error' ? 'border-danger/40 bg-dangersoft'
@@ -44,6 +45,8 @@ export default function SyncPanel({ store, setStore, setMsg }){
   };
 
   const status = sync ? syncStatusLabel(sync) : null;
+  let ownDeviceId = null;
+  try{ ownDeviceId = getDeviceId(); }catch{}
 
   const persistAndMaybeSync = async (cfgPatch, thenSync = false) => {
     const nextSync = { ...(prefs.sync || {}), ...cfgPatch };
@@ -57,15 +60,25 @@ export default function SyncPanel({ store, setStore, setMsg }){
     setBusy(true);
     try{
       const adapter = makeWebdavAdapter({ url: syncArg?.url, username: syncArg?.username, password: syncArg?.password });
+      const localIds = new Set((storeArg.history || []).map((h) => h?.id));
       const { merged, config, error } = await runSync({ store: storeArg, config: syncArg, adapter });
       // Persist runtime state (timestamps, logs, queue) and the merged store in
       // one write; merged.preferences keeps the local sync config, which we
       // refresh with the runtime config so status stays truthful.
       setStore({ ...storeArg, ...merged, preferences: { ...(merged.preferences || {}), sync: config } });
-      setMsg(error ? `Sync failed: ${error}` : 'Sync complete — both devices now match.');
-      setTimeout(() => setMsg(null), 5000);
+      if(error){
+        setMsg(`Sync failed: ${error} — nothing was overwritten; your local history is intact.`);
+      }else{
+        // Say what the merge actually did: conflicts are resolved by session
+        // id (newest edit wins) and NOTHING is ever deleted to make room.
+        const incoming = (merged.history || []).filter((h) => h?.id && !localIds.has(h.id)).length;
+        setMsg(incoming
+          ? `Sync complete — merged ${incoming} session${incoming === 1 ? '' : 's'} in from your other device(s); your history was kept, not replaced.`
+          : 'Sync complete — both devices now match. Merging is by session id; nothing is ever overwritten away.');
+      }
+      setTimeout(() => setMsg(null), 6000);
     }catch(err){
-      setMsg(String(err?.message || err));
+      setMsg(`${String(err?.message || err)} — your local history is untouched.`);
       setTimeout(() => setMsg(null), 5000);
     }finally{
       setBusy(false);
@@ -159,18 +172,19 @@ export default function SyncPanel({ store, setStore, setMsg }){
       </p>
 
       <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
+        <p className="text-[11px] text-ink3">Four settings, one minute: paste your storage address, sign in with an app password, optionally set the encryption passphrase — then Test connection and Save &amp; sync.</p>
         <label className="block">
-          <span className="text-[11px] font-bold">WebDAV URL (https)</span>
+          <span className="text-[11px] font-bold">1 · Your storage address (WebDAV, https)</span>
           <input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://cloud.example.com/remote.php/dav/files/me/" autoComplete="off" spellCheck={false}
             className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm" />
         </label>
         <label className="block">
-          <span className="text-[11px] font-bold">Username</span>
+          <span className="text-[11px] font-bold">2 · Username</span>
           <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} autoComplete="off"
             className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm" />
         </label>
         <label className="block">
-          <span className="text-[11px] font-bold">{sanitized?.passwordSet ? 'App password (saved — type to replace)' : 'App password'}</span>
+          <span className="text-[11px] font-bold">3 · {sanitized?.passwordSet ? 'App password (saved — type to replace)' : 'App password'}</span>
           <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder={sanitized?.passwordSet ? '•••• saved' : 'app password'} autoComplete="new-password"
             className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm" />
         </label>
@@ -181,7 +195,7 @@ export default function SyncPanel({ store, setStore, setMsg }){
         {form.encryption && (
           <div className="space-y-1.5">
             <label className="block">
-              <span className="text-[11px] font-bold">{sanitized?.passphraseSet ? 'Encryption passphrase (saved — type to replace)' : 'Encryption passphrase'}</span>
+              <span className="text-[11px] font-bold">4 · {sanitized?.passphraseSet ? 'Encryption passphrase (saved — type to replace)' : 'Encryption passphrase'}</span>
               <input type="password" value={form.passphrase} onChange={(e) => setForm({ ...form, passphrase: e.target.value })} placeholder={sanitized?.passphraseSet ? '•••• saved' : 'long and unique — this is your recovery key'} autoComplete="new-password"
                 className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm" />
             </label>
@@ -225,6 +239,17 @@ export default function SyncPanel({ store, setStore, setMsg }){
               <button onClick={retryQueued} disabled={busy} className="ml-2 underline font-semibold">Retry now</button>
             </p>
           )}
+          <div aria-label="Devices on this sync">
+            <p className="font-semibold">Devices</p>
+            <p className="text-[11px] text-ink3">This device: {ownDeviceId || 'this device'} — changes are merged by session id, never overwritten away.</p>
+            {Object.entries(sync.devices || {}).filter(([id]) => id !== ownDeviceId).slice(0, 5).map(([id, d]) => (
+              <p key={id} className="text-[11px] text-ink3">Peer {id.slice(0, 10)} — last wrote {d?.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : 'unknown'}{d?.wroteAt ? ` (file dated ${new Date(d.wroteAt).toLocaleString()})` : ''}</p>
+            ))}
+            {Object.keys(sync.devices || {}).length === 0 && (
+              <p className="text-[11px] text-ink3">No peer device has written to your storage yet. On your other device, set the same four values and sync once.</p>
+            )}
+          </div>
+          <p className="text-[11px] text-ink3">No network or the storage is unreachable? More → Backup &amp; portability exports an <span className="font-semibold">encrypted backup file</span> you can move by any means (share sheet, file app, drive); importing it on the other device merges — it never replaces history.</p>
           {sync.logs?.length > 0 && (
             <details>
               <summary className="font-semibold cursor-pointer">Sync log (last {Math.min(sync.logs.length, 10)})</summary>

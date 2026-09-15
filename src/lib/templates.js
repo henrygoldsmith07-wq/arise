@@ -1,9 +1,9 @@
-// templates.js — programme template engine.
+﻿// templates.js â€” programme template engine.
 // Templates are reusable blueprints (data.js PROGRAM_TEMPLATES) that point at a
 // program. This module turns one into a dated, equipment-honest schedule:
 // exercises the user's kit can't do are swapped via rankedSubstitutions, and
 // template versioning is reported alongside the linked program's changelog.
-// Pure + deterministic — offline, no AI.
+// Pure + deterministic â€” offline, no AI.
 
 import { PROGRAM_TEMPLATES, PROGRAM_BY_ID, programHistory, templateHistory, exerciseAvailable, scheduleProgram, EXERCISE_BY_ID } from "./data.js";
 import { rankedSubstitutions } from "./substitutions.js";
@@ -37,7 +37,7 @@ export function templateById(templateId, extraTemplates = []){
   return listTemplates(extraTemplates).find(t=> t.id===templateId) || null;
 }
 
-// Bodyweight moves are always doable (matching availablePrograms' grace) — a
+// Bodyweight moves are always doable (matching availablePrograms' grace) â€” a
 // user selecting "barbell" kit shouldn't be told they can't do a push-up.
 function kitWithBodyweight(availableEquipment){
   const kit = new Set(availableEquipment || []);
@@ -58,8 +58,8 @@ export function applyEquipmentSubstitutions(sessions, availableEquipment=null, h
     blocks: (s.blocks||[]).map(b=>{
       if(exerciseAvailable(b.exerciseId, kit)) return b;
       const [candidate] = rankedSubstitutions(b.exerciseId, kit, 1, history);
-      if(!candidate) return b; // no viable sub — keep the plan; user can still attempt or skip
-      subs.push({ sessionId: s.id, from: b.exerciseId, to: candidate.id, reason: `${b.exerciseId} needs kit you don't have — swapped for ${candidate.name}.` });
+      if(!candidate) return b; // no viable sub â€” keep the plan; user can still attempt or skip
+      subs.push({ sessionId: s.id, from: b.exerciseId, to: candidate.id, reason: `${b.exerciseId} needs kit you don't have â€” swapped for ${candidate.name}.` });
       return { ...b, exerciseId: candidate.id, loadHint: candidate.equipment.length===1 && candidate.equipment[0]==='bodyweight' && /light|moderate|dumbbell|barbell/.test(b.loadHint||'') ? 'bodyweight' : b.loadHint };
     }),
   }));
@@ -119,7 +119,7 @@ export function templateVersionInfo(templateId, extraTemplates = []){
   };
 }
 
-// ── Recommendation ─────────────────────────────────────────────────────
+// â”€â”€ Recommendation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Deterministic profile scoring: equipment honesty dominates, then level/goal
 // match, then days-per-week fit. Everything explains itself in `reasons`.
 const GOAL_AFFINITY = {
@@ -130,7 +130,7 @@ const GOAL_AFFINITY = {
   general: ['general', 'muscle', 'endurance'],
 };
 
-function equipmentCoverage(program, availableEquipment){
+export function equipmentCoverage(program, availableEquipment){
   if(!program) return 0;
   const has = kitWithBodyweight(availableEquipment);
   const kit = [...has];
@@ -162,15 +162,15 @@ export function recommendTemplate({ goal='general', level='Beginner', availableE
     if(!prog){ return { ...t, score: -100, reasons: ['unknown program'] }; }
     const coverage = equipmentCoverage(prog, availableEquipment);
     score += coverage * 8;
-    if(coverage >= 1) reasons.push('full equipment fit — no swaps needed');
-    else if(coverage >= 0.75) reasons.push('mostly doable — a few honest swaps');
+    if(coverage >= 1) reasons.push('full equipment fit â€” no swaps needed');
+    else if(coverage >= 0.75) reasons.push('mostly doable â€” a few honest swaps');
     else reasons.push('several exercises will need swapping');
 
     const declared = prog.equipment || [];
     const fit = declared.filter(eq=> kit.has(eq)).length;
     const missing = declared.length - fit;
     score += fit * 3;
-    if(missing){ score -= missing * 2; reasons.push(`needs ${missing} piece(s) of kit you don't have — swaps will cover it`); }
+    if(missing){ score -= missing * 2; reasons.push(`needs ${missing} piece(s) of kit you don't have â€” swaps will cover it`); }
     if(t.level === level) { score += 3; reasons.push(`matches ${level} level`); }
     else { score += 1; reasons.push(`close to ${t.level} level`); }
 
@@ -178,10 +178,12 @@ export function recommendTemplate({ goal='general', level='Beginner', availableE
     else if(t.goal === 'general') { score += 1; reasons.push('general-purpose'); }
 
     if(daysPerWeek){
-      if(t.daysPerWeek === daysPerWeek) { score += 2; reasons.push(`${daysPerWeek}×/week exactly`); }
-      else if(Math.abs(t.daysPerWeek - daysPerWeek) <= 1) { score += 1; reasons.push(`${t.daysPerWeek}×/week — close to your ${daysPerWeek}`); }
+      if(t.daysPerWeek === daysPerWeek) { score += 2; reasons.push(`${daysPerWeek}Ã—/week exactly`); }
+      else if(Math.abs(t.daysPerWeek - daysPerWeek) <= 1) { score += 1; reasons.push(`${t.daysPerWeek}Ã—/week â€” close to your ${daysPerWeek}`); }
     }
     return { ...t, score: Math.round(score*100)/100, reasons };
   }).sort((a,b)=> b.score - a.score);
   return { top: ranked[0] || null, ranked };
 }
+
+// â”€

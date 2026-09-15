@@ -60,10 +60,10 @@ test('sync: configure WebDAV, sync once, payload is sealed and status shown', as
 
   // Fill the form (sync panel renders lazily inside its section). The E2E
   // passphrase is its own field — deliberately separate from the app password.
-  await page.getByLabel(/WebDAV URL/).fill('https://dav.test');
-  await page.getByLabel(/^Username/).fill('athlete');
-  await page.getByLabel(/^App password/).fill('app-password-123');
-  await page.getByLabel(/Encryption passphrase/i).fill('correct horse battery staple');
+  await page.getByLabel(/storage address/).fill('https://dav.test');
+  await page.getByLabel(/Username/).fill('athlete');
+  await page.getByLabel(/App password/).fill('app-password-123');
+  await page.getByLabel(/passphrase/i).fill('correct horse battery staple');
   await page.getByRole('checkbox', { name: 'Enabled' }).check();
   await page.getByRole('button', { name: /Save & sync now/i }).click();
 

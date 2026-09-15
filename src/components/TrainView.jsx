@@ -7,8 +7,9 @@ import { startProgram } from '../lib/schedule.js';
 import { adaptScheduleForEquipment, programAdherence, recordProgramStart, userProgramHistory } from '../lib/programming.js';
 import { generateProgramme } from '../lib/programmeGenerator.js';
 import { trainRecommendation } from '../lib/trainRecommendation.js';
+import { buildEditorTemplate, moveItem, duplicateEditorTemplate, editorSubstitutionPreview } from '../lib/templateEditor.js';
 
-const EMPTY_DAY = { title: '', exercises: [{ exerciseId: '', sets: 3, reps: '8–12' }] };
+const EMPTY_DAY = { title: '', exercises: [{ exerciseId: '', sets: 3, reps: '8–12', restSec: 90 }] };
 
 // Week number of the first session still due (or the last week when all are
 // done) — the "Week 3 of 6" readout on the current-programme card.
@@ -17,40 +18,6 @@ function currentWeek(adherence){
   const due = rows.find(row=> !row.completed);
   const week = due ? due.session.week : rows[rows.length - 1]?.session?.week;
   return Number(week) || 1;
-}
-
-function makeId(){ return `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`; }
-
-function buildCustomTemplate({ name, description, level, goal, days }, existing = null){
-  const id = existing?.id || makeId();
-  const usedEquipment = new Set(['bodyweight']);
-  const workouts = days.map((day, i)=> ({
-    day: i + 1,
-    title: day.title?.trim() || `Day ${i + 1}`,
-    blocks: day.exercises
-      .filter(e => e.exerciseId)
-      .map(e => {
-        for(const eq of (EXERCISE_BY_ID[e.exerciseId]?.equipment || [])) usedEquipment.add(eq);
-        return { exerciseId: e.exerciseId, sets: Math.max(1, Number(e.sets) || 3), reps: e.reps?.trim() || '8–12', restSec: 90, loadHint: '' };
-      }),
-  }));
-  const nowISO = new Date().toISOString();
-  const base = existing ? { ...existing, version: (existing.version || 1) + 1 } : { id, isCustom: true, version: 1, createdAtISO: nowISO };
-  return {
-    ...base,
-    name: name.trim(),
-    description: description.trim() || 'Your own template.',
-    level, goal, daysPerWeek: days.length,
-    updatedAtISO: nowISO,
-    program: {
-      id, name: name.trim(), tagline: description.trim() || 'Your own template.',
-      level, daysPerWeek: days.length,
-      mesocycle: { weeks: 4, deloadWeek: null, progression: 'double-progression' },
-      version: base.version,
-      equipment: [...usedEquipment],
-      weeks: [{ week: 1, workouts }],
-    },
-  };
 }
 
 export default function TrainView({ store, setStore, onStartSession, availableEquipment }){
@@ -129,7 +96,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
         level: tplToEdit.level || 'Beginner', goal: tplToEdit.goal || 'general',
         days: (p.weeks?.[0]?.workouts || [EMPTY_DAY]).map(w => ({
           title: w.title,
-          exercises: (w.blocks || []).map(b => ({ exerciseId: b.exerciseId, sets: b.sets, reps: b.reps })),
+          exercises: (w.blocks || []).map(b => ({ exerciseId: b.exerciseId, sets: b.sets, reps: b.reps, restSec: Number(b.restSec) || 90 })),
         })),
       });
       setEditingId(tplToEdit.id);
@@ -145,15 +112,17 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
   const setExercise = (di, ei, patch)=> setForm(f => ({ ...f, days: f.days.map((d,i)=> i!==di ? d : {
     ...d, exercises: d.exercises.map((e,j)=> j===ei ? { ...e, ...patch } : e),
   })}));
-  const addExerciseRow = (di)=> setForm(f => ({ ...f, days: f.days.map((d,i)=> i!==di ? d : { ...d, exercises: [...d.exercises, { exerciseId:'', sets:3, reps:'8–12' }] }) }));
+  const addExerciseRow = (di)=> setForm(f => ({ ...f, days: f.days.map((d,i)=> i!==di ? d : { ...d, exercises: [...d.exercises, { exerciseId:'', sets:3, reps:'8–12', restSec:90 }] }) }));
   const removeExerciseRow = (di, ei)=> setForm(f => ({ ...f, days: f.days.map((d,i)=> i!==di ? d : { ...d, exercises: d.exercises.filter((_,j)=> j!==ei) }) }));
+  const moveDay = (di, dir)=> setForm(f => ({ ...f, days: moveItem(f.days, di, di + dir) }));
+  const moveExercise = (di, ei, dir)=> setForm(f => ({ ...f, days: f.days.map((d,i)=> i!==di ? d : { ...d, exercises: moveItem(d.exercises, ei, ei + dir) }) }));
 
   const saveBuilder = ()=>{
     if(!form.name.trim() || form.days.some(d => !d.exercises.some(e => e.exerciseId))){
       alert('Give the template a name and at least one exercise per day.');
       return;
     }
-    const tpl = buildCustomTemplate(form, editingId ? customTemplates.find(t => t.id === editingId) : null);
+    const tpl = buildEditorTemplate(form, editingId ? customTemplates.find(t => t.id === editingId) : null);
     const nextList = editingId
       ? customTemplates.map(t => t.id === editingId ? tpl : t)
       : [...customTemplates, tpl];
@@ -176,6 +145,16 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
       tombstones: [...(store.tombstones || []).filter(t => t.refId !== id), tombstone],
     });
     if(programId === id) setProgramId(PROGRAMS[0].id);
+  };
+  // Duplicate: a fresh version-1 copy under a new id (save-as). The original
+  // keeps its own history; the copy is owned going forward by the editor.
+  const duplicateTemplate = (tpl)=>{
+    const copy = duplicateEditorTemplate(tpl);
+    if(!copy) return;
+    setStore({ ...store, customTemplates: [...(store.customTemplates || []), copy] });
+    setProgramId(copy.id);
+    setShareMsg(`Duplicated “${copy.name}” — edit it or start it now.`);
+    setTimeout(()=> setShareMsg(null), 5000);
   };
   const undoDelete = (id)=>{
     setStore({
@@ -418,6 +397,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
                 <span key={t.id} className="inline-flex items-center gap-1">
                   <button onClick={()=> setProgramId(t.id)} className={`text-xs font-semibold px-2.5 py-1.5 min-h-9 rounded-full border ${programId===t.id?'bg-ink text-bg border-ink':'bg-surface border-line'}`}>{t.name} ★</button>
                   <button onClick={()=> openBuilder(t)} aria-label={`Edit ${t.name}`} className="text-[10px] text-ink3 underline">edit</button>
+                  <button onClick={()=> duplicateTemplate(t)} aria-label={`Duplicate ${t.name}`} className="text-[10px] text-ink3 underline">copy</button>
                   <button onClick={()=> shareTemplate(t)} aria-label={`Share ${t.name}`} className="text-[10px] text-ink3 underline">share</button>
                   <button onClick={()=> deleteCustom(t.id)} aria-label={`Delete ${t.name}`} className="text-[10px] text-danger underline">del</button>
                 </span>
@@ -517,27 +497,61 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
               <div key={di} className="rounded-2xl border border-line bg-surface2 p-3 space-y-2">
                 <div className="flex items-center gap-2">
                   <input value={day.title} onChange={e=> setDay(di, { title: e.target.value })} placeholder={`Day ${di+1} title`} aria-label={`Day ${di+1} title`} className="flex-1 min-w-0 rounded-lg border border-line bg-surface px-2.5 py-2 text-xs font-bold" />
+                  <button onClick={()=> moveDay(di, -1)} disabled={di===0} aria-label={`Move day ${di+1} up`} className="w-8 h-8 grid place-items-center rounded-full border border-line text-ink3 disabled:opacity-30">↑</button>
+                  <button onClick={()=> moveDay(di, 1)} disabled={di===form.days.length-1} aria-label={`Move day ${di+1} down`} className="w-8 h-8 grid place-items-center rounded-full border border-line text-ink3 disabled:opacity-30">↓</button>
                   {form.days.length > 1 && <button onClick={()=> removeDay(di)} aria-label={`Remove day ${di+1}`} className="w-9 h-9 grid place-items-center rounded-full border border-line text-ink3">×</button>}
                 </div>
                 {day.exercises.map((exRow, ei)=> (
-                  <div key={ei} className="grid grid-cols-[minmax(0,1fr)_56px_minmax(64px,88px)_36px] gap-1.5 items-center">
-                    <select value={exRow.exerciseId} onChange={e=> setExercise(di, ei, { exerciseId: e.target.value })} aria-label={`Day ${di+1} exercise ${ei+1}`} className="min-w-0 rounded-lg border border-line bg-surface px-2 py-2 text-xs">
-                      <option value="">Pick an exercise…</option>
-                      {EXERCISES.map(ex=> <option key={ex.id} value={ex.id}>{ex.name}</option>)}
-                    </select>
-                    <input type="number" min="1" max="10" inputMode="numeric" value={exRow.sets} onChange={e=> setExercise(di, ei, { sets: e.target.value })} aria-label={`Day ${di+1} exercise ${ei+1} sets`} className="rounded-lg border border-line bg-surface px-2 py-2 text-xs tabular-nums" />
-                    <input value={exRow.reps} onChange={e=> setExercise(di, ei, { reps: e.target.value })} aria-label={`Day ${di+1} exercise ${ei+1} reps`} placeholder="8–12" className="min-w-0 rounded-lg border border-line bg-surface px-2 py-2 text-xs" />
-                    <button onClick={()=> removeExerciseRow(di, ei)} aria-label={`Remove exercise ${ei+1} of day ${di+1}`} className="w-8 h-8 grid place-items-center rounded-full border border-line text-ink3">×</button>
+                  <div key={ei} className="rounded-xl border border-line bg-surface p-2 space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <select value={exRow.exerciseId} onChange={e=> setExercise(di, ei, { exerciseId: e.target.value })} aria-label={`Day ${di+1} exercise ${ei+1}`} className="flex-1 min-w-0 rounded-lg border border-line bg-surface2 px-2 py-2 text-xs">
+                        <option value="">Pick an exercise…</option>
+                        {EXERCISES.map(ex=> <option key={ex.id} value={ex.id}>{ex.name}</option>)}
+                      </select>
+                      <button onClick={()=> moveExercise(di, ei, -1)} disabled={ei===0} aria-label={`Move exercise ${ei+1} of day ${di+1} up`} className="w-8 h-8 shrink-0 grid place-items-center rounded-full border border-line text-ink3 disabled:opacity-30">↑</button>
+                      <button onClick={()=> moveExercise(di, ei, 1)} disabled={ei===day.exercises.length-1} aria-label={`Move exercise ${ei+1} of day ${di+1} down`} className="w-8 h-8 shrink-0 grid place-items-center rounded-full border border-line text-ink3 disabled:opacity-30">↓</button>
+                      <button onClick={()=> removeExerciseRow(di, ei)} aria-label={`Remove exercise ${ei+1} of day ${di+1}`} className="w-8 h-8 shrink-0 grid place-items-center rounded-full border border-line text-ink3">×</button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <label className="text-[10px] text-ink3">Sets
+                        <input type="number" min="1" max="10" inputMode="numeric" value={exRow.sets} onChange={e=> setExercise(di, ei, { sets: e.target.value })} aria-label={`Day ${di+1} exercise ${ei+1} sets`} className="mt-0.5 w-full rounded-lg border border-line bg-surface2 px-2 py-2 text-xs tabular-nums" />
+                      </label>
+                      <label className="text-[10px] text-ink3">Reps
+                        <input value={exRow.reps} onChange={e=> setExercise(di, ei, { reps: e.target.value })} aria-label={`Day ${di+1} exercise ${ei+1} reps`} placeholder="8–12" className="mt-0.5 w-full min-w-0 rounded-lg border border-line bg-surface2 px-2 py-2 text-xs" />
+                      </label>
+                      <label className="text-[10px] text-ink3">Rest sec
+                        <input type="number" min="0" max="600" step="15" inputMode="numeric" value={exRow.restSec ?? 90} onChange={e=> setExercise(di, ei, { restSec: e.target.value })} aria-label={`Day ${di+1} exercise ${ei+1} rest seconds`} className="mt-0.5 w-full rounded-lg border border-line bg-surface2 px-2 py-2 text-xs tabular-nums" />
+                      </label>
+                    </div>
                   </div>
                 ))}
                 <button onClick={()=> addExerciseRow(di)} className="text-[11px] font-bold underline underline-offset-2">+ exercise</button>
               </div>
             ))}
+            {(() => {
+              // Honest kit preview: what the plan asks for vs what this
+              // device's kit supports, and the exact swap the scheduler
+              // would make (same engine — preview and reality can't drift).
+              if(!availableEquipment?.length) return null;
+              const preview = editorSubstitutionPreview(buildEditorTemplate(form, editingId ? customTemplates.find(t => t.id === editingId) : null), availableEquipment, store.history);
+              if(preview.coverage >= 1 && !preview.swaps.length) return (
+                <p className="text-[11px] text-success font-semibold">✓ Every exercise fits your kit — no swaps at schedule time.</p>
+              );
+              return (
+                <div className="rounded-xl border border-line bg-surface2 px-3 py-2 space-y-1" aria-label="Equipment substitution preview">
+                  <p className="text-[11px] font-bold">Without some kit, this becomes:</p>
+                  {preview.swaps.slice(0, 6).map((s, i)=> (
+                    <p key={`${s.from}-${i}`} className="text-[11px] text-ink2">{s.fromName} → {s.to ? `${s.to.name}${s.to.equipment?.length ? ` (${s.to.equipment.join(', ')})` : ''}` : 'no honest match yet'}</p>
+                  ))}
+                  {preview.swaps.length > 6 && <p className="text-[11px] text-ink3">…{preview.swaps.length - 6} more</p>}
+                </div>
+              );
+            })()}
             <div className="flex gap-2">
               <button onClick={addDay} disabled={form.days.length >= 6} className="btn btn-secondary flex-1 min-h-10 rounded-xl disabled:opacity-40">+ Add day</button>
-              <button onClick={saveBuilder} className="btn btn-primary flex-1 min-h-10 rounded-xl">{editingId ? 'Save changes' : 'Create template'}</button>
+              <button onClick={saveBuilder} className="btn btn-primary flex-1 min-h-10 rounded-xl">{editingId ? `Save as v${(customTemplates.find(t=> t.id===editingId)?.version || 1) + 1}` : 'Create template'}</button>
             </div>
-            <p className="text-[11px] text-ink3">One-week blueprint — scheduling repeats it weekly with a 4-week mesocycle and honest kit swaps. Templates live on this device and ride along in backups.</p>
+            <p className="text-[11px] text-ink3">One-week blueprint — scheduling repeats it weekly with a 4-week mesocycle and honest kit swaps. Saving changes bumps the template version; started schedules keep their own copy. Templates live on this device and ride along in backups.</p>
           </div>
         </div>
       )}

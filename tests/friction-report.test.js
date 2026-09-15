@@ -171,7 +171,8 @@ describe('missing timing consent is reported, never reconstructed', ()=>{
     const ps = ['a', 'b'].map(c=> participant(c, [sessionFlow(`${c}-1`, { sets: 2, timed: false }), sessionFlow(`${c}-2`, { sets: 2, timed: false })]));
     const r = summariseCohort(ps, { gates: LOOSE_GATES });
     assert.equal(r.status, 'sufficient');
-    assert.equal(r.missingTimingRate, 1);
+    assert.equal(r.missingTimingObservationRate, 1);
+    assert.ok(!('missingTimingRate' in r), 'old name is gone');
     assert.equal(r.modes.standard.firstSetMs.balancedMedianMs, null);
     assert.equal(r.modes.standard.firstSetMs.rawMedianMs, null);
     assert.equal(r.modes.standard.netSets, 8);
@@ -235,6 +236,60 @@ describe('synthetic comparison stays descriptive', ()=>{
     assert.equal(expectation.expectedCheapestMode, 'guided');
     assert.ok(expectation.ranked.includes('standard') && expectation.ranked.includes('gym'));
     assert.match(expectation.basis, /friction-baseline/);
+  });
+});
+
+describe('per-mode gates refuse one-participant domination', ()=>{
+  it('a single prolific participant cannot make guided rankable', ()=>{
+    // Whale does everything in guided (12 sessions × 2 sets) plus a couple
+    // of standard sessions; four others supply breadth for standard only.
+    const whale = participant('whale', [
+      ...Array.from({ length: 12 }, (_, i)=> sessionFlow(`w-g${i}`, { mode: 'guided', sets: 2 })),
+      ...Array.from({ length: 2 }, (_, i)=> sessionFlow(`w-s${i}`, { mode: 'standard', sets: 2 })),
+    ]);
+    const others = ['a', 'b', 'c', 'd'].map(c=> participant(c, [
+      sessionFlow(`${c}-1`, { mode: 'standard', sets: 3 }),
+      sessionFlow(`${c}-2`, { mode: 'standard', sets: 3 }),
+    ]));
+    const r = summariseCohort([whale, ...others], { gates: FRICTION_COHORT_GATES, synthetic: EXPECTED });
+    assert.equal(r.status, 'sufficient'); // cohort breadth passes
+    assert.equal(r.modes.guided.participants, 1);
+    assert.equal(r.modes.guided.belowGate, true, 'one participant never makes a mode sufficient');
+    assert.equal(r.modes.standard.belowGate, false);
+    // The comparison only ranks gated modes — guided is excluded even though
+    // it has the most raw sets, so the synthetic prediction is contradicted.
+    assert.equal(r.comparison.observedOrder[0], 'standard');
+    assert.ok(!r.comparison.observedOrder.includes('guided'));
+    assert.equal(r.comparison.verdict, 'direction-contradicted');
+  });
+
+  it('thin session counts gate a mode even with multiple participants', ()=>{
+    const ps = ['a', 'b', 'c'].map(c=> participant(c, [
+      sessionFlow(`${c}-g`, { mode: 'guided', sets: 6 }),
+      sessionFlow(`${c}-s1`, { mode: 'standard', sets: 3 }),
+      sessionFlow(`${c}-s2`, { mode: 'standard', sets: 3 }),
+      sessionFlow(`${c}-s3`, { mode: 'standard', sets: 3 }),
+    ]));
+    const r = summariseCohort(ps, { gates: { ...FRICTION_COHORT_GATES, minParticipants: 3, minSessions: 9, minModeSessions: 5 } });
+    assert.equal(r.modes.guided.participants, 3);
+    assert.equal(r.modes.guided.sessions, 3, '3 guided sessions');
+    assert.equal(r.modes.guided.belowGate, true);
+    assert.equal(r.modes.standard.belowGate, false);
+  });
+});
+
+describe('completion rates are mode-specific', ()=>{
+  it('a mode only present in abandoned sessions reports 0, not the cohort rate', ()=>{
+    const ps = ['a', 'b'].map(c=> participant(c, [
+      sessionFlow(`${c}-s1`, { mode: 'standard', sets: 3 }),
+      sessionFlow(`${c}-s2`, { mode: 'standard', sets: 3 }),
+      sessionFlow(`${c}-g`, { mode: 'guided', sets: 1, complete: false, abandon: true }),
+    ]));
+    const r = summariseCohort(ps, { gates: { ...LOOSE_GATES, minModeNetSets: 1, minModeParticipants: 1, minModeSessions: 1 } });
+    assert.equal(r.modes.standard.completionRate, 1);
+    assert.equal(r.modes.guided.completionRate, 0);
+    assert.equal(r.sessionCompletionRate, Math.round((4 / 6) * 1000) / 1000);
+    assert.ok(!('completionRate' in r), 'cohort-level rate is named, not ambiguous');
   });
 });
 

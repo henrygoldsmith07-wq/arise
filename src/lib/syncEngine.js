@@ -45,6 +45,7 @@ export function defaultSyncConfig(){
     lastError: null,
     queue: [],
     logs: [],
+    devices: {},   // peer device ids seen on the synced file → last-seen times
   };
 }
 
@@ -57,6 +58,7 @@ export function normalizeSyncConfig(raw){
     ...raw,
     queue: Array.isArray(raw.queue) ? raw.queue.slice(-SYNC_QUEUE_LIMIT) : [],
     logs: Array.isArray(raw.logs) ? raw.logs.slice(-SYNC_LOG_LIMIT) : [],
+    devices: raw.devices && typeof raw.devices === 'object' && !Array.isArray(raw.devices) ? raw.devices : {},
   };
 }
 
@@ -77,6 +79,29 @@ export function enqueueOffline(config, reason){
   const cfg = normalizeSyncConfig(config);
   const queue = [...cfg.queue, { at: new Date().toISOString(), reason, attempts: 0, nextAttemptAt: null }].slice(-SYNC_QUEUE_LIMIT);
   return { ...cfg, queue };
+}
+
+const PEER_DEVICE_LIMIT = 10;
+
+/**
+ * Note a peer device from a pulled remote payload. Export envelopes carry
+ * `device` (the writing device's id) and `exportedAt`; recording who last
+ * wrote the synced file gives the cross-device registry. Pure + best-effort:
+ * unparseable or anonymous payloads change nothing.
+ */
+export function observePeerDevice(config, remoteText){
+  const cfg = normalizeSyncConfig(config);
+  if(!remoteText) return cfg;
+  let envelope = null;
+  try{ envelope = JSON.parse(remoteText); }catch{ return cfg; }
+  const deviceId = typeof envelope?.device === 'string' ? envelope.device.slice(0, 64) : null;
+  if(!deviceId) return cfg;
+  const devices = { ...cfg.devices, [deviceId]: { lastSeenAt: new Date().toISOString(), wroteAt: typeof envelope?.exportedAt === 'string' ? envelope.exportedAt : null } };
+  const sorted = Object.entries(devices)
+    .sort((a, b) => String(b[1]?.lastSeenAt || '').localeCompare(String(a[1]?.lastSeenAt || '')))
+    .slice(0, PEER_DEVICE_LIMIT);
+  const trimmed = Object.fromEntries(sorted);
+  return { ...cfg, devices: trimmed };
 }
 
 /**
@@ -154,8 +179,11 @@ export async function runSync({ store, config, adapter, encryption } = {}){
       outgoing = await seal.encrypt(payload, cfg.passphrase);
     }
     await adapter.push(outgoing);
+    // Record who last wrote the remote file (device registry), then stamp
+    // this cycle's timestamps on top.
+    const peered = observePeerDevice(cfg, remoteText);
     const next = {
-      ...cfg,
+      ...peered,
       lastPushAt: new Date().toISOString(),
       lastPullAt: remoteText ? new Date().toISOString() : cfg.lastPullAt,
       lastError: null,
