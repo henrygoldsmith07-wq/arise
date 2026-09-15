@@ -155,17 +155,28 @@ export async function runSync({ store, config, adapter, encryption } = {}){
   const logs0 = cfg.logs;
   try{
     // 1. Pull + merge (syncDown already handles "remote empty" → local).
+    // The transport carries BYTES so sealed envelopes survive intact; a
+    // sealed payload decrypts with the ENCRYPTION PASSPHRASE — the account
+    // password authenticates to the storage and must never be used as key
+    // material. Plain text stays plain text when encryption is off.
     let remoteText = null;
     try{
       const remoteRaw = await adapter.pull();
       if(remoteRaw != null){
-        remoteText = typeof remoteRaw === 'string' ? remoteRaw : remoteRaw;
-        if(seal && remoteRaw instanceof Uint8Array){
-          remoteText = JSON.stringify(await seal.decrypt(remoteRaw, cfg.password));
+        if(typeof remoteRaw === 'string'){
+          remoteText = remoteRaw; // legacy/string adapters (tests, providers that expose text)
+        }else if(remoteRaw instanceof Uint8Array){
+          if(seal){
+            remoteText = JSON.stringify(await seal.decrypt(remoteRaw, cfg.passphrase));
+          }else{
+            remoteText = new TextDecoder().decode(remoteRaw);
+          }
         }
       }
     }catch(err){
-      // A missing remote file is a first run, not an error.
+      // A missing remote file is a first run, not an error. A wrong
+      // passphrase or corrupt ciphertext IS an error — and nothing is
+      // pushed, so neither the remote file nor local history changes.
       if(!/404|not found/i.test(String(err?.message || err))) throw err;
     }
     const merged = remoteText

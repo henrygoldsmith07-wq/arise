@@ -261,7 +261,7 @@ export function runMigrations(raw){
     j.version = STORE_SCHEMA_VERSION;
   }
   if(j.version === 5){
-    // v5 -> v6: auto rest timer preference (default on â€” matches prior behaviour).
+    // v5 -> v6: auto rest timer preference (default on — matches prior behaviour).
     if(!j.preferences) j.preferences={};
     if(j.preferences.autoRest==null) j.preferences.autoRest=true;
     j.version = STORE_SCHEMA_VERSION;
@@ -318,7 +318,7 @@ export function runMigrations(raw){
   return j;
 }
 
-// Track readiness over time â€” the engine consumes `readinessLog`; the logger
+// Track readiness over time — the engine consumes `readinessLog`; the logger
 // itself is exposed through the readiness UI, not this module.
 
 // Previous-session lookup
@@ -331,7 +331,7 @@ export function lastExerciseSets(history, exerciseId){
   return null;
 }
 
-// PRs â€” with technique/ROM guard (notes that mention rom/depth/assisted invalidate)
+// PRs — with technique/ROM guard (notes that mention rom/depth/assisted invalidate)
 export function prsHitBySession(session, priorHistory){
   const priorBest = new Map(); // exerciseId -> { e1rm, note }
   for(const h of priorHistory) for(const b of h.blocks || []) for(const s of b.sets || []){

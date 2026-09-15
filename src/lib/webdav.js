@@ -36,8 +36,13 @@ async function davFetch(url, options, externalSignal){
 
 /**
  * Build a { pull, push } adapter over a WebDAV remote.
- *   pull() → string | null   (null when no remote file exists yet)
- *   push(text) → void        (PUT, overwrites the previous payload)
+ *   pull() → Uint8Array | null   (null when no remote file exists yet)
+ *   push(body) → void           (PUT of string or bytes, overwrites previous)
+ *
+ * Bytes are the transport truth: an encrypted envelope is a binary container
+ * ([ARCB][salt][iv][AES-GCM ciphertext]) and decoding it as text would
+ * irreversibly replace invalid UTF-8 sequences with U+FFFD, destroying the
+ * ciphertext. Plaintext JSON is also valid bytes, so one path handles both.
  */
 export function makeWebdavAdapter({ url, username, password, filePath = 'arise-sync/arise-backup.arise', signal = null } = {}){
   const base = webdavBaseUrl(url);
@@ -54,10 +59,10 @@ export function makeWebdavAdapter({ url, username, password, filePath = 'arise-s
       const res = await davFetch(fileUrl, { method: 'GET', headers }, signal);
       if(res.status === 404) return null;
       if(!res.ok) throw new Error(`WebDAV pull failed: HTTP ${res.status}.`);
-      return res.text();
+      return new Uint8Array(await res.arrayBuffer());
     },
-    async push(text){
-      const res = await davFetch(fileUrl, { method: 'PUT', headers, body: text }, signal);
+    async push(body){
+      const res = await davFetch(fileUrl, { method: 'PUT', headers, body }, signal);
       if(!res.ok) throw new Error(`WebDAV push failed: HTTP ${res.status}.`);
     },
   };

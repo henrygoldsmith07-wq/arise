@@ -1,4 +1,4 @@
-﻿// Export / restore / import â€” versioned JSON backup for local-first data.
+﻿// Export / restore / import — versioned JSON backup for local-first data.
 // No cloud sync; the user owns the file.
 
 import { runMigrations, STORE_SCHEMA_VERSION, mergeCustomTemplates, normaliseHistory } from './store.js';
@@ -203,7 +203,7 @@ export function parseImportFile(text){
   if(!data || typeof data !== 'object') throw new Error('Import file is empty or malformed.');
   if(parsed?.app && parsed.app !== 'arise') throw new Error('This backup is not for Arise.');
   if(!('history' in data) && !('onboarding' in data) && !('activeSchedule' in data) && !('eventHistory' in data) && !('evaluationLedger' in data)){
-    throw new Error('Unrecognised backup shape â€” missing history/onboarding/schedule/event history.');
+    throw new Error('Unrecognised backup shape — missing history/onboarding/schedule/event history.');
   }
   const validation=validateStoreData(data);
   if(!validation.ok) throw new Error(`Backup validation failed: ${validation.errors.join(' ')}`);

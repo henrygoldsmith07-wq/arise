@@ -84,6 +84,21 @@ export function assignmentFor(enrollment, exerciseId){
   return enrollment?.assignments?.[exerciseId]?.arm || null;
 }
 
+// ── Study arm for a recommendation about to be shown ─────────────────────
+// Policy: an exercise that was NEVER RANDOMISED is excluded from the study —
+// it must never inherit the Arise arm by default. Enrolled participants get
+// 'arise' / 'double-progression' only for exercises frozen into the
+// enrollment at entry; exercises arriving later (a swap to an unseen lift, a
+// programme adaptation, a newly introduced movement, or a resumed session
+// after a device change) resolve to null: the user still gets the normal
+// engine, but the row carries no arm and the pooled/primary analysis
+// excludes it (it would poison a randomised contrast with a non-randomised
+// observation). Unenrolled devices are always null — no study at all.
+export function studyArmFor(enrollment, exerciseId){
+  const arm = assignmentFor(enrollment, exerciseId);
+  return arm === 'arise' || arm === 'double-progression' ? arm : null;
+}
+
 // Pilot checklist in one object — everything P1 verification needs.
 export function enrollmentAudit(enrollment){
   if(!enrollment) return { ok:false, reason:'no enrollment' };

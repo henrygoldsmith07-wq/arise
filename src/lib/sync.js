@@ -1,4 +1,4 @@
-﻿// sync.js â€” optional cross-device sync layer (offline-first preserved).
+﻿// sync.js — optional cross-device sync layer (offline-first preserved).
 // Default: localStorage only. When sync is enabled, this mirrors export/import over a sync provider.
 // Provider is a pluggable { pull, push } pair so tests stay pure.
 // Conflict resolution: per-session last-write-wins via savedAt; onboarding last-write-wins via exportedAt.
@@ -18,9 +18,13 @@ export async function syncUp(store, adapter){
 
 export async function syncDown(currentStore, adapter, strategy="merge"){
   if(!adapter?.pull) return currentStore;
-  const remoteText = await adapter.pull();
-  if(!remoteText) return currentStore;
-  const text = typeof remoteText === "string" ? remoteText : JSON.stringify(remoteText);
+  const remoteRaw = await adapter.pull();
+  if(!remoteRaw) return currentStore;
+  // The transport is byte-native; sealed payloads are decrypted upstream in
+  // runSync. A raw byte pull that reaches syncDown is plaintext JSON.
+  const text = typeof remoteRaw === "string" ? remoteRaw
+    : remoteRaw instanceof Uint8Array ? new TextDecoder().decode(remoteRaw)
+    : JSON.stringify(remoteRaw);
   const imported = parseImportFile(text);
   if(strategy==='replace') return mergeStores(currentStore, imported, 'replace');
   return mergeStoresWithConflicts(currentStore, imported);

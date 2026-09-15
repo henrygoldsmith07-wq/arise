@@ -4,7 +4,7 @@ import { lastExerciseSets } from '../lib/store.js';
 import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, applySwapToBlocks, attributePrescribedSets, userAddedSet, removeSetAt, isSetPerformed, personalCalibrationFromHistory } from '../lib/progression.js';
 import { recommendNextWithPolicy, POLICY_ORDER } from '../lib/progressionPolicies.js';
 import { runComparativeStudy, doubleProgressionRec } from '../lib/study.js';
-import { assignmentFor } from '../lib/studyEnrollment.js';
+import { studyArmFor } from '../lib/studyEnrollment.js';
 import { recommendNextWithModel } from '../lib/progressionModel.js';
 import { formatPlateStack } from '../lib/plates.js';
 import { substitutionOptions } from '../lib/substitutions.js';
@@ -443,8 +443,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     const recs=new Map(), prevs=new Map(), assigned=new Map();
     for(const b of blocks){
       if(recs.has(b.exerciseId)) continue;
-      // Randomised trial: the assigned arm decides which policy runs.
-      const arm = assignmentFor(studyEnrollment, b.exerciseId);
+      // Randomised trial: the assigned arm decides which policy runs. An
+      // exercise that was never randomised (swapped-in, adapted-in, new) is
+      // EXCLUDED from the study — never silently labelled 'arise'.
+      const arm = studyArmFor(studyEnrollment, b.exerciseId);
       assigned.set(b.exerciseId, arm);
       recs.set(b.exerciseId, getRecommendation(b,history,session.dateISO,plateConfig,study,arm, appPolicy, appExplanationMode));
       prevs.set(b.exerciseId, lastExerciseSets(history,b.exerciseId));
@@ -465,7 +467,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       if(!recommendation) continue;
       shownRecommendationRef.current.add(block.exerciseId);
       const arm = blockMeta.assigned.get(block.exerciseId);
-      recordEvent('recommendation:shown', { sessionId:session.id, exerciseId:block.exerciseId, assignedArm:arm || 'arise' });
+      recordEvent('recommendation:shown', { sessionId:session.id, exerciseId:block.exerciseId, assignedArm:arm ?? null });
       try{
         recordRecommendation({
           exerciseId: block.exerciseId,
@@ -475,7 +477,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           programId: session.programId || null,
           programVersion: session.programVersion ?? null,
           targetReps: block.reps || undefined,
-          assignedArm: arm || 'arise',
+          assignedArm: arm ?? null,
           participantId,
           preferences: measurementConsent === true ? { telemetryEnabled: true } : null,
         });
@@ -783,7 +785,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       const target = prev[bi];
       if(!target || !option?.id || option.id === target.exerciseId){ swapResumeRef.current = null; return prev; }
       const plan = Number.isInteger(target.planIndex) ? target.planIndex : bi;
-      const recommendation = getRecommendation({ exerciseId: option.id, reps: target.reps || session.blocks?.[plan]?.reps }, history, session.dateISO, plateConfig, study, assignmentFor(studyEnrollment, option.id), appPolicy, appExplanationMode);
+      const recommendation = getRecommendation({ exerciseId: option.id, reps: target.reps || session.blocks?.[plan]?.reps }, history, session.dateISO, plateConfig, study, studyArmFor(studyEnrollment, option.id), appPolicy, appExplanationMode);
       // applySwapToBlocks splits a partially-completed block so done work keeps
       // its original exercise + prescription, or replaces it in place if nothing
       // has been performed yet. Either way the swap stays a single tap.
