@@ -24,13 +24,16 @@ import { resolveArisePriors } from './priors.js';
 import { isValidStudyParticipantId } from './studyIdentity.js';
 import { STUDY_VERSION } from './studyEnrollment.js';
 import { loadParticipantFile } from './fieldStudy.js';
+import { isProspectiveRecord } from './longitudinalCore.js';
 import { mergeStores } from './export.js';
+import { createHash } from 'node:crypto';
 
 const round = (v, d = 3)=> Number.isFinite(Number(v)) ? Math.round(Number(v) * 10 ** d) / 10 ** d : null;
 const pct = (part, whole)=> whole ? round(part / whole) : null;
 
 // ── Prespecified analysis gates ─────────────────────────────────────────
-// A gate blocks treatment ranking until BOTH breadth (real participants) and
+// A gate blocks treatment ranking until BOTH breadth (genuine contributors:
+// identified, consented, ≥1 valid resolved assigned-arm transition) and
 // depth (assigned transitions) exist. These are study-operations constants:
 // the pooled analysis (fieldStudy.pooledAssignedComparison) carries its own
 // identical defaults; the operator report simply shows who is close.
@@ -98,7 +101,7 @@ export function ingestParticipantFiles(files, { config = null } = {}){
   for(const { name, text } of list){
     if(!text.trim()){ warnings.push(warn('import-error', name, 'empty file')); importErrors++; continue; }
     // Duplicate whole files: byte-identical payloads are counted, not merged.
-    const digest = simpleHash(text);
+    const digest = sha256Hex(text);
     if(seenPayloads.has(digest)){
       duplicateFiles++;
       warnings.push(warn('duplicate-file', name, `byte-identical to ${seenPayloads.get(digest)} — counted once`));
@@ -176,10 +179,23 @@ function safeParse(text){
   try{ const p = JSON.parse(text); return p?.data ? p.data : p; }catch{ return null; }
 }
 
-function simpleHash(str){
-  let h = 5381;
-  for(let i = 0; i < str.length; i++){ h = ((h << 5) + h + str.charCodeAt(i)) | 0; }
-  return `${h}:${str.length}`;
+// Duplicate files mean BYTE-IDENTICAL content: SHA-256 over the raw payload,
+// not a hand-rolled hash (collisions in a 32-bit rolling hash would silently
+// swallow genuinely different exports).
+function sha256Hex(text){
+  return createHash('sha256').update(text, 'utf8').digest('hex');
+}
+
+// Canonical JSON: key-sorted, order-independent serialization so two devices
+// writing the same record in different key orders compare EQUAL, while any
+// material difference (a rep, a load, an RPE, a timestamp, a provenance
+// stamp) compares UNEQUAL. This is what makes the conflict audit exhaustive
+// instead of a savedAt/block-count spot check.
+function canonicalJson(value){
+  if(value === null || typeof value !== 'object') return JSON.stringify(value ?? null);
+  if(Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  const keys = Object.keys(value).sort();
+  return `{${keys.map(k => `${JSON.stringify(k)}:${canonicalJson(value[k])}`).join(',')}}`;
 }
 
 // Record-level conflict audit between the accumulated participant and a fresh
@@ -191,23 +207,49 @@ function auditMergeConflicts(prior, incoming, fileName, warnings){
   const b = incoming.store || {};
   const conflicts = [];
 
-  // Evaluation ledger: same id, materially different recommendation/outcome.
+  // Evaluation ledger: same id, materially different content. The WHOLE row
+  // is compared canonically — recommendation, outcome, per-arm prescription
+  // snapshots, provenance stamps — so any disagreement surfaces, not just
+  // fields a previous audit happened to look at.
   const aLedger = new Map((a.evaluationLedger || []).map(r => [String(r?.id), r]));
   for(const row of (b.evaluationLedger || [])){
     const old = aLedger.get(String(row?.id));
     if(!old) continue;
-    if(JSON.stringify(old?.recommendation ?? null) !== JSON.stringify(row?.recommendation ?? null)
-      || JSON.stringify(old?.outcome ?? null) !== JSON.stringify(row?.outcome ?? null)){
+    if(canonicalJson(old) !== canonicalJson(row)){
       conflicts.push(`ledger:${row.id}`);
     }
   }
-  // History: same session id, different savedAt (edit race) or block count.
+  // History: same session id, canonically different content — exercises,
+  // per-set reps/load/RPE/RIR, completion status, workout timestamps,
+  // provenance. savedAt alone is never the test, but a savedAt-only
+  // difference is still a conflict (two devices saved the "same" session —
+  // one side is discarded by the first-seen merge, so the operator must see
+  // it). `sourceTaggedAt` is NORMALISED OUT: it is a load-time tagging
+  // artifact (parseImportFile stamps it with the wall clock when a record
+  // first lacks a tag), not observation content — comparing it would flag the
+  // same session as conflicting with itself across repeated exports.
+  const materialJson = (row) => {
+    if(!row || typeof row !== 'object') return canonicalJson(row);
+    const { sourceTaggedAt, ...material } = row;
+    return canonicalJson(material);
+  };
   const aHist = new Map((a.history || []).map(h => [String(h?.id), h]));
   for(const h of (b.history || [])){
     const old = aHist.get(String(h?.id));
     if(!old) continue;
-    if(String(old?.savedAt || '') !== String(h?.savedAt || '') || (old?.blocks || []).length !== (h?.blocks || []).length){
+    if(materialJson(old) !== materialJson(h)){
       conflicts.push(`history:${h.id}`);
+    }
+  }
+  // Events: same id, different payload — type, timestamp, or measurement
+  // (logging-time elapsedMs, acceptance). These feed product metrics and
+  // friction completeness, so disagreements are disclosed, never dropped.
+  const aEv = new Map((a.eventHistory || []).map(e => [String(e?.id), e]));
+  for(const e of (b.eventHistory || [])){
+    const old = aEv.get(String(e?.id));
+    if(!old) continue;
+    if(canonicalJson(old) !== canonicalJson(e)){
+      conflicts.push(`event:${e.id}`);
     }
   }
   if(conflicts.length){
@@ -237,8 +279,6 @@ function auditMergeConflicts(prior, incoming, fileName, warnings){
   }
 }
 
-// ── Cohort summary ──────────────────────────────────────────────────────
-
 // Lifecycle state per participant, resolved from store facts (never inferred
 // from file order): withdrawn if studyStatus === 'withdrawn', else active /
 // lapsed by recency of the last logged session.
@@ -252,62 +292,99 @@ function lifecycleOf(store, todayStr){
   return gap <= ACTIVE_WINDOW_DAYS ? 'active' : 'lapsed';
 }
 
+// ── Contributor predicate (single definition, shared wording) ───────────
+// A participant CONTRIBUTES when they are identified (by construction here —
+// unidentified exports never reach summariseCohort), consented, and hold at
+// least one VALID resolved assigned-arm transition: live-engine provenance on
+// both sides (isProspectiveRecord), assigned to a primary study arm, resolved
+// with a graded assignedMet. This mirrors pooledAssignedComparison's row
+// filters exactly, so cohortOps, fieldStudy and every rendered report state
+// the same participant counts. Invariant: no usable assigned evidence → no
+// participant credit; enrolled-but-empty people cannot satisfy the gate.
+function contributingTransitionsOf(store){
+  const ledger = Array.isArray(store?.evaluationLedger) ? store.evaluationLedger : [];
+  return ledger.filter(r =>
+    r && r.recommendation
+    && isProspectiveRecord(r)
+    && (r.assignedArm === 'arise' || r.assignedArm === 'double-progression')
+    && r.outcome?.assignedMet != null
+  );
+}
+
+function summariseParticipantRow(p, todayStr){
+  const store = p.store || {};
+  const history = Array.isArray(store.history) ? store.history : [];
+  const ledger = Array.isArray(store.evaluationLedger) ? store.evaluationLedger : [];
+  const enrollment = store.studyEnrollment || null;
+  const arms = Object.values(enrollment?.assignments || {}).map(a => a?.arm).filter(Boolean);
+  const dates = history.map(h => h?.dateISO).filter(Boolean).sort();
+  const first = dates[0] || null;
+  const last = dates[dates.length - 1] || null;
+  const lifecycle = lifecycleOf(store, todayStr);
+  const scheduled = (store.activeSchedule?.sessions || []);
+  const scheduledIds = new Set(scheduled.map(s => s.id));
+  const doneIds = new Set(history.map(h => h.id));
+  const assignedTransitions = ledger.filter(r => r?.assignedArm && r?.outcome?.assignedMet != null).length;
+  const openRecommendations = ledger.filter(r => r?.recommendation && !r?.outcome).length;
+  const consented = store.preferences?.telemetryEnabled === true;
+  const valid = contributingTransitionsOf(store);
+  const contributorArms = {
+    arise: valid.some(r => r.assignedArm === 'arise'),
+    'double-progression': valid.some(r => r.assignedArm === 'double-progression'),
+  };
+  return {
+    code: p.code,
+    studyParticipantId: p.studyParticipantId || null,
+    lifecycle,
+    enrolled: Boolean(enrollment),
+    enrolledAtISO: enrollment?.enrolledAtISO || null,
+    withdrawnAtISO: store.studyStatus === 'withdrawn' ? (store.studyStatusChangedAtISO || null) : null,
+    sessions: history.length,
+    firstSessionISO: first,
+    lastSessionISO: last,
+    daysSinceLastSession: last ? daysBetween(last, todayStr) : null,
+    weeksObserved: new Set(history.map(h => mondayKey(h.dateISO)).filter(Boolean)).size,
+    scheduledSessions: scheduled.length,
+    scheduledDone: scheduled.filter(s => doneIds.has(s.id) || s.status === 'done').length,
+    assignedTransitions,
+    openRecommendations,
+    consented,
+    assignedExercises: arms.length,
+    armBalance: {
+      arise: arms.filter(a => a === 'arise').length,
+      'double-progression': arms.filter(a => a === 'double-progression').length,
+    },
+    exportCount: (p.sourceFiles || []).length,
+    firstExportedAtISO: p.firstExportedAtISO || null,
+    lastExportedAtISO: p.lastExportedAtISO || null,
+    // Contributor facts (see contributingTransitionsOf): the gate reads these,
+    // and the report shows them so "enrolled but empty" is always visible.
+    contributingTransitions: valid.length,
+    contributorArms,
+    isContributor: consented && (contributorArms.arise || contributorArms['double-progression']),
+    // Observation gaps that a data-quality reviewer should see per person:
+    missing: {
+      consent: store.preferences?.telemetryEnabled !== true,
+      readinessDates: (store.readinessLog || []).filter(r => !r?.dateISO).length,
+      undatedSessions: history.filter(h => !h?.dateISO).length,
+    },
+  };
+}
+
 export function summariseCohort(participants, { config = null, nowISO = null, gates = ANALYSIS_GATES } = {}){
   const cfg = resolveArisePriors(config);
   const todayStr = todayISO(nowISO);
-  const rows = (participants || []).map(p => {
-    const store = p.store || {};
-    const history = Array.isArray(store.history) ? store.history : [];
-    const ledger = Array.isArray(store.evaluationLedger) ? store.evaluationLedger : [];
-    const enrollment = store.studyEnrollment || null;
-    const arms = Object.values(enrollment?.assignments || {}).map(a => a?.arm).filter(Boolean);
-    const dates = history.map(h => h?.dateISO).filter(Boolean).sort();
-    const first = dates[0] || null;
-    const last = dates[dates.length - 1] || null;
-    const lifecycle = lifecycleOf(store, todayStr);
-    const scheduled = (store.activeSchedule?.sessions || []);
-    const scheduledIds = new Set(scheduled.map(s => s.id));
-    const doneIds = new Set(history.map(h => h.id));
-    const assignedTransitions = ledger.filter(r => r?.assignedArm && r?.outcome?.assignedMet != null).length;
-    const openRecommendations = ledger.filter(r => r?.recommendation && !r?.outcome).length;
-    return {
-      code: p.code,
-      studyParticipantId: p.studyParticipantId || null,
-      lifecycle,
-      enrolled: Boolean(enrollment),
-      enrolledAtISO: enrollment?.enrolledAtISO || null,
-      withdrawnAtISO: store.studyStatus === 'withdrawn' ? (store.studyStatusChangedAtISO || null) : null,
-      sessions: history.length,
-      firstSessionISO: first,
-      lastSessionISO: last,
-      daysSinceLastSession: last ? daysBetween(last, todayStr) : null,
-      weeksObserved: new Set(history.map(h => mondayKey(h.dateISO)).filter(Boolean)).size,
-      scheduledSessions: scheduled.length,
-      scheduledDone: scheduled.filter(s => doneIds.has(s.id) || s.status === 'done').length,
-      assignedTransitions,
-      openRecommendations,
-      consented: store.preferences?.telemetryEnabled === true,
-      assignedExercises: arms.length,
-      armBalance: {
-        arise: arms.filter(a => a === 'arise').length,
-        'double-progression': arms.filter(a => a === 'double-progression').length,
-      },
-      exportCount: (p.sourceFiles || []).length,
-      firstExportedAtISO: p.firstExportedAtISO || null,
-      lastExportedAtISO: p.lastExportedAtISO || null,
-      // Observation gaps that a data-quality reviewer should see per person:
-      missing: {
-        consent: store.preferences?.telemetryEnabled !== true,
-        readinessDates: (store.readinessLog || []).filter(r => !r?.dateISO).length,
-        undatedSessions: history.filter(h => !h?.dateISO).length,
-      },
-    };
-  });
+  const rows = (participants || []).map(p => summariseParticipantRow(p, todayStr));
 
   // Cohort-level totals.
   const totals = {
     participants: rows.length,
     enrolled: rows.filter(r => r.enrolled).length,
+    // Contributor accounting per the shared definition: identified (by
+    // construction) + consented + ≥1 valid resolved assigned-arm transition.
+    contributors: rows.filter(r => r.isContributor).length,
+    contributorsArise: rows.filter(r => r.contributorArms.arise).length,
+    contributorsDoubleProgression: rows.filter(r => r.contributorArms['double-progression']).length,
     active: rows.filter(r => r.lifecycle === 'active').length,
     lapsed: rows.filter(r => r.lifecycle === 'lapsed').length,
     withdrawn: rows.filter(r => r.lifecycle === 'withdrawn').length,
@@ -344,16 +421,19 @@ export function summariseCohort(participants, { config = null, nowISO = null, ga
     ariseShare: pct(armTotals.arise, armTotals.arise + armTotals['double-progression']),
   };
   // Transitions per arm from the ledger itself (what the analysis actually
-  // uses): a transition counts toward an arm only when it is RESOLVED with a
-  // scored assignedMet — the same rows pooledAssignedComparison accepts.
-  const transitionsByArm = { arise: 0, 'double-progression': 0, unassigned: 0, open: 0 };
+  // uses): a transition counts toward an arm ONLY through the same validity
+  // filters pooledAssignedComparison applies — live-engine provenance on both
+  // sides and a graded assignedMet. Unproven rows are reported under
+  // `unproven` so nothing silently disappears.
+  const transitionsByArm = { arise: 0, 'double-progression': 0, unassigned: 0, open: 0, unproven: 0 };
   for(const p of (participants || [])){
     for(const row of (p.store?.evaluationLedger || [])){
       if(!row?.recommendation) continue;
       if(!row.outcome){ transitionsByArm.open++; continue; }
-      if(row.assignedArm === 'arise' && row.outcome.assignedMet != null) transitionsByArm.arise++;
-      else if(row.assignedArm === 'double-progression' && row.outcome.assignedMet != null) transitionsByArm['double-progression']++;
-      else transitionsByArm.unassigned++;
+      const assigned = row.assignedArm === 'arise' || row.assignedArm === 'double-progression';
+      if(!assigned){ transitionsByArm.unassigned++; continue; }
+      if(!isProspectiveRecord(row) || row.outcome.assignedMet == null){ transitionsByArm.unproven++; continue; }
+      transitionsByArm[row.assignedArm]++;
     }
   }
   armBalance.ledgerTransitions = transitionsByArm;
@@ -364,21 +444,30 @@ export function summariseCohort(participants, { config = null, nowISO = null, ga
   // Data-quality warnings derivable from store contents themselves.
   const quality = dataQualityWarnings(rows);
 
-  // Gate eligibility: never rank treatments until these clear.
+  // Gate eligibility: never rank treatments until these clear. The breadth
+  // gate counts CONTRIBUTORS, not enrollments and not identifications —
+  // enrolled-but-empty people cannot satisfy it (shared definition with
+  // fieldStudy.pooledAssignedComparison / computeFieldStudy).
   const gate = {
     minParticipants: gates.minParticipants,
     minTransitions: gates.minTransitions,
     minTransitionsPerArm: gates.minTransitionsPerArm,
-    participants: totals.enrolled,
+    participants: totals.contributors,
+    identifiedParticipants: totals.participants,
+    contributors: {
+      total: totals.contributors,
+      arise: totals.contributorsArise,
+      'double-progression': totals.contributorsDoubleProgression,
+    },
     transitions: totals.assignedTransitions,
     transitionsArise: resolvedByArm.arise,
     transitionsDoubleProgression: resolvedByArm['double-progression'],
-    eligible: totals.enrolled >= gates.minParticipants
+    eligible: totals.contributors >= gates.minParticipants
       && totals.assignedTransitions >= gates.minTransitions
       && resolvedByArm.arise >= gates.minTransitionsPerArm
       && resolvedByArm['double-progression'] >= gates.minTransitionsPerArm,
     deficits: {
-      participants: Math.max(0, gates.minParticipants - totals.enrolled),
+      participants: Math.max(0, gates.minParticipants - totals.contributors),
       transitions: Math.max(0, gates.minTransitions - totals.assignedTransitions),
       arise: Math.max(0, gates.minTransitionsPerArm - resolvedByArm.arise),
       'double-progression': Math.max(0, gates.minTransitionsPerArm - resolvedByArm['double-progression']),
@@ -493,6 +582,9 @@ export function renderCohortReport(summary, { ingest = null } = {}){
   L.push('|---|---|');
   L.push(`| Participants (unique people) | ${t.participants} |`);
   L.push(`| Enrolled in the randomised study | ${t.enrolled} |`);
+  L.push(`| Contributing (consented + ≥1 valid resolved assigned transition) | ${t.contributors} |`);
+  L.push(`| Contributing · arise arm | ${t.contributorsArise} |`);
+  L.push(`| Contributing · double-progression arm | ${t.contributorsDoubleProgression} |`);
   L.push(`| Active (session ≤${summary.activeWindowDays}d) | ${t.active} |`);
   L.push(`| Lapsed | ${t.lapsed} |`);
   L.push(`| Withdrawn | ${t.withdrawn} |`);
@@ -519,6 +611,7 @@ export function renderCohortReport(summary, { ingest = null } = {}){
   L.push(`| double-progression | ${summary.armBalance['double-progression']} | ${summary.armBalance.ledgerTransitions['double-progression']} |`);
   L.push(`| (unassigned rows) | — | ${summary.armBalance.ledgerTransitions.unassigned} |`);
   L.push(`| (open, awaiting outcome) | — | ${summary.armBalance.ledgerTransitions.open} |`);
+  L.push(`| (resolved but unproven provenance) | — | ${summary.armBalance.ledgerTransitions.unproven} |`);
   L.push('');
   L.push(`Arm balance: arise share ${summary.armBalance.ariseShare == null ? '—' : `${Math.round(summary.armBalance.ariseShare * 100)}%`} of assigned exercises.`);
   L.push('');
@@ -527,7 +620,7 @@ export function renderCohortReport(summary, { ingest = null } = {}){
   L.push('| Gate | Need | Have | Met |');
   L.push('|---|---|---|---|');
   const g = summary.gate;
-  L.push(`| Participants | ${g.minParticipants} | ${g.participants} | ${g.participants >= g.minParticipants ? '✓' : `need ${g.deficits.participants} more`} |`);
+  L.push(`| Contributing participants | ${g.minParticipants} | ${g.participants} | ${g.participants >= g.minParticipants ? '✓' : `need ${g.deficits.participants} more`} |`);
   L.push(`| Assigned transitions | ${g.minTransitions} | ${g.transitions} | ${g.transitions >= g.minTransitions ? '✓' : `need ${g.deficits.transitions} more`} |`);
   L.push(`| Transitions · arise | ${g.minTransitionsPerArm} | ${g.transitionsArise} | ${g.transitionsArise >= g.minTransitionsPerArm ? '✓' : `need ${g.deficits.arise} more`} |`);
   L.push(`| Transitions · double-progression | ${g.minTransitionsPerArm} | ${g.transitionsDoubleProgression} | ${g.transitionsDoubleProgression >= g.minTransitionsPerArm ? '✓' : `need ${g.deficits['double-progression']} more`} |`);

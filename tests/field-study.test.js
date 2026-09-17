@@ -191,14 +191,27 @@ describe('study identity: one person × many exports = ONE participant', ()=>{
     // An earlier weekly snapshot: same id, only the first four sessions.
     const earlier = participantFixture('P01');
     earlier.store.history = full.store.history.slice(0, 4);
+    // Contributor-based gates: a participant counts only with ≥1 valid
+    // resolved assigned-arm transition, so the fixture row carries a genuine
+    // assigned arm and graded outcome (live-engine provenance is already on
+    // the fixture's ledger row).
+    for(const p of [full, earlier]){
+      p.store.preferences = { telemetryEnabled: true };
+      p.store.evaluationLedger = p.store.evaluationLedger.map(row => ({ ...row, assignedArm: 'arise', outcome: { ...row.outcome, assignedMet: true } }));
+    }
     const single = computeFieldStudy([full], { config: LOOSE, minParticipants: 1, minTransitions: 1 });
 
     const result = computeFieldStudy([earlier, full], { config: LOOSE, minParticipants: 1, minTransitions: 1 });
-    assert.equal(result.gates.participants, 1, 'two exports, one person — gate must see ONE participant');
+    assert.equal(result.gates.participants, 1, 'two exports, one person — gate must see ONE contributing participant');
+    assert.equal(result.gates.contributors.arise, 1, 'per-arm contributor accounting');
     assert.equal(result.pooled.arise.n, single.pooled.arise.n, 'cumulative snapshots must not double-count transitions');
 
     const inflated = computeFieldStudy(
-      [participantFixture('P01'), participantFixture('P02')],
+      [participantFixture('P01'), participantFixture('P02')].map(p => {
+        p.store.preferences = { telemetryEnabled: true };
+        p.store.evaluationLedger = p.store.evaluationLedger.map(row => ({ ...row, assignedArm: 'arise', outcome: { ...row.outcome, assignedMet: true } }));
+        return p;
+      }),
       { config: LOOSE, minParticipants: 2, minTransitions: 3 },
     );
     assert.equal(inflated.gates.participants, 2, 'distinct ids stay distinct people');
@@ -213,6 +226,32 @@ describe('study identity: one person × many exports = ONE participant', ()=>{
     assert.equal(result.gates.unidentifiedExports, 2);
     assert.equal(result.status, 'insufficient-evidence', 'unidentified arrivals must not satisfy the breadth gate');
     assert.match(renderFieldReport(result), /without a study id/);
+  });
+
+  it('the participant breadth gate counts CONTRIBUTORS, not identifications', ()=>{
+    // Nine identified+consented participants with NO valid resolved assigned
+    // transition, plus one genuine contributor: the gate must see exactly one.
+    const mk = (hex, contribute)=> {
+      const p = participantFixture(`P${hex.slice(0, 2)}`);
+      p.store.studyParticipantId = hex;
+      p.store.preferences = { telemetryEnabled: true };
+      p.store.evaluationLedger = p.store.evaluationLedger.map(row => ({
+        ...row,
+        assignedArm: 'arise',
+        outcome: { ...row.outcome, assignedMet: contribute ? true : undefined },
+      }));
+      return p;
+    };
+    const participants = [];
+    for(let i = 1; i <= 9; i++) participants.push(mk(i.toString(16).padStart(16, '0'), false));
+    participants.push(mk('f'.repeat(16), true));
+    const result = computeFieldStudy(participants, { config: LOOSE, minParticipants: 10, minTransitions: 1000 });
+    assert.equal(result.gates.participants, 1, 'no usable assigned evidence → no participant credit');
+    assert.equal(result.gates.identifiedParticipants, 10, 'identification alone is not contribution');
+    assert.equal(result.gates.contributors.arise, 1);
+    assert.equal(result.gates.contributors['double-progression'], 0);
+    assert.equal(result.status, 'insufficient-evidence');
+    assert.equal(result.claim, null);
   });
 
   it('study id survives the export → import round trip', ()=>{

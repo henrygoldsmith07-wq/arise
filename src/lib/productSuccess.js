@@ -115,6 +115,12 @@ export function measureProductSuccess(store, { config = null, nowISO = null } = 
   const startedSessions = new Set(events.filter(e => e?.type === 'session:start').map(e => e.sessionId).filter(Boolean));
   const abandonedEvents = events.filter(e => e?.type === 'session:abandon');
   const abandonedIds = [...new Set(abandonedEvents.map(e => e.sessionId).filter(Boolean))].filter(id => !history.some(h => h.id === id));
+  const savedIds = new Set(history.map(h => h.id));
+  // STARTED BUT UNRESOLVED: a session:start whose id has neither a saved
+  // completion nor an explicit abandonment. These are MISSING OUTCOMES —
+  // neither completions nor abandonments — and they must appear in the report
+  // with their own count instead of silently shrinking the denominator.
+  const startedUnresolvedIds = [...startedSessions].filter(id => !savedIds.has(id) && !abandonedIds.includes(id));
   const terminal = completedSessions + abandonedIds.length;
   const workoutCompletionRate = terminal ? round(completedSessions / terminal) : null;
   const abandonmentRate = terminal ? round(abandonedIds.length / terminal) : null;
@@ -175,6 +181,8 @@ export function measureProductSuccess(store, { config = null, nowISO = null } = 
     completion: {
       completed: completedSessions,
       abandonedWithoutSave: abandonedIds.length,
+      startedUnresolved: startedUnresolvedIds.length,
+      startedTotal: startedSessions.size,
       rate: workoutCompletionRate,
       eventBacked: completion,
     },
@@ -234,6 +242,9 @@ export function computeProductSuccessReport(participants, { config = null, nowIS
   const adherenceMissed = sum(m => m.adherence.missed);
   const terminalTotal = sum(m => (m.completion.completed + m.completion.abandonedWithoutSave));
   const completedTotal = sum(m => m.completion.completed);
+  const abandonedTotal = sum(m => m.completion.abandonedWithoutSave);
+  const unresolvedStarts = sum(m => m.completion.startedUnresolved);
+  const unresolvedParticipants = measures.filter(m => m.completion.startedUnresolved > 0).length;
 
   const week1Eligible = measures.filter(m => m.retention.eligibleWeek1);
   const week4Eligible = measures.filter(m => m.retention.eligibleWeek4);
@@ -276,6 +287,15 @@ export function computeProductSuccessReport(participants, { config = null, nowIS
       n: terminalTotal,
       missing: sum(m => (m.completion.completed + m.completion.abandonedWithoutSave) ? 0 : 1),
     },
+    startedUnresolved: {
+      count: unresolvedStarts,
+      participants: unresolvedParticipants,
+      startedTotal: sum(m => m.completion.startedTotal),
+      // Denominator accounting: completed + abandoned + unresolved = every
+      // start. Unresolved starts are MISSING outcomes, not silent drops —
+      // completion and abandonment stay pooled over TERMINAL sessions only.
+      note: 'session:start events with neither a saved completion nor an explicit abandonment. Reported as missing outcomes; completion/abandonment denominators count terminal sessions only.',
+    },
     recommendationAcceptance: {
       pooled: acceptanceShown ? round(acceptanceAccepted / acceptanceShown) : null,
       participantMean: mean(num(m => m.acceptance.rate)),
@@ -287,7 +307,7 @@ export function computeProductSuccessReport(participants, { config = null, nowIS
       n: overrideN,
     },
     abandonment: {
-      pooled: terminalTotal ? round(sum(m => m.completion.abandonedWithoutSave) / terminalTotal) : null,
+      pooled: terminalTotal ? round(abandonedTotal / terminalTotal) : null,
       participantMean: mean(num(m => m.abandonmentRate)),
       n: terminalTotal,
     },
@@ -361,6 +381,7 @@ export function renderProductSuccessReport(report){
   L.push('');
   L.push(`- Workout completion rate: ${pctStr(report.workoutCompletion.pooled)} pooled over ${report.workoutCompletion.n} terminal session(s)${report.workoutCompletion.missing ? ` · ${report.workoutCompletion.missing} participant(s) with none` : ''}`);
   L.push(`- Abandonment: ${pctStr(report.abandonment.pooled)} (same denominator)`);
+  L.push(`- Started but unresolved: ${report.startedUnresolved.count} of ${report.startedUnresolved.startedTotal} started session(s)${report.startedUnresolved.participants ? ` across ${report.startedUnresolved.participants} participant(s)` : ''} — ${report.startedUnresolved.note}`);
   L.push(`- Recommendation acceptance: ${pctStr(report.recommendationAcceptance.pooled)} over ${report.recommendationAcceptance.n} shown (participant mean ${pctStr(report.recommendationAcceptance.participantMean)})`);
   L.push(`- Override rate: ${pctStr(report.overrideRate.pooled)} over ${report.overrideRate.n} resolved recommendation(s) (participant mean ${pctStr(report.overrideRate.participantMean)})`);
   L.push(`- Median logging time: ${report.medianLoggingTime.participantMedianMs ?? '—'} ms (participants with timing data: ${report.medianLoggingTime.n}/${report.medianLoggingTime.n + report.medianLoggingTime.missing}) — ${report.medianLoggingTime.note}`);

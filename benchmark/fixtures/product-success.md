@@ -17,6 +17,7 @@ Generated 2026-04-03T00:00:00.000Z · 12 consenting participant(s) of 12 export(
 
 - Workout completion rate: 100% pooled over 308 terminal session(s)
 - Abandonment: 0% (same denominator)
+- Started but unresolved: 0 of 0 started session(s) — session:start events with neither a saved completion nor an explicit abandonment. Reported as missing outcomes; completion/abandonment denominators count terminal sessions only.
 - Recommendation acceptance: 84% over 360 shown (participant mean 84%)
 - Override rate: 0% over 1184 resolved recommendation(s) (participant mean 0%)
 - Median logging time: 5870 ms (participants with timing data: 12/12) — Timing events persist only with the sessionTimings refinement on; otherwise this degrades to null.

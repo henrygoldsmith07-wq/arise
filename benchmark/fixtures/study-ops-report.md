@@ -13,6 +13,9 @@ Generated 2026-04-03T00:00:00.000Z · activity window 28 days
 |---|---|
 | Participants (unique people) | 12 |
 | Enrolled in the randomised study | 9 |
+| Contributing (consented + ≥1 valid resolved assigned transition) | 10 |
+| Contributing · arise arm | 10 |
+| Contributing · double-progression arm | 10 |
 | Active (session ≤28d) | 9 |
 | Lapsed | 2 |
 | Withdrawn | 1 |
@@ -37,6 +40,7 @@ Assigned exercises and ledger transitions per arm. This is a BALANCE report, not
 | double-progression | 18 | 580 |
 | (unassigned rows) | — | 24 |
 | (open, awaiting outcome) | — | 0 |
+| (resolved but unproven provenance) | — | 0 |
 
 Arm balance: arise share 50% of assigned exercises.
 
@@ -44,12 +48,12 @@ Arm balance: arise share 50% of assigned exercises.
 
 | Gate | Need | Have | Met |
 |---|---|---|---|
-| Participants | 10 | 9 | need 1 more |
+| Contributing participants | 10 | 10 | ✓ |
 | Assigned transitions | 1000 | 1160 | ✓ |
 | Transitions · arise | 400 | 580 | ✓ |
 | Transitions · double-progression | 400 | 580 | ✓ |
 
-**Gates unmet — no treatment comparison is made.** Any arm ranking before these gates clear would read noise as signal.
+**Gates met.** Effectiveness analysis (field study) may run — rankings come only from that prespecified pipeline, never from this report.
 
 ## Participant contribution balance
 

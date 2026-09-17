@@ -59,12 +59,17 @@ training history, health summaries or backup files into an issue: they are
 your data, and issues are public. Diagnose first, share a minimal
 reproduction second.
 
-**Open PRs and branches:** the numbered PR series (#17–#35) is fully merged;
-no open PR is pending, and the long-lived remote branches behind them are
-closed work awaiting a routine remote prune (tracked in
-`docs/KNOWN_ISSUES.md`). A PR touching progression logic, study
-randomisation or the treatment pipeline additionally needs a reviewer who is
-not its author, and any change to the ground rules needs an ADR first.
+**Open PRs and branches:** none. The numbered PR series (#17–#35) is fully
+merged, and PRs #13–#16 were reviewed and closed on 2026-09-17 — #13 as
+stale-completed (its substance already landed on main), #14 and #16 as
+stale/out-of-scope against the current roadmap, and #15 (hosted Google-account
+sync) as explicitly REJECTED by the product charter: Arise keeps training
+data on-device with explicit exports and no account layer (see
+`docs/PRODUCT.md`). If you are about to propose hosted accounts or sync, read
+that charter note first — a PR will not change it, only a charter change will.
+A PR touching progression logic, study randomisation or the treatment
+pipeline additionally needs a reviewer who is not its author, and any change
+to the ground rules needs an ADR first.
 
 ## Code style
 

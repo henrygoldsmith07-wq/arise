@@ -57,6 +57,16 @@ accepted as documented behaviour in the appropriate doc.
    behaviour". **Experience:** none in the app. **Tracked:** repo hygiene
    only, safe to close/prune at any time.
 
+8. **PRs #13–#16 were closed (not merged) on 2026-09-17.** #13 was
+   stale-completed (its content already on main); #14 (N-of-1 lab) and #16
+   (history-visualisation rework) were stale/out-of-scope against the current
+   roadmap; #15 (hosted Google-account sync) was REJECTED by the product
+   charter — Arise stays on-device with explicit exports and no account layer
+   (`docs/PRODUCT.md`). These closures are documented decisions, not
+   oversights; do not re-open the branches as "open proposals".
+   **Experience:** none in the app. **Tracked:** repo documentation of
+   record.
+
 ## Accepted as documented behaviour
 
 - Kg is the storage and engine unit; lb is display-only (`src/lib/units.js`).

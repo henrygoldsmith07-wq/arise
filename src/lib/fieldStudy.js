@@ -229,6 +229,18 @@ export function pooledProspectiveComparison(participants, { config = null } = {}
 // the same clustered bootstrap as the single-device primary. Conclusions stay
 // descriptive until the prespecified participant/transition gates are met.
 // Pure and deterministic.
+// Aggregates ONLY genuine assigned-arm prospective outcomes: live-engine
+// provenance on both sides, resolved, assigned to a primary arm, with a
+// graded assignedMet. The result is descriptive until the prespecified
+// participant/transition gates are met.
+//
+// CONTRIBUTOR DEFINITION (single source of truth — cohortOps and
+// computeFieldStudy read the counts exposed here): a participant contributes
+// when they are identified (a real study id, grouped before this call),
+// consented (telemetry on, enforced below), and produce at least one row that
+// survives EVERY exclusion filter — i.e. at least one valid resolved
+// assigned-arm transition. Enrolled-but-empty participants never satisfy the
+// breadth gate: no usable assigned evidence → no participant credit.
 const ASSIGNED_PRIMARY_ARMS = ['arise', 'double-progression'];
 
 export function pooledAssignedComparison(participants, { config = null, minParticipants = 10, minTransitions = 1000 } = {}){
@@ -265,8 +277,11 @@ export function pooledAssignedComparison(participants, { config = null, minParti
   }
   // Participant-clustered rollup: per-participant per-arm wins, pooled sums.
   const perParticipant = new Map();
+  const contributorArms = new Map(); // participant → Set<arm> with ≥1 valid resolved transition
   for(const row of assigned){
     const code = participantOf(row);
+    if(!contributorArms.has(code)) contributorArms.set(code, new Set());
+    contributorArms.get(code).add(row.assignedArm);
     if(!perParticipant.has(code)) perParticipant.set(code, { arise: { n: 0, met: 0 }, dp: { n: 0, met: 0 } });
     const buckets = perParticipant.get(code);
     const bucket = row.assignedArm === 'double-progression' ? buckets.dp : buckets.arise;
@@ -291,6 +306,20 @@ export function pooledAssignedComparison(participants, { config = null, minParti
   const dpConclusive = dpTot.n >= minimum;
   const participantCount = perParticipant.size;
   const transitions = assigned.length;
+  // Contributor accounting, per the contributor definition above. Exported so
+  // every consumer (gates, cohortOps, rendered reports) states the SAME
+  // participant counts from the same predicate.
+  let contributorsArise = 0;
+  let contributorsDoubleProgression = 0;
+  for(const arms of contributorArms.values()){
+    if(arms.has('arise')) contributorsArise++;
+    if(arms.has('double-progression')) contributorsDoubleProgression++;
+  }
+  const contributorCounts = {
+    total: participantCount,
+    arise: contributorsArise,
+    'double-progression': contributorsDoubleProgression,
+  };
   const reasons = [];
   if(transitions < minTransitions) reasons.push(`only ${transitions} assigned transitions (need ${minTransitions}+)`);
   if(participantCount < minParticipants) reasons.push(`only ${participantCount} participants (need ${minParticipants}+)`);
@@ -321,6 +350,7 @@ export function pooledAssignedComparison(participants, { config = null, minParti
     causal: true,
     evidenceKind: 'assigned-arm-pooled',
     participants: participantCount,
+    contributors: contributorCounts,
     transitions,
     open: openRows,
     arise: { key: 'arise', n: ariseTot.n, metCount: ariseTot.met, participants: ariseTot.users, targetAchievementRate: ariseRate, conclusive: ariseConclusive },
@@ -412,10 +442,14 @@ export function computeFieldStudy(participants, { config = null, minParticipants
   // drives the gates and the headline claim.
   const assigned = pooledAssignedComparison(participants, { config, minParticipants, minTransitions });
   const transitions = assigned.transitions;
-  // Breadth is measured in IDENTIFIED PEOPLE, not file arrivals. Legacy
-  // exports without a study id are reported separately and never satisfy the
-  // participant gate — they cannot be proven distinct from each other.
-  const gatesPassed = identifiedCount >= minParticipants && transitions >= minTransitions;
+  // Breadth is measured in GENUINE CONTRIBUTORS, not file arrivals and not
+  // bare identifications: an identified person counts only when they consented
+  // AND produced at least one valid resolved assigned-arm transition (the
+  // contributor definition single-sourced in pooledAssignedComparison).
+  // Enrolled-but-empty participants and unidentified exports are reported
+  // separately and never satisfy the participant gate.
+  const contributors = assigned.contributors;
+  const gatesPassed = contributors.total >= minParticipants && transitions >= minTransitions;
 
   const headline = {};
   for(const arm of ['double-progression','linear-progression','flat']){
@@ -490,7 +524,9 @@ export function computeFieldStudy(participants, { config = null, minParticipants
     gates: {
       minParticipants,
       minTransitions,
-      participants: identifiedCount,
+      participants: contributors.total,
+      identifiedParticipants: identifiedCount,
+      contributors,
       transitions,
       unidentifiedExports: unidentifiedCount,
     },
@@ -628,7 +664,7 @@ export function renderFieldReport(result){
   const L = [];
   L.push(`# Real-world longitudinal study`);
   L.push('');
-  L.push(`Status: **${result.status}** · participants ${result.gates.participants}/${result.gates.minParticipants} · transitions ${result.gates.transitions}/${result.gates.minTransitions}`);
+  L.push(`Status: **${result.status}** · contributing participants ${result.gates.participants}/${result.gates.minParticipants} (identified ${result.gates.identifiedParticipants ?? result.gates.participants}) · transitions ${result.gates.transitions}/${result.gates.minTransitions}`);
   if(result.gates.unidentifiedExports){
     L.push('');
     L.push(`${result.gates.unidentifiedExports} export${result.gates.unidentifiedExports === 1 ? '' : 's'} without a study id — counted in nothing; they cannot be proven distinct people. Re-export from the updated app to be identified.`);
