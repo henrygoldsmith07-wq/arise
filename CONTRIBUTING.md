@@ -59,6 +59,13 @@ training history, health summaries or backup files into an issue: they are
 your data, and issues are public. Diagnose first, share a minimal
 reproduction second.
 
+**Open PRs and branches:** the numbered PR series (#17–#35) is fully merged;
+no open PR is pending, and the long-lived remote branches behind them are
+closed work awaiting a routine remote prune (tracked in
+`docs/KNOWN_ISSUES.md`). A PR touching progression logic, study
+randomisation or the treatment pipeline additionally needs a reviewer who is
+not its author, and any change to the ground rules needs an ADR first.
+
 ## Code style
 
 Plain modern JavaScript (ESM), 2-space indent, LF endings, single quotes,

@@ -35,6 +35,12 @@ const DEFAULT = {
   // Randomised trial enrollment (studyEnrollment.js): null until the user
   // opts in via measurement consent and starts a treated programme.
   studyEnrollment: null,
+  // Study lifecycle (participation.js): 'withdrawn' after leaving the study.
+  // Withdrawal stops NEW treatment (arm assignments stop being honoured) but
+  // deliberately preserves already-observed history unless the user deletes
+  // it explicitly — deletion is its own action, never a side effect.
+  studyStatus: null,
+  studyStatusChangedAtISO: null,
 };
 
 export function loadStore(){
@@ -52,6 +58,7 @@ export function loadStore(){
     if(j.healthSummary === undefined) j.healthSummary=null;
     ensureStudyParticipantId(j); // keep the per-installation study identity stable
     if(j.studyEnrollment === undefined) j.studyEnrollment=null;
+    if(j.studyStatus === undefined) j.studyStatus=null;
     j.history = normaliseHistory(j.history);
     return { ...structuredClone(DEFAULT), ...j };
   }
@@ -68,6 +75,7 @@ export function loadStore(){
     if(j.healthSummary === undefined) j.healthSummary=null;
     ensureStudyParticipantId(j); // keep the per-installation study identity stable
     if(j.studyEnrollment === undefined) j.studyEnrollment=null;
+    if(j.studyStatus === undefined) j.studyStatus=null;
     j.history = normaliseHistory(j.history);
     return { ...structuredClone(DEFAULT), ...j };
   }catch{
@@ -313,6 +321,8 @@ export function runMigrations(raw){
   // Today-hero start-mode preference: absent/legacy/invalid falls back to
   // 'standard' — the hero's dominant CTA never depends on a fresh store.
   if(!WORKOUT_MODES_SET.has(j.preferences.workoutMode)) j.preferences.workoutMode = 'standard';
+  if(j.studyStatus === undefined) j.studyStatus=null;
+  if(j.studyStatusChangedAtISO === undefined) j.studyStatusChangedAtISO=null;
   if(!Array.isArray(j.customTemplates)) j.customTemplates=[];
   j.history = normaliseHistory(j.history || []);
   return j;

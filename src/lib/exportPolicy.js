@@ -180,6 +180,7 @@ export const IMPORT_ALLOW_KEYS = [
   'readinessLog', 'programHistory', 'evaluationLedger', 'customTemplates',
   'eventHistory', 'studyEnrollment', 'tombstones',
   'studyParticipantId', 'healthSummary',
+  'studyStatus', 'studyStatusChangedAtISO', // participation lifecycle (participation.js)
 ];
 
 const NESTED_DENY = DENY_FIELDS.filter((f) => f.includes('.')).map((f) => f.split('.')[1]);

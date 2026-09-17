@@ -72,6 +72,11 @@ jobs:
         run: npm run benchmark:study
       - name: Smoke gate - field-study pipeline (fixture mode, synthetic data)
         run: npm run benchmark:field:fixture
+      # The committed example reports must stay in sync with the report
+      # pipeline: --check regenerates in memory and fails on any drift, so a
+      # schema/render change without a regeneration fails CI.
+      - name: Smoke gate - study report fixture (--check)
+        run: npm run study:report:fixture -- --check
       - name: Smoke gate - logging-time metric
         run: npm run benchmark:logging
       # -- Bundle size diff reporting -----------------------------------------

@@ -98,6 +98,29 @@ empty start. It answers "is this for me?" in ninety seconds without
 compromising the no-demo-user data-integrity principle, because demo data
 is *visibly* not yours.
 
+## Sync posture: user-owned storage only — no hosted accounts
+
+Cross-device sync is WebDAV against storage the user owns, end-to-end
+encrypted, with the keys on the user's device. This is a charter decision,
+not a missing feature:
+
+- **Hosted accounts are rejected.** A server-side identity (email,
+  Google sign-in, Apple sign-in, anything hosted) makes the vendor a
+  custodian of training data — the exact role the local-first contract
+  refuses. There is no account to delete today; there must never be one.
+- **Hosted Google-account sync is explicitly rejected as incompatible with
+  the current strategy.** Google Sign-In was evaluated across the app suite
+  and declined: it introduces a hosted identity provider and a hosted
+  data path into a product whose entire trust model is "the only network
+  peer is your own storage host". It would also silently exclude users who
+  train offline or deliberately keep no Google account. This stance holds
+  unless the product charter itself changes — which means a written,
+  argued ADR and a strategy rewrite, not a feature branch.
+- **What could change the stance:** nothing incremental. Federated sync
+  onto user-owned storage (already shipped), or a self-hosted appliance the
+  user controls end-to-end, stay in charter. Anything where a third party
+  can read or correlate training data is out.
+
 ## Community: later, only if it fits
 
 No social layer is planned. Identity and graphs contradict the

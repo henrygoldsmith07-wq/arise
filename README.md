@@ -59,8 +59,9 @@ and there is no account to delete. See the [privacy guide](docs/PRIVACY.md).
 22. **Durable measurements & consent** — consent-gated local event history (logging time, abandonment, acceptance), exportable and clearable independently.
 23. **Health adapters** — optional minimised health-summary adapter; no platform SDK, no raw history.
 24. **Real longitudinal validation (`longitudinal.js`)** — with consent, recommendations are frozen before the workout and scored against outcomes; segment conclusions are sample-size-gated; the ledger never feeds back. See [`docs/EVIDENCE.md`](docs/EVIDENCE.md).
-25. **Sync (optional)** — bring your own WebDAV storage, end-to-end encrypted: [sync guide](docs/SYNC_GUIDE.md).
-26. **Before any public/commercial release — rename franchise-adjacent terminology.** The codebase is already neutral fitness language. Audit app name, copy, icon and store listing before publishing.
+25. **Real-participant study layer (`fieldStudy.js` + `cohortOps.js` + `participation.js`)** — pseudonymous participant ids fold repeated weekly exports into ONE person; self-service onboarding covers the full lifecycle (eligibility → consent → enrolled → withdrawn); withdrawal stops treatment but keeps observed history; the cohort-operations report (`npm run study:report`) audits arm balance, data quality and analysis-gate eligibility, and never ranks arms before the participant/session gates are met.
+26. **Sync (optional)** — bring your own WebDAV storage, end-to-end encrypted: [sync guide](docs/SYNC_GUIDE.md). Hosted accounts (including hosted Google-account sync) are deliberately rejected — see [product strategy](docs/PRODUCT.md).
+27. **Before any public/commercial release — rename franchise-adjacent terminology.** The codebase is already neutral fitness language. Audit app name, copy, icon and store listing before publishing.
 
 ## Roadmap
 
@@ -88,12 +89,35 @@ npm run verify     # lint:content && type-check && test && build  (also in CI)
 npm run e2e        # Playwright browser E2E (dev server)
 npm run e2e:pwa    # Playwright E2E against the production build (service worker paths)
 npm run screenshots # regenerate docs/screenshots/ from the real app
+npm run study:report # cohort-ops + product-success reports from participant exports
 ```
 
 No env vars. Data is local — clear via **More → Clear local data** (export
 first; see [backup & recovery](docs/BACKUP_RECOVERY.md)). Cross-device sync
 is optional and user-owned (WebDAV, E2E-encrypted) — offline-first is
-preserved either way.
+preserved either way. There are no hosted accounts and there never will be
+under the current charter — including hosted Google-account sync (see
+[product strategy](docs/PRODUCT.md)).
+
+## Real-user study operations
+
+Arise's progression claims are only as good as the real-world evidence
+behind them. The participant pipeline is built in:
+
+1. **Participants opt in** (More → Progression evidence → Join the study):
+   eligibility is checked locally, consent is plain-language, and a
+   pseudonymous id is created — never a name or email.
+2. **Weekly exports** (More → Backup & portability → Export) are the study
+   contribution. Repeated exports fold into one participant; duplicate,
+   conflicting or malformed files surface as data-quality warnings, never
+   silent overwrites.
+3. **Operators aggregate** with `npm run study:report -- path/to/exports`,
+   producing a cohort-operations report (enrollment, activity, withdrawals,
+   arm balance, missing observations, analysis-gate eligibility) and a
+   product-success report (retention, adherence, acceptance — consented
+   data only, with sample sizes).
+4. **Nothing ranks treatments** until the prespecified participant/session
+   gates pass. Until then the reports say so, in words.
 
 ## Test on a real phone (30s checklist)
 
@@ -103,8 +127,9 @@ preserved either way.
 4. Log a session with varied loads — Progress attributes + PRs update immediately and survive reload.
 5. **Export →** airplane off → **Import on a second device (Merge)** → history appears.
 6. **Consent:** choose local measurement consent; verify the local event summary changes only when enabled and export contains event history.
-7. **Keyboard-only:** Tab Today → Train → Exercises; focus ring visible everywhere, no trap.
-8. **VoiceOver / TalkBack:** headings, session rows and form fields announced; result counts live-polite.
+7. **Study lifecycle:** More → Progression evidence → join the study → verify enrollment appears → withdraw → verify new sessions carry no study assignment while history remains.
+8. **Keyboard-only:** Tab Today → Train → Exercises; focus ring visible everywhere, no trap.
+9. **VoiceOver / TalkBack:** headings, session rows and form fields announced; result counts live-polite.
 
 The public, expanded checklist: [`docs/mobile-testing.md`](docs/mobile-testing.md).
 
@@ -120,6 +145,7 @@ src/lib/attributes.js  history-derived attributes + level
 src/lib/storage.js     IndexedDB persistence + integrity gate + snapshots + recovery
 src/lib/idb.js         IndexedDB wrapper (14 object stores, transactional writes)
 src/lib/export.js      versioned backup (+ exportPolicy.js: contract, adapters, dangerous-field policy)
+src/lib/fieldStudy.js   real-world study aggregator + pooled assigned-arm comparison (+ cohortOps.js, productSuccess.js, participation.js, studyIdentity.js)
 src/lib/telemetry.js   consent-gated durable events + abandonment/acceptance/logging metrics
 src/lib/health.js      optional health-platform summary adapter
 src/lib/pulse.js       Pulse payloads + push/pull + integration E2E helper

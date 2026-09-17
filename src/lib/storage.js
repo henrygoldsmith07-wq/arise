@@ -74,7 +74,7 @@ export function decompose(store){
     // activeWorkout rides on the profile row: the crashed-session draft must
     // survive restart or the recovery dialog can never be offered (it is the
     // whole point of the draft — losing it on a save defeats crash recovery).
-    profile: { id: PROFILE_ID, version: store.version || 6, onboarding: store.onboarding || null, preferences: store.preferences || {}, healthSummary: store.healthSummary || null, studyParticipantId: store.studyParticipantId || null, studyEnrollment: store.studyEnrollment || null, activeWorkout: store.activeWorkout ?? null },
+    profile: { id: PROFILE_ID, version: store.version || 6, onboarding: store.onboarding || null, preferences: store.preferences || {}, healthSummary: store.healthSummary || null, studyParticipantId: store.studyParticipantId || null, studyEnrollment: store.studyEnrollment || null, studyStatus: store.studyStatus || null, studyStatusChangedAtISO: store.studyStatusChangedAtISO || null, activeWorkout: store.activeWorkout ?? null },
     sessions: canonicalHistory,
     sets: splitSets(canonicalHistory),
     programme: { id: PROGRAMME_ID, activeSchedule: schedule, programHistory: store.programHistory || [] },
@@ -167,6 +167,8 @@ export async function loadStoreFromIdb(){
     healthSummary: profile?.healthSummary ?? null,
     studyParticipantId: profile?.studyParticipantId ?? null,
     studyEnrollment: profile?.studyEnrollment ?? null,
+    studyStatus: profile?.studyStatus ?? null,
+    studyStatusChangedAtISO: profile?.studyStatusChangedAtISO ?? null,
     activeWorkout: profile?.activeWorkout ?? null,
     history: sessions || [],
     activeSchedule: schedule,

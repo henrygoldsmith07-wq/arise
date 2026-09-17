@@ -46,6 +46,17 @@ accepted as documented behaviour in the appropriate doc.
    potentially unreliable rest-timer audio on locked-screen iOS.
    **Workaround:** keep the screen on (Gym mode's wake lock) where possible.
 
+7. **Stale merged branches linger on the remote.** Every pre-0.1.0 feature
+   branch (gym-mode, indexdb-storage, segmented-comparisons,
+   adaptive-mesocycle-review, weekly-review-card, custom-workout-templates,
+   exercise-library-tags, field-study-benchmark, and the rest of the
+   numbered PR series #17–#35) is MERGED into main — none carries unmerged
+   work, and none should be treated as an open proposal. They are listed
+   here as the documentation of record until a remote-side prune deletes
+   them; after that prune this entry moves to "accepted as documented
+   behaviour". **Experience:** none in the app. **Tracked:** repo hygiene
+   only, safe to close/prune at any time.
+
 ## Accepted as documented behaviour
 
 - Kg is the storage and engine unit; lb is display-only (`src/lib/units.js`).

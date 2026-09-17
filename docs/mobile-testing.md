@@ -16,7 +16,11 @@ maintainers use. The full per-device, per-browser matrix lives in
    draft is offered back (crash recovery).
 5. **Export/Import:** export the backup; import it with Merge; history
    count is unchanged and nothing duplicated.
-6. **Theme:** system dark ↔ light — no invisible text or lost illustrations
+6. **Study lifecycle:** join the study (More → Progression evidence) →
+   export → re-import the export as Merge → confirm the study enrollment and
+   history survive intact; then withdraw and confirm new sessions carry no
+   study assignment while past history remains.
+7. **Theme:** system dark ↔ light — no invisible text or lost illustrations
    in either.
 
 ## Deeper pass (before any release)
@@ -28,6 +32,9 @@ maintainers use. The full per-device, per-browser matrix lives in
   haptics fire; history pagination doesn't jank.
 - **In-app browsers:** Instagram/Facebook shells show the "open in your
   browser first" guidance rather than a broken install button.
+- **Study onboarding:** the whole eligibility → join → export → withdraw
+  flow works one-handed and is announced by screen readers (the withdraw
+  confirmation explains what happens to recorded data).
 - **Keyboard/screen reader:** Tab through Today → Train → Exercises with
   no trap; VoiceOver/TalkBack announces headings, session rows, form
   fields.

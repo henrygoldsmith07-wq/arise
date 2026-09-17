@@ -21,6 +21,41 @@ commit log.
 5. Tag `vX.Y.Z` on the merge commit; the tag message should equal the release
    notes summary.
 
+## Unreleased
+
+**Study & evidence**
+
+- The real-user study is now operationally complete: join from More →
+  Progression evidence, export weekly, and your contribution folds into one
+  pseudonymous participant — repeated exports never create duplicate people.
+- Withdrawing from the study stops study assignments on new workouts but
+  keeps everything you already logged. Deleting that data remains a separate
+  action you must perform explicitly.
+- Study onboarding now states eligibility, plain-language consent, current
+  status, participation and export instructions, and exactly what happens to
+  previously collected observations when you leave.
+- Cohort-operations and product-success reporting (for study operators, via
+  `npm run study:report`): enrollment, activity, withdrawals, arm balance,
+  missing observations, data-quality warnings and analysis-gate eligibility;
+  product metrics (retention, adherence, acceptance, mode usage) from
+  consented exports only, always with sample sizes. Treatments are never
+  ranked until the prespecified participant/session gates are met.
+- Example reports, committed: `npm run study:report:fixture` regenerates
+  `benchmark/fixtures/study-ops-report.md` + `product-success.md` from a
+  deterministic synthetic cohort through the real ingestion path (bannered as
+  synthetic examples, pinned date, byte-stable); CI keeps them in sync with
+  the pipeline via `--check`, and the harness refuses to overwrite real
+  reports.
+
+**Docs**
+
+- Roadmap, product strategy and testing docs updated to match the shipped
+  product (template editing is in the app, not "file-level today"); hosted
+  Google-account sync explicitly rejected as incompatible with the
+  local-first charter.
+
+**Known issues** — see `docs/KNOWN_ISSUES.md`.
+
 ## 0.1.0 — initial public release
 
 **Training**

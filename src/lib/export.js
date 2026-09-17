@@ -155,7 +155,7 @@ export async function parseBackupFile(textOrEnvelope){
 // Anything else in a hand-edited backup is dropped rather than persisted forever.
 // studyParticipantId is the pseudonymous study identity (studyIdentity.js) —
 // preserved so repeated exports fold into ONE field-study participant.
-const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','preferences','readinessLog','programHistory','evaluationLedger','customTemplates','studyParticipantId','studyEnrollment','tombstones'];
+const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','preferences','readinessLog','programHistory','evaluationLedger','customTemplates','studyParticipantId','studyEnrollment','studyStatus','studyStatusChangedAtISO','tombstones'];
 
 // ── Import hardening (malicious/hostile JSON) ───────────────────────────────
 // Imports are untrusted input. Beyond schema validation, three structural

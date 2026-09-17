@@ -44,6 +44,35 @@ your training age.
 **Where are the diet features?** Nowhere, deliberately. Arise is a training
 companion; nutrition is out of scope.
 
+## The study
+
+**What is the "real-world study"?** With your consent, Arise records what it
+recommended before each workout and what you actually did, and compares that
+against simple textbook baselines on the same sessions. Aggregate results
+tell the developers (and you) whether the engine's advice actually helps.
+Nothing is automatic: your data leaves the device only when YOU export it.
+
+**How do I take part?** More → Progression evidence → *Join the study*.
+You need measurement consent on and at least 3 logged workouts. You get a
+pseudonymous participant id — never a name or email.
+
+**How do I contribute data?** Export a backup (More → Backup & portability →
+Export) and send that file to whoever runs the study. Weekly is ideal.
+Repeated exports are expected — they fold back into one participant, never
+two. Duplicate, conflicting or damaged files are reported as warnings, never
+silently merged.
+
+**What if I want to leave?** Withdraw from the study card in More. New
+workouts immediately run on the normal engine with no study assignments.
+Everything you already logged stays on your device — withdrawing never
+deletes observations. Deleting data is a separate action (More → Privacy &
+data) that you perform explicitly and confirm.
+
+**Does joining change my workouts?** Each assigned exercise follows one of
+two honest progression policies for the duration of the study. Both are real
+training prescriptions; neither is a placebo and neither is deliberately bad.
+You can leave at any time, for any reason, without losing your history.
+
 ## Data
 
 **Where exactly is my data?** In IndexedDB in your browser, on this device,
@@ -56,7 +85,8 @@ the export habit and `docs/BACKUP_RECOVERY.md` exist. Export before clearing.
 
 **How do I move to a new phone or laptop?** Export a backup on the old
 device, import (Merge) on the new one. For continuous two-way sync, configure
-your own WebDAV storage: `docs/SYNC_GUIDE.md`.
+your own WebDAV storage: `docs/SYNC_GUIDE.md`. There is no hosted account
+sync — including Google-account sync — by charter: see `docs/PRODUCT.md`.
 
 **Can I use it on two devices at once?** Yes, with sync enabled; edits merge
 per-session by newest save, and deletions win over stale edits. Without sync,
@@ -90,7 +120,8 @@ in the foreground during rest; a native wrapper is documented but optional.
 commits per tag (`scripts/changelog.cjs`); `CHANGELOG.md` indexes releases.
 
 **How is this tested?** 600+ unit tests, engine benchmarks with regression
-gates, Playwright e2e for user journeys, resilience, PWA/offline. See
+gates, Playwright e2e for user journeys, resilience, PWA/offline, plus the
+study/field-study harnesses. See
 `docs/TESTING.md` and `docs/device-test-matrix.md` for what still needs
 physical devices.
 

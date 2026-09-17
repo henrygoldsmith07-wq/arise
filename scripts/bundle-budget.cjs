@@ -69,6 +69,13 @@
 // the friction core. Requested product logic, not dependency growth; boot
 // (195.5) and largest-lazy (47.4) budgets unchanged; measured total 346.0.
 //
+// total 358 → 359 kB with the study-lifecycle pass: withdraw/rejoin actions,
+// the full eligibility→consent→export→withdraw onboarding card, and the
+// participation.js state machine in the More chunk. Operator-side study
+// modules (cohortOps.js, productSuccess.js) ship ZERO bundle bytes — they are
+// imported only by scripts/ and tests/. Boot (196.2) and largest-lazy (47.4)
+// unchanged; measured total 358.1.
+//
 // total 357 → 358 kB with the guided both-arms treatment pass: one shared
 // application path in guidedMode (reps/load/assistance, value-diffed so
 // re-application is a no-op), the generalised study-policy disclosure line,
@@ -103,7 +110,7 @@ if(!fs.existsSync(dist)){
 
 const BOOT_BUDGET_KB = 197;
 const CHUNK_BUDGET_KB = 48;
-const TOTAL_BUDGET_KB = 358;
+const TOTAL_BUDGET_KB = 359;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;
