@@ -53,7 +53,7 @@ describe('pilot roster', ()=>{
     assert.deepEqual(roster.counts, { participants: 1, enrolled: 1, withdrawn: 0, other: 0, needsAttention: 0, consented: 1 });
   });
 
-  it('flags stale exports and never-exported participants', ()=>{
+  it('flags stale exports and missing export timestamps', ()=>{
     const stale = base('b'.repeat(16));
     stale.history.push(session(0, '2026-02-02'));
     const fresh = base('c'.repeat(16));
@@ -72,12 +72,12 @@ describe('pilot roster', ()=>{
     assert.equal(byCode['dddddddd'].needsAttention, false, 'a fresh export means not stale');
   });
 
-  it('never-exported needs the flag even with a fresh file when no export timestamp exists', ()=>{
+  it('missing-export-timestamp needs the flag even with a fresh file when no export timestamp exists', ()=>{
     const store = base('e'.repeat(16));
     const text = JSON.stringify({ app: 'arise', data: store }); // no exportedAt anywhere
     const ingest = ingestParticipantFiles([{ name: 'eeeeeeee.json', text }]);
     const roster = buildPilotRoster(ingest.participants, { nowISO: NOW, ingest });
-    assert.equal(roster.roster[0].warnings.includes('never-exported'), true, JSON.stringify(roster.roster[0].warnings));
+    assert.equal(roster.roster[0].warnings.includes('missing-export-timestamp'), true, JSON.stringify(roster.roster[0].warnings));
   });
 
   it('flags consent loss and no workouts', ()=>{

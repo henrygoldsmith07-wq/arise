@@ -54,10 +54,14 @@ export function assessParticipant(p, { nowISO, ingestWarnings = [], cohortMedian
   // 1. Stopped exporting: an enrolled participant whose latest export is
   //    >21 days old (three weekly exports missed). Withdrawn people are
   //    expected to stop — that is the lifecycle working, not a problem.
+  //    HONEST SEMANTICS: this is a MISSING-EXPORT-TIMESTAMP signal, not a
+  //    never-exported detector. The operator has no enrollment registry, so
+  //    a person who enrolled but has sent no file yet is simply invisible
+  //    here — this flag covers files that arrived without a usable stamp.
   const lastExport = p.lastExportedAtISO || null;
   const exportAgeDays = lastExport ? daysBetween(lastExport, nowISO) : null;
   if(status === 'enrolled'){
-    if(lastExport == null) attention('never-exported');
+    if(lastExport == null) attention('missing-export-timestamp');
     else if(exportAgeDays != null && exportAgeDays > 21) attention(`stale-export-${exportAgeDays}d`);
   }
 
@@ -85,10 +89,11 @@ export function assessParticipant(p, { nowISO, ingestWarnings = [], cohortMedian
     attention('single-arm-evidence');
   }
 
-  // 6. Unusually high abandonment: of terminal workouts (completed or
-  //    explicitly abandoned), more than half abandoned across ≥4 starts.
-  const started = measure.completion.startedTotal;
-  if(started >= 4 && measure.abandonmentRate != null && measure.abandonmentRate > 0.5){
+  // 6. Unusually high abandonment: of TERMINAL workouts (completed OR
+  //    explicitly abandoned — unresolved starts are missing outcomes, not
+  //    data points), more than half abandoned across ≥4 terminal sessions.
+  const terminal = (measure.completion.completed || 0) + (measure.completion.abandonedWithoutSave || 0);
+  if(terminal >= 4 && measure.abandonmentRate != null && measure.abandonmentRate > 0.5){
     attention(`high-abandonment-${Math.round(measure.abandonmentRate * 100)}pct`);
   }
 
@@ -187,7 +192,7 @@ export function renderPilotRosterMd(rosterResult){
     L.push(`| \`${r.code}\` | ${r.status}${r.consented ? '' : ' ·unconsented'} | ${r.sourceFiles.length} | ${lastExport} | ${r.weeksObserved} | ${r.sessionsLogged} | ${r.transitions.arise} / ${r.transitions['double-progression']} | ${r.openOutcomes} | ${r.unresolvedStarts} | ${warn} |`);
   }
   L.push('');
-  L.push('Warnings are operational, not product changes: `stale-export-Nd` = no export in N days · `never-exported` · `no-workouts` · `consent-lost` · `conflicting-records` / `import-error` (see data quality below) · `single-arm-evidence` (≥8 transitions, all one arm) · `high-abandonment-Npct` (>50% of ≥4 terminal workouts abandoned) · `override-heavy-Npct` (>50% of ≥8 resolved recommendations overridden) · `logging-time-outlier` (median logging time >2× cohort median with ≥5 timing events).');
+  L.push('Warnings are operational, not product changes: `stale-export-Nd` = no export in N days · `missing-export-timestamp` (a file arrived without a usable export time; a true never-exporter sends no file and is invisible without a registry) · `no-workouts` · `consent-lost` · `conflicting-records` / `import-error` (see data quality below) · `single-arm-evidence` (≥8 transitions, all one arm) · `high-abandonment-Npct` (>50% of ≥4 terminal workouts abandoned — completed or explicitly abandoned; unresolved starts never count toward the floor) · `override-heavy-Npct` (>50% of ≥8 resolved recommendations overridden) · `logging-time-outlier` (median logging time >2× cohort median with ≥5 timing events).');
   L.push('');
   return L.join('\n');
 }

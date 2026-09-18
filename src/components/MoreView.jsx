@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
-import { buildExportPayload, downloadJson, parseImportFile, mergeStores, portableCsv, deletionPreview, downloadBackup, parseBackupFile } from '../lib/export.js';
+import { buildExportPayload, downloadJson, parseImportFile, mergeStores, portableCsv, deletionPreview, downloadBackup, parseBackupFile, buildStudyExportPayload } from '../lib/export.js';
 import { buildImportPreview } from '../lib/exportPolicy.js';
 import { clearStore } from '../lib/store.js';
 import { clearAllStoredData, getIntegrityNotice, clearIntegrityNotice, whenPersisted } from '../lib/storage.js';
@@ -123,6 +123,21 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
     downloadBackup(payload, `arise-backup-${date}.arise`);
     setMsg('Export downloaded — keep it somewhere safe.');
     setTimeout(()=> setMsg(null), 3000);
+  };
+
+  // ── Dedicated STUDY export (not the backup) ────────────────────────────────
+  // The file the study tooling ingests: pseudonymous id, consent fact,
+  // evidence slices, exportedAt — and none of the profile/credential fields a
+  // backup must carry. Plain JSON, versioned; ingestion needs no conversion.
+  const exportStudyData = ()=>{
+    markExported();
+    try{
+      const envelope = buildStudyExportPayload(store);
+      const date = new Date().toISOString().slice(0, 10);
+      downloadJson(`arise-study-${date}.json`, envelope);
+      setMsg('Study data exported — send this file to the study team.');
+    }catch(err){ setMsg(String(err.message || err)); }
+    setTimeout(()=> setMsg(null), 4000);
   };
 
   const exportEncrypted = async ()=>{
@@ -909,7 +924,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
         <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
           <summary className="text-sm font-semibold cursor-pointer">Privacy, ownership & disclaimers</summary>
           <div className="text-xs text-ink3 mt-2 space-y-2">
-            <p><span className="font-semibold text-ink">Data ownership.</span> Everything Arise stores is yours: it lives on your device, exports are plain files, and deleting the data removes it everywhere. There is no server copy and no account.</p>
+            <p><span className="font-semibold text-ink">Data ownership.</span> Everything Arise stores is yours: it lives on your device, exports are plain files, and deleting the data removes it from this device. There is no server copy and no account — but files you already shared (backups, study exports) are copies outside the app that deleting here cannot reach.</p>
             <p><span className="font-semibold text-ink">Not medical advice.</span> Arise is a training-log tool with heuristic recommendations. It does not diagnose, treat or prevent any condition. Consult a qualified health professional before starting or changing an exercise program, especially with pre-existing conditions, injuries or during pregnancy.</p>
             <p><span className="font-semibold text-ink">High-intensity caution.</span> Aggressive progression policies and proximity-to-failure targets raise injury risk when misapplied. Treat every recommendation as a suggestion — reduce load or stop entirely if you feel sharp pain, dizziness or unusual discomfort.</p>
             <p><span className="font-semibold text-ink">Privacy policy (short form).</span> Arise is local-first: data stays on this device unless you export it or explicitly enable a sharing integration. Telemetry is opt-in and device-local. No third-party trackers, ads or analytics are included. Crash logs (opt-in) stay local, are capped at 50 and are excluded from exports.</p>
@@ -981,12 +996,14 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
                     <summary className="text-[11px] font-semibold cursor-pointer">How to take part &amp; export</summary>
                     <ul className="text-[11px] text-ink3 list-disc pl-4 mt-1 space-y-0.5">
                       <li>Train as normal — enrolment never changes what a good workout looks like.</li>
-                      <li>Once a week: More → Backup &amp; portability → <span className="font-semibold">Export</span> (or Export &amp; share). That JSON file IS your study contribution.</li>
+                      <li>Once a week: use <span className="font-semibold">Export study data</span> below — it downloads the exact file the study tooling reads. Repeated exports are expected — they fold back into one participant, never two.</li>
                       <li>Send the file to the study operator however you already share files. Repeated exports are expected — they fold back into one participant, never two.</li>
                       <li>Everything stays on this device between exports; nothing uploads by itself.</li>
                     </ul>
                   </details>
-                  <button onClick={()=> { if(!confirm('Withdraw from the study?\n\nNew workouts stop getting study assignments (the normal engine takes over).\nEverything already recorded — sessions, measurements, export history — stays on this device exactly as it is.\n\nDeleting that data is a separate action (More → Privacy & data → Delete all data) and is never done by withdrawing.')) return; setStore(withdrawFromStudy(store)); setMsg('Withdrawn — new workouts are study-free; recorded history preserved.'); setTimeout(()=> setMsg(null), 5000); }}
+                  <button onClick={exportStudyData}
+                    className="btn btn-primary min-h-9 rounded-lg px-2.5 text-[11px]">Export study data</button>
+                  <button onClick={()=> { if(!confirm('Withdraw from the study?\n\nNew workouts stop getting study assignments (the normal engine takes over).\nEverything already recorded — sessions, measurements, export history — stays on this device exactly as it is.\n\nNote: files you already sent to the study team are copies the app cannot reach. Deleting local data never removes them; ask the study team to delete their copies if you want that.\n\nDeleting local data is a separate action (More → Privacy & data → Delete all data) and is never done by withdrawing.')) return; setStore(withdrawFromStudy(store)); setMsg('Withdrawn — new workouts are study-free; recorded history preserved.'); setTimeout(()=> setMsg(null), 5000); }}
                     className="btn btn-secondary min-h-9 rounded-lg px-2.5 text-[11px]">Withdraw from the study</button>
                 </div>
               ) : status === 'withdrawn' ? (

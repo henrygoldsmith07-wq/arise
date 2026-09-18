@@ -28,7 +28,7 @@ const nowISO = args.find(a => a.startsWith('--now='))?.split('=')[1] || new Date
 const dir = path.resolve(dirArg);
 if(!fs.existsSync(dir)){
   console.log(`No participant directory at ${dir}`);
-  console.log('Collect consented exports (More → Backup & portability → Export) into a folder and pass its path.');
+  console.log('Collect consented study exports (study card → Export study data) into a folder and pass its path.');
   process.exit(0);
 }
 const files = fs.readdirSync(dir)

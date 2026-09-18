@@ -56,10 +56,13 @@ Nothing is automatic: your data leaves the device only when YOU export it.
 You need measurement consent on and at least 3 logged workouts. You get a
 pseudonymous participant id — never a name or email.
 
-**How do I contribute data?** Export a backup (More → Backup & portability →
-Export) and send that file to whoever runs the study. Weekly is ideal.
+**How do I contribute data?** From the study card (More → Progression
+evidence), tap **Export study data** and send the downloaded
+`arise-study-<date>.json` to whoever runs the study. Weekly is ideal.
 Repeated exports are expected — they fold back into one participant, never
-two. Duplicate, conflicting or damaged files are reported as warnings, never
+two. Your regular backup is a different file for moving your own data
+between devices — it is not the study contribution. Duplicate, conflicting
+or damaged files are reported as warnings, never
 silently merged.
 
 **What if I want to leave?** Withdraw from the study card in More. New

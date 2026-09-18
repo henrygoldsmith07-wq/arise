@@ -14,7 +14,7 @@ The architecture is frozen. No readiness logic, evidence predicates, randomisati
 
 ## The weekly loop
 
-1. **Collect exports.** Participants send their `.json` export files (weekly is ideal; the app folds repeats automatically). Drop every file into one directory, e.g. `field/`.
+1. **Collect exports.** Participants send the file produced by the study card's **Export study data** button (`arise-study-<date>.json`; weekly is ideal; the app folds repeats automatically). Drop every file into one directory, e.g. `field/`. A generic `.arise` backup is NOT the study contribution — if one arrives, ask the participant to use the study card's button instead (ingestion may still accept it, but it carries personal fields the study file deliberately omits).
 2. **Run the pilot report:**
 
    ```bash
@@ -34,12 +34,12 @@ The architecture is frozen. No readiness logic, evidence predicates, randomisati
 
 | Warning | Meaning |
 |---|---|
-| `stale-export-Nd` / `never-exported` | Enrolled, but no export in N days (21d threshold) or none ever. |
+| `stale-export-Nd` / `missing-export-timestamp` | Enrolled, but no export in N days (21d threshold) — or a file arrived without a usable export timestamp. There is no enrollment registry, so a true never-exporter (someone who joined but never sent anything) is invisible to this tooling; the flag covers stamp-less files only. |
 | `no-workouts` | Enrolled with zero logged sessions. |
 | `consent-lost` | Joined the study, then turned local measurements off — evidence stops until re-consent. |
 | `conflicting-records` / `import-error` | One of their files disagreed with a prior export or failed validation — see data quality. |
 | `single-arm-evidence` | ≥8 valid transitions all from one arm; worth an operator look, not a bug report. |
-| `high-abandonment-Npct` | >50% of ≥4 terminal workouts abandoned. |
+| `high-abandonment-Npct` | >50% of ≥4 terminal workouts abandoned (terminal = completed + explicitly abandoned; unresolved starts never satisfy the volume floor). |
 | `override-heavy-Npct` | >50% of ≥8 resolved recommendations overridden. |
 | `logging-time-outlier` | Median logging time >2× the cohort median with ≥5 timing events — friction is creeping up for them. |
 

@@ -107,8 +107,9 @@ behind them. The participant pipeline is built in:
 1. **Participants opt in** (More → Progression evidence → Join the study):
    eligibility is checked locally, consent is plain-language, and a
    pseudonymous id is created — never a name or email.
-2. **Weekly exports** (More → Backup & portability → Export) are the study
-   contribution. Repeated exports fold into one participant; duplicate,
+2. **Weekly exports** (More → Progression evidence → **Export study data**)
+   are the study contribution — a dedicated file, not the personal backup.
+   Repeated exports fold into one participant; duplicate,
    conflicting or malformed files surface as data-quality warnings, never
    silent overwrites.
 3. **Operators aggregate** with `npm run study:report -- path/to/exports`,

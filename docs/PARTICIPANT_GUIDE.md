@@ -6,12 +6,20 @@ Thank you for being part of the pilot. This page tells you everything you need t
 
 Arise compares two ways of adjusting your workout targets week to week. When you train, the app sometimes shows a recommended target that has been **randomly assigned** to one of the two methods. Over weeks, the recorded outcomes tell us which method actually helps people hit their targets.
 
+## Who can join
+
+All three, then tap **Join the study** on the study card:
+
+1. **Local measurement consent is on** (More → Privacy & data → Local measurements). The study records what was recommended and what you did — that requires it.
+2. **At least 3 logged workouts.** The study needs real training, not intent.
+3. A programme or active schedule, so there is something to assign arms to.
+
 ## What Arise measures
 
 - Which recommendation was shown, and whether you followed it.
 - Whether you met the assigned target for a set (reps × weight).
 - Workout structure: exercises, sets, reps, load, and how sessions resolved.
-- Rough timing of how long logging takes (if you enable local measurements).
+- Rough timing of how long logging takes (part of local measurements).
 
 ## What stays on your phone
 
@@ -25,11 +33,13 @@ Everything above stays in the app's local storage. There is **no account, no ser
 
 ## Sending data to the study (weekly, or whenever convenient)
 
-1. Open **More → Backup & portability → Export**.
-2. Save or share the exported `.json` file.
-3. Send it to the study team by whatever channel they gave you (e.g. email).
+1. Open **More** and find the study card under *Progression evidence*.
+2. Tap **Export study data**. This downloads `arise-study-<date>.json` — the exact file the study tooling reads, with nothing extra in it.
+3. Send that file to the study team by whatever channel they gave you (e.g. email).
 
-Repeating this weekly is ideal: every export contains your full history, and the study tooling folds repeated exports together automatically — you cannot double-count by exporting twice.
+That button is your study contribution. Your regular backup (**Backup & portability → Export**) is a different file for moving your own data between devices — the study tooling may reject it, so please don't use it as your contribution.
+
+Repeating the study export weekly is ideal: every export contains your full training history, and the study tooling folds repeated exports together automatically — you cannot double-count by exporting twice.
 
 ## Your study status
 
@@ -37,7 +47,11 @@ Open **More** and find the study card to see your current status (joined, active
 
 ## Leaving the study
 
-You can withdraw at any time from the study card (**More → study card → Withdraw**). Withdrawing stops any new study assignment — it does **not** delete your training history. If you want your previously collected study observations erased as well, tell the study team and they will delete your exported files, or use **Delete data** in the app for a full local wipe.
+You can withdraw at any time from the study card (**More → study card → Withdraw**). Withdrawing:
+
+- **Stops future study assignments** — new workouts run on the normal engine.
+- **Preserves your local history** — nothing recorded is deleted; withdrawing never deletes observations.
+- **Does not delete files you already sent.** Each export you shared is a copy outside the app. Deleting local data (More → Privacy & data → Delete all data) removes data **from this device only** — it cannot reach copies already shared. If you want previously shared exports erased, ask the study team to delete their files on their side.
 
 ## Questions
 

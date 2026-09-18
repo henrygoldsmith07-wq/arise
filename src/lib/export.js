@@ -27,9 +27,13 @@ export function buildExportPayload(store){
   const data={ ...store, version: store.version || STORE_SCHEMA_VERSION, eventHistory, evaluationLedger };
   // Credential hygiene: never let device-local sync config ride along.
   if(data.preferences) data.preferences = stripDeviceLocalPrefs(data.preferences);
-  // Every export carries the pseudonymous study id so repeated weekly exports
-  // from one person can be folded back into ONE participant downstream.
+  // A full backup also contributes to the study: carry the exportedAt FACT
+  // inside the payload too, so study ingestion (which reads data.exportedAt)
+  // can age every export without depending on the envelope layer.
+  // Every export also carries the pseudonymous study id so repeated weekly
+  // exports from one person can be folded back into ONE participant downstream.
   ensureStudyParticipantId(data);
+  data.exportedAt = new Date().toISOString();
   return buildEnvelope({
     payload: data,
     payloadVersion: EXPORT_VERSION,
@@ -72,7 +76,55 @@ export function downloadJson(filename, obj){
   setTimeout(()=> URL.revokeObjectURL(url), 2000);
 }
 
-// ── Compressed backups ──────────────────────────────────────────────────────
+// ── Study export ────────────────────────────────────────────────────────────
+// The dedicated participant action for the real-world study: the EXACT file
+// cohortOps.ingestParticipantFiles accepts. Deliberately NOT the backup:
+// backups move a life between devices; the study file contributes evidence.
+//
+// Contains: pseudonymous study id (one person, many exports → one
+// participant), lifecycle (status + frozen enrollment), the evidence slices
+// (history, schedule, events, ledger, readiness), the consent FACT (the
+// study's inclusion criteria read it; fieldStudy.loadParticipantFile restores
+// it from the raw envelope — the consumer import path still strips it), and
+// exportedAt at BOTH envelope levels (ingest reads data.exportedAt).
+// Never contains: credentials, sync config, health summary, custom templates,
+// onboarding profile, crash logs — study relevance only. Plain JSON (no
+// gzip): the operator's ingestion reads the text directly.
+export const STUDY_EXPORT_VERSION = 1;
+
+export function buildStudyExportPayload(store){
+  const eventHistory = getEventHistory().filter(e => e?.type !== 'error');
+  const evaluationLedger = loadEvaluationLedger();
+  // Locks in the pseudonymous id (created at boot or on join) before the
+  // snapshot is taken, so a study file can never lack an identity.
+  ensureStudyParticipantId(store);
+  const slice = {
+    studyExportVersion: STUDY_EXPORT_VERSION,
+    studyParticipantId: store.studyParticipantId,
+    studyStatus: store.studyStatus || null,
+    studyStatusChangedAtISO: store.studyStatusChangedAtISO || null,
+    studyEnrollment: store.studyEnrollment || null,
+    history: store.history || [],
+    activeSchedule: store.activeSchedule || null,
+    eventHistory,
+    evaluationLedger,
+    readinessLog: store.readinessLog || [],
+    // The consent FACT only — never the toggles themselves (device-local).
+    preferences: { telemetryEnabled: store?.preferences?.telemetryEnabled === true },
+  };
+  const envelope = buildEnvelope({
+    payload: slice,
+    payloadVersion: EXPORT_VERSION,
+    schemaVersion: STORE_SCHEMA_VERSION,
+  });
+  // Keep the two timestamp layers in lockstep: ingestParticipantFiles derives
+  // export ages from data.exportedAt, so a missing inner stamp would read as
+  // "missing-export-timestamp" even though the envelope has one.
+  envelope.data.exportedAt = envelope.exportedAt;
+  return envelope;
+}
+
+// ── Compressed backups ──────────────────────────────────────────────────
 // A decade of sessions is megabytes of JSON. Exports are gzip-compressed when
 // the browser exposes CompressionStream, and written as a versioned envelope
 // `{ app:'arise', format:'arise+gzip', v:1, encoding:'base64', data }` so an

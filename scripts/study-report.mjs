@@ -34,7 +34,7 @@ const minTransitions = Number(args.find(a => a.startsWith('--min-transitions='))
 const dir = path.resolve(dirArg);
 if(!fs.existsSync(dir)){
   console.log(`No participant directory at ${dir}`);
-  console.log('Collect consented exports (More → Backup & portability → Export) into a folder and pass its path.');
+  console.log('Collect consented study exports (study card → Export study data) into a folder and pass its path.');
   console.log('Every export folds into one participant per pseudonymous study id — repeated files are expected.');
   process.exit(0);
 }
