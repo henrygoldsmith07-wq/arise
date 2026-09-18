@@ -71,6 +71,14 @@ A PR touching progression logic, study randomisation or the treatment
 pipeline additionally needs a reviewer who is not its author, and any change
 to the ground rules needs an ADR first.
 
+**Study-system freeze:** the study architecture is frozen for the pilot.
+Changes to study-readiness logic, evidence predicates, randomisation,
+treatment arms, progression algorithms, cohort gates or causal analysis now
+require one of: a correctness bug, a privacy issue, a data-loss risk, or
+evidence from actual pilot participants. Operational warnings in the pilot
+report are operational — they never trigger product changes by themselves
+(see `docs/PILOT.md`).
+
 ## Code style
 
 Plain modern JavaScript (ESM), 2-space indent, LF endings, single quotes,

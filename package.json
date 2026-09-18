@@ -17,6 +17,7 @@
     "benchmark:field": "node benchmark/field-study.js --min-participants=10 --min-transitions=1000",
     "benchmark:field:fixture": "node benchmark/field-study.js --fixture --min-participants=10 --min-transitions=1000",
     "study:report": "node scripts/study-report.mjs",
+    "pilot:report": "node scripts/pilot-report.mjs",
     "study:report:fixture": "node benchmark/report-fixture.mjs",
     "benchmark:logging": "node benchmark/logging-time.js",
     "lint:content": "node scripts/lint-content.mjs",

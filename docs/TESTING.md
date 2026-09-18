@@ -14,6 +14,7 @@ still needs a human with a real device.
 | Benchmarks | `npm run benchmark` | engine regression gates, artifact determinism across commits, study/field-study/logging-time harnesses |
 | Study operations | `npm run study:report` + `benchmark:field` / `benchmark:field:fixture` | participant-export ingestion (repeated exports fold into one participant), anomaly detection (duplicates, conflicting records, malformed ids, arm flips), cohort totals, arm balance, gate eligibility — fixture mode in CI, real directories by operators |
 | Report canary | `npm run study:report:fixture` (add `-- --check` for CI mode) | regenerates the committed example reports in `benchmark/fixtures/` from the deterministic synthetic cohort through the real ingestion path — byte-identical or CI fails; a render/schema change without regeneration is caught |
+| Pilot operations | `npm run pilot:report <exports-dir>` (+ `docs/PILOT.md`) | weekly operator report over real participant exports: roster with per-participant health warnings (stale exports, consent loss, conflicts, abandonment, overrides, friction), pulse metrics with n/missingness, gate progress, data quality — deterministic under `--now=`; operational warnings never change product or gate behaviour |
 | E2E | `npm run e2e` (Playwright, dev server) | user journeys, guided mode, resilience (interruption, resume, cross-tab, a11y, light/dark screenshots), performance smoke |
 | E2E (PWA) | `npm run e2e:pwa` (production build) | service-worker offline boot, install surface, shortcuts |
 
