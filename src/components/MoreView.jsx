@@ -984,9 +984,10 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
               <p className="text-xs font-bold">Take part in the real-world study</p>
               <p className="text-[11px] text-ink3">
                 Who can join: anyone training with Arise who has measurement consent on and at least 3 logged workouts.
-                What is kept: the target shown before each workout, and what you actually did next. What is never kept: your name,
-                health data or anything you do not log. It all stays on this device; you decide if anything is shared by
-                exporting a backup to the study tooling yourself. Pseudonymous participant id:{' '}
+                What the study keeps: the target shown before each workout and what you actually did next, your structured
+                readiness check-ins (score, sleep, soreness, motivation), and timing of how long logging takes — never your
+                name, health-platform data, or free-text notes. Nothing leaves this device unless you export it yourself.
+                Pseudonymous participant id:{' '}
                 <span className="font-semibold text-ink2">{isValidStudyParticipantId(store.studyParticipantId) ? `${String(store.studyParticipantId).slice(0, 8)}…` : 'created when you join'}</span>
               </p>
               {status === 'enrolled' ? (
@@ -996,10 +997,21 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
                     <summary className="text-[11px] font-semibold cursor-pointer">How to take part &amp; export</summary>
                     <ul className="text-[11px] text-ink3 list-disc pl-4 mt-1 space-y-0.5">
                       <li>Train as normal — enrolment never changes what a good workout looks like.</li>
-                      <li>Once a week: use <span className="font-semibold">Export study data</span> below — it downloads the exact file the study tooling reads. Repeated exports are expected — they fold back into one participant, never two.</li>
+                      <li>Once a week: use <span className="font-semibold">Export study data</span> below — it downloads the exact file the study tooling reads.</li>
                       <li>Send the file to the study operator however you already share files. Repeated exports are expected — they fold back into one participant, never two.</li>
                       <li>Everything stays on this device between exports; nothing uploads by itself.</li>
                     </ul>
+                  </details>
+                  <details className="rounded-lg border border-line bg-surface px-2.5 py-1.5">
+                    <summary className="text-[11px] font-semibold cursor-pointer">What a study export contains</summary>
+                    <ul className="text-[11px] text-ink3 list-disc pl-4 mt-1 space-y-0.5">
+                      <li>Workout structure and performance: exercises, sets, reps, load, RPE, completed/skipped/failed, structured pain flags, session mode and duration.</li>
+                      <li>Recommendation evidence: the target that was shown, whether you met it, and any overrides.</li>
+                      <li>Readiness check-ins, structured only: date, score, sleep, soreness, motivation.</li>
+                      <li>Logging/timing measurements: how long sets took to log.</li>
+                      <li>Study metadata: your pseudonymous ID, study status, enrollment and export date.</li>
+                    </ul>
+                    <p className="text-[11px] text-ink3 mt-1">Never included: free-text notes or session titles, your onboarding profile, custom templates, health-platform data, crash diagnostics, or credentials.</p>
                   </details>
                   <button onClick={exportStudyData}
                     className="btn btn-primary min-h-9 rounded-lg px-2.5 text-[11px]">Export study data</button>

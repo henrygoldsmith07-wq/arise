@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
-  buildStudyExportPayload, STUDY_EXPORT_VERSION,
+  buildStudyExportPayload, buildStudyHistoryExport, buildStudyReadinessExport, STUDY_EXPORT_VERSION,
 } from '../src/lib/export.js';
 import { ingestParticipantFiles } from '../src/lib/cohortOps.js';
 import { buildPilotRoster } from '../src/lib/pilotHealth.js';
@@ -261,6 +261,121 @@ describe('§4/§5 guidance and privacy wording stay honest', ()=>{
     for(const [name, text] of [['PARTICIPANT_GUIDE.md', guide], ['MoreView.jsx', more]]){
       assert.doesNotMatch(text, /removes it everywhere/, name);
       assert.match(text, /outside the app|cannot reach/, name + ' states the shared-copy limit');
+    }
+  });
+});
+
+// ── § export minimisation: allowlists, disclosure contract ──────────────────
+// Everything in the study file must be study-required AND disclosed. History,
+// readiness, schedule and events travel as explicit allowlist slices — never
+// object spreads — so free text, future app fields and whole store categories
+// cannot silently start riding along.
+describe('§ export minimisation — only disclosed, study-required data leaves', ()=>{
+  function richPrivateStore(){
+    const store = baseStore();
+    store.history.push({
+      id: 's-rich', dateISO: '2026-03-08', programId: 'p1', programVersion: 3, templateVersion: 2,
+      week: 1, day: 1, title: 'PRIVATE TITLE heavy day', mode: 'guided', status: 'done',
+      durationMinutes: 44, startedAt: '2026-03-08T09:00:00.000Z', finishedAt: '2026-03-08T09:44:00.000Z', savedAt: '2026-03-08T09:44:00.000Z',
+      equipmentSnapshot: ['barbell'], exerciseOrder: ['bench-press-dumbbell'], painDiscomfort: true,
+      skippedSetsCount: 0, sessionDuration: 44, quality: 'solid',
+      note: 'PRIVATE TEXT about my knee', noteTags: ['pain-discomfort'],
+      substitutions: [{ from: 'squat-rack-404', to: 'bench-press-dumbbell', reason: 'engine kept it' }],
+      aFutureSessionField: 'PRIVATE SESSION FUTURE',
+      blocks: [{
+        exerciseId: 'bench-press-dumbbell', exerciseOrder: 0, substitutionFrom: null, substitutionReason: null,
+        prescription: { prescriptionId: 'rx1', prescribedReps: 8, prescribedLoadKg: 40, shownAt: '2026-03-01T09:00:00.000Z', reason: 'engine reason', engine: { name: 'arise-engine', policy: 'standard' } },
+        prescriptionOverridden: false, equipment: 'barbell', aFutureBlockField: 'PRIVATE BLOCK FUTURE',
+        sets: [{ reps: '8', weightKg: '40', rpe: '7', completed: true, skipped: false, failed: false, pain: true, setId: 'set1', origin: 'prescribed', plannedSlot: 0, governingPrescriptionId: 'rx1', side: null, rom: null, assistedKg: null, tempo: null, aFutureSetField: 'PRIVATE SET FUTURE' }],
+      }],
+    });
+    store.readinessLog = [{ dateISO: '2026-03-08', score: 70, sleep: 4, soreness: 2, motivation: 4, moodFreeText: 'PRIVATE MOOD', deviceStress: 3 }];
+    store.activeSchedule = { programId: 'p1', startDateISO: '2026-03-01', week: 1,
+      sessions: [{ id: 'w1d1', dateISO: '2026-03-08', programId: 'p1', week: 1, day: 1, mode: 'guided', status: 'planned', title: 'PRIVATE SCHEDULE TITLE', blocks: [] }] };
+    store.onboarding = { name: 'PRIVATE NAME', goal: 'muscle' };
+    store.customTemplates = [{ id: 't1', title: 'PRIVATE TEMPLATE' }];
+    store.healthSummary = { restingHr: 50, sleepHours: 7 };
+    store.preferences = { telemetryEnabled: true, sync: { url: 'https://dav.example', username: 'u', password: 'p' } };
+    return store;
+  }
+
+  it('session.note "PRIVATE TEXT" and every free-text field never appear in the exported JSON', ()=>{
+    const store = richPrivateStore();
+    const json = JSON.stringify(buildStudyExportPayload(store));
+    for(const secret of [
+      'PRIVATE TEXT',        // the required probe: session.note
+      'PRIVATE TITLE',       // session title
+      'PRIVATE SCHEDULE TITLE',
+      'PRIVATE MOOD',        // readiness free text
+      'PRIVATE SESSION FUTURE', 'PRIVATE BLOCK FUTURE', 'PRIVATE SET FUTURE', // unknown future fields
+      'PRIVATE NAME', 'PRIVATE TEMPLATE', 'https://dav.example', // profile/templates/credentials
+    ]){
+      assert.equal(json.includes(secret), false, `"${secret}" must never leave the device`);
+    }
+  });
+
+  it('excludes onboarding, credentials, health summary, crash diagnostics and unknown fields; keeps required evidence', ()=>{
+    const store = richPrivateStore();
+    globalThis.localStorage.setItem('arise.telemetry.v2', JSON.stringify({ version: 2, events: [
+      { id: 'e1', type: 'session:start', sessionId: 's-rich', at: '2026-03-08T09:00:00.000Z', moodNote: 'PRIVATE EVENT' },
+      { id: 'e2', type: 'error', message: 'crash boom' },
+      { id: 'e3', type: 'session:complete', sessionId: 's-rich', at: '2026-03-08T09:44:00.000Z' },
+    ] }));
+    const data = buildStudyExportPayload(store).data;
+    // Excluded categories:
+    assert.equal('onboarding' in data, false);
+    assert.equal('customTemplates' in data, false);
+    assert.equal('healthSummary' in data, false);
+    const text = JSON.stringify(data);
+    assert.equal(text.includes('crash boom'), false, 'error diagnostics excluded');
+    assert.equal(text.includes('PRIVATE EVENT'), false, 'unknown event fields excluded');
+    assert.equal(data.eventHistory.some(e => e.type === 'error'), false);
+    // Required evidence survives the allowlist:
+    const s = data.history[0];
+    assert.equal(s.id, 's-rich');
+    assert.equal(s.mode, 'guided');
+    assert.equal(s.durationMinutes, 44);
+    assert.deepEqual(s.noteTags, ['pain-discomfort'], 'structured tags travel; free text does not');
+    assert.deepEqual(s.substitutions, [{ from: 'squat-rack-404', to: 'bench-press-dumbbell', reason: 'engine kept it' }]);
+    const b = s.blocks[0], set = b.sets[0];
+    assert.equal(b.exerciseId, 'bench-press-dumbbell');
+    assert.equal(b.prescription.prescriptionId, 'rx1', 'prescription snapshot travels');
+    assert.deepEqual({ reps: set.reps, weightKg: set.weightKg, rpe: set.rpe, completed: set.completed, skipped: set.skipped, failed: set.failed, pain: set.pain, setId: set.setId },
+      { reps: '8', weightKg: '40', rpe: '7', completed: true, skipped: false, failed: false, pain: true, setId: 'set1' });
+    const r = data.readinessLog[0];
+    assert.deepEqual(Object.keys(r).sort(), ['dateISO', 'motivation', 'score', 'sleep', 'soreness'], 'readiness is exactly the protocol fields');
+    assert.equal(data.eventHistory.some(e => e.type === 'session:complete'), true, 'product measurements travel');
+  });
+
+  it('serialisers are direct allowlists: unknown keys dropped, known keys kept', ()=>{
+    const rows = buildStudyHistoryExport([{ id: 'h', dateISO: '2026-03-08', mode: 'guided', note: 'PRIVATE', blocks: [{ exerciseId: 'x', sets: [{ reps: '5', weightKg: '60', note2: 'PRIVATE2' }] }], futureField: 'F' }]);
+    assert.deepEqual(Object.keys(rows[0]).sort(), ['blocks', 'dateISO', 'id', 'mode']);
+    assert.deepEqual(Object.keys(rows[0].blocks[0].sets[0]).sort(), ['reps', 'weightKg']);
+    const r = buildStudyReadinessExport([{ dateISO: 'd', score: 1, sleep: 2, soreness: 3, motivation: 4, extra: 'PRIVATE' }]);
+    assert.deepEqual(Object.keys(r[0]).sort(), ['dateISO', 'motivation', 'score', 'sleep', 'soreness']);
+  });
+
+  it('disclosure contract: every exported category is stated in participant-facing study copy', ()=>{
+    const guide = readFileSync(root('docs', 'PARTICIPANT_GUIDE.md'), 'utf8');
+    const more = readFileSync(root('src', 'components', 'MoreView.jsx'), 'utf8');
+    // The five exported categories, each present in both surfaces:
+    const categories = [
+      [/Workout structure and performance/i, 'workout structure + performance'],
+      [/Recommendation\/outcome evidence|recommendation evidence/i, 'recommendation/outcome evidence'],
+      [/Readiness check-ins[^.]*structured/i, 'structured readiness inputs'],
+      [/Logging\/timing measurements|timing of how long logging takes/i, 'logging/timing measurements'],
+      [/Study lifecycle metadata|pseudonymous/i, 'study lifecycle metadata'],
+    ];
+    for(const [re, label] of categories){
+      assert.match(guide, re, `PARTICIPANT_GUIDE.md must disclose: ${label}`);
+      assert.match(more, re, `study card must disclose: ${label}`);
+    }
+    // The never-included list in both surfaces, incl. the readiness honesty fix:
+    for(const [name, text] of [['PARTICIPANT_GUIDE.md', guide], ['MoreView.jsx', more]]){
+      assert.match(text, /free-text notes|free text/i, name);
+      assert.match(text, /health-platform/i, name + ' discloses health-platform data is not exported');
+      assert.match(text, /crash diagnostics|crash/i, name);
+      assert.match(text, /sleep, soreness, motivation/, name + ' names the readiness inputs that DO travel');
     }
   });
 });
