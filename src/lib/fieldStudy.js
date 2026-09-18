@@ -17,6 +17,7 @@ import { isProspectiveRecord, isProspectiveRecommendation, isResolvedProspective
 import { enrollmentAudit } from './studyEnrollment.js';
 import { runComparativeStudy, collectDeloadDecisions, validateDeloadDecisions } from './study.js';
 import { recommendationAcceptanceStats, loggingTimeStats } from './telemetry.js';
+import { isValidAssignedStudyTransition, evaluateStudyReadiness, STUDY_GATES } from './studyReadiness.js';
 
 const round = (v, d = 3)=> Number.isFinite(Number(v)) ? Math.round(Number(v) * 10 ** d) / 10 ** d : null;
 const pct = (part, whole)=> whole ? round(part / whole) : null;
@@ -238,9 +239,10 @@ export function pooledProspectiveComparison(participants, { config = null } = {}
 // computeFieldStudy read the counts exposed here): a participant contributes
 // when they are identified (a real study id, grouped before this call),
 // consented (telemetry on, enforced below), and produce at least one row that
-// survives EVERY exclusion filter — i.e. at least one valid resolved
-// assigned-arm transition. Enrolled-but-empty participants never satisfy the
-// breadth gate: no usable assigned evidence → no participant credit.
+// satisfies the canonical predicate (studyReadiness.isValidAssignedStudy
+// Transition) — i.e. at least one valid resolved assigned-arm transition.
+// Enrolled-but-empty participants never satisfy the breadth gate: no usable
+// assigned evidence → no participant credit.
 const ASSIGNED_PRIMARY_ARMS = ['arise', 'double-progression'];
 
 export function pooledAssignedComparison(participants, { config = null, minParticipants = 10, minTransitions = 1000 } = {}){
@@ -262,14 +264,19 @@ export function pooledAssignedComparison(participants, { config = null, minParti
   let duplicatePairs = 0;
   let openRows = 0;
   for(const row of rows){
+    // THE canonical predicate (studyReadiness.isValidAssignedStudyTransition)
+    // decides validity; the buckets only label WHY a row was rejected, for
+    // reporting. No filter logic lives here any more.
     if(!(row && row.recommendation) || !isProspectiveRecommendation(row)){ excluded.nonProspective++; continue; }
     // Live open recommendations are prospective and awaiting — counted under
     // `open`, never under an exclusion bucket.
     if(!row.outcome){ openRows++; continue; }
-    // Resolved without a live outcome: excluded once resolved, never graded.
-    if(!isProspectiveRecord(row)){ excluded.unprovenOutcome++; continue; }
-    if(!ASSIGNED_PRIMARY_ARMS.includes(row.assignedArm)){ excluded.unassigned++; continue; }
-    if(row.outcome.assignedMet == null){ excluded.noAssignedMet++; continue; }
+    if(!isValidAssignedStudyTransition(row)){
+      if(!isProspectiveRecord(row)) excluded.unprovenOutcome++;
+      else if(!ASSIGNED_PRIMARY_ARMS.includes(row.assignedArm)) excluded.unassigned++;
+      else excluded.noAssignedMet++;
+      continue;
+    }
     const key = `${prospectiveTransitionKey(row)}::${row.assignedArm}`;
     if(seen.has(key)){ duplicatePairs++; continue; }
     seen.add(key);
@@ -306,9 +313,6 @@ export function pooledAssignedComparison(participants, { config = null, minParti
   const dpConclusive = dpTot.n >= minimum;
   const participantCount = perParticipant.size;
   const transitions = assigned.length;
-  // Contributor accounting, per the contributor definition above. Exported so
-  // every consumer (gates, cohortOps, rendered reports) states the SAME
-  // participant counts from the same predicate.
   let contributorsArise = 0;
   let contributorsDoubleProgression = 0;
   for(const arms of contributorArms.values()){
@@ -320,10 +324,27 @@ export function pooledAssignedComparison(participants, { config = null, minParti
     arise: contributorsArise,
     'double-progression': contributorsDoubleProgression,
   };
-  const reasons = [];
-  if(transitions < minTransitions) reasons.push(`only ${transitions} assigned transitions (need ${minTransitions}+)`);
-  if(participantCount < minParticipants) reasons.push(`only ${participantCount} participants (need ${minParticipants}+)`);
-  if(participantCount < 2) reasons.push('fewer than 2 participants — no clustered uncertainty');
+  // THE canonical readiness result (studyReadiness.evaluateStudyReadiness):
+  // cohort.gate.eligible, fieldStudy status and claim readiness all derive
+  // from this single evaluation, so no two surfaces can disagree. The
+  // per-arm ANALYSIS conclusiveness gate (priors' minimumSegmentSamples) is
+  // kept as an additional reason — it governs whether an arm's rate may be
+  // called conclusive, on top of the shared study gates.
+  const readiness = evaluateStudyReadiness(
+    {
+      transitionsArise: ariseTot.n,
+      transitionsDoubleProgression: dpTot.n,
+      transitionsTotal: transitions,
+      contributors: contributorCounts,
+    },
+    // Canonical per-arm gate (400); evaluateStudyReadiness clamps it to
+    // floor(minTransitions/2) when callers override the depth gate downward.
+    { minContributors: minParticipants, minTransitions, minTransitionsPerArm: STUDY_GATES.minTransitionsPerArm },
+  );
+  // Reasons = the canonical readiness reasons + the per-arm ANALYSIS
+  // conclusiveness gate (priors' minimumSegmentSamples), which governs whether
+  // an arm's rate may be called conclusive on top of the shared study gates.
+  const reasons = [...readiness.reasons];
   if(!(ariseConclusive && dpConclusive)) reasons.push('an assigned arm is below the per-arm sample gate');
   const sufficient = reasons.length === 0;
   // Next-exposure performance BY ASSIGNED TREATMENT: the best-set e1RM delta
@@ -362,7 +383,7 @@ export function pooledAssignedComparison(participants, { config = null, minParti
       userOverrides: assigned.filter(r=> r.outcome.userOverride).length,
     },
     nextExposureByArm,
-    gates: { minParticipants, minTransitions, perArmMinimum: minimum, sufficient, reasons },
+    gates: { minParticipants, minTransitions, perArmMinimum: minimum, sufficient, reasons, readiness },
     maturity: sufficient ? 'descriptive' : (transitions > 0 ? 'early' : 'insufficient'),
     excluded: { ...excluded, duplicatePairs, unidentifiedExports: unidentified.length, unconsentedExports },
     duplicatePairs,
@@ -442,14 +463,22 @@ export function computeFieldStudy(participants, { config = null, minParticipants
   // drives the gates and the headline claim.
   const assigned = pooledAssignedComparison(participants, { config, minParticipants, minTransitions });
   const transitions = assigned.transitions;
-  // Breadth is measured in GENUINE CONTRIBUTORS, not file arrivals and not
-  // bare identifications: an identified person counts only when they consented
-  // AND produced at least one valid resolved assigned-arm transition (the
-  // contributor definition single-sourced in pooledAssignedComparison).
-  // Enrolled-but-empty participants and unidentified exports are reported
-  // separately and never satisfy the participant gate.
+  // THE canonical readiness evaluation (studyReadiness.evaluateStudyReadiness)
+  // decides study status — the same one cohortOps uses, so the two surfaces
+  // can never disagree. Breadth is measured in GENUINE CONTRIBUTORS, not file
+  // arrivals and not bare identifications; depth counts only valid assigned
+  // transitions (total = valid arise + valid double-progression).
   const contributors = assigned.contributors;
-  const gatesPassed = contributors.total >= minParticipants && transitions >= minTransitions;
+  const readiness = evaluateStudyReadiness(
+    {
+      transitionsArise: assigned.arise.n,
+      transitionsDoubleProgression: assigned['double-progression'].n,
+      transitionsTotal: transitions,
+      contributors,
+    },
+    { minContributors: minParticipants, minTransitions, minTransitionsPerArm: STUDY_GATES.minTransitionsPerArm },
+  );
+  const gatesPassed = readiness.ready;
 
   const headline = {};
   for(const arm of ['double-progression','linear-progression','flat']){
@@ -529,6 +558,7 @@ export function computeFieldStudy(participants, { config = null, minParticipants
       contributors,
       transitions,
       unidentifiedExports: unidentifiedCount,
+      reasons: readiness.reasons,
     },
     totals: {
       sessionsLogged: sum(measures, m => m.sessionsLogged),

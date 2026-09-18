@@ -24,8 +24,9 @@ import { resolveArisePriors } from './priors.js';
 import { isValidStudyParticipantId } from './studyIdentity.js';
 import { STUDY_VERSION } from './studyEnrollment.js';
 import { loadParticipantFile } from './fieldStudy.js';
-import { isProspectiveRecord } from './longitudinalCore.js';
 import { mergeStores } from './export.js';
+import { isValidAssignedStudyTransition, evaluateStudyReadiness, STUDY_GATES, PRIMARY_STUDY_ARMS } from './studyReadiness.js';
+import { prospectiveTransitionKey } from './evaluation.js';
 import { createHash } from 'node:crypto';
 
 const round = (v, d = 3)=> Number.isFinite(Number(v)) ? Math.round(Number(v) * 10 ** d) / 10 ** d : null;
@@ -37,11 +38,9 @@ const pct = (part, whole)=> whole ? round(part / whole) : null;
 // depth (assigned transitions) exist. These are study-operations constants:
 // the pooled analysis (fieldStudy.pooledAssignedComparison) carries its own
 // identical defaults; the operator report simply shows who is close.
-export const ANALYSIS_GATES = Object.freeze({
-  minParticipants: 10,
-  minTransitions: 1000,
-  minTransitionsPerArm: 400, // per assigned arm, roughly balanced halves
-});
+// Canonical gates now live in studyReadiness.STUDY_GATES; this alias keeps
+// the historical import surface for tests and reports.
+export const ANALYSIS_GATES = STUDY_GATES;
 
 // Sessions newer than this are "recent"; a participant counts as ACTIVE when
 // they logged something inside the window. Window: 28 days — a deload or a
@@ -303,12 +302,8 @@ function lifecycleOf(store, todayStr){
 // participant credit; enrolled-but-empty people cannot satisfy the gate.
 function contributingTransitionsOf(store){
   const ledger = Array.isArray(store?.evaluationLedger) ? store.evaluationLedger : [];
-  return ledger.filter(r =>
-    r && r.recommendation
-    && isProspectiveRecord(r)
-    && (r.assignedArm === 'arise' || r.assignedArm === 'double-progression')
-    && r.outcome?.assignedMet != null
-  );
+  // THE canonical predicate — no local equivalent filter.
+  return ledger.filter(r => isValidAssignedStudyTransition(r));
 }
 
 function summariseParticipantRow(p, todayStr){
@@ -329,8 +324,8 @@ function summariseParticipantRow(p, todayStr){
   const consented = store.preferences?.telemetryEnabled === true;
   const valid = contributingTransitionsOf(store);
   const contributorArms = {
-    arise: valid.some(r => r.assignedArm === 'arise'),
-    'double-progression': valid.some(r => r.assignedArm === 'double-progression'),
+    arise: valid.some(r => r.assignedArm === PRIMARY_STUDY_ARMS[0]),
+    'double-progression': valid.some(r => r.assignedArm === PRIMARY_STUDY_ARMS[1]),
   };
   return {
     code: p.code,
@@ -420,57 +415,76 @@ export function summariseCohort(participants, { config = null, nowISO = null, ga
     'double-progression': armTotals['double-progression'],
     ariseShare: pct(armTotals.arise, armTotals.arise + armTotals['double-progression']),
   };
-  // Transitions per arm from the ledger itself (what the analysis actually
-  // uses): a transition counts toward an arm ONLY through the same validity
-  // filters pooledAssignedComparison applies — live-engine provenance on both
-  // sides and a graded assignedMet. Unproven rows are reported under
-  // `unproven` so nothing silently disappears.
-  const transitionsByArm = { arise: 0, 'double-progression': 0, unassigned: 0, open: 0, unproven: 0 };
+  // Transitions per arm, counted through THE canonical predicate and
+  // de-duplicated across exports the same way the analysis dedupes (same
+  // prospectiveTransitionKey + arm folds). Every other row lands in a
+  // separate reported bucket — unassigned, open, unproven, ungraded — so
+  // nothing silently disappears and nothing invalid helps a gate.
+  const transitionsByArm = { arise: 0, 'double-progression': 0, unassigned: 0, open: 0, unproven: 0, ungraded: 0, duplicate: 0 };
+  const seenKeys = new Set();
   for(const p of (participants || [])){
     for(const row of (p.store?.evaluationLedger || [])){
       if(!row?.recommendation) continue;
       if(!row.outcome){ transitionsByArm.open++; continue; }
-      const assigned = row.assignedArm === 'arise' || row.assignedArm === 'double-progression';
-      if(!assigned){ transitionsByArm.unassigned++; continue; }
-      if(!isProspectiveRecord(row) || row.outcome.assignedMet == null){ transitionsByArm.unproven++; continue; }
+      if(!PRIMARY_STUDY_ARMS.includes(row.assignedArm)){ transitionsByArm.unassigned++; continue; }
+      if(!isValidAssignedStudyTransition(row)){
+        if(row.outcome.assignedMet == null) transitionsByArm.ungraded++;
+        else transitionsByArm.unproven++;
+        continue;
+      }
+      // Same dedupe identity the analysis uses — repeated exports fold, while
+      // different people never collide (identity is stamped into the key the
+      // same way pooledAssignedComparison stamps participantId onto rows).
+      const key = `${p.studyParticipantId || p.code || 'anonymous'}::${prospectiveTransitionKey({ ...row, participantId: row.participantId ?? p.studyParticipantId ?? p.code })}::${row.assignedArm}`;
+      if(seenKeys.has(key)){ transitionsByArm.duplicate++; continue; }
+      seenKeys.add(key);
       transitionsByArm[row.assignedArm]++;
     }
   }
   armBalance.ledgerTransitions = transitionsByArm;
 
   // Resolved transitions per arm — the denominators the analysis gates read.
-  const resolvedByArm = { arise: transitionsByArm.arise, 'double-progression': transitionsByArm['double-progression'] };
 
   // Data-quality warnings derivable from store contents themselves.
   const quality = dataQualityWarnings(rows);
 
-  // Gate eligibility: never rank treatments until these clear. The breadth
-  // gate counts CONTRIBUTORS, not enrollments and not identifications —
-  // enrolled-but-empty people cannot satisfy it (shared definition with
-  // fieldStudy.pooledAssignedComparison / computeFieldStudy).
+  // Gate eligibility: never rank treatments until these clear. THE canonical
+  // readiness evaluation (studyReadiness.evaluateStudyReadiness) decides —
+  // the exact same call computeFieldStudy makes, so cohort.gate.eligible,
+  // fieldStudy status, assigned.gates.sufficient and claim readiness are one
+  // result rendered four ways. Breadth counts CONTRIBUTORS (identified,
+  // consented, ≥1 valid resolved assigned transition); depth counts only
+  // valid transitions (total = valid arise + valid double-progression).
+  const readiness = evaluateStudyReadiness(
+    {
+      transitionsArise: transitionsByArm.arise,
+      transitionsDoubleProgression: transitionsByArm['double-progression'],
+      transitionsTotal: transitionsByArm.arise + transitionsByArm['double-progression'],
+      contributors: {
+        total: totals.contributors,
+        arise: totals.contributorsArise,
+        'double-progression': totals.contributorsDoubleProgression,
+      },
+    },
+    gates,
+  );
   const gate = {
-    minParticipants: gates.minParticipants,
+    minParticipants: gates.minContributors,
     minTransitions: gates.minTransitions,
     minTransitionsPerArm: gates.minTransitionsPerArm,
-    participants: totals.contributors,
+    participants: readiness.gates.contributors.total,
     identifiedParticipants: totals.participants,
-    contributors: {
-      total: totals.contributors,
-      arise: totals.contributorsArise,
-      'double-progression': totals.contributorsDoubleProgression,
-    },
-    transitions: totals.assignedTransitions,
-    transitionsArise: resolvedByArm.arise,
-    transitionsDoubleProgression: resolvedByArm['double-progression'],
-    eligible: totals.contributors >= gates.minParticipants
-      && totals.assignedTransitions >= gates.minTransitions
-      && resolvedByArm.arise >= gates.minTransitionsPerArm
-      && resolvedByArm['double-progression'] >= gates.minTransitionsPerArm,
+    contributors: readiness.gates.contributors,
+    transitions: readiness.gates.transitionsTotal,
+    transitionsArise: readiness.gates.transitionsArise,
+    transitionsDoubleProgression: readiness.gates.transitionsDoubleProgression,
+    eligible: readiness.ready,
+    reasons: readiness.reasons,
     deficits: {
-      participants: Math.max(0, gates.minParticipants - totals.contributors),
-      transitions: Math.max(0, gates.minTransitions - totals.assignedTransitions),
-      arise: Math.max(0, gates.minTransitionsPerArm - resolvedByArm.arise),
-      'double-progression': Math.max(0, gates.minTransitionsPerArm - resolvedByArm['double-progression']),
+      participants: Math.max(0, gates.minContributors - readiness.gates.contributors.total),
+      transitions: Math.max(0, gates.minTransitions - readiness.gates.transitionsTotal),
+      arise: Math.max(0, gates.minTransitionsPerArm - readiness.gates.transitionsArise),
+      'double-progression': Math.max(0, gates.minTransitionsPerArm - readiness.gates.transitionsDoubleProgression),
     },
     rankingAllowed: false, // recomputed below
   };
@@ -612,6 +626,8 @@ export function renderCohortReport(summary, { ingest = null } = {}){
   L.push(`| (unassigned rows) | — | ${summary.armBalance.ledgerTransitions.unassigned} |`);
   L.push(`| (open, awaiting outcome) | — | ${summary.armBalance.ledgerTransitions.open} |`);
   L.push(`| (resolved but unproven provenance) | — | ${summary.armBalance.ledgerTransitions.unproven} |`);
+  L.push(`| (resolved but ungraded) | — | ${summary.armBalance.ledgerTransitions.ungraded} |`);
+  L.push(`| (cross-export duplicates, folded) | — | ${summary.armBalance.ledgerTransitions.duplicate} |`);
   L.push('');
   L.push(`Arm balance: arise share ${summary.armBalance.ariseShare == null ? '—' : `${Math.round(summary.armBalance.ariseShare * 100)}%`} of assigned exercises.`);
   L.push('');

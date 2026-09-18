@@ -41,6 +41,8 @@ Assigned exercises and ledger transitions per arm. This is a BALANCE report, not
 | (unassigned rows) | — | 24 |
 | (open, awaiting outcome) | — | 0 |
 | (resolved but unproven provenance) | — | 0 |
+| (resolved but ungraded) | — | 0 |
+| (cross-export duplicates, folded) | — | 0 |
 
 Arm balance: arise share 50% of assigned exercises.
 

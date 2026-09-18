@@ -148,7 +148,7 @@ describe('cohort ops: cohort summary', ()=>{
     const md = renderCohortReport(cohort);
     assert.match(md, /Gates unmet — no treatment comparison is made/);
     assert.doesNotMatch(md, /arise (beats|wins|outperforms)/i);
-    assert.equal(ANALYSIS_GATES.minParticipants, 10);
+    assert.equal(ANALYSIS_GATES.minContributors, 10);
     assert.equal(ANALYSIS_GATES.minTransitions, 1000);
   });
 
@@ -161,7 +161,10 @@ describe('cohort ops: cohort summary', ()=>{
       for(let t = 0; t < 90; t++){
         s.evaluationLedger.push({
           id: `l${t}`, recommendation: { load: 40, reps: 8 }, assignedArm: t % 2 ? 'double-progression' : 'arise',
-          outcome: { assignedMet: t % 3 !== 0, dateISO: '2026-02-01' }, provenance: { origin: 'live-engine' }, outcomeProvenance: { origin: 'live-engine' },
+          // Distinct outcome session per row: real ledger rows resolve against
+          // distinct sessions, and the canonical dedupe identity folds rows
+          // that share (participant, exercise, prescription, outcome session).
+          outcome: { assignedMet: t % 3 !== 0, dateISO: '2026-02-01', sessionId: `s${t}` }, provenance: { origin: 'live-engine' }, outcomeProvenance: { origin: 'live-engine' },
         });
       }
       stores.push({ code: i.toString(16).padStart(8, '0'), studyParticipantId: i.toString(16).padStart(16, '0'), store: s });
@@ -268,7 +271,7 @@ describe('cohort integrity: contributor gates, exhaustive conflicts, unresolved 
     assert.equal(cohort.totals.contributors, 1, 'only one is a contributor');
     assert.equal(cohort.gate.participants, 1, 'the breadth gate reads contributors');
     assert.equal(cohort.gate.eligible, false, 'no usable assigned evidence → gate stays shut');
-    assert.equal(cohort.gate.deficits.participants, ANALYSIS_GATES.minParticipants - 1);
+    assert.equal(cohort.gate.deficits.participants, ANALYSIS_GATES.minContributors - 1);
   });
 
   it('per-arm contributor counts split by assigned arm', ()=>{

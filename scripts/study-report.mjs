@@ -19,13 +19,17 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ingestParticipantFiles, summariseCohort, renderCohortReport } from '../src/lib/cohortOps.js';
 import { computeProductSuccessReport, renderProductSuccessReport } from '../src/lib/productSuccess.js';
+import { STUDY_GATES } from '../src/lib/studyReadiness.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const dirArg = args.find(a => !a.startsWith('--')) || path.join(here, '..', 'field');
 const outDir = path.resolve(args.find(a => a.startsWith('--out='))?.split('=')[1] || path.dirname(path.resolve(dirArg)));
-const minParticipants = Number(args.find(a => a.startsWith('--min-participants='))?.split('=')[1]) || 10;
-const minTransitions = Number(args.find(a => a.startsWith('--min-transitions='))?.split('=')[1]) || 1000;
+// Canonical gates (studyReadiness.STUDY_GATES); CLI overrides exist only for
+// exploration and are mapped onto the same canonical shape so the report can
+// never drift onto a private threshold set.
+const minParticipants = Number(args.find(a => a.startsWith('--min-participants='))?.split('=')[1]) || STUDY_GATES.minContributors;
+const minTransitions = Number(args.find(a => a.startsWith('--min-transitions='))?.split('=')[1]) || STUDY_GATES.minTransitions;
 
 const dir = path.resolve(dirArg);
 if(!fs.existsSync(dir)){
@@ -45,7 +49,7 @@ if(!files.length){
 }
 
 const ingest = ingestParticipantFiles(files);
-const cohort = summariseCohort(ingest.participants, { gates: { minParticipants, minTransitions, minTransitionsPerArm: Math.floor(minTransitions / 2) } });
+const cohort = summariseCohort(ingest.participants, { gates: { ...STUDY_GATES, minContributors: minParticipants, minTransitions } });
 // Product success pools IDENTIFIED participants only — an export without a
 // valid study id cannot be proven to be a distinct person.
 const success = computeProductSuccessReport(ingest.participants);
