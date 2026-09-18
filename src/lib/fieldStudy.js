@@ -325,11 +325,10 @@ export function pooledAssignedComparison(participants, { config = null, minParti
     'double-progression': contributorsDoubleProgression,
   };
   // THE canonical readiness result (studyReadiness.evaluateStudyReadiness):
-  // cohort.gate.eligible, fieldStudy status and claim readiness all derive
-  // from this single evaluation, so no two surfaces can disagree. The
-  // per-arm ANALYSIS conclusiveness gate (priors' minimumSegmentSamples) is
-  // kept as an additional reason — it governs whether an arm's rate may be
-  // called conclusive, on top of the shared study gates.
+  // cohort.gate.eligible, fieldStudy status, assigned.gates.sufficient and
+  // claim readiness all derive from this single evaluation, so no two
+  // surfaces can disagree. Metric-level conclusiveness (minimumSegment
+  // Samples) never enters it — see the metricGate label below.
   const readiness = evaluateStudyReadiness(
     {
       transitionsArise: ariseTot.n,
@@ -341,12 +340,21 @@ export function pooledAssignedComparison(participants, { config = null, minParti
     // floor(minTransitions/2) when callers override the depth gate downward.
     { minContributors: minParticipants, minTransitions, minTransitionsPerArm: STUDY_GATES.minTransitionsPerArm },
   );
-  // Reasons = the canonical readiness reasons + the per-arm ANALYSIS
-  // conclusiveness gate (priors' minimumSegmentSamples), which governs whether
-  // an arm's rate may be called conclusive on top of the shared study gates.
-  const reasons = [...readiness.reasons];
-  if(!(ariseConclusive && dpConclusive)) reasons.push('an assigned arm is below the per-arm sample gate');
-  const sufficient = reasons.length === 0;
+  // Reasons = THE canonical readiness reasons — nothing else. The per-arm
+  // metric sample gate (priors' minimumSegmentSamples) is a per-METRIC
+  // conclusiveness label below (arm.conclusive / gates.metricGate): it can
+  // qualify an individual rate but must never change assigned.gates.sufficient,
+  // fieldStudy status, claim eligibility or cohort readiness.
+  const reasons = readiness.reasons;
+  const sufficient = readiness.ready;
+  const metricGate = {
+    minSegmentSamples: minimum,
+    ariseConclusive,
+    dpConclusive,
+    note: ariseConclusive && dpConclusive
+      ? null
+      : `an arm's rate is below the metric sample gate (${minimum}+ per arm) — that rate stays descriptive until it clears`,
+  };
   // Next-exposure performance BY ASSIGNED TREATMENT: the best-set e1RM delta
   // at the user's next logged session after the resolved one, split by the
   // arm they trained under. Reported with n — thin arms stay descriptive.
@@ -383,7 +391,7 @@ export function pooledAssignedComparison(participants, { config = null, minParti
       userOverrides: assigned.filter(r=> r.outcome.userOverride).length,
     },
     nextExposureByArm,
-    gates: { minParticipants, minTransitions, perArmMinimum: minimum, sufficient, reasons, readiness },
+    gates: { minParticipants, minTransitions, perArmMinimum: readiness.gates.minTransitionsPerArm, sufficient, reasons, readiness, metricGate },
     maturity: sufficient ? 'descriptive' : (transitions > 0 ? 'early' : 'insufficient'),
     excluded: { ...excluded, duplicatePairs, unidentifiedExports: unidentified.length, unconsentedExports },
     duplicatePairs,
@@ -463,21 +471,12 @@ export function computeFieldStudy(participants, { config = null, minParticipants
   // drives the gates and the headline claim.
   const assigned = pooledAssignedComparison(participants, { config, minParticipants, minTransitions });
   const transitions = assigned.transitions;
-  // THE canonical readiness evaluation (studyReadiness.evaluateStudyReadiness)
-  // decides study status — the same one cohortOps uses, so the two surfaces
-  // can never disagree. Breadth is measured in GENUINE CONTRIBUTORS, not file
-  // arrivals and not bare identifications; depth counts only valid assigned
-  // transitions (total = valid arise + valid double-progression).
   const contributors = assigned.contributors;
-  const readiness = evaluateStudyReadiness(
-    {
-      transitionsArise: assigned.arise.n,
-      transitionsDoubleProgression: assigned['double-progression'].n,
-      transitionsTotal: transitions,
-      contributors,
-    },
-    { minContributors: minParticipants, minTransitions, minTransitionsPerArm: STUDY_GATES.minTransitionsPerArm },
-  );
+  // Physically THE SAME canonical readiness object pooledAssignedComparison
+  // evaluated — not a recomputation. Status, claim readiness, cohort gate and
+  // assigned gates all consume this one object, so they cannot disagree, even
+  // when exploratory thresholds are overridden.
+  const readiness = assigned.gates.readiness;
   const gatesPassed = readiness.ready;
 
   const headline = {};

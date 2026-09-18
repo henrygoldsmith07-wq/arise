@@ -20,9 +20,9 @@
 //
 // THE GATES — one threshold set for operations and analysis alike:
 //   minContributors 10 · minTransitions 1000 · minTransitionsPerArm 400
-//   (400 + 400 = 800 of the 1000 must sit in the two primary arms; the
-//   remaining 200 is headroom for genuinely assigned-but-ungraded rows,
-//   which exist in real data and are reported, never hidden.)
+//   At least 400 valid transitions must come from each primary arm. The
+//   remaining 200+ transitions must also be valid assigned transitions and
+//   may be distributed across either primary arm.
 //
 // THE RULES the canonical evaluation enforces:
 //   • total transitions = valid arise + valid double-progression. Unassigned,

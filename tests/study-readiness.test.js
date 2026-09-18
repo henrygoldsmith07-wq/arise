@@ -271,4 +271,63 @@ describe('one readiness result everywhere', ()=>{
     assert.equal(field.status, 'insufficient-evidence');
     assert.equal(cohort.gate.eligible, field.status === 'sufficient-evidence');
   });
+
+  it('override: a lowered configuration moves every surface together', ()=>{
+    // minContributors 2 · minTransitions 2 · effective per-arm minimum 1,
+    // with one valid transition per arm for 2 contributors: exactly at the
+    // lowered gates. The SAME override flows into every surface.
+    const two = cohortWith({ contributors: 2, rowsPer: 1 });
+    const lowered = { minContributors: 2, minTransitions: 2, minTransitionsPerArm: 400 };
+    const ingest = ingestParticipantFiles(two.map((p, i)=> ({ name: `p${i}.json`, text: JSON.stringify(p.store) })));
+    const cohort = summariseCohort(ingest.participants, { nowISO: '2026-04-01T00:00:00Z', gates: lowered });
+    const assigned = pooledAssignedComparison(ingest.participants, { minParticipants: 2, minTransitions: 2 });
+    const field = computeFieldStudy(ingest.participants, { minParticipants: 2, minTransitions: 2 });
+    const md = renderCohortReport(cohort);
+    assert.equal(assigned.gates.readiness.ready, true, 'canonical readiness = ready under the lowered gates');
+    assert.equal(assigned.gates.readiness.gates.minTransitionsPerArm, 1, 'per-arm clamped to floor(minTransitions/2) = 1');
+    assert.equal(assigned.gates.sufficient, true);
+    assert.equal(field.status, 'sufficient-evidence');
+    assert.equal(field.totals.primaryComparison.gates.sufficient, true);
+    assert.equal(cohort.gate.eligible, true, JSON.stringify(cohort.gate.reasons));
+    assert.match(md, /Gates met/);
+  });
+
+  it('override: minimumSegmentSamples labels metrics but never changes readiness', ()=>{
+    // Same lowered-ready cohort, but the metric sample gate stays at 5: each
+    // arm has only 1 valid transition, so both rates stay non-conclusive —
+    // while readiness, status and gates are ALL ready/sufficient/eligible.
+    const two = cohortWith({ contributors: 2, rowsPer: 1 });
+    const ingest = ingestParticipantFiles(two.map((p, i)=> ({ name: `p${i}.json`, text: JSON.stringify(p.store) })));
+    const assigned = pooledAssignedComparison(ingest.participants, { minParticipants: 2, minTransitions: 2 });
+    const field = computeFieldStudy(ingest.participants, { minParticipants: 2, minTransitions: 2 });
+    assert.equal(assigned.gates.sufficient, true);
+    assert.equal(field.status, 'sufficient-evidence');
+    const metricGate = field.totals.primaryComparison.gates.metricGate;
+    assert.ok(metricGate, 'the metric gate is reported, separate from readiness');
+    assert.equal(metricGate.ariseConclusive, false, '1 transition < minimumSegmentSamples');
+    assert.equal(metricGate.dpConclusive, false);
+    assert.match(metricGate.note, /below the metric sample gate/);
+    assert.equal(field.totals.primaryComparison.arise.conclusive, false);
+    assert.equal(field.totals.primaryComparison['double-progression'].conclusive, false);
+    // And the claim still fires — metric conclusiveness is a label, not a gate.
+    assert.ok(field.claim, 'claim eligibility derives from readiness, not the metric label');
+  });
+
+  it('inverse: readiness false blocks the claim even when metric-level sample gates pass', ()=>{
+    // minimumSegmentSamples = 1, so every arm rate is conclusive; but 2
+    // contributors × 1 transition/arm is far below the canonical gates with
+    // NO override — readiness false must withhold status, gates and claim.
+    const two = cohortWith({ contributors: 2, rowsPer: 1 });
+    const LOOSE = { longitudinal: { minimumSegmentSamples: 1 } };
+    const ingest = ingestParticipantFiles(two.map((p, i)=> ({ name: `p${i}.json`, text: JSON.stringify(p.store) })));
+    const field = computeFieldStudy(ingest.participants, { config: LOOSE });
+    const assigned = field.totals.primaryComparison;
+    assert.equal(assigned.arise.conclusive, true, 'metric-level gate passes at this scale');
+    assert.equal(assigned['double-progression'].conclusive, true);
+    assert.equal(assigned.gates.sufficient, false, 'metric conclusiveness cannot substitute for readiness');
+    assert.equal(field.status, 'insufficient-evidence');
+    assert.equal(field.claim, null, 'readiness false prevents claims even when metrics clear their own gates');
+    const cohort = summariseCohort(ingest.participants, { nowISO: '2026-04-01T00:00:00Z', config: LOOSE });
+    assert.equal(cohort.gate.eligible, false);
+  });
 });
