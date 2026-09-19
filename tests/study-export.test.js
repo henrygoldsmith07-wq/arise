@@ -562,3 +562,198 @@ describe('§ export minimisation — only disclosed, study-required data leaves'
     }
   });
 });
+
+// ── § malicious shapes fail closed: scalars are type-locked at the boundary ─
+// Every scalar slot must reject objects/arrays/unknown strings: a hostile or
+// future value can never ride through a typed field into the study file.
+describe('§ malicious shapes fail closed — scalars type-locked', ()=>{
+  let storage;
+  beforeEach(()=>{ storage = new Mem(); globalThis.localStorage = storage; });
+
+  function hostileStore(){
+    const store = baseStore();
+    store.studyStatus = { privateField: 'PRIVATE' };
+    store.studyStatusChangedAtISO = ['PRIVATE'];
+    store.studyEnrollment = {
+      studyVersion: 1, participantId: ID, seed: { privateField: 'PRIVATE' },
+      enrolledAtISO: { privateField: 'PRIVATE' }, startArm: { privateField: 'PRIVATE' },
+      targetDefinition: ['PRIVATE'], analysisCodeVersion: { privateField: 'PRIVATE' },
+      meaningfulGainThreshold: 'not-a-number',
+      policyVersions: { arise: { deep: 'PRIVATE' }, doubleProgression: 7 },
+      assignments: { 'bench-press-dumbbell': { arm: { privateField: 'PRIVATE' }, assignmentVersion: 'x', assignedAtISO: 42 } },
+      rogue: 'PRIVATE ENROLLMENT ROGUE',
+    };
+    store.history = [{
+      id: { privateField: 'PRIVATE' }, dateISO: ['PRIVATE'], mode: { privateField: 'PRIVATE' },
+      quality: 5, status: { s: 'PRIVATE' }, note: 'PRIVATE TEXT', title: 'PRIVATE TITLE',
+      durationMinutes: { ms: 'PRIVATE' }, painDiscomfort: 'yes', skippedSetsCount: 1.5,
+      equipmentSnapshot: ['barbell', { privateField: 'PRIVATE' }], exerciseOrder: [1, { privateField: 'PRIVATE' }],
+      blocks: [{
+        exerciseId: 9, equipment: ['PRIVATE'], exerciseOrder: 'two', prescriptionOverridden: 'nope',
+        substitutionFrom: { privateField: 'PRIVATE' }, substitutionReason: ['PRIVATE'],
+        governedSlots: [0, 'one', { privateField: 'PRIVATE' }], removedSlots: 'nope',
+        prescription: { prescriptionId: 'rx1', revision: 1, shownAt: '2026-03-01T09:00:00.000Z', reason: 'engine reason', source: { privateField: 'PRIVATE' }, schemaVersion: 'nan', confidence: { band: 'high', slope: 0.5, privateField: 'PRIVATE' }, uncertainty: { pct: 3, privateField: 'PRIVATE' }, engine: { name: 'arise-engine', priorsVersion: 7, privateField: 'PRIVATE' }, rogue: 'PRIVATE RX ROGUE' },
+        prescriptionHistory: [{ prescriptionId: 'rx0', revision: 0, privateField: 'PRIVATE' }, 'junk', 7],
+        sets: [{ reps: '8', weightKg: '40', rpe: '7', completed: true, setId: 'set1', origin: 'prescribed', plannedSlot: 0, completed2: 'PRIVATE', aFutureSetField: 'PRIVATE SET FUTURE' }, 'junk', 9],
+        aFutureBlockField: 'PRIVATE BLOCK FUTURE',
+      }],
+      substitutions: [{ from: 'a', to: 'b', reason: 'engine decided', rogue: 'PRIVATE SUB' }],
+      aFutureSessionField: 'PRIVATE SESSION FUTURE',
+    }];
+    store.readinessLog = [{ dateISO: '2026-03-08', score: 70, sleep: 4, soreness: 2, motivation: 4, moodFreeText: 'PRIVATE MOOD' }];
+    store.activeSchedule = {
+      programId: { privateField: 'PRIVATE' }, startDateISO: 20260301, week: 'one', day: null,
+      mesocycle: { weekIndex: 1, privateField: 'PRIVATE MESOCYCLE' },
+      sessions: [{ id: 'w1d1', dateISO: '2026-03-08', mode: 'guided', status: { s: 'PRIVATE' }, title: 'PRIVATE SCHEDULE TITLE', blocks: [{ exerciseId: 'bench-press-dumbbell', sets: 3, reps: '8-12', restSec: 90, loadHint: { privateField: 'PRIVATE' } }] }],
+      adaptationHistory: [{ basisKey: 'k1', dateISO: '2026-03-08', decision: { deload: false, deloadSignals: ['difficulty'], confidence: { band: 'low', slope: 1 } }, changes: [{ sessionId: 'w1d1', dateISO: '2026-03-09', exerciseId: 'bench-press-dumbbell', kind: 'repeated-difficulty', from: { sets: 3 }, to: { sets: 2 }, reason: 'engine decided', evidence: ['difficulty', 5, { privateField: 'PRIVATE' }], rogue: 'PRIVATE CHANGE' }] }],
+      lastAdaptation: 'not-an-object',
+    };
+    store.preferences = { telemetryEnabled: true, sync: { password: 'PRIVATE CREDENTIALS' } };
+    return store;
+  }
+
+  function hostileLedger(){
+    return [{
+      id: 'r1', schemaVersion: 2, recordedAtISO: '2026-03-01T10:00:00.000Z', dueDateISO: '2026-03-08',
+      exerciseId: 'bench-press-dumbbell', movementPattern: 'horizontal-push', equipmentClass: 'barbell',
+      programId: 'p1', programVersion: 3,
+      recommendation: { load: 40, reps: 8, reason: 'engine reason' },
+      audit: { policy: 'arise-engine', policyVersion: 3, confidence: { band: 'high', slope: 0.5, personalCalibration: { headline: 'PRIVATE HEADLINE' } }, uncertainty: { pct: 3 }, rogue: 'PRIVATE AUDIT' },
+      assignedArm: { privateField: 'PRIVATE' }, studyVersion: 1, participantId: ID,
+      prescription: { arm: ['PRIVATE'], load: 40, reps: 8 },
+      recommendedAction: { action: 'PRIVATE' },
+      arms: { arise: { load: 40, reps: 8 }, rogueArm: { load: 1, privateField: 'PRIVATE ROGUE' } },
+      basis: { visibleSessions: 3, previousBest: { reps: 8, weightKg: 37.5, e1rm: 41.2 }, trainingAgePhase: 'novice', priorsVersion: 7 },
+      userOverride: false,
+      provenance: { origin: 'live-engine', capturedAt: '2026-03-01T10:00:00.000Z', deviceId: 'dev-x' },
+      outcomeProvenance: { origin: ['PRIVATE'] },
+      outcome: { sessionId: 's1', dateISO: '2026-03-08', load: 40, reps: 8, rpe: '7', sets: 1, failedSets: 0, volumeKg: 320, e1rm: 42.3, previousE1rm: 41.2, changePct: 0.0267, metTarget: true, followed: true, assignedMet: true, assignedArm: { privateField: 'PRIVATE' }, userOverride: false, pain: false, techniqueWarning: false, classification: 'progression-success', label: 'successful', labelReason: 'PRIVATE PROSE', attempted: true, gradeable: true, rogue: 'PRIVATE OUTCOME',
+        arms: { arise: { metTarget: true, loadErrorKg: 0, repError: 0 }, rogue: { metTarget: true, privateField: 'PRIVATE ARMOUT' } } },
+    }];
+  }
+
+  function hostileEvents(){
+    return [
+      { id: 'e1', type: 'set:complete', sessionId: 's1', at: '2026-03-08T09:00:00.000Z', elapsedMs: 3000, setIndex: 0, mode: 'gym', moodNote: 'PRIVATE EVENT', interactions: { n: 'PRIVATE' }, corrections: ['PRIVATE'], durMs: { privateField: 'PRIVATE' }, setIndex2: undefined },
+      { id: 'e2', type: 'error', message: 'crash boom PRIVATE' },
+      { id: 'e3', type: 'never-seen-before', rogue: 'PRIVATE FUTURE EVENT' },
+      'junk-string', 42, null,
+    ];
+  }
+
+  it('hostile scalars, objects and arrays never reach the exported JSON; valid scalars survive', ()=>{
+    const store = hostileStore();
+    globalThis.localStorage.setItem('arise.evaluation.v1', JSON.stringify(hostileLedger()));
+    globalThis.localStorage.setItem('arise.telemetry.v2', JSON.stringify({ version: 2, events: hostileEvents() }));
+    const json = JSON.stringify(buildStudyExportPayload(store));
+    // No private probe of any shape may appear anywhere:
+    for(const secret of ['PRIVATE', 'privateField', 'rogue', 'labelReason', 'uncertainty', 'crash boom', 'headline']){
+      assert.equal(json.includes(secret), false, `"${secret}" leaked through a hostile scalar`);
+    }
+    // Valid scalars in the SAME store are preserved (fail closed ≠ fail empty):
+    const data = buildStudyExportPayload(store).data;
+    assert.equal(data.studyParticipantId, ID);
+    assert.equal(data.studyStatus, null, 'hostile studyStatus → null');
+    assert.equal(data.studyStatusChangedAtISO, null, 'hostile timestamp → null');
+    const e = data.studyEnrollment;
+    assert.equal(e.seed, null, 'hostile seed object → null');
+    assert.equal(e.startArm, null, 'hostile startArm object → null');
+    assert.equal(e.participantId, ID, 'valid participantId survives beside hostile siblings');
+    assert.equal(e.assignments['bench-press-dumbbell'].arm, null, 'hostile assignment arm → null');
+    const s = data.history[0];
+    assert.equal(s.mode, null, 'hostile mode object → null');
+    assert.equal(s.durationMinutes, null, 'hostile number object → null');
+    assert.equal(s.skippedSetsCount, null, 'non-integer count → null');
+    assert.equal(s.equipmentSnapshot.length, 1, 'non-string array members dropped, strings kept');
+    const b = s.blocks[0], rx = b.prescription;
+    assert.equal(b.exerciseId, null, 'hostile block id → null');
+    assert.equal(rx.prescriptionId, 'rx1', 'valid prescription fields survive');
+    assert.equal(rx.confidence, 'high', 'engine confidence object → band string only');
+    assert.equal(rx.engine.name, 'arise-engine', 'engine block rebuilt scalar-by-scalar');
+    assert.equal('uncertainty' in rx, false, 'prescription uncertainty never travels');
+    assert.equal(b.sets.length, 1, 'non-object set dropped');
+    assert.equal(b.sets[0].reps, '8');
+    assert.deepEqual(data.readinessLog[0], { dateISO: '2026-03-08', score: 70, sleep: 4, soreness: 2, motivation: 4 });
+    assert.equal(data.activeSchedule.mesocycle, null, 'mesocycle object → null');
+    assert.equal(data.activeSchedule.adaptationHistory[0].changes[0].from.sets, 3, 'valid geometry survives hostile siblings');
+    const row = data.evaluationLedger[0];
+    assert.equal(row.assignedArm, null, 'hostile ledger assignedArm object → null');
+    assert.equal(row.prescription.arm, null, 'hostile prescription arm array → null');
+    assert.equal(row.recommendedAction, null, 'hostile recommendedAction object → null');
+    assert.equal(row.audit.confidence, 'high', 'audit confidence object → band string');
+    assert.equal(row.outcome.assignedArm, null, 'hostile outcome assignedArm → null');
+    assert.equal('rogueArm' in row.arms, false, 'unknown arm dropped');
+    assert.equal(data.eventHistory.length, 2, 'error event dropped; product + unknown taxonomy types travel field-stripped');
+    assert.equal(data.eventHistory[0].type, 'set:complete');
+    assert.deepEqual(Object.keys(data.eventHistory[1]).sort(), ['id', 'schemaVersion', 'type'], 'unknown event type carries no payload fields (telemetry stamps its own schemaVersion)');
+    assert.equal('interactions' in data.eventHistory[0], false, 'dead/unknown event payload keys dropped');
+    assert.equal(data.preferences.telemetryEnabled, true, 'consent fact survives hostile prefs');
+    assert.equal('sync' in data.preferences, false, 'credentials never travel');
+  });
+
+  it('valid scalars in a clean store round-trip exactly (no over-blocking)', ()=>{
+    const store = baseStore();
+    store.studyStatusChangedAtISO = '2026-03-01T00:00:00.000Z';
+    store.studyEnrollment = {
+      ...store.studyEnrollment,
+      seed: 'priors-v7::a1b2c3d4e5f60718::v1',
+      startArm: 'arise',
+      assignments: { 'bench-press-dumbbell': { arm: 'arise', assignmentVersion: 1, assignedAtISO: '2026-03-01T00:00:00.000Z' } },
+    };
+    store.history.push({
+      id: 's-clean', dateISO: '2026-03-08', programId: 'p1', programVersion: 3, week: 1, day: 1,
+      status: 'done', mode: 'guided', quality: 'good', durationMinutes: 44, painDiscomfort: true,
+      skippedSetsCount: 2, equipmentSnapshot: ['barbell'], noteTags: ['felt-strong', 'nope-not-real'],
+      blocks: [{ exerciseId: 'bench-press-dumbbell', exerciseOrder: 0, governedSlots: [0, 2], equipment: 'barbell',
+        prescription: { prescriptionId: 'rx1', revision: 1, source: 'engine', shownAt: '2026-03-01T09:00:00.000Z', reason: 'engine', confidence: { band: 'medium' }, engine: { name: 'arise-engine', priorsVersion: 7 } },
+        sets: [{ reps: '8', weightKg: '40', rpe: '7', completed: true, setId: 'set1', origin: 'user-added', plannedSlot: null }] }],
+      substitutions: [{ from: 'squat-rack-404', to: 'bench-press-dumbbell', reason: 'engine kept it' }],
+    });
+    store.evaluationLedger = [{
+      id: 'r-clean', schemaVersion: 2, recordedAtISO: '2026-03-01T10:00:00.000Z', dueDateISO: '2026-03-08',
+      exerciseId: 'bench-press-dumbbell', movementPattern: 'horizontal-push', equipmentClass: 'barbell',
+      programId: 'p1', programVersion: 3,
+      recommendation: { load: 42.5, reps: 8, reason: 'suite' },
+      audit: { policy: 'arise-engine', policyVersion: 3, guard: null, confidence: { band: 'low-thin' } },
+      assignedArm: 'arise', participantId: ID, studyVersion: 1,
+      prescription: { arm: 'arise', load: 40, reps: 8, assistKg: null },
+      recommendedAction: 'reduce_assistance',
+      arms: { arise: { load: 40, reps: 8, assistKg: null }, 'double-progression': { load: 40, reps: 9 } },
+      basis: { visibleSessions: 3, previousBest: { reps: 8, weightKg: 37.5, assistedKg: null, e1rm: 41.2 }, trainingAgePhase: 'novice', priorsVersion: 7 },
+      userOverride: false,
+      provenance: { origin: 'live-engine', capturedAt: '2026-03-01T10:00:00.000Z', deviceId: 'dev-x' },
+      outcomeProvenance: { origin: 'live-engine', capturedAt: '2026-03-02T10:00:00.000Z', deviceId: 'dev-x' },
+      outcome: { sessionId: 's-clean', dateISO: '2026-03-08', load: 40, reps: 8, rpe: '7', sets: 1, failedSets: 0, volumeKg: 320, e1rm: 42.3, previousE1rm: 41.2, changePct: 0.0267, metTarget: true, followed: true, assignedMet: true, assignedArm: 'arise', userOverride: false, pain: false, techniqueWarning: false, classification: 'progression-success', label: 'too-conservative', attempted: true, gradeable: true,
+        arms: { arise: { metTarget: true, loadErrorKg: 0, repError: 0 } } },
+    }];
+    globalThis.localStorage.setItem('arise.evaluation.v1', JSON.stringify(store.evaluationLedger));
+    const data = buildStudyExportPayload(store).data;
+    assert.equal(data.studyStatus, 'enrolled');
+    assert.equal(data.studyStatusChangedAtISO, '2026-03-01T00:00:00.000Z');
+    const e = data.studyEnrollment;
+    assert.equal(typeof e.seed, 'string', 'canonical string seed travels');
+    assert.equal(e.startArm, 'arise');
+    assert.equal(e.assignments['bench-press-dumbbell'].arm, 'arise');
+    const s = data.history[0];
+    assert.equal(s.mode, 'guided');
+    assert.equal(s.quality, 'good');
+    assert.equal(s.durationMinutes, 44);
+    assert.equal(s.skippedSetsCount, 2);
+    assert.deepEqual(s.noteTags, ['felt-strong'], 'unknown note tag dropped, real tag kept');
+    const rx = s.blocks[0].prescription;
+    assert.equal(rx.source, 'engine');
+    assert.equal(rx.confidence, 'medium', 'engine confidence object → band string');
+    assert.equal(rx.engine.priorsVersion, 7);
+    assert.deepEqual(s.blocks[0].governedSlots, [0, 2]);
+    assert.deepEqual(s.substitutions, [{ from: 'squat-rack-404', to: 'bench-press-dumbbell', reason: 'engine kept it' }]);
+    const row = data.evaluationLedger[0];
+    assert.equal(row.assignedArm, 'arise');
+    assert.equal(row.prescription.arm, 'arise');
+    assert.equal(row.recommendedAction, 'reduce_assistance');
+    assert.equal(row.audit.confidence, 'low-thin');
+    assert.equal(row.outcome.classification, 'progression-success');
+    assert.equal(row.outcome.label, 'too-conservative');
+    assert.equal(row.outcome.assignedArm, 'arise');
+    assert.deepEqual(Object.keys(row.arms).sort(), ['arise', 'double-progression']);
+  });
+});

@@ -15,6 +15,13 @@ import { EXPORT_CONTRACT, EXPORT_CONTRACT_MIN } from './domain.js';
 
 const APP_NAME = 'arise';
 
+// The store-snapshot payload version (export envelope `payloadVersion`). Lives
+// here — the shared export-contract leaf — so both the backup path (export.js)
+// and the lazy-loaded study-export path (studyExport.js) read one constant
+// without the study chunk duplicating the whole backup module into its
+// closure (bundle budget: the study chunk must stay serializer-only).
+export const EXPORT_VERSION = 4;
+
 // ── Device id (export metadata + tombstone provenance) ──────────────────────
 let deviceId = null;
 export function getDeviceId(){

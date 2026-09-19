@@ -5,10 +5,10 @@ import { runMigrations, STORE_SCHEMA_VERSION, mergeCustomTemplates, normaliseHis
 import { getEventHistory } from './telemetry.js';
 import { loadEvaluationLedger, mergeEvaluationLedgers } from './longitudinal.js';
 import { ensureStudyParticipantId } from './studyIdentity.js';
-import { buildEnvelope, applyFieldPolicy } from './exportPolicy.js';
+import { buildEnvelope, applyFieldPolicy, EXPORT_VERSION } from './exportPolicy.js';
 import { withProvenance, ensureSourceTags, importLedgerProvenance } from './domain.js';
 
-export const EXPORT_VERSION = 4;
+export { EXPORT_VERSION };
 
 // preferences.sync carries the user's WebDAV/backup credentials and is
 // DEVICE-LOCAL, same policy class as consent toggles: it must never appear in

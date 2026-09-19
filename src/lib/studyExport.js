@@ -5,46 +5,46 @@
 // no duplicate allowlist.
 
 import { STORE_SCHEMA_VERSION } from './store.js';
-import { buildEnvelope } from './exportPolicy.js';
+import { buildEnvelope, EXPORT_VERSION } from './exportPolicy.js';
 import { getEventHistory } from './telemetry.js';
 import { loadEvaluationLedger } from './longitudinal.js';
 import { ensureStudyParticipantId } from './studyIdentity.js';
-import { EXPORT_VERSION } from './export.js';
-export { EXPORT_VERSION } from './export.js';
+export { EXPORT_VERSION };
 
 
 // ── Study allowlists ────────────────────────────────────────────────────
 // SCHEMA-VERSION INVARIANT: the study export is a recursively closed,
 // versioned schema. EVERY nested structure (sessions, blocks, sets,
 // prescriptions, ledger rows, enrollment, schedule adaptations) is rebuilt
-// field-by-field here — never passed through by spread — so a future app
-// feature cannot silently start riding in study exports. An intentional
+// field-by-field here — never passed through by spread — and EVERY scalar
+// field is type-locked at this boundary (string / number / boolean / fixed
+// vocabulary only): a hostile or future object, array or unknown string in a
+// scalar slot fails closed to null. It can never ride along. An intentional
 // schema change therefore REQUIRES all of:
-//   1. an explicit allowlist/serializer change in this block;
-//   2. a matching update to tests/study-export.test.js (key-set + privacy
-//      regression assertions);
+//   1. an explicit serializer change in this block;
+//   2. a matching update to tests/study-export.test.js (key-set, privacy and
+//      malicious-shape regression assertions);
 //   3. a STUDY_EXPORT_VERSION bump when the material payload changes.
 // Free text (session note, session title), note-tag LABELS, UI metadata,
 // engine-facing prose and any unknown/extra field stay on the device.
-export const STUDY_EXPORT_VERSION = 3; // v3: every nested slice recursively allowlisted
+export const STUDY_EXPORT_VERSION = 4; // v4: scalars type-locked; audit/band confidence is a string; engine objects rebuilt; prescription uncertainty stays local
 
-// Explicit allowlist pick: only named fields travel, only when present.
-function pickFields(value, keys){
-  if(!value || typeof value !== 'object') return value ?? null;
-  const out = {};
-  for(const key of keys){
-    if(value[key] !== undefined) out[key] = value[key];
-  }
-  return out;
-}
-// Compact typed pickers for the recursive serializers: null/unknown → null
-// (never a smuggled object or a coerced 0), a non-string never travels.
+// Compact typed pickers for the serializers: null/unknown → null (never a
+// smuggled object/array or a coerced 0), a non-conforming value never travels.
 const pickNum = (v)=> (v == null || v === '' || !Number.isFinite(Number(v))) ? null : Number(v);
 const pickStr = (v)=> typeof v === 'string' ? v : null;
 const pickBoolOr = (v, fallback = null)=> typeof v === 'boolean' ? v : fallback;
-function pickArr(value, keys){
-  return (Array.isArray(value) ? value : []).filter(x => x && typeof x === 'object').map(x => pickFields(x, keys));
-}
+// Integers only (counts, indexes, versions): 1.5 or "3" (string-encoded) or
+// an object never passes. "3"→3 is the documented canonical form.
+const pickInt = (v)=>{
+  const n = pickNum(v);
+  return n != null && Number.isInteger(n) ? n : null;
+};
+// Seed is the deterministic-enrollment string ('base::participant::vN'); a
+// legacy numeric seed still travels, anything else (object/array) → null.
+const pickSeed = (v)=> (typeof v === 'string' && v.length > 0) || (typeof v === 'number' && Number.isFinite(v)) ? v : null;
+const pickArrOfStr = (v)=> Array.isArray(v) ? v.filter(x => typeof x === 'string') : null;
+const pickArrOfInt = (v)=> Array.isArray(v) ? v.filter(x => Number.isInteger(x)) : null;
 
 // Fixed structured vocabularies. Unknown strings are DROPPED, not passed
 // through: only these ids may ever appear in a study export. Kept in sync
@@ -53,86 +53,56 @@ const NOTE_TAG_IDS = new Set(['felt-strong', 'felt-heavy', 'poor-sleep', 'short-
 const QUALITY_IDS = new Set(['great', 'good', 'ok', 'rough']); // SESSION_QUALITY_OPTIONS
 const MODE_IDS = new Set(['guided', 'gym', 'standard', 'short']);
 const ARM_IDS = new Set(['arise', 'double-progression', 'linear-progression', 'fixed-rules', 'flat']);
-const vocabList = (value, vocab)=> Array.isArray(value) ? value.filter(t => typeof t === 'string' && vocab.has(t)) : undefined;
+// participation.js lifecycle — the only study statuses the cohort reports read.
+const STUDY_STATUS_IDS = new Set(['enrolled', 'withdrawn']);
+// domain.js PROVENANCE_ORIGINS — the trust-ranked decision origins.
+const RESULT_ORIGIN_IDS = new Set(['live-engine', 'imported', 'replayed', 'seed']);
+// evidenceMetrics bands — audit.confidence reduced to its band string only.
+const BAND_IDS = new Set(['high', 'medium', 'low', 'low-thin']);
+// progression.js PRESCRIPTION_SNAPSHOT `source` — who authored the shown target.
+const RX_SOURCE_IDS = new Set(['engine', 'schedule']);
+// longitudinal.js classifyRecommendedAction — the frozen graded action.
+const RECOMMENDED_ACTION_IDS = new Set(['unknown', 'hold', 'add_reps', 'add_load', 'reduce_assistance']);
+// longitudinalCore.js RECOMMENDATION_OUTCOME_LABELS — the five named,
+// conservative grades (labelReason PROSE never travels).
+const OUTCOME_LABEL_IDS = new Set(['successful', 'neutral', 'too-aggressive', 'too-conservative', 'insufficient-evidence']);
 const vocabOne = (value, vocab)=> typeof value === 'string' && vocab.has(value) ? value : null;
+// Confidence arrives in two shapes (live engine object { band, … } vs the
+// reduced export string): both collapse to the band string here.
+const bandOf = (c)=> typeof c === 'string' ? vocabOne(c, BAND_IDS) : (c && typeof c === 'object' ? vocabOne(c.band, BAND_IDS) : null);
 
-const STUDY_SET_KEYS = [
-  // What was lifted (the app's canonical string-encoded numbers, '' = unset).
-  'reps', 'weightKg', 'rpe', 'rom', 'assistedKg', 'tempo',
-  // How the set resolved, plus per-set identity/provenance for analysis.
-  'completed', 'skipped', 'failed', 'pain',
-  'setId', 'origin', 'plannedSlot', 'governingPrescriptionId', 'side',
-];
+// typedFields: the allowlist primitive. For each spec key, if the input
+// carried the field, write the MAPPED value (null when the type is wrong);
+// fields the input lacked stay absent, so no phantom keys appear.
+function typedFields(src, spec){
+  const out = {};
+  for(const key of Object.keys(spec)){
+    if(src[key] !== undefined) out[key] = spec[key](src[key]);
+  }
+  return out;
+}
 
-const STUDY_BLOCK_KEYS = [
-  'exerciseId', 'exerciseOrder', 'sets',
-  // Substitution + prescription audit metadata (engine-written).
-  'substitutionFrom', 'substitutionReason', 'governedSlots', 'removedSlots',
-  'prescription', 'prescriptionHistory', 'prescriptionOverridden', 'equipment',
-];
-
-const STUDY_SESSION_KEYS = [
-  'id', 'dateISO', 'programId', 'programVersion', 'templateVersion',
-  'week', 'day', 'status',
-  'durationMinutes', 'startedAt', 'finishedAt', 'savedAt',
-  'targetMinutes', 'originalDurationMin', 'rescheduledFrom',
-  'equipmentSnapshot', 'exerciseOrder', 'substitutions',
-  'painDiscomfort', 'skippedSetsCount', 'sessionDuration',
-  'noteTags', 'blocks',
-];
-
-const STUDY_EVENT_KEYS = [
-  'id', 'schemaVersion', 'type', 'at', 'ts',
-  // Product-measurement payload fields the pilot reports read.
-  'sessionId', 'mode', 'elapsedMs', 'setIndex', 'interactions', 'corrections',
-  'startedAtISO', 'completedAtISO', 'durMs',
-];
-
-const STUDY_READINESS_KEYS = ['dateISO', 'score', 'sleep', 'soreness', 'motivation'];
-
-const STUDY_SCHEDULE_KEYS = ['programId', 'startDateISO', 'week', 'day', 'mesocycle', 'lastAdaptationBasis'];
-const STUDY_SCHEDULE_SESSION_KEYS = [
-  'id', 'dateISO', 'programId', 'programVersion', 'templateVersion',
-  'week', 'day', 'status', 'blocks',
-]; // scheduled-session `mode` is vocabulary-checked separately
-const STUDY_SCHEDULE_BLOCK_KEYS = ['exerciseId', 'sets', 'reps', 'restSec', 'loadHint', 'substitutionFrom', 'substitutionReason'];
-
-// Prescription snapshots (progression.js buildPrescriptionSnapshot): the
-// complete shown-target audit trail — every field is engine-written analysis
-// input, so all of it travels; unknown additions do not.
-const STUDY_PRESCRIPTION_KEYS = [
-  'schemaVersion', 'prescriptionId', 'revision', 'supersedesPrescriptionId',
-  'previousExerciseId', 'changeReason', 'source', 'sessionId', 'exerciseId',
-  'blockIndex', 'prescribedSets', 'prescribedReps', 'prescribedRepRange',
-  'prescribedLoadKg', 'prescribedAssistKg', 'rpeTarget', 'rirTarget',
-  'shownAt', 'firstShownAt', 'createdAt', 'prescribedAt', 'priorCutoffDateISO',
-  'engine', 'reason', 'confidence', 'uncertainty',
-];
-
-// ── Evaluation-ledger serializer ──────────────────────────────────────
+// ── Evaluation-ledger serializers ─────────────────────────────────────
 // Exactly the fields the frozen analysis consumes: assigned-arm analysis,
 // recommendation/outcome scoring, provenance, participant clustering,
 // overrides, protocol/audit checks. Everything else (future fields, human-
-// readable labelReason prose) is excluded — analysis recomputes grades from
-// the numbers, so equivalence with the raw store is preserved (tested).
-const studyProvenance = (p)=> {
-  if(!p || typeof p !== 'object') return null;
-  const out = { origin: vocabOne(p.origin, new Set(['live-engine', 'imported', 'replayed', 'seed'])), capturedAt: pickStr(p.capturedAt), deviceId: pickStr(p.deviceId) };
-  if(p.exportVersion != null) out.exportVersion = pickNum(p.exportVersion);
-  return out;
-};
+// readable free prose) is excluded — analysis recomputes grades from the
+// numbers, so equivalence with the raw store is preserved (tested).
+const studyProvenance = (p)=> p && typeof p === 'object'
+  ? { origin: vocabOne(p.origin, RESULT_ORIGIN_IDS), capturedAt: pickStr(p.capturedAt), deviceId: pickStr(p.deviceId) }
+  : null;
 const studyRecPayload = (r)=> r && typeof r === 'object'
-  ? { load: pickNum(r.load), reps: pickNum(r.reps), assistKg: pickNum(r.assistKg), reason: pickStr(r.reason) }
+  ? { load: pickNum(r.load), reps: pickInt(r.reps), assistKg: pickNum(r.assistKg), reason: pickStr(r.reason) }
   : null;
 const studyBasis = (b)=> b && typeof b === 'object'
-  ? { visibleSessions: pickNum(b.visibleSessions),
+  ? { visibleSessions: pickInt(b.visibleSessions),
       previousBest: b.previousBest && typeof b.previousBest === 'object'
-        ? { reps: pickNum(b.previousBest.reps), weightKg: pickNum(b.previousBest.weightKg), assistedKg: pickNum(b.previousBest.assistedKg), e1rm: pickNum(b.previousBest.e1rm) }
+        ? { reps: pickInt(b.previousBest.reps), weightKg: pickNum(b.previousBest.weightKg), assistedKg: pickNum(b.previousBest.assistedKg), e1rm: pickNum(b.previousBest.e1rm) }
         : null,
-      trainingAgePhase: pickStr(b.trainingAgePhase), priorsVersion: pickNum(b.priorsVersion) }
+      trainingAgePhase: pickStr(b.trainingAgePhase), priorsVersion: pickInt(b.priorsVersion) }
   : null;
 const studyPolicy = (p)=> p && typeof p === 'object'
-  ? { id: pickStr(p.id), priorsVersion: pickNum(p.priorsVersion), modelVersion: pickNum(p.modelVersion) }
+  ? { id: pickStr(p.id), priorsVersion: pickInt(p.priorsVersion), modelVersion: pickInt(p.modelVersion) }
   : null;
 // Audit block: policy identity, guard and confidence band — the fields the
 // frozen analysis reads (evidenceMetrics bands, policy rollups). uncertainty/
@@ -142,12 +112,12 @@ const studyPolicy = (p)=> p && typeof p === 'object'
 // state and must never ride along — both analysis readers (confidenceBandOf,
 // calibrationMetrics) accept the string form.
 const studyAudit = (a)=> a && typeof a === 'object'
-  ? { policy: pickStr(a.policy), policyVersion: pickNum(a.policyVersion),
+  ? { policy: pickStr(a.policy), policyVersion: pickInt(a.policyVersion),
       guard: pickStr(a.guard),
-      confidence: vocabOne(a.confidence?.band, new Set(['high', 'medium', 'low', 'low-thin'])) }
+      confidence: bandOf(a.confidence) }
   : null;
 const studyArmRec = (a)=> a && typeof a === 'object'
-  ? { load: pickNum(a.load), reps: pickNum(a.reps), assistKg: pickNum(a.assistKg) }
+  ? { load: pickNum(a.load), reps: pickInt(a.reps), assistKg: pickNum(a.assistKg) }
   : null;
 function studyArms(arms){
   if(!arms || typeof arms !== 'object') return null;
@@ -161,15 +131,17 @@ function studyOutcome(o){
   if(!o || typeof o !== 'object') return null;
   return {
     sessionId: pickStr(o.sessionId), dateISO: pickStr(o.dateISO), recordedAtISO: pickStr(o.recordedAtISO),
-    load: pickNum(o.load), reps: pickNum(o.reps), assistedKg: pickNum(o.assistedKg), rpe: pickStr(o.rpe),
-    sets: pickNum(o.sets), failedSets: pickNum(o.failedSets), volumeKg: pickNum(o.volumeKg),
+    load: pickNum(o.load), reps: pickInt(o.reps), assistedKg: pickNum(o.assistedKg), rpe: pickStr(o.rpe),
+    sets: pickInt(o.sets), failedSets: pickInt(o.failedSets), volumeKg: pickNum(o.volumeKg),
     e1rm: pickNum(o.e1rm), previousE1rm: pickNum(o.previousE1rm), changePct: pickNum(o.changePct),
     metTarget: pickBoolOr(o.metTarget), followed: pickBoolOr(o.followed), deviationKg: pickNum(o.deviationKg),
-    assignedMet: pickBoolOr(o.assignedMet), assignedArm: pickStr(o.assignedArm), userOverride: pickBoolOr(o.userOverride, false),
+    assignedMet: pickBoolOr(o.assignedMet), assignedArm: vocabOne(o.assignedArm, ARM_IDS), userOverride: pickBoolOr(o.userOverride, false),
     pain: pickBoolOr(o.pain, false), techniqueWarning: pickBoolOr(o.techniqueWarning, false),
     repsMet: pickBoolOr(o.repsMet), loadMet: pickBoolOr(o.loadMet), assistMet: pickBoolOr(o.assistMet),
     loadErrorKg: pickNum(o.loadErrorKg), repError: pickNum(o.repError),
-    classification: pickStr(o.classification), label: pickStr(o.label), attempted: pickBoolOr(o.attempted), gradeable: pickBoolOr(o.gradeable),
+    classification: pickStr(o.classification), // engine taxonomy id (longitudinal.js), not free text
+    label: vocabOne(o.label, OUTCOME_LABEL_IDS), // named grade only; labelReason prose stays local
+    attempted: pickBoolOr(o.attempted), gradeable: pickBoolOr(o.gradeable),
     // Shadow (counterfactual) baseline outcomes: { metTarget, loadErrorKg, repError } per known arm.
     arms: (()=>{ if(!o.arms || typeof o.arms !== 'object') return null; const out = {}; for(const arm of ARM_IDS){ if(o.arms[arm] !== undefined) out[arm] = { metTarget: pickBoolOr(o.arms[arm].metTarget), loadErrorKg: pickNum(o.arms[arm].loadErrorKg), repError: pickNum(o.arms[arm].repError) }; } return out; })(),
   };
@@ -177,20 +149,23 @@ function studyOutcome(o){
 function studyLedgerRow(row){
   if(!row || typeof row !== 'object') return null;
   return {
-    id: pickStr(row.id), schemaVersion: pickNum(row.schemaVersion),
+    id: pickStr(row.id), schemaVersion: pickInt(row.schemaVersion),
     recordedAtISO: pickStr(row.recordedAtISO), dueDateISO: pickStr(row.dueDateISO),
     exerciseId: pickStr(row.exerciseId), movementPattern: pickStr(row.movementPattern), equipmentClass: pickStr(row.equipmentClass),
-    programId: pickStr(row.programId), programVersion: pickNum(row.programVersion),
+    programId: pickStr(row.programId), programVersion: pickInt(row.programVersion),
     recommendation: studyRecPayload(row.recommendation), audit: studyAudit(row.audit),
-    participantId: pickStr(row.participantId), assignedArm: pickStr(row.assignedArm), studyVersion: pickNum(row.studyVersion),
+    participantId: pickStr(row.participantId),
+    // Arm fields are lifecycle vocabulary only — a hostile object/array/unknown
+    // string fails closed to null, never rides along.
+    assignedArm: vocabOne(row.assignedArm, ARM_IDS), studyVersion: pickInt(row.studyVersion),
     // The arm's frozen prescription (what was actually enforced).
     prescription: row.prescription && typeof row.prescription === 'object'
-      ? { arm: pickStr(row.prescription.arm), load: pickNum(row.prescription.load), reps: pickNum(row.prescription.reps), assistKg: pickNum(row.prescription.assistKg) }
+      ? { arm: vocabOne(row.prescription.arm, ARM_IDS), load: pickNum(row.prescription.load), reps: pickInt(row.prescription.reps), assistKg: pickNum(row.prescription.assistKg) }
       : null,
     prescriptionCreatedAt: pickStr(row.prescriptionCreatedAt),
     // Frozen prior-only baseline prescriptions (SHADOW analysis).
     arms: studyArms(row.arms), policy: studyPolicy(row.policy),
-    recommendedAction: pickStr(row.recommendedAction), basis: studyBasis(row.basis),
+    recommendedAction: vocabOne(row.recommendedAction, RECOMMENDED_ACTION_IDS), basis: studyBasis(row.basis),
     userOverride: pickBoolOr(row.userOverride, false),
     provenance: studyProvenance(row.provenance), outcomeProvenance: studyProvenance(row.outcomeProvenance),
     outcome: studyOutcome(row.outcome),
@@ -205,14 +180,19 @@ function buildStudyEnrollmentExport(e){
   if(e.assignments && typeof e.assignments === 'object'){
     for(const [exerciseId, a] of Object.entries(e.assignments)){
       assignments[exerciseId] = a && typeof a === 'object'
-        ? { arm: pickStr(a.arm), assignmentVersion: pickNum(a.assignmentVersion), assignedAtISO: pickStr(a.assignedAtISO) }
+        ? { arm: vocabOne(a.arm, ARM_IDS), assignmentVersion: pickInt(a.assignmentVersion), assignedAtISO: pickStr(a.assignedAtISO) }
         : null;
     }
   }
   return {
-    studyVersion: pickNum(e.studyVersion),
-    participantId: pickStr(e.participantId), seed: e.seed != null ? e.seed : null,
-    enrolledAtISO: pickStr(e.enrolledAtISO), startArm: pickStr(e.startArm),
+    studyVersion: pickInt(e.studyVersion),
+    participantId: pickStr(e.participantId),
+    // Deterministic-enrollment seed: canonical string (studyEnrollment.js),
+    // legacy number tolerated; an object/array/anything else → null.
+    seed: pickSeed(e.seed),
+    enrolledAtISO: pickStr(e.enrolledAtISO),
+    // Fixed arm vocabulary — the balancing pair lives in ARM_IDS.
+    startArm: vocabOne(e.startArm, ARM_IDS),
     policyVersions: e.policyVersions && typeof e.policyVersions === 'object'
       ? { arise: pickStr(e.policyVersions.arise), doubleProgression: pickStr(e.policyVersions.doubleProgression) }
       : null,
@@ -229,31 +209,95 @@ function buildStudyEnrollmentExport(e){
 function studySubstitutions(subs){
   return (Array.isArray(subs) ? subs : [])
     .filter(s => s && typeof s === 'object')
-    .map(s => ({ from: pickStr(s.from), to: pickStr(s.to), reason: pickStr(s.reason) }));
+    .map(s => ({ from: pickStr(s.from), to: pickStr(s.to), reason: pickStr(s.reason) })); // engine-written rationale, disclosed as programme metadata
+}
+// Prescription snapshots (progression.js buildPrescriptionSnapshot): the
+// complete shown-target audit trail. Engine objects (confidence, engine) are
+// REBUILT scalar-by-scalar — confidence collapses to its band string and
+// `uncertainty` (engine-only numeric estimate with no study consumer) never
+// travels — so a future snapshot field cannot silently ride along.
+const studyPrescription = (p)=> p && typeof p === 'object' ? typedFields(p, {
+  schemaVersion: pickInt,
+  prescriptionId: pickStr,
+  revision: pickInt,
+  supersedesPrescriptionId: pickStr,
+  previousExerciseId: pickStr,
+  changeReason: pickStr,
+  source: (v)=> vocabOne(v, RX_SOURCE_IDS),
+  sessionId: pickStr,
+  exerciseId: pickStr,
+  blockIndex: pickInt,
+  prescribedSets: pickInt,
+  prescribedReps: pickNum,
+  prescribedRepRange: pickStr,
+  prescribedLoadKg: pickNum,
+  prescribedAssistKg: pickNum,
+  rpeTarget: pickNum,
+  rirTarget: pickNum,
+  shownAt: pickStr,
+  firstShownAt: pickStr,
+  createdAt: pickStr,
+  prescribedAt: pickStr,
+  priorCutoffDateISO: pickStr,
+  engine: (v)=> v && typeof v === 'object'
+    ? { name: pickStr(v.name), priorsVersion: pickInt(v.priorsVersion), policy: pickStr(v.policy),
+        policyVersion: pickNum(v.policyVersion), modelVersion: pickNum(v.modelVersion),
+        strategy: pickStr(v.strategy), guard: pickStr(v.guard) }
+    : null,
+  reason: pickStr,
+  confidence: bandOf,
+}) : null;
+const studyPrescriptionHistory = (v)=> (Array.isArray(v) ? v : []).filter(x => x && typeof x === 'object').map(studyPrescription);
+
+function studySets(sets){
+  return (Array.isArray(sets) ? sets : [])
+    .filter(s => s && typeof s === 'object')
+    .map(s => typedFields(s, {
+      // What was lifted (the app's canonical string-encoded numbers, '' = unset).
+      reps: pickStr, weightKg: pickStr, rpe: pickStr, rom: pickStr, assistedKg: pickStr, tempo: pickStr,
+      // How the set resolved, plus per-set identity/provenance for analysis.
+      completed: pickBoolOr, skipped: pickBoolOr, failed: pickBoolOr, pain: pickBoolOr,
+      setId: pickStr,
+      origin: pickStr, // engine taxonomy id ('prescribed' | 'user-added' | …), not user text
+      plannedSlot: pickInt, governingPrescriptionId: pickStr, side: pickStr,
+    }));
+}
+function studyBlocks(blocks){
+  return (Array.isArray(blocks) ? blocks : [])
+    .filter(b => b && typeof b === 'object')
+    .map(b => typedFields(b, {
+      exerciseId: pickStr, exerciseOrder: pickInt, equipment: pickStr,
+      prescriptionOverridden: pickBoolOr,
+      // Substitution + prescription audit metadata (engine-written).
+      substitutionFrom: pickStr,
+      substitutionReason: pickStr, // engine-written rationale, disclosed as programme metadata
+      governedSlots: pickArrOfInt, removedSlots: pickArrOfInt,
+      prescription: studyPrescription,
+      prescriptionHistory: studyPrescriptionHistory,
+      sets: studySets,
+    }));
 }
 export function buildStudyHistoryExport(history){
   const out = [];
   for(const s of (Array.isArray(history) ? history : [])){
     if(!s || typeof s !== 'object') continue;
-    const session = pickFields(s, STUDY_SESSION_KEYS);
-    session.blocks = (Array.isArray(s.blocks) ? s.blocks : []).map(b => {
-      if(!b || typeof b !== 'object') return null;
-      const block = pickFields(b, STUDY_BLOCK_KEYS);
-      block.sets = (Array.isArray(b.sets) ? b.sets : []).map(set => pickFields(set, STUDY_SET_KEYS));
-      // Recursively closed prescription snapshots + history revisions.
-      if(block.prescription !== undefined) block.prescription = pickFields(block.prescription, STUDY_PRESCRIPTION_KEYS);
-      if(block.prescriptionHistory !== undefined) block.prescriptionHistory = pickArr(block.prescriptionHistory, STUDY_PRESCRIPTION_KEYS);
-      return block;
-    }).filter(Boolean);
-    // Vocabulary-checked values are only written when the input carried them,
-    // so exports stay minimal and no phantom keys appear. An invalid value
-    // becomes null ("unknown"), never the raw string.
-    if(s.mode !== undefined) session.mode = vocabOne(s.mode, MODE_IDS);
-    if(s.quality !== undefined) session.quality = vocabOne(s.quality, QUALITY_IDS);
-    if(s.noteTags !== undefined) session.noteTags = vocabList(s.noteTags, NOTE_TAG_IDS) || [];
-    if(s.substitutions !== undefined) session.substitutions = studySubstitutions(s.substitutions);
-    if(Array.isArray(session.equipmentSnapshot)) session.equipmentSnapshot = session.equipmentSnapshot.filter(x => typeof x === 'string');
-    out.push(session);
+    out.push(typedFields(s, {
+      id: pickStr, dateISO: pickStr,
+      programId: pickStr, programVersion: pickInt, templateVersion: pickInt,
+      week: pickInt, day: pickInt, status: pickStr,
+      durationMinutes: pickNum, startedAt: pickStr, finishedAt: pickStr, savedAt: pickStr,
+      targetMinutes: pickNum, originalDurationMin: pickNum, rescheduledFrom: pickStr,
+      equipmentSnapshot: pickArrOfStr, exerciseOrder: pickArrOfStr,
+      painDiscomfort: pickBoolOr, skippedSetsCount: pickInt, sessionDuration: pickNum,
+      blocks: studyBlocks,
+      // Vocabulary-checked values are only written when the input carried them,
+      // so exports stay minimal and no phantom keys appear. An invalid value
+      // becomes null ("unknown"), never the raw string.
+      mode: (v)=> vocabOne(v, MODE_IDS),
+      quality: (v)=> vocabOne(v, QUALITY_IDS),
+      noteTags: (v)=> (pickArrOfStr(v) || []).filter(t => NOTE_TAG_IDS.has(t)), // real NOTE_PROMPTS ids only
+      substitutions: studySubstitutions,
+    }));
   }
   return out;
 }
@@ -263,36 +307,57 @@ export function buildStudyHistoryExport(history){
 export function buildStudyReadinessExport(readinessLog){
   return (Array.isArray(readinessLog) ? readinessLog : [])
     .filter(r => r && typeof r === 'object')
-    .map(r => pickFields(r, STUDY_READINESS_KEYS));
+    .map(r => typedFields(r, { dateISO: pickStr, score: pickNum, sleep: pickNum, soreness: pickNum, motivation: pickNum }));
 }
 
 // Schedule adaptation entries: decision metadata the audit trail needs,
-// rebuilt field-by-field (from/to geometry included; prose `reason` kept —
-// engine-written substitution rationale, disclosed as programme metadata).
+// rebuilt field-by-field (from/to geometry included; vocabulary-checked
+// engine `reason` kept — disclosed as programme adjustment metadata).
 function studyAdaptationChange(c){
-  const geometry = (g)=> g && typeof g === 'object' ? { sets: pickNum(g.sets), exerciseId: pickStr(g.exerciseId) } : (g == null ? null : g);
-  return { sessionId: pickStr(c.sessionId), dateISO: pickStr(c.dateISO), exerciseId: pickStr(c.exerciseId), kind: pickStr(c.kind), from: geometry(c.from), to: geometry(c.to), reason: pickStr(c.reason), evidence: Array.isArray(c.evidence) ? c.evidence.filter(x => typeof x === 'string') : null };
+  // Geometry objects only: { sets, exerciseId }. A hostile scalar → null.
+  const geometry = (g)=> g && typeof g === 'object' ? { sets: pickInt(g.sets), exerciseId: pickStr(g.exerciseId) } : null;
+  return {
+    sessionId: pickStr(c.sessionId), dateISO: pickStr(c.dateISO), exerciseId: pickStr(c.exerciseId),
+    kind: pickStr(c.kind), // engine directive taxonomy ('deload' | 'weekly-*' | …), not free text
+    from: geometry(c.from), to: geometry(c.to),
+    reason: pickStr(c.reason), // engine-written rationale, disclosed as programme metadata
+    evidence: pickArrOfStr(c.evidence),
+  };
 }
 function studyAdaptationEntry(e){
   if(!e || typeof e !== 'object') return null;
   return {
     basisKey: pickStr(e.basisKey), basisSessionId: pickStr(e.basisSessionId), dateISO: pickStr(e.dateISO),
     decision: e.decision && typeof e.decision === 'object'
-      ? { deload: pickBoolOr(e.decision.deload, false), deloadSignals: Array.isArray(e.decision.deloadSignals) ? e.decision.deloadSignals.filter(x => typeof x === 'string') : [], confidence: pickStr(e.decision.confidence) }
+      ? { deload: pickBoolOr(e.decision.deload, false),
+          deloadSignals: pickArrOfStr(e.decision.deloadSignals) || [],
+          confidence: bandOf(e.decision.confidence) }
       : null,
     changes: (Array.isArray(e.changes) ? e.changes : []).filter(c => c && typeof c === 'object').map(studyAdaptationChange),
   };
 }
 function buildStudyScheduleExport(schedule){
   if(!schedule || typeof schedule !== 'object') return null;
-  const out = pickFields(schedule, STUDY_SCHEDULE_KEYS);
-  if(out.mesocycle != null && typeof out.mesocycle === 'object') out.mesocycle = null; // structured scalars only
+  const out = typedFields(schedule, {
+    programId: pickStr, startDateISO: pickStr, week: pickInt, day: pickInt,
+    // Structured scalars only: a mesocycle OBJECT never travels (its internals
+    // are UI state); scalars pass so the field stays honest.
+    mesocycle: (v)=> (v == null || typeof v !== 'object') ? (v ?? null) : null,
+    lastAdaptationBasis: pickStr,
+  });
   out.sessions = (Array.isArray(schedule.sessions) ? schedule.sessions : [])
     .map(s => {
       if(!s || typeof s !== 'object') return null;
-      const session = pickFields(s, STUDY_SCHEDULE_SESSION_KEYS);
-      session.mode = vocabOne(s.mode, MODE_IDS);
-      session.blocks = (Array.isArray(s.blocks) ? s.blocks : []).filter(b => b && typeof b === 'object').map(b => pickFields(b, STUDY_SCHEDULE_BLOCK_KEYS));
+      const session = typedFields(s, {
+        id: pickStr, dateISO: pickStr, programId: pickStr, programVersion: pickInt, templateVersion: pickInt,
+        week: pickInt, day: pickInt, status: pickStr,
+        mode: (v)=> vocabOne(v, MODE_IDS),
+        blocks: (v)=> (Array.isArray(v) ? v : []).filter(b => b && typeof b === 'object').map(b => typedFields(b, {
+          exerciseId: pickStr, sets: pickNum, reps: pickStr, restSec: pickInt, loadHint: pickStr,
+          substitutionFrom: pickStr,
+          substitutionReason: pickStr, // engine-written rationale, disclosed as programme metadata
+        })),
+      });
       return session;
     })
     .filter(Boolean);
@@ -301,9 +366,22 @@ function buildStudyScheduleExport(schedule){
   return out;
 }
 function buildStudyEventExport(events){
+  // The privacy filter is the ERROR EXCLUSION, not the type list: `type` is
+  // the app's own event taxonomy (recordEvent call sites, 30+ kinds — never
+  // user-authored free text), so every product measurement travels and crash/
+  // error diagnostics — plus any payload field outside the allowlist — stay
+  // local.
   return (Array.isArray(events) ? events : [])
-    .filter(e => e && typeof e === 'object' && e.type !== 'error') // crash diagnostics stay local
-    .map(e => pickFields(e, STUDY_EVENT_KEYS));
+    .filter(e => e && typeof e === 'object' && e.type !== 'error')
+    .map(e => typedFields(e, {
+      id: pickStr, schemaVersion: pickInt,
+      type: pickStr, // app event taxonomy id, never user-authored
+      at: pickStr, ts: pickStr,
+      sessionId: pickStr,
+      mode: (v)=> vocabOne(v, MODE_IDS),
+      elapsedMs: pickNum, setIndex: pickInt, durMs: pickNum,
+      startedAtISO: pickStr, completedAtISO: pickStr,
+    }));
 }
 
 export function buildStudyExportPayload(store){
@@ -312,11 +390,13 @@ export function buildStudyExportPayload(store){
   ensureStudyParticipantId(store);
   const slice = {
     studyExportVersion: STUDY_EXPORT_VERSION,
-    studyParticipantId: store.studyParticipantId,
-    studyStatus: store.studyStatus || null,
-    studyStatusChangedAtISO: store.studyStatusChangedAtISO || null,
+    studyParticipantId: pickStr(store.studyParticipantId),
+    // Lifecycle vocabulary only ('enrolled' | 'withdrawn'); anything else → null.
+    studyStatus: vocabOne(store.studyStatus, STUDY_STATUS_IDS),
+    // Timestamps: string or null — never an object/array.
+    studyStatusChangedAtISO: pickStr(store.studyStatusChangedAtISO),
     studyEnrollment: buildStudyEnrollmentExport(store.studyEnrollment),
-    // Recursively allowlisted slices — never the raw stores.
+    // Recursively allowlisted, type-locked slices — never the raw stores.
     history: buildStudyHistoryExport(store.history),
     activeSchedule: buildStudyScheduleExport(store.activeSchedule),
     eventHistory: buildStudyEventExport(getEventHistory()),
@@ -336,6 +416,3 @@ export function buildStudyExportPayload(store){
   envelope.data.exportedAt = envelope.exportedAt;
   return envelope;
 }
-
-
-

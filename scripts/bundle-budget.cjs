@@ -94,6 +94,15 @@
 // content/logic in existing chunks, no new dependencies; largest-lazy
 // unchanged (47.4 ≤ 48); measured boot 196.1, total 356.1.
 //
+// total 359 → 362 kB with the dedicated study-export boundary pass: the study
+// serializers move OUT of export.js into a dedicated lazy-loaded studyExport.js
+// chunk (every scalar type-locked — hostile shapes fail closed to null), so the
+// study export no longer rides in the backup path. The lazy chunk's own closure
+// (longitudinal, telemetry, exportPolicy data-source adapters) is the +2.4 kB;
+// MoreView, boot and every other chunk are byte-identical, and boot (196.2 ≤ 197)
+// plus largest-lazy (47.4 ≤ 48) budgets are UNCHANGED — user-perceived load is
+// untouched. Re-baseline is the documented total only; measured total 361.8.
+//
 // The budgets are regression bounds with headroom, not aspirations: a change
 // that crosses one must either undo the bloat or consciously re-baseline here
 // and say why in the PR.
@@ -110,7 +119,7 @@ if(!fs.existsSync(dist)){
 
 const BOOT_BUDGET_KB = 197;
 const CHUNK_BUDGET_KB = 48;
-const TOTAL_BUDGET_KB = 359;
+const TOTAL_BUDGET_KB = 362;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

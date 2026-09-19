@@ -1,9 +1,9 @@
 {
   "schema": "arise.benchmark.artifact.v1",
-  "generatedAtISO": "2026-09-04T11:26:26.657Z",
+  "generatedAtISO": "2026-09-19T08:23:13.873Z",
   "corpus": {
     "fixture": "synthetic-history.json",
-    "sha256": "1ef8e40eba98d6a971f36e10148689c4b1bbccdfe106acd39bd260e3c40d865d"
+    "sha256": "eba9f84ca9eab15be6adc0623bf1d9c6cad85ddc68f1a5a08511ddf4e0f4eac0"
   },
   "versions": {
     "priors": 1,
