@@ -13,6 +13,12 @@ export { EXPORT_VERSION };
 
 
 // ── Study allowlists ────────────────────────────────────────────────────
+// FROZEN (2026-09-19): the study/export infrastructure — schema, serializers,
+// telemetry allowlist, readiness, arms, cohort gates — is frozen for
+// participant recruitment. Reopens only for a correctness bug, a privacy
+// issue, a data-loss risk, or pilot-participant evidence (the freeze rule in
+// docs/PILOT.md).
+//
 // SCHEMA-VERSION INVARIANT: the study export is a recursively closed,
 // versioned schema. EVERY nested structure (sessions, blocks, sets,
 // prescriptions, ledger rows, enrollment, schedule adaptations) is rebuilt
@@ -27,24 +33,43 @@ export { EXPORT_VERSION };
 //   3. a STUDY_EXPORT_VERSION bump when the material payload changes.
 // Free text (session note, session title), note-tag LABELS, UI metadata,
 // engine-facing prose and any unknown/extra field stay on the device.
+//
+// NUMERIC BOUNDARY: numeric export fields accept only real finite numbers
+// (pickFiniteNumber / pickFiniteInteger below) — never a coercion result.
+// Numeric-string acceptance would be a schema-meaning change (v5+), and no
+// exported numeric field is written as a string today.
 export const STUDY_EXPORT_VERSION = 4; // v4: scalars type-locked; audit/band confidence is a string; engine objects rebuilt; prescription uncertainty stays local
 
 // Compact typed pickers for the serializers: null/unknown → null (never a
 // smuggled object/array or a coerced 0), a non-conforming value never travels.
-const pickNum = (v)=> (v == null || v === '' || !Number.isFinite(Number(v))) ? null : Number(v);
+//
+// NUMERIC BOUNDARY INVARIANT: the export never relies on JavaScript coercion
+// (Number(v)) to decide whether a value is safe to export. Every numeric field
+// accepts only intentionally supported inputs — finite JS numbers — and every
+// coercible value (arrays, booleans, objects, empty/whitespace strings,
+// NaN/Infinity, malformed numeric strings) fails closed to null. Numeric
+// strings are deliberately NOT accepted: no exported numeric field is written
+// as a string by the app (the canonical string-encoded numbers are the
+// SET-level reps/weightKg/rpe/rom/assistedKg/tempo, which travel as strings
+// via pickStr below — by design, not through a numeric picker).
+const pickFiniteNumber = (v)=> typeof v === 'number' && Number.isFinite(v) ? v : null;
 const pickStr = (v)=> typeof v === 'string' ? v : null;
 const pickBoolOr = (v, fallback = null)=> typeof v === 'boolean' ? v : fallback;
-// Integers only (counts, indexes, versions): 1.5 or "3" (string-encoded) or
-// an object never passes. "3"→3 is the documented canonical form.
-const pickInt = (v)=>{
-  const n = pickNum(v);
+// Integers only (counts, indexes, versions): additionally requires
+// Number.isInteger — 3.5, "3" and [3] never pass.
+const pickFiniteInteger = (v)=>{
+  const n = pickFiniteNumber(v);
   return n != null && Number.isInteger(n) ? n : null;
 };
 // Seed is the deterministic-enrollment string ('base::participant::vN'); a
 // legacy numeric seed still travels, anything else (object/array) → null.
-const pickSeed = (v)=> (typeof v === 'string' && v.length > 0) || (typeof v === 'number' && Number.isFinite(v)) ? v : null;
+const pickSeed = (v)=> ((typeof v === 'string' && v.length > 0) || (typeof v === 'number' && Number.isFinite(v))) ? v : null;
 const pickArrOfStr = (v)=> Array.isArray(v) ? v.filter(x => typeof x === 'string') : null;
-const pickArrOfInt = (v)=> Array.isArray(v) ? v.filter(x => Number.isInteger(x)) : null;
+const pickArrOfInt = (v)=> Array.isArray(v) ? v.filter(x => typeof x === 'number' && Number.isInteger(x)) : null;
+
+// Strict-parsing regression surface: tests/study-export.test.js exercises the
+// pickers through the real serializers (they stay module-private by design —
+// the boundary contract is what the serializers accept, not the helpers).
 
 // Fixed structured vocabularies. Unknown strings are DROPPED, not passed
 // through: only these ids may ever appear in a study export. Kept in sync
@@ -92,17 +117,17 @@ const studyProvenance = (p)=> p && typeof p === 'object'
   ? { origin: vocabOne(p.origin, RESULT_ORIGIN_IDS), capturedAt: pickStr(p.capturedAt), deviceId: pickStr(p.deviceId) }
   : null;
 const studyRecPayload = (r)=> r && typeof r === 'object'
-  ? { load: pickNum(r.load), reps: pickInt(r.reps), assistKg: pickNum(r.assistKg), reason: pickStr(r.reason) }
+  ? { load: pickFiniteNumber(r.load), reps: pickFiniteInteger(r.reps), assistKg: pickFiniteNumber(r.assistKg), reason: pickStr(r.reason) }
   : null;
 const studyBasis = (b)=> b && typeof b === 'object'
-  ? { visibleSessions: pickInt(b.visibleSessions),
+  ? { visibleSessions: pickFiniteInteger(b.visibleSessions),
       previousBest: b.previousBest && typeof b.previousBest === 'object'
-        ? { reps: pickInt(b.previousBest.reps), weightKg: pickNum(b.previousBest.weightKg), assistedKg: pickNum(b.previousBest.assistedKg), e1rm: pickNum(b.previousBest.e1rm) }
+        ? { reps: pickFiniteInteger(b.previousBest.reps), weightKg: pickFiniteNumber(b.previousBest.weightKg), assistedKg: pickFiniteNumber(b.previousBest.assistedKg), e1rm: pickFiniteNumber(b.previousBest.e1rm) }
         : null,
-      trainingAgePhase: pickStr(b.trainingAgePhase), priorsVersion: pickInt(b.priorsVersion) }
+      trainingAgePhase: pickStr(b.trainingAgePhase), priorsVersion: pickFiniteInteger(b.priorsVersion) }
   : null;
 const studyPolicy = (p)=> p && typeof p === 'object'
-  ? { id: pickStr(p.id), priorsVersion: pickInt(p.priorsVersion), modelVersion: pickInt(p.modelVersion) }
+  ? { id: pickStr(p.id), priorsVersion: pickFiniteInteger(p.priorsVersion), modelVersion: pickFiniteInteger(p.modelVersion) }
   : null;
 // Audit block: policy identity, guard and confidence band — the fields the
 // frozen analysis reads (evidenceMetrics bands, policy rollups). uncertainty/
@@ -112,12 +137,12 @@ const studyPolicy = (p)=> p && typeof p === 'object'
 // state and must never ride along — both analysis readers (confidenceBandOf,
 // calibrationMetrics) accept the string form.
 const studyAudit = (a)=> a && typeof a === 'object'
-  ? { policy: pickStr(a.policy), policyVersion: pickInt(a.policyVersion),
+  ? { policy: pickStr(a.policy), policyVersion: pickFiniteInteger(a.policyVersion),
       guard: pickStr(a.guard),
       confidence: bandOf(a.confidence) }
   : null;
 const studyArmRec = (a)=> a && typeof a === 'object'
-  ? { load: pickNum(a.load), reps: pickInt(a.reps), assistKg: pickNum(a.assistKg) }
+  ? { load: pickFiniteNumber(a.load), reps: pickFiniteInteger(a.reps), assistKg: pickFiniteNumber(a.assistKg) }
   : null;
 function studyArms(arms){
   if(!arms || typeof arms !== 'object') return null;
@@ -131,36 +156,36 @@ function studyOutcome(o){
   if(!o || typeof o !== 'object') return null;
   return {
     sessionId: pickStr(o.sessionId), dateISO: pickStr(o.dateISO), recordedAtISO: pickStr(o.recordedAtISO),
-    load: pickNum(o.load), reps: pickInt(o.reps), assistedKg: pickNum(o.assistedKg), rpe: pickStr(o.rpe),
-    sets: pickInt(o.sets), failedSets: pickInt(o.failedSets), volumeKg: pickNum(o.volumeKg),
-    e1rm: pickNum(o.e1rm), previousE1rm: pickNum(o.previousE1rm), changePct: pickNum(o.changePct),
-    metTarget: pickBoolOr(o.metTarget), followed: pickBoolOr(o.followed), deviationKg: pickNum(o.deviationKg),
+    load: pickFiniteNumber(o.load), reps: pickFiniteInteger(o.reps), assistedKg: pickFiniteNumber(o.assistedKg), rpe: pickStr(o.rpe),
+    sets: pickFiniteInteger(o.sets), failedSets: pickFiniteInteger(o.failedSets), volumeKg: pickFiniteNumber(o.volumeKg),
+    e1rm: pickFiniteNumber(o.e1rm), previousE1rm: pickFiniteNumber(o.previousE1rm), changePct: pickFiniteNumber(o.changePct),
+    metTarget: pickBoolOr(o.metTarget), followed: pickBoolOr(o.followed), deviationKg: pickFiniteNumber(o.deviationKg),
     assignedMet: pickBoolOr(o.assignedMet), assignedArm: vocabOne(o.assignedArm, ARM_IDS), userOverride: pickBoolOr(o.userOverride, false),
     pain: pickBoolOr(o.pain, false), techniqueWarning: pickBoolOr(o.techniqueWarning, false),
     repsMet: pickBoolOr(o.repsMet), loadMet: pickBoolOr(o.loadMet), assistMet: pickBoolOr(o.assistMet),
-    loadErrorKg: pickNum(o.loadErrorKg), repError: pickNum(o.repError),
+    loadErrorKg: pickFiniteNumber(o.loadErrorKg), repError: pickFiniteNumber(o.repError),
     classification: pickStr(o.classification), // engine taxonomy id (longitudinal.js), not free text
     label: vocabOne(o.label, OUTCOME_LABEL_IDS), // named grade only; labelReason prose stays local
     attempted: pickBoolOr(o.attempted), gradeable: pickBoolOr(o.gradeable),
     // Shadow (counterfactual) baseline outcomes: { metTarget, loadErrorKg, repError } per known arm.
-    arms: (()=>{ if(!o.arms || typeof o.arms !== 'object') return null; const out = {}; for(const arm of ARM_IDS){ if(o.arms[arm] !== undefined) out[arm] = { metTarget: pickBoolOr(o.arms[arm].metTarget), loadErrorKg: pickNum(o.arms[arm].loadErrorKg), repError: pickNum(o.arms[arm].repError) }; } return out; })(),
+    arms: (()=>{ if(!o.arms || typeof o.arms !== 'object') return null; const out = {}; for(const arm of ARM_IDS){ if(o.arms[arm] !== undefined) out[arm] = { metTarget: pickBoolOr(o.arms[arm].metTarget), loadErrorKg: pickFiniteNumber(o.arms[arm].loadErrorKg), repError: pickFiniteNumber(o.arms[arm].repError) }; } return out; })(),
   };
 }
 function studyLedgerRow(row){
   if(!row || typeof row !== 'object') return null;
   return {
-    id: pickStr(row.id), schemaVersion: pickInt(row.schemaVersion),
+    id: pickStr(row.id), schemaVersion: pickFiniteInteger(row.schemaVersion),
     recordedAtISO: pickStr(row.recordedAtISO), dueDateISO: pickStr(row.dueDateISO),
     exerciseId: pickStr(row.exerciseId), movementPattern: pickStr(row.movementPattern), equipmentClass: pickStr(row.equipmentClass),
-    programId: pickStr(row.programId), programVersion: pickInt(row.programVersion),
+    programId: pickStr(row.programId), programVersion: pickFiniteInteger(row.programVersion),
     recommendation: studyRecPayload(row.recommendation), audit: studyAudit(row.audit),
     participantId: pickStr(row.participantId),
     // Arm fields are lifecycle vocabulary only — a hostile object/array/unknown
     // string fails closed to null, never rides along.
-    assignedArm: vocabOne(row.assignedArm, ARM_IDS), studyVersion: pickInt(row.studyVersion),
+    assignedArm: vocabOne(row.assignedArm, ARM_IDS), studyVersion: pickFiniteInteger(row.studyVersion),
     // The arm's frozen prescription (what was actually enforced).
     prescription: row.prescription && typeof row.prescription === 'object'
-      ? { arm: vocabOne(row.prescription.arm, ARM_IDS), load: pickNum(row.prescription.load), reps: pickInt(row.prescription.reps), assistKg: pickNum(row.prescription.assistKg) }
+      ? { arm: vocabOne(row.prescription.arm, ARM_IDS), load: pickFiniteNumber(row.prescription.load), reps: pickFiniteInteger(row.prescription.reps), assistKg: pickFiniteNumber(row.prescription.assistKg) }
       : null,
     prescriptionCreatedAt: pickStr(row.prescriptionCreatedAt),
     // Frozen prior-only baseline prescriptions (SHADOW analysis).
@@ -180,12 +205,12 @@ function buildStudyEnrollmentExport(e){
   if(e.assignments && typeof e.assignments === 'object'){
     for(const [exerciseId, a] of Object.entries(e.assignments)){
       assignments[exerciseId] = a && typeof a === 'object'
-        ? { arm: vocabOne(a.arm, ARM_IDS), assignmentVersion: pickInt(a.assignmentVersion), assignedAtISO: pickStr(a.assignedAtISO) }
+        ? { arm: vocabOne(a.arm, ARM_IDS), assignmentVersion: pickFiniteInteger(a.assignmentVersion), assignedAtISO: pickStr(a.assignedAtISO) }
         : null;
     }
   }
   return {
-    studyVersion: pickInt(e.studyVersion),
+    studyVersion: pickFiniteInteger(e.studyVersion),
     participantId: pickStr(e.participantId),
     // Deterministic-enrollment seed: canonical string (studyEnrollment.js),
     // legacy number tolerated; an object/array/anything else → null.
@@ -197,7 +222,7 @@ function buildStudyEnrollmentExport(e){
       ? { arise: pickStr(e.policyVersions.arise), doubleProgression: pickStr(e.policyVersions.doubleProgression) }
       : null,
     targetDefinition: pickStr(e.targetDefinition),
-    meaningfulGainThreshold: pickNum(e.meaningfulGainThreshold),
+    meaningfulGainThreshold: pickFiniteNumber(e.meaningfulGainThreshold),
     analysisCodeVersion: pickStr(e.analysisCodeVersion),
     assignments,
   };
@@ -217,31 +242,31 @@ function studySubstitutions(subs){
 // `uncertainty` (engine-only numeric estimate with no study consumer) never
 // travels — so a future snapshot field cannot silently ride along.
 const studyPrescription = (p)=> p && typeof p === 'object' ? typedFields(p, {
-  schemaVersion: pickInt,
+  schemaVersion: pickFiniteInteger,
   prescriptionId: pickStr,
-  revision: pickInt,
+  revision: pickFiniteInteger,
   supersedesPrescriptionId: pickStr,
   previousExerciseId: pickStr,
   changeReason: pickStr,
   source: (v)=> vocabOne(v, RX_SOURCE_IDS),
   sessionId: pickStr,
   exerciseId: pickStr,
-  blockIndex: pickInt,
-  prescribedSets: pickInt,
-  prescribedReps: pickNum,
+  blockIndex: pickFiniteInteger,
+  prescribedSets: pickFiniteInteger,
+  prescribedReps: pickFiniteNumber,
   prescribedRepRange: pickStr,
-  prescribedLoadKg: pickNum,
-  prescribedAssistKg: pickNum,
-  rpeTarget: pickNum,
-  rirTarget: pickNum,
+  prescribedLoadKg: pickFiniteNumber,
+  prescribedAssistKg: pickFiniteNumber,
+  rpeTarget: pickFiniteNumber,
+  rirTarget: pickFiniteNumber,
   shownAt: pickStr,
   firstShownAt: pickStr,
   createdAt: pickStr,
   prescribedAt: pickStr,
   priorCutoffDateISO: pickStr,
   engine: (v)=> v && typeof v === 'object'
-    ? { name: pickStr(v.name), priorsVersion: pickInt(v.priorsVersion), policy: pickStr(v.policy),
-        policyVersion: pickNum(v.policyVersion), modelVersion: pickNum(v.modelVersion),
+    ? { name: pickStr(v.name), priorsVersion: pickFiniteInteger(v.priorsVersion), policy: pickStr(v.policy),
+        policyVersion: pickFiniteNumber(v.policyVersion), modelVersion: pickFiniteNumber(v.modelVersion),
         strategy: pickStr(v.strategy), guard: pickStr(v.guard) }
     : null,
   reason: pickStr,
@@ -259,14 +284,14 @@ function studySets(sets){
       completed: pickBoolOr, skipped: pickBoolOr, failed: pickBoolOr, pain: pickBoolOr,
       setId: pickStr,
       origin: pickStr, // engine taxonomy id ('prescribed' | 'user-added' | …), not user text
-      plannedSlot: pickInt, governingPrescriptionId: pickStr, side: pickStr,
+      plannedSlot: pickFiniteInteger, governingPrescriptionId: pickStr, side: pickStr,
     }));
 }
 function studyBlocks(blocks){
   return (Array.isArray(blocks) ? blocks : [])
     .filter(b => b && typeof b === 'object')
     .map(b => typedFields(b, {
-      exerciseId: pickStr, exerciseOrder: pickInt, equipment: pickStr,
+      exerciseId: pickStr, exerciseOrder: pickFiniteInteger, equipment: pickStr,
       prescriptionOverridden: pickBoolOr,
       // Substitution + prescription audit metadata (engine-written).
       substitutionFrom: pickStr,
@@ -283,12 +308,12 @@ export function buildStudyHistoryExport(history){
     if(!s || typeof s !== 'object') continue;
     out.push(typedFields(s, {
       id: pickStr, dateISO: pickStr,
-      programId: pickStr, programVersion: pickInt, templateVersion: pickInt,
-      week: pickInt, day: pickInt, status: pickStr,
-      durationMinutes: pickNum, startedAt: pickStr, finishedAt: pickStr, savedAt: pickStr,
-      targetMinutes: pickNum, originalDurationMin: pickNum, rescheduledFrom: pickStr,
+      programId: pickStr, programVersion: pickFiniteInteger, templateVersion: pickFiniteInteger,
+      week: pickFiniteInteger, day: pickFiniteInteger, status: pickStr,
+      durationMinutes: pickFiniteNumber, startedAt: pickStr, finishedAt: pickStr, savedAt: pickStr,
+      targetMinutes: pickFiniteNumber, originalDurationMin: pickFiniteNumber, rescheduledFrom: pickStr,
       equipmentSnapshot: pickArrOfStr, exerciseOrder: pickArrOfStr,
-      painDiscomfort: pickBoolOr, skippedSetsCount: pickInt, sessionDuration: pickNum,
+      painDiscomfort: pickBoolOr, skippedSetsCount: pickFiniteInteger, sessionDuration: pickFiniteNumber,
       blocks: studyBlocks,
       // Vocabulary-checked values are only written when the input carried them,
       // so exports stay minimal and no phantom keys appear. An invalid value
@@ -307,7 +332,7 @@ export function buildStudyHistoryExport(history){
 export function buildStudyReadinessExport(readinessLog){
   return (Array.isArray(readinessLog) ? readinessLog : [])
     .filter(r => r && typeof r === 'object')
-    .map(r => typedFields(r, { dateISO: pickStr, score: pickNum, sleep: pickNum, soreness: pickNum, motivation: pickNum }));
+    .map(r => typedFields(r, { dateISO: pickStr, score: pickFiniteNumber, sleep: pickFiniteNumber, soreness: pickFiniteNumber, motivation: pickFiniteNumber }));
 }
 
 // Schedule adaptation entries: decision metadata the audit trail needs,
@@ -315,7 +340,7 @@ export function buildStudyReadinessExport(readinessLog){
 // engine `reason` kept — disclosed as programme adjustment metadata).
 function studyAdaptationChange(c){
   // Geometry objects only: { sets, exerciseId }. A hostile scalar → null.
-  const geometry = (g)=> g && typeof g === 'object' ? { sets: pickInt(g.sets), exerciseId: pickStr(g.exerciseId) } : null;
+  const geometry = (g)=> g && typeof g === 'object' ? { sets: pickFiniteInteger(g.sets), exerciseId: pickStr(g.exerciseId) } : null;
   return {
     sessionId: pickStr(c.sessionId), dateISO: pickStr(c.dateISO), exerciseId: pickStr(c.exerciseId),
     kind: pickStr(c.kind), // engine directive taxonomy ('deload' | 'weekly-*' | …), not free text
@@ -339,7 +364,7 @@ function studyAdaptationEntry(e){
 function buildStudyScheduleExport(schedule){
   if(!schedule || typeof schedule !== 'object') return null;
   const out = typedFields(schedule, {
-    programId: pickStr, startDateISO: pickStr, week: pickInt, day: pickInt,
+    programId: pickStr, startDateISO: pickStr, week: pickFiniteInteger, day: pickFiniteInteger,
     // Structured scalars only: a mesocycle OBJECT never travels (its internals
     // are UI state); scalars pass so the field stays honest.
     mesocycle: (v)=> (v == null || typeof v !== 'object') ? (v ?? null) : null,
@@ -349,11 +374,11 @@ function buildStudyScheduleExport(schedule){
     .map(s => {
       if(!s || typeof s !== 'object') return null;
       const session = typedFields(s, {
-        id: pickStr, dateISO: pickStr, programId: pickStr, programVersion: pickInt, templateVersion: pickInt,
-        week: pickInt, day: pickInt, status: pickStr,
+        id: pickStr, dateISO: pickStr, programId: pickStr, programVersion: pickFiniteInteger, templateVersion: pickFiniteInteger,
+        week: pickFiniteInteger, day: pickFiniteInteger, status: pickStr,
         mode: (v)=> vocabOne(v, MODE_IDS),
         blocks: (v)=> (Array.isArray(v) ? v : []).filter(b => b && typeof b === 'object').map(b => typedFields(b, {
-          exerciseId: pickStr, sets: pickNum, reps: pickStr, restSec: pickInt, loadHint: pickStr,
+          exerciseId: pickStr, sets: pickFiniteNumber, reps: pickStr, restSec: pickFiniteInteger, loadHint: pickStr,
           substitutionFrom: pickStr,
           substitutionReason: pickStr, // engine-written rationale, disclosed as programme metadata
         })),
@@ -374,12 +399,12 @@ function buildStudyEventExport(events){
   return (Array.isArray(events) ? events : [])
     .filter(e => e && typeof e === 'object' && e.type !== 'error')
     .map(e => typedFields(e, {
-      id: pickStr, schemaVersion: pickInt,
+      id: pickStr, schemaVersion: pickFiniteInteger,
       type: pickStr, // app event taxonomy id, never user-authored
       at: pickStr, ts: pickStr,
       sessionId: pickStr,
       mode: (v)=> vocabOne(v, MODE_IDS),
-      elapsedMs: pickNum, setIndex: pickInt, durMs: pickNum,
+      elapsedMs: pickFiniteNumber, setIndex: pickFiniteInteger, durMs: pickFiniteNumber,
       startedAtISO: pickStr, completedAtISO: pickStr,
     }));
 }

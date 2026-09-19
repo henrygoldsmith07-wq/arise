@@ -7,6 +7,7 @@
 //   §2 missing-export-timestamp semantics (not a "never exported" detector)
 //   §3 abandonment warning on the true terminal denominator
 //   §4/§5 guidance + privacy wording enforced against the actual artifacts
+//   §6 numeric boundary — strict parsing: coercion truth tables + real-field injection
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -755,5 +756,236 @@ describe('§ malicious shapes fail closed — scalars type-locked', ()=>{
     assert.equal(row.outcome.label, 'too-conservative');
     assert.equal(row.outcome.assignedArm, 'arise');
     assert.deepEqual(Object.keys(row.arms).sort(), ['arise', 'double-progression']);
+  });
+});
+
+// ── §6 Numeric boundary — strict parsing, zero coercion ─────────────────────
+// The numeric pickers in studyExport.js never call Number(v): the old coercion
+// accepted [] → 0, ['3'] → 3, true → 1, false → 0, '   ' → 0, '3 ' → 3 and
+// valueOf-thunks → their result. The contract now: a numeric export slot
+// accepts only finite JS numbers (integer slots additionally Number.isInteger);
+// every coercible value fails closed to null. Numeric strings are NOT accepted
+// because no exported numeric field is written as a string by the app — the
+// canonical string-encoded numbers are the SET-level reps/weightKg/rpe/rom/
+// assistedKg/tempo, which travel as strings by design (re-pinned below). The
+// pickers stay module-private on purpose; these tests exercise the real
+// serializers — the boundary contract is what the serializers accept.
+const HOSTILE = ['', '   ', '3 ', ' 3', '3x', 'e', '3', '3.5', '0x10', '1e3', [], ['3'], ['3', 'x'], {}, { valueOf(){ return 3; } }, true, false, NaN, Infinity, -Infinity];
+const fmt = (v)=> Array.isArray(v) ? JSON.stringify(v) : (v && typeof v === 'object' ? '{object}' : String(v));
+const NUM_SLOTS = ['durationMinutes', 'targetMinutes', 'originalDurationMin', 'sessionDuration'];
+const INT_SLOTS = ['week', 'day', 'programVersion', 'templateVersion', 'skippedSetsCount'];
+
+describe('§6 numeric boundary — coercible values fail closed to null', ()=>{
+  let storage;
+  beforeEach(()=>{ storage = new Mem(); globalThis.localStorage = storage; });
+
+  describe('direct serializers (no JSON round-trip): the truth tables', ()=>{
+    it('number fields reject every coercible value and every numeric string', ()=>{
+      for(const v of HOSTILE){
+        const s = { id: 'probe', dateISO: '2026-03-08', blocks: [] };
+        for(const k of NUM_SLOTS) s[k] = v;
+        const [out] = buildStudyHistoryExport([s]);
+        for(const k of NUM_SLOTS) assert.equal(out[k], null, `${k}: ${fmt(v)} → null`);
+      }
+    });
+
+    it('integer fields reject every coercible value; fractional and numeric strings never pass', ()=>{
+      for(const v of HOSTILE){
+        const s = { id: 'probe', dateISO: '2026-03-08', blocks: [] };
+        for(const k of INT_SLOTS) s[k] = v;
+        const [out] = buildStudyHistoryExport([s]);
+        for(const k of INT_SLOTS) assert.equal(out[k], null, `${k}: ${fmt(v)} → null`);
+      }
+    });
+
+    it('readiness numbers reject every coercible value', ()=>{
+      for(const v of HOSTILE){
+        const [out] = buildStudyReadinessExport([{ dateISO: '2026-03-08', score: v, sleep: v, soreness: v, motivation: v }]);
+        assert.deepEqual(out, { dateISO: '2026-03-08', score: null, sleep: null, soreness: null, motivation: null }, `${fmt(v)} → null`);
+      }
+    });
+
+    it('canonical numbers travel: 3 → 3, 3.5 → 3.5, 0 → 0, -2.25 → -2.25', ()=>{
+      const [out] = buildStudyHistoryExport([{ id: 'probe', dateISO: '2026-03-08', blocks: [], week: 3, day: 0, programVersion: 2, templateVersion: 5, skippedSetsCount: 0, durationMinutes: 3, targetMinutes: 3.5, originalDurationMin: 0, sessionDuration: -2.25 }]);
+      assert.equal(out.week, 3);
+      assert.equal(out.day, 0);
+      assert.equal(out.programVersion, 2);
+      assert.equal(out.templateVersion, 5);
+      assert.equal(out.skippedSetsCount, 0);
+      assert.equal(out.durationMinutes, 3);
+      assert.equal(out.targetMinutes, 3.5);
+      assert.equal(out.originalDurationMin, 0);
+      assert.equal(out.sessionDuration, -2.25);
+      const [rdy] = buildStudyReadinessExport([{ dateISO: '2026-03-08', score: 3, sleep: 3.5, soreness: 0, motivation: -2.25 }]);
+      assert.deepEqual(rdy, { dateISO: '2026-03-08', score: 3, sleep: 3.5, soreness: 0, motivation: -2.25 });
+    });
+
+    it('integer fields additionally require Number.isInteger: 3 → 3, 3.5 → null, "3.5" → null', ()=>{
+      const [out] = buildStudyHistoryExport([{ id: 'probe', dateISO: '2026-03-08', blocks: [], week: 3, day: 3.5, programVersion: '3.5', templateVersion: '3' }]);
+      assert.equal(out.week, 3);
+      assert.equal(out.day, null);
+      assert.equal(out.programVersion, null);
+      assert.equal(out.templateVersion, null);
+    });
+
+    it('set-level canonical string numbers are untouched: "8"/"42.5"/"7.5" travel as strings', ()=>{
+      const [out] = buildStudyHistoryExport([{ id: 'probe', dateISO: '2026-03-08', blocks: [{ exerciseId: 'bench-press-dumbbell', sets: [{ reps: '8', weightKg: '42.5', rpe: '7.5', rom: '95', assistedKg: '', tempo: '301' }] }] }]);
+      const st = out.blocks[0].sets[0];
+      assert.equal(st.reps, '8');
+      assert.equal(st.weightKg, '42.5');
+      assert.equal(st.rpe, '7.5');
+      assert.equal(st.rom, '95');
+      assert.equal(st.assistedKg, '', 'canonical unset form stays ""');
+      assert.equal(st.tempo, '301');
+    });
+  });
+
+  describe('real nested injection through buildStudyExportPayload', ()=>{
+    // Poisons EVERY numeric export slot with one hostile value P and re-asserts
+    // the full shape. Values that survive a JSON round-trip (a corrupted or
+    // migrated store can only carry these through the real storage paths) are
+    // seeded via localStorage; NaN/Infinity are included too — they arrive as
+    // null through JSON and must still export null (their direct rejection is
+    // proven above, where no round-trip intervenes).
+    function poison(P){
+      const store = baseStore();
+      const rx = {
+        prescriptionId: 'rx1', schemaVersion: P, revision: P, blockIndex: P, prescribedSets: P,
+        prescribedReps: P, prescribedLoadKg: P, prescribedAssistKg: P, rpeTarget: P, rirTarget: P,
+        source: 'engine', shownAt: '2026-03-01T09:00:00.000Z', reason: 'suite',
+        confidence: { band: 'high' }, engine: { name: 'arise-engine', priorsVersion: P, policyVersion: P, modelVersion: P },
+      };
+      store.history.push({
+        id: 'h-poison', dateISO: '2026-03-08', programId: 'p1', status: 'done', mode: 'guided',
+        programVersion: P, templateVersion: P, week: P, day: P,
+        durationMinutes: P, targetMinutes: P, originalDurationMin: P, sessionDuration: P, skippedSetsCount: P,
+        blocks: [{ exerciseId: 'bench-press-dumbbell', exerciseOrder: P, governedSlots: [P], removedSlots: [P],
+          prescription: rx, prescriptionHistory: [rx],
+          sets: [{ reps: '8', weightKg: '40', rpe: '', completed: true, setId: 'set1', plannedSlot: P }] }],
+      });
+      store.activeSchedule = {
+        programId: 'p1', startDateISO: '2026-03-01', week: P, day: P, mesocycle: null, lastAdaptation: null,
+        sessions: [{ id: 'sc-poison', dateISO: '2026-03-09', programId: 'p1', programVersion: P, templateVersion: P, week: P, day: P, status: 'planned',
+          blocks: [{ exerciseId: 'bench-press-dumbbell', sets: P, reps: '8-10', restSec: P, loadHint: '40' }] }],
+        adaptationHistory: [{ basisKey: 'k', basisSessionId: 'h0', dateISO: '2026-03-08',
+          decision: { deload: false, confidence: { band: 'medium' } },
+          changes: [{ sessionId: 'h0', dateISO: '2026-03-08', exerciseId: 'bench-press-dumbbell', kind: 'weekly-sets',
+            from: { sets: P, exerciseId: 'bench-press-dumbbell' }, to: { sets: 3, exerciseId: 'bench-press-dumbbell' }, reason: 'suite', evidence: ['x'] }] }],
+      };
+      store.readinessLog.push({ dateISO: '2026-03-08', score: P, sleep: P, soreness: P, motivation: P });
+      store.studyEnrollment = {
+        studyVersion: P, participantId: ID, seed: 'base::p::v1', enrolledAtISO: '2026-03-01T00:00:00.000Z',
+        startArm: 'arise', targetDefinition: 'e1rm', analysisCodeVersion: 'a1', meaningfulGainThreshold: P,
+        assignments: { 'bench-press-dumbbell': { arm: 'arise', assignmentVersion: P, assignedAtISO: '2026-03-01T00:00:00.000Z' } },
+      };
+      globalThis.localStorage.setItem('arise.telemetry.v2', JSON.stringify({ version: 2, events: [
+        { id: 'ev-poison', schemaVersion: P, type: 'set:complete', at: '2026-03-08T10:00:00.000Z', sessionId: 'h-poison', elapsedMs: P, setIndex: P, durMs: P },
+      ] }));
+      globalThis.localStorage.setItem('arise.evaluation.v1', JSON.stringify({ schemaVersion: 2, records: [{
+        id: 'r-poison', schemaVersion: P, recordedAtISO: '2026-03-01T10:00:00.000Z', dueDateISO: '2026-03-08',
+        exerciseId: 'bench-press-dumbbell', movementPattern: 'horizontal-push', equipmentClass: 'barbell',
+        programId: 'p1', programVersion: P, studyVersion: P,
+        recommendation: { load: P, reps: P, assistKg: P, reason: 'suite' },
+        audit: { policy: 'arise-engine', policyVersion: P, guard: null, confidence: { band: 'low' } },
+        assignedArm: 'arise', participantId: ID, prescription: { arm: 'arise', load: P, reps: P, assistKg: P },
+        prescriptionCreatedAt: '2026-03-01T10:00:00.000Z', recommendedAction: 'reduce_assistance',
+        basis: { visibleSessions: P, trainingAgePhase: 'novice', priorsVersion: P, previousBest: { reps: P, weightKg: P, assistedKg: P, e1rm: P } },
+        policy: { id: 'arise-engine', priorsVersion: P, modelVersion: P },
+        arms: { arise: { load: P, reps: P, assistKg: P }, 'double-progression': { load: P, reps: P, assistKg: P } },
+        provenance: { origin: 'live-engine', capturedAt: '2026-03-01T10:00:00.000Z', deviceId: 'dev-x' },
+        outcomeProvenance: null,
+        outcome: { sessionId: 'h-poison', dateISO: '2026-03-08', recordedAtISO: '2026-03-01T12:00:00.000Z',
+          load: P, reps: P, assistedKg: P, rpe: '', sets: P, failedSets: P, volumeKg: P, e1rm: P, previousE1rm: P, changePct: P,
+          deviationKg: P, loadErrorKg: P, repError: P, metTarget: true, followed: true, assignedArm: 'arise', userOverride: false, pain: false, techniqueWarning: false,
+          classification: 'progression-success', label: 'successful', attempted: true, gradeable: true,
+          arms: { arise: { metTarget: true, loadErrorKg: P, repError: P } } },
+      }] }));
+      return store;
+    }
+
+    it('every poisoned numeric slot exports null; canonical siblings survive; no malformed value reaches the JSON', ()=>{
+      for(const P of HOSTILE){
+        const data = buildStudyExportPayload(poison(P)).data;
+
+        // Version unchanged: strict parsing is not a schema-meaning change.
+        assert.equal(data.studyExportVersion, STUDY_EXPORT_VERSION);
+
+        const s = data.history[0];
+        for(const k of [...NUM_SLOTS, ...INT_SLOTS]) assert.equal(s[k], null, `history.${k}: ${fmt(P)}`);
+        const b = s.blocks[0], rxOut = b.prescription;
+        assert.equal(b.exerciseOrder, null);
+        assert.deepEqual(b.governedSlots, [], 'non-integer array members filtered');
+        assert.deepEqual(b.removedSlots, []);
+        for(const k of ['schemaVersion', 'revision', 'blockIndex', 'prescribedSets', 'prescribedReps', 'prescribedLoadKg', 'prescribedAssistKg', 'rpeTarget', 'rirTarget']) assert.equal(rxOut[k], null, `prescription.${k}: ${fmt(P)}`);
+        assert.equal(rxOut.engine.priorsVersion, null);
+        assert.equal(rxOut.engine.policyVersion, null);
+        assert.equal(rxOut.engine.modelVersion, null);
+        assert.equal(rxOut.engine.name, 'arise-engine', 'sibling strings survive');
+        assert.equal(b.prescriptionHistory[0].prescribedLoadKg, null);
+        assert.equal(b.sets[0].plannedSlot, null);
+        assert.equal(b.sets[0].reps, '8', 'set-level canonical strings survive poisoned numerics');
+
+        const sched = data.activeSchedule, ss = sched.sessions[0];
+        assert.equal(sched.week, null);
+        assert.equal(sched.day, null);
+        for(const k of ['programVersion', 'templateVersion', 'week', 'day']) assert.equal(ss[k], null, `schedule session.${k}: ${fmt(P)}`);
+        assert.equal(ss.blocks[0].sets, null, 'schedule block.sets: poisoned → null');
+        assert.equal(ss.blocks[0].restSec, null);
+        assert.equal(ss.blocks[0].reps, '8-10', 'string sibling survives');
+        assert.equal(sched.adaptationHistory[0].changes[0].from.sets, null);
+        assert.equal(sched.adaptationHistory[0].changes[0].to.sets, 3, 'canonical geometry survives');
+
+        assert.deepEqual(data.readinessLog[0], { dateISO: '2026-03-08', score: null, sleep: null, soreness: null, motivation: null });
+
+        const en = data.studyEnrollment;
+        assert.equal(en.studyVersion, null);
+        assert.equal(en.meaningfulGainThreshold, null);
+        assert.equal(en.assignments['bench-press-dumbbell'].assignmentVersion, null);
+        assert.equal(en.assignments['bench-press-dumbbell'].arm, 'arise', 'vocabulary sibling survives');
+
+        const ev = data.eventHistory[0];
+        for(const k of ['schemaVersion', 'elapsedMs', 'setIndex', 'durMs']) assert.equal(ev[k], null, `event.${k}: ${fmt(P)}`);
+        assert.equal(ev.type, 'set:complete');
+
+        const row = data.evaluationLedger[0];
+        for(const k of ['schemaVersion', 'programVersion', 'studyVersion']) assert.equal(row[k], null, `ledger row.${k}: ${fmt(P)}`);
+        assert.equal(row.recommendation.load, null);
+        assert.equal(row.recommendation.reps, null);
+        assert.equal(row.recommendation.assistKg, null);
+        assert.equal(row.recommendation.reason, 'suite', 'sibling string survives');
+        assert.equal(row.audit.policyVersion, null);
+        assert.equal(row.audit.confidence, 'low', 'band survives');
+        assert.equal(row.basis.visibleSessions, null);
+        assert.equal(row.basis.priorsVersion, null);
+        assert.equal(row.basis.previousBest.reps, null);
+        assert.equal(row.basis.previousBest.weightKg, null);
+        assert.equal(row.basis.previousBest.e1rm, null);
+        assert.equal(row.policy.priorsVersion, null);
+        assert.equal(row.policy.modelVersion, null);
+        assert.equal(row.policy.id, 'arise-engine');
+        for(const arm of ['arise', 'double-progression']){
+          assert.equal(row.arms[arm].load, null);
+          assert.equal(row.arms[arm].reps, null);
+        }
+        assert.equal(row.prescription.load, null);
+        assert.equal(row.prescription.reps, null);
+        const o = row.outcome;
+        for(const k of ['load', 'reps', 'assistedKg', 'sets', 'failedSets', 'volumeKg', 'e1rm', 'previousE1rm', 'changePct', 'deviationKg', 'loadErrorKg', 'repError']) assert.equal(o[k], null, `outcome.${k}: ${fmt(P)}`);
+        assert.equal(o.metTarget, true, 'boolean siblings survive');
+        assert.equal(o.label, 'successful');
+        assert.equal(o.arms.arise.loadErrorKg, null);
+        assert.equal(o.arms.arise.metTarget, true);
+
+        // Global JSON sweep: no coercible residue of any shape reaches the file.
+        const json = JSON.stringify(data);
+        assert.equal(json.includes('NaN'), false);
+        assert.equal(json.includes('Infinity'), false);
+        assert.equal(json.includes('[object Object]'), false);
+
+        // And the null-failed export still ingests cleanly through the real pipeline.
+        const ingest = ingestParticipantFiles([participantFile(buildStudyExportPayload(poison(P)))]);
+        assert.equal(ingest.warnings.some(w => w.kind === 'import-error'), false, JSON.stringify(ingest.warnings));
+      }
+    });
   });
 });

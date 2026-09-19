@@ -37,6 +37,14 @@ still needs a human with a real device.
   separate, explicit action.
 - **No ranking below the gates:** the cohort report counts, audits and warns
   but never compares arms until the participant/session gates clear.
+- **Numeric export boundary:** the study export never relies on JavaScript
+  coercion (`Number(v)`) to decide whether a value is safe to export — numeric
+  fields accept only finite numbers (integer fields additionally
+  `Number.isInteger`); arrays, booleans, objects, empty/whitespace strings,
+  `NaN`/`Infinity` and malformed strings all fail closed to `null`, while the
+  set-level string-encoded numbers (`reps`, `weightKg`, `rpe`, `rom`,
+  `assistedKg`, `tempo`) keep travelling as strings by design. Pinned by the
+  §6 truth tables and nested-injection tests in `tests/study-export.test.js`.
 
 ## What is deliberately not automated
 
