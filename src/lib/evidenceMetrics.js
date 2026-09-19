@@ -87,11 +87,14 @@ export function agreementMetrics(records = []){
 // Calibration: does "confidence high" actually mean "target met more often"?
 // Buckets resolved followed-records by audit confidence band and compares met
 // rates. A calibrated engine shows monotonically rising met-rates.
+// Confidence arrives in two shapes: the live device ledger carries the full
+// engine object ({ band, … }); study exports carry the reduced band string.
 export function calibrationMetrics(records = []){
   const resolved = records.filter(r=> r.outcome && r.outcome.followed === true);
   const bands = { high: [], medium: [], low: [], 'low-thin': [] };
   for(const row of resolved){
-    const band = row.audit?.confidence?.band;
+    const c = row.audit?.confidence;
+    const band = typeof c === 'string' ? c : c?.band;
     if(band && bands[band]) bands[band].push(row);
   }
   const out = {};

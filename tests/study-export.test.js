@@ -14,11 +14,13 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
   buildStudyExportPayload, buildStudyHistoryExport, buildStudyReadinessExport, STUDY_EXPORT_VERSION,
-} from '../src/lib/export.js';
+} from '../src/lib/studyExport.js';
 import { ingestParticipantFiles } from '../src/lib/cohortOps.js';
 import { buildPilotRoster } from '../src/lib/pilotHealth.js';
 import { recordEvent } from '../src/lib/telemetry.js';
 import { recordRecommendation, attachOutcome } from '../src/lib/longitudinal.js';
+import { computeFieldStudy } from '../src/lib/fieldStudy.js';
+import { measureProductSuccess } from '../src/lib/productSuccess.js';
 import { isValidStudyParticipantId } from '../src/lib/studyIdentity.js';
 import { KEY as STORE_KEY } from '../src/lib/store.js';
 
@@ -265,6 +267,186 @@ describe('§4/§5 guidance and privacy wording stay honest', ()=>{
   });
 });
 
+// ── § recursive closure: nested allowlists + vocabularies + ledger lock ────
+// The export is a recursively closed, versioned schema: every nested structure
+// is rebuilt field-by-field. Injecting a private/future field at ANY nesting
+// level must leave it stranded on the device.
+describe('§ recursive closure — no nested passthrough, vocabularies locked', ()=>{
+  // A store with private probes injected at EVERY documented nesting level.
+  function deeplyPrivateStore(){
+    const store = baseStore();
+    store.history.push({
+      id: 's-deep', dateISO: '2026-03-08', programId: 'p1', programVersion: 3, templateVersion: 2,
+      week: 1, day: 1, title: 'PRIVATE TITLE', mode: 'guided', status: 'done',
+      durationMinutes: 40, startedAt: '2026-03-08T09:00:00.000Z', finishedAt: '2026-03-08T09:40:00.000Z', savedAt: '2026-03-08T09:40:00.000Z',
+      equipmentSnapshot: ['barbell'], exerciseOrder: ['bench-press-dumbbell'], painDiscomfort: false,
+      skippedSetsCount: 0, sessionDuration: 40, quality: 'good',
+      note: 'PRIVATE TEXT about my knee',
+      noteTags: ['felt-strong', 'PRIVATE USER TEXT'],          // unknown tag dropped
+      substitutions: [{ from: 'a', to: 'b', reason: 'engine', privateField: 'PRIVATE SUB' }],
+      aFutureSessionField: 'PRIVATE SESSION FUTURE',
+      blocks: [{
+        exerciseId: 'bench-press-dumbbell', exerciseOrder: 0, equipment: 'barbell',
+        substitutionFrom: null, substitutionReason: null, aFutureBlockField: 'PRIVATE BLOCK FUTURE',
+        prescription: { prescriptionId: 'rx1', revision: 1, prescribedReps: 8, prescribedLoadKg: 40, shownAt: '2026-03-01T09:00:00.000Z', reason: 'engine', engine: { name: 'arise-engine', policy: 'standard' }, privateField: 'PRIVATE RX' },
+        prescriptionHistory: [{ prescriptionId: 'rx0', revision: 0, shownAt: '2026-03-01T08:00:00.000Z', privateField: 'PRIVATE RXH' }],
+        sets: [{ reps: '8', weightKg: '40', rpe: '7', completed: true, setId: 'set1', aFutureSetField: 'PRIVATE SET FUTURE' }],
+      }],
+    });
+    store.readinessLog = [{ dateISO: '2026-03-08', score: 70, sleep: 4, soreness: 2, motivation: 4, moodFreeText: 'PRIVATE MOOD' }];
+    store.studyEnrollment = {
+      studyVersion: 1, participantId: ID, seed: 12345, enrolledAtISO: '2026-03-01T00:00:00.000Z', startArm: 'arise',
+      policyVersions: { arise: 'priors-v7', doubleProgression: 'dp-v2' }, targetDefinition: 'meaningful-gain',
+      meaningfulGainThreshold: 0.02, analysisCodeVersion: 'v1',
+      assignments: { 'bench-press-dumbbell': { arm: 'arise', assignmentVersion: 1, assignedAtISO: '2026-03-01T00:00:00.000Z' } },
+      privateField: 'PRIVATE ENROLLMENT',
+    };
+    store.evaluationLedger = [{
+      id: 'r-deep', schemaVersion: 2, recordedAtISO: '2026-03-01T10:00:00.000Z', dueDateISO: '2026-03-08',
+      exerciseId: 'bench-press-dumbbell', movementPattern: 'horizontal-push', equipmentClass: 'barbell',
+      programId: 'p1', programVersion: 3,
+      recommendation: { load: 40, reps: 8, reason: 'engine reason', strategy: 'progress', privateComment: 'PRIVATE REC' },
+      audit: { policy: 'arise-engine', policyVersion: 3, guard: null, confidence: { band: 'high', slope: 0.5 }, uncertainty: null, evidence: null, personalCalibration: { active: false, direction: 'up', jumpMultiplier: 1, samples: 3, headline: 'PRIVATE HEADLINE' }, privateAuditField: 'PRIVATE AUDIT' },
+      assignedArm: 'arise', participantId: ID, studyVersion: 1,
+      prescription: { arm: 'arise', load: 40, reps: 8, privateField: 'PRIVATE PRESCRIP' },
+      prescriptionCreatedAt: '2026-03-01T10:00:00.000Z',
+      arms: { arise: { load: 40, reps: 8, assistKg: null, reason: 'engine', noisy: [], held: false }, 'double-progression': { load: 40, reps: 9, reason: 'baseline' }, rogueArm: { load: 1, reps: 1, reason: 'PRIVATE ROGUE' } },
+      policy: { id: 'arise-engine', priorsVersion: 7, modelVersion: 2 },
+      recommendedAction: 'progress',
+      basis: { visibleSessions: 3, previousBest: { reps: 8, weightKg: 37.5, assistedKg: null, e1rm: 41.2 }, trainingAgePhase: 'novice', priorsVersion: 7, privateField: 'PRIVATE BASIS' },
+      userOverride: false, privateField: 'PRIVATE ROW',
+      provenance: { origin: 'live-engine', capturedAt: '2026-03-01T10:00:00.000Z', deviceId: 'dev-x' },
+      outcomeProvenance: { origin: 'live-engine', capturedAt: '2026-03-02T10:00:00.000Z', deviceId: 'dev-x' },
+      outcome: { sessionId: 's-deep', dateISO: '2026-03-08', recordedAtISO: '2026-03-08T10:00:00.000Z', load: 40, reps: 8, rpe: '7', sets: 1, failedSets: 0, volumeKg: 320, e1rm: 42.3, previousE1rm: 41.2, changePct: 0.0267, metTarget: true, followed: true, assignedMet: true, assignedArm: 'arise', userOverride: false, pain: false, techniqueWarning: false, classification: 'progression-success', label: 'met-target-progressed', labelReason: 'PRIVATE PROSE', attempted: true, gradeable: true, privateField: 'PRIVATE OUTCOME',
+        arms: { arise: { metTarget: true, loadErrorKg: 0, repError: 0 }, rogue: { metTarget: true, privateField: 'PRIVATE ARMOUT' } } },
+    }];
+    store.activeSchedule = {
+      programId: 'p1', startDateISO: '2026-03-01', week: 1, mesocycle: { weekIndex: 1 },
+      sessions: [{ id: 'w1d1', dateISO: '2026-03-08', programId: 'p1', week: 1, day: 1, mode: 'guided', status: 'planned', title: 'PRIVATE SCHED TITLE', blocks: [{ exerciseId: 'bench-press-dumbbell', sets: 3, reps: '8–12', restSec: 90, loadHint: 'barbell', privateField: 'PRIVATE SBLOCK' }] }],
+      adaptationHistory: [{ basisKey: 'k1', basisSessionId: 's-deep', dateISO: '2026-03-08', decision: { deload: false, deloadSignals: [], confidence: 'low' }, changes: [{ sessionId: 'w1d1', dateISO: '2026-03-09', exerciseId: 'bench-press-dumbbell', kind: 'repeated-difficulty', from: { sets: 3 }, to: { sets: 2 }, reason: 'engine decided', evidence: ['difficulty'], privateField: 'PRIVATE CHANGE' }], privateField: 'PRIVATE ADAPT' }],
+      lastAdaptation: { basisKey: 'k1', dateISO: '2026-03-08', decision: { deload: false }, changes: [] },
+      lastAdaptationBasis: 'k1',
+    };
+    return store;
+  }
+
+  const PROBES = [
+    'PRIVATE TEXT', 'PRIVATE TITLE', 'PRIVATE USER TEXT', 'PRIVATE SUB', 'PRIVATE SESSION FUTURE',
+    'PRIVATE BLOCK FUTURE', 'PRIVATE RX', 'PRIVATE RXH', 'PRIVATE SET FUTURE', 'PRIVATE MOOD',
+    'PRIVATE ENROLLMENT', 'PRIVATE REC', 'PRIVATE AUDIT', 'PRIVATE HEADLINE', 'PRIVATE PRESCRIP',
+    'PRIVATE ROGUE', 'PRIVATE BASIS', 'PRIVATE ROW', 'PRIVATE OUTCOME', 'PRIVATE ARMOUT',
+    'PRIVATE PROSE', 'PRIVATE SCHED TITLE', 'PRIVATE SBLOCK', 'PRIVATE ADAPT', 'PRIVATE CHANGE',
+    'rogueArm',      'labelReason',           // outcome free-text reason — excluded
+      '"confidence":{',   // audit.confidence OBJECT form never travels; the locked
+                          // row carries only the band STRING under the same key
+                          // (row.audit.confidence === 'high', see key-set test)
+      '"evidence":{',     // audit.evidence OBJECT form never travels; the locked
+                          // changes[].evidence is a string ARRAY (key-set test)
+      'uncertainty', 'personalCalibration', 'privateAuditField',
+      'privateField', 'privateComment', 'headline',
+    ];
+    // Structural probes ('"confidence":{', '"evidence":{') target the OBJECT
+    // forms that must never ride along — the plain key names legitimately
+    // appear in the locked schema as reduced string/scalar forms.
+
+    it('private fields injected at every nesting level never appear in the exported JSON', ()=>{
+      const store = deeplyPrivateStore();
+      globalThis.localStorage.setItem('arise.evaluation.v1', JSON.stringify(store.evaluationLedger));
+      const json = JSON.stringify(buildStudyExportPayload(store));
+      for(const secret of PROBES){
+        assert.equal(json.includes(secret), false, `"${secret}" leaked through a nested passthrough`);
+      }
+    });
+
+  it('unknown vocabulary strings are dropped; valid ids and labels never travel', ()=>{
+    const data = buildStudyExportPayload(deeplyPrivateStore()).data;
+    assert.deepEqual(data.history[0].noteTags, ['felt-strong'], 'only real NOTE_PROMPTS ids survive');
+    assert.equal(data.history[0].mode, 'guided');
+    assert.equal(data.history[0].quality, 'good');
+    assert.equal(data.history[0].note, undefined, 'free text stays local');
+    assert.equal(data.history[0].title, undefined, 'title stays local');
+  });
+
+  it('evaluation ledger is locked to the analysis schema with exact key sets', ()=>{
+    const store = deeplyPrivateStore();
+    globalThis.localStorage.setItem('arise.evaluation.v1', JSON.stringify(store.evaluationLedger));
+    const data = buildStudyExportPayload(store).data;
+    const row = data.evaluationLedger[0];
+    assert.deepEqual(Object.keys(row).sort(), [
+      'assignedArm', 'arms', 'audit', 'basis', 'dueDateISO', 'equipmentClass', 'exerciseId', 'id',
+      'movementPattern', 'outcome', 'outcomeProvenance', 'participantId',
+      'policy', 'prescription', 'prescriptionCreatedAt', 'programId',
+      'programVersion', 'provenance', 'recommendation', 'recordedAtISO',
+      'recommendedAction', 'schemaVersion', 'studyVersion', 'userOverride',
+    ].sort());
+    assert.deepEqual(Object.keys(row.recommendation).sort(), ['assistKg', 'load', 'reason', 'reps']);
+    assert.deepEqual(Object.keys(row.audit).sort(), ['confidence', 'guard', 'policy', 'policyVersion']);
+    assert.deepEqual(row.audit.confidence, 'high', 'audit.confidence reduced to its band string form in the ledger row');
+    // The full personalCalibration object (incl. its UI-prose headline) must NOT travel:
+    assert.equal(row.audit.personalCalibration, undefined, 'personalCalibration stays local — only band string in audit');
+    assert.deepEqual(Object.keys(row.prescription).sort(), ['arm', 'assistKg', 'load', 'reps']);
+    assert.deepEqual(Object.keys(row.arms).sort(), ['arise', 'double-progression'], 'rogue baseline arms dropped, real arms kept');
+    assert.deepEqual(Object.keys(row.arms.arise).sort(), ['assistKg', 'load', 'reps']);
+    assert.deepEqual(Object.keys(row.basis).sort(), ['priorsVersion', 'previousBest', 'trainingAgePhase', 'visibleSessions'].sort());
+    assert.deepEqual(Object.keys(row.outcome).sort(), [
+      'assignedArm', 'assignedMet', 'assistMet', 'arms', 'attempted', 'classification',
+      'changePct', 'dateISO', 'deviationKg', 'e1rm', 'failedSets', 'followed', 'gradeable',
+      'label', 'load', 'loadErrorKg', 'loadMet', 'metTarget', 'pain', 'previousE1rm',
+      'recordedAtISO', 'repError', 'reps', 'repsMet', 'sessionId', 'sets', 'techniqueWarning',
+      'userOverride', 'volumeKg', 'rpe', 'assistedKg',
+    ].sort(), 'outcome rebuilt, nothing extra');
+    assert.deepEqual(row.outcome.arms.arise, { metTarget: true, loadErrorKg: 0, repError: 0 });
+    assert.deepEqual(row.outcome.arms.arise, { metTarget: true, loadErrorKg: 0, repError: 0 });
+    assert.deepEqual(Object.keys(row.provenance).sort(), ['capturedAt', 'deviceId', 'origin']);
+    const enrollment = data.studyEnrollment;
+    assert.deepEqual(Object.keys(enrollment).sort(), ['analysisCodeVersion', 'assignments', 'enrolledAtISO', 'meaningfulGainThreshold', 'participantId', 'policyVersions', 'seed', 'startArm', 'studyVersion', 'targetDefinition']);
+    assert.deepEqual(Object.keys(enrollment.assignments['bench-press-dumbbell']).sort(), ['arm', 'assignedAtISO', 'assignmentVersion']);
+  });
+
+  it('schedule adaptations and nested scheduled blocks are rebuilt, not passed through', ()=>{
+    const sched = buildStudyExportPayload(deeplyPrivateStore()).data.activeSchedule;
+    assert.deepEqual(Object.keys(sched).sort(), ['adaptationHistory', 'lastAdaptation', 'lastAdaptationBasis', 'mesocycle', 'programId', 'sessions', 'startDateISO', 'week']);
+    assert.equal(sched.mesocycle, null, 'structured scalars only');
+    assert.equal('title' in sched.sessions[0], false);
+    assert.deepEqual(Object.keys(sched.sessions[0].blocks[0]).sort(), ['exerciseId', 'loadHint', 'reps', 'restSec', 'sets']);
+    const adapt = sched.adaptationHistory[0];
+    assert.deepEqual(Object.keys(adapt).sort(), ['basisKey', 'basisSessionId', 'changes', 'dateISO', 'decision']);
+    assert.deepEqual(Object.keys(adapt.changes[0]).sort(), ['dateISO', 'evidence', 'exerciseId', 'from', 'kind', 'reason', 'sessionId', 'to']);
+    assert.deepEqual(Object.keys(adapt.decision).sort(), ['confidence', 'deload', 'deloadSignals']);
+  });
+
+  it('raw-store analysis equals study-export analysis for the frozen study outputs', ()=>{
+    const store = deeplyPrivateStore();
+    // The live builder reads the ledger from its storage key.
+    globalThis.localStorage.setItem('arise.evaluation.v1', JSON.stringify(store.evaluationLedger));
+    const json = JSON.stringify(buildStudyExportPayload(store));
+    globalThis.localStorage.setItem('arise.evaluation.v1', '[]');
+    const ingest = ingestParticipantFiles([{ name: 'deep.json', text: json }]);
+    const p = ingest.participants[0];
+    const gates = { minParticipants: 1, minTransitions: 1 };
+    const raw = computeFieldStudy([{ code: 'a1b2c3d4', store }], gates);
+    const san = computeFieldStudy([{ code: 'a1b2c3d4', store: p.store }], gates);
+    const pc = r => r.totals.primaryComparison;
+    assert.equal(san.status, raw.status);
+    assert.equal(pc(san).transitions, pc(raw).transitions);
+    assert.equal(san.gates.participants, raw.gates.participants);
+    const m1 = measureProductSuccess(store, { nowISO: '2026-09-19' });
+    const m2 = measureProductSuccess(p.store, { nowISO: '2026-09-19' });
+    assert.equal(m2.sessionsLogged, m1.sessionsLogged);
+    assert.deepEqual(m2.completion, m1.completion);
+    assert.deepEqual(m2.overrideRate, m1.overrideRate);
+    assert.equal(san.participants[0].weeksObserved, raw.participants[0].weeksObserved);
+    assert.equal(ingest.warnings.length, 0, JSON.stringify(ingest.warnings));
+  });
+
+  it('schema-version invariant is documented next to the serializers', ()=>{
+    const src = readFileSync(root('src', 'lib', 'studyExport.js'), 'utf8');
+    assert.match(src, /SCHEMA-VERSION INVARIANT/, 'the invariant comment exists');
+    assert.match(src, /STUDY_EXPORT_VERSION bump/, 'the invariant names the version bump');
+    assert.match(src, /tests\/study-export\.test\.js/, 'the invariant names the test file');
+  });
+});
+
 // ── § export minimisation: allowlists, disclosure contract ──────────────────
 // Everything in the study file must be study-required AND disclosed. History,
 // readiness, schedule and events travel as explicit allowlist slices — never
@@ -364,6 +546,7 @@ describe('§ export minimisation — only disclosed, study-required data leaves'
       [/Recommendation\/outcome evidence|recommendation evidence/i, 'recommendation/outcome evidence'],
       [/Readiness check-ins[^.]*structured/i, 'structured readiness inputs'],
       [/Logging\/timing measurements|timing of how long logging takes/i, 'logging/timing measurements'],
+      [/Programme adjustment metadata|substituted or adapted/i, 'programme adjustment metadata'],
       [/Study lifecycle metadata|pseudonymous/i, 'study lifecycle metadata'],
     ];
     for(const [re, label] of categories){

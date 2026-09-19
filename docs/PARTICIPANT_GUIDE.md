@@ -47,6 +47,7 @@ That button is your study contribution. Your regular backup (**Backup & portabil
 - **Recommendation/outcome evidence** — the target that was shown, whether you met it, and any overrides.
 - **Readiness check-ins, structured only** — date, score, sleep, soreness, motivation.
 - **Logging/timing measurements** — how long sets took to log.
+- **Programme adjustment metadata** — why the app substituted or adapted an exercise, written by the app itself (never by you).
 - **Study lifecycle metadata** — your pseudonymous study ID, study status, enrollment and export date.
 
 **Never included:** free-text notes or session titles, your onboarding profile, custom templates, health-platform data, crash diagnostics, or any credentials.

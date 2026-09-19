@@ -77,164 +77,13 @@ export function downloadJson(filename, obj){
 }
 
 // ── Study export ────────────────────────────────────────────────────────────
-// The dedicated participant action for the real-world study: the EXACT file
-// cohortOps.ingestParticipantFiles accepts. Deliberately NOT the backup:
-// backups move a life between devices; the study file contributes evidence.
+// The dedicated participant action for the real-world study lives in
+// studyExport.js — the EXACT file cohortOps.ingestParticipantFiles accepts,
+// deliberately NOT the backup: backups move a life between devices; the study
+// file contributes evidence. It is a separate module (lazy-loaded from the
+// More screen) so its serializers never bloat the boot chunk.
 //
-// Contains: pseudonymous study id (one person, many exports → one
-// participant), lifecycle (status + frozen enrollment), the evidence slices
-// (history, schedule, events, ledger, readiness), the consent FACT (the
-// study's inclusion criteria read it; fieldStudy.loadParticipantFile restores
-// it from the raw envelope — the consumer import path still strips it), and
-// exportedAt at BOTH envelope levels (ingest reads data.exportedAt).
-// Never contains: credentials, sync config, health summary, custom templates,
-// onboarding profile, crash logs — study relevance only. Plain JSON (no
-// gzip): the operator's ingestion reads the text directly.
-//
-// ── Study allowlists ────────────────────────────────────────────────────────
-// Every study slice is built field-by-field from the allowlists below — NEVER
-// by object spread — so a future app feature cannot silently start riding in
-// study exports. Each list is the frozen study protocol's exact input set:
-// structured training/outcome facts, engine-written prescription and
-// substitution audit fields, and the structured readiness signals. Free text
-// (session note, session title), note-tag labels, UI metadata and any
-// unknown/extra field are left on the device.
-export const STUDY_EXPORT_VERSION = 2; // v2: history/readiness/schedule/events became allowlisted slices
-
-const STUDY_SET_KEYS = [
-  // What was lifted (the app's canonical string-encoded numbers, '' = unset).
-  'reps', 'weightKg', 'rpe', 'rom', 'assistedKg', 'tempo',
-  // How the set resolved, plus per-set identity/provenance for analysis.
-  'completed', 'skipped', 'failed', 'pain',
-  'setId', 'origin', 'plannedSlot', 'governingPrescriptionId', 'side',
-];
-
-const STUDY_BLOCK_KEYS = [
-  'exerciseId', 'exerciseOrder', 'sets',
-  // Substitution + prescription audit metadata (engine-written).
-  'substitutionFrom', 'substitutionReason', 'governedSlots', 'removedSlots',
-  'prescription', 'prescriptionHistory', 'prescriptionOverridden', 'equipment',
-];
-
-const STUDY_SESSION_KEYS = [
-  'id', 'dateISO', 'programId', 'programVersion', 'templateVersion',
-  'week', 'day', 'mode', 'status',
-  'durationMinutes', 'startedAt', 'finishedAt', 'savedAt',
-  'targetMinutes', 'originalDurationMin', 'rescheduledFrom',
-  'equipmentSnapshot', 'exerciseOrder', 'substitutions',
-  'painDiscomfort', 'skippedSetsCount', 'sessionDuration', 'quality',
-  // STRUCTURED session tags (fixed NOTE_PROMPTS id vocabulary) — never the
-  // free-text note, which the runner builds by joining human labels.
-  'noteTags',
-  'blocks',
-];
-
-const STUDY_EVENT_KEYS = [
-  'id', 'schemaVersion', 'type', 'at', 'ts',
-  // Product-measurement payload fields the pilot reports read.
-  'sessionId', 'mode', 'elapsedMs', 'setIndex', 'interactions', 'corrections',
-  'startedAtISO', 'completedAtISO', 'durMs',
-];
-
-const STUDY_READINESS_KEYS = ['dateISO', 'score', 'sleep', 'soreness', 'motivation'];
-
-const STUDY_SCHEDULE_KEYS = [
-  'programId', 'startDateISO', 'week', 'day', 'mesocycle', 'sessions',
-  'adaptationHistory', 'lastAdaptation', 'lastAdaptationBasis',
-];
-
-const STUDY_SCHEDULE_SESSION_KEYS = [
-  'id', 'dateISO', 'programId', 'programVersion', 'templateVersion',
-  'week', 'day', 'mode', 'status', 'blocks',
-];
-
-// Explicit allowlist pick: only named fields travel, only when present.
-function pickFields(value, keys){
-  if(!value || typeof value !== 'object') return value ?? null;
-  const out = {};
-  for(const key of keys){
-    if(value[key] !== undefined) out[key] = value[key];
-  }
-  return out;
-}
-
-// History rows: the per-session record of what was prescribed and what was
-// done — the study analysis's input. Free text (note, title) and any unknown
-// field never travel.
-export function buildStudyHistoryExport(history){
-  const out = [];
-  for(const s of (Array.isArray(history) ? history : [])){
-    if(!s || typeof s !== 'object') continue;
-    const session = pickFields(s, STUDY_SESSION_KEYS);
-    session.blocks = (Array.isArray(s.blocks) ? s.blocks : []).map(b => {
-      if(!b || typeof b !== 'object') return null;
-      const block = pickFields(b, STUDY_BLOCK_KEYS);
-      block.sets = (Array.isArray(b.sets) ? b.sets : []).map(set => pickFields(set, STUDY_SET_KEYS));
-      return block;
-    }).filter(Boolean);
-    if(Array.isArray(session.noteTags)){
-      session.noteTags = session.noteTags.filter(t => typeof t === 'string');
-    }
-    out.push(session);
-  }
-  return out;
-}
-
-// Readiness: only the protocol's structured signals travel — the derived
-// score plus the three inputs it was computed from. No extra fields.
-export function buildStudyReadinessExport(readinessLog){
-  return (Array.isArray(readinessLog) ? readinessLog : [])
-    .filter(r => r && typeof r === 'object')
-    .map(r => pickFields(r, STUDY_READINESS_KEYS));
-}
-
-function buildStudyScheduleExport(schedule){
-  if(!schedule || typeof schedule !== 'object') return null;
-  const out = pickFields(schedule, STUDY_SCHEDULE_KEYS);
-  out.sessions = (Array.isArray(schedule.sessions) ? schedule.sessions : [])
-    .map(s => pickFields(s, STUDY_SCHEDULE_SESSION_KEYS));
-  return out;
-}
-
-function buildStudyEventExport(events){
-  return (Array.isArray(events) ? events : [])
-    .filter(e => e && typeof e === 'object' && e.type !== 'error') // crash diagnostics stay local
-    .map(e => pickFields(e, STUDY_EVENT_KEYS));
-}
-
-export function buildStudyExportPayload(store){
-  const evaluationLedger = loadEvaluationLedger();
-  // Locks in the pseudonymous id (created at boot or on join) before the
-  // snapshot is taken, so a study file can never lack an identity.
-  ensureStudyParticipantId(store);
-  const slice = {
-    studyExportVersion: STUDY_EXPORT_VERSION,
-    studyParticipantId: store.studyParticipantId,
-    studyStatus: store.studyStatus || null,
-    studyStatusChangedAtISO: store.studyStatusChangedAtISO || null,
-    studyEnrollment: store.studyEnrollment || null,
-    // Allowlisted slices — never the raw stores. See the allowlist block above.
-    history: buildStudyHistoryExport(store.history),
-    activeSchedule: buildStudyScheduleExport(store.activeSchedule),
-    eventHistory: buildStudyEventExport(getEventHistory()),
-    evaluationLedger,
-    readinessLog: buildStudyReadinessExport(store.readinessLog),
-    // The consent FACT only — never the toggles themselves (device-local).
-    preferences: { telemetryEnabled: store?.preferences?.telemetryEnabled === true },
-  };
-  const envelope = buildEnvelope({
-    payload: slice,
-    payloadVersion: EXPORT_VERSION,
-    schemaVersion: STORE_SCHEMA_VERSION,
-  });
-  // Keep the two timestamp layers in lockstep: ingestParticipantFiles derives
-  // export ages from data.exportedAt, so a missing inner stamp would read as
-  // "missing-export-timestamp" even though the envelope has one.
-  envelope.data.exportedAt = envelope.exportedAt;
-  return envelope;
-}
-
-// ── Compressed backups ──────────────────────────────────────────────────
+// ── Compressed backups ──────────────────────────────────────────────
 // A decade of sessions is megabytes of JSON. Exports are gzip-compressed when
 // the browser exposes CompressionStream, and written as a versioned envelope
 // `{ app:'arise', format:'arise+gzip', v:1, encoding:'base64', data }` so an
@@ -243,6 +92,14 @@ export function buildStudyExportPayload(store){
 
 export const BACKUP_FORMAT = 'arise+gzip';
 
+async function gzipBytes(text){
+  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+async function gunzipBytes(bytes){
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new TextDecoder().decode(await new Response(stream).arrayBuffer());
+}
 function bytesToBase64(bytes){
   let bin = '';
   for(const b of bytes) bin += String.fromCharCode(b);
@@ -253,15 +110,6 @@ function base64ToBytes(b64){
   const out = new Uint8Array(bin.length);
   for(let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
-}
-
-async function gzipBytes(text){
-  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
-}
-async function gunzipBytes(bytes){
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
-  return new TextDecoder().decode(await new Response(stream).arrayBuffer());
 }
 
 export function compressionAvailable(){

@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
-import { buildExportPayload, downloadJson, parseImportFile, mergeStores, portableCsv, deletionPreview, downloadBackup, parseBackupFile, buildStudyExportPayload } from '../lib/export.js';
+import { buildExportPayload, downloadJson, parseImportFile, mergeStores, portableCsv, deletionPreview, downloadBackup, parseBackupFile } from '../lib/export.js';
 import { buildImportPreview } from '../lib/exportPolicy.js';
 import { clearStore } from '../lib/store.js';
 import { clearAllStoredData, getIntegrityNotice, clearIntegrityNotice, whenPersisted } from '../lib/storage.js';
@@ -129,14 +129,17 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   // The file the study tooling ingests: pseudonymous id, consent fact,
   // evidence slices, exportedAt — and none of the profile/credential fields a
   // backup must carry. Plain JSON, versioned; ingestion needs no conversion.
+  // The serializer module is lazy-loaded: it exists for this one button, so
+  // the boot chunk never carries it.
   const exportStudyData = ()=>{
     markExported();
-    try{
+    setMsg('Preparing study export…');
+    import('../lib/studyExport.js').then(({ buildStudyExportPayload }) => {
       const envelope = buildStudyExportPayload(store);
       const date = new Date().toISOString().slice(0, 10);
       downloadJson(`arise-study-${date}.json`, envelope);
       setMsg('Study data exported — send this file to the study team.');
-    }catch(err){ setMsg(String(err.message || err)); }
+    }).catch((err) => setMsg(String(err?.message || err)));
     setTimeout(()=> setMsg(null), 4000);
   };
 
@@ -1008,7 +1011,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
                       <li>Workout structure and performance: exercises, sets, reps, load, RPE, completed/skipped/failed, structured pain flags, session mode and duration.</li>
                       <li>Recommendation evidence: the target that was shown, whether you met it, and any overrides.</li>
                       <li>Readiness check-ins, structured only: date, score, sleep, soreness, motivation.</li>
-                      <li>Logging/timing measurements: how long sets took to log.</li>
+                      <li>Logging/timing measurements: how long sets took to log. Programme adjustment metadata: why the app substituted or adapted an exercise (written by the app, not you).</li>
                       <li>Study metadata: your pseudonymous ID, study status, enrollment and export date.</li>
                     </ul>
                     <p className="text-[11px] text-ink3 mt-1">Never included: free-text notes or session titles, your onboarding profile, custom templates, health-platform data, crash diagnostics, or credentials.</p>
