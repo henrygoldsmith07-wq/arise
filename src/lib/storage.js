@@ -269,6 +269,8 @@ export async function clearAllStoredData(){
   try{ localStorage.removeItem('arise.store.v1.pre-idb-backup'); }catch{}
   try{ localStorage.removeItem('arise.store.v1.corrupt'); }catch{}
   try{ localStorage.removeItem(POINTER_KEY); }catch{}
+  try{ localStorage.removeItem('arise.feedback.v1'); }catch{}
+  try{ localStorage.removeItem('arise.classifier.settings.v1'); }catch{}
 }
 
 export function isCleared(){ return cleared; }

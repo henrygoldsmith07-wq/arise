@@ -30,6 +30,21 @@ import { captureSnapshot } from '../lib/snapshots.js';
 import { buildSupportBundle } from '../lib/supportDiagnostics.js';
 import { buildSalvagePayload } from '../lib/salvageExport.js';
 import { normaliseHistoryEntry } from '../lib/store.js';
+import {
+  CLASSIFIER_TAXONOMY_VERSION,
+  classifyFeedback,
+  clearClassifierSettings,
+  getClassifierSettings,
+  redactTextForClassification,
+  saveClassifierSettings,
+} from '../lib/feedbackClassifier.js';
+import {
+  buildFeedbackRecord,
+  clearFeedbackRecords,
+  loadFeedbackRecords,
+  markFeedbackReviewed,
+  saveFeedbackRecord,
+} from '../lib/feedbackStore.js';
 const StorageDiagnostics = lazy(()=> import('./StorageDiagnostics.jsx'));
 const EvidenceDashboard = lazy(()=> import('./EvidenceDashboard.jsx'));
 
@@ -53,6 +68,11 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   const [aiEnabled,setAiEnabled]=useState(ai.enabled);
   const [aiBusy,setAiBusy]=useState(false);
   const [aiResult,setAiResult]=useState(null);
+  const [classifierEnabled,setClassifierEnabled]=useState(()=> getClassifierSettings().enabled);
+  const [feedbackText,setFeedbackText]=useState('');
+  const [feedbackBusy,setFeedbackBusy]=useState(false);
+  const [feedbackResult,setFeedbackResult]=useState(null);
+  const [feedbackRecords,setFeedbackRecords]=useState(()=> loadFeedbackRecords());
 
   // Computed lazily — only while the study details panel is open.
   let evidenceData = null;
@@ -94,6 +114,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
     { id: 'sec-personalise', title: 'Personalise', keywords: 'onboarding goal kit location level equipment plates' },
     { id: 'sec-privacy', title: 'Privacy & data', keywords: 'privacy telemetry consent measurements delete storage diagnostics demo sample data' },
     { id: 'sec-ai', title: 'AI coach', keywords: 'ai coach model api key insight' },
+    { id: 'sec-feedback', title: 'Feedback & issue triage', keywords: 'feedback issue report classifier categorisation category review cloud local coach routing privacy' },
     { id: 'sec-evidence', title: 'Progression evidence', keywords: 'evidence study ledger metrics calibration dashboard' },
     { id: 'sec-help', title: 'Help & testing', keywords: 'help testing diagnostics about version legal disclaimers terms privacy license medical' },
   ];
@@ -185,6 +206,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
     await whenPersisted();
     await clearAllStoredData();
     clearStore(); clearTelemetry();
+    clearFeedbackRecords(); clearClassifierSettings();
     location.reload();
   };
   const exportCsv = ()=>{
@@ -328,6 +350,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
     await whenPersisted();
     await clearAllStoredData();
     clearStore(); clearTelemetry();
+    clearFeedbackRecords(); clearClassifierSettings();
     location.reload();
   };
 
@@ -349,6 +372,53 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
     setTimeout(()=> setMsg(null), 5000);
   };
   const integrity = !noticeDismissed ? getIntegrityNotice() : null;
+
+  const setClassifierConsent = (enabled)=>{
+    saveClassifierSettings({ enabled });
+    setClassifierEnabled(enabled);
+    setMsg(enabled
+      ? 'Cloud-assisted feedback categorisation enabled. Only redacted feedback is sent when you submit it.'
+      : 'Cloud-assisted feedback categorisation disabled. Feedback stays local.');
+    setTimeout(()=> setMsg(null), 4500);
+  };
+
+  const submitFeedback = async ()=>{
+    const redacted = redactTextForClassification(feedbackText);
+    if(!redacted){
+      setMsg('Enter a short issue or piece of feedback first.');
+      setTimeout(()=> setMsg(null), 3000);
+      return;
+    }
+    setFeedbackBusy(true);
+    try{
+      const classifiedAt = new Date().toISOString();
+      const classification = await classifyFeedback(feedbackText);
+      const record = buildFeedbackRecord({
+        text: feedbackText,
+        submittedAt: classifiedAt,
+        classification: {
+          ...classification,
+          classifiedAt,
+          taxonomyVersion: CLASSIFIER_TAXONOMY_VERSION,
+        },
+      });
+      if(!saveFeedbackRecord(record)) throw new Error('Could not save feedback on this device.');
+      setFeedbackRecords(loadFeedbackRecords());
+      setFeedbackResult(record);
+      setFeedbackText('');
+      setMsg('Feedback submitted for local developer/operator review.');
+      setTimeout(()=> setMsg(null), 4500);
+    }catch(err){
+      setMsg(String(err?.message || err));
+      setTimeout(()=> setMsg(null), 4500);
+    }finally{
+      setFeedbackBusy(false);
+    }
+  };
+
+  const reviewFeedback = (id)=>{
+    if(markFeedbackReviewed(id)) setFeedbackRecords(loadFeedbackRecords());
+  };
 
   // Support bundle: environment + shape summary only, never training data.
   const exportSupportBundle = async ()=>{
@@ -965,6 +1035,92 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
             <div role="status" aria-live="polite" className={`rounded-xl border px-3 py-2 text-xs whitespace-pre-wrap ${aiResult.ok ? 'border-line bg-surface' : 'border-amber-300 bg-amber-50 text-amber-900'}`}>
               {aiResult.ok ? `${aiResult.text}\n\n— ${aiResult.model}` : `AI request failed: ${aiResult.error}`}
             </div>
+          )}
+        </div>
+      </section>
+
+      <section id="sec-feedback" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+        <h3 className="text-sm font-bold">Feedback &amp; issue triage</h3>
+        <p className="text-xs text-ink3">
+          Tell us about a problem, accessibility issue, content error, or request. Feedback is classified for
+          developer/operator triage only — it never changes progression, readiness, workout generation, substitutions,
+          safety, treatment, study gates, or evidence.
+        </p>
+        <ToggleRow
+          label="Cloud-assisted feedback categorisation"
+          checked={classifierEnabled}
+          onChange={setClassifierConsent}
+          hint="Off by default. When switched on, feedback text may be sent to classifier.dev after obvious personal identifiers are redacted first. Training decisions never use this service. Switching it off keeps classification local."
+        />
+        <form
+          onSubmit={(event)=> { event.preventDefault(); void submitFeedback(); }}
+          className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2"
+          aria-label="Submit feedback"
+        >
+          <label htmlFor="feedback-issue" className="block text-xs font-bold">Describe the issue or request</label>
+          <textarea
+            id="feedback-issue"
+            value={feedbackText}
+            onChange={(event)=> setFeedbackText(event.target.value)}
+            maxLength={2000}
+            rows={4}
+            placeholder="What happened? Please do not include passwords or other sensitive information."
+            className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] text-ink3">
+              {classifierEnabled ? 'Cloud classification is on for this submission.' : 'Classification stays on this device.'}
+            </span>
+            <button type="submit" disabled={feedbackBusy} className="btn btn-primary min-h-9 rounded-xl px-3 text-xs disabled:opacity-40">
+              {feedbackBusy ? 'Categorising…' : 'Submit feedback'}
+            </button>
+          </div>
+        </form>
+        {feedbackResult && (
+          <div data-testid="feedback-result" role="status" aria-live="polite" className="rounded-xl border border-line bg-surface2 px-3 py-2 text-xs space-y-1">
+            <p className="font-bold">Latest category: <span data-testid="feedback-category">{feedbackResult.category}</span></p>
+            <p className="text-ink3">
+              Confidence: {feedbackResult.confidence == null ? 'not available' : Math.round(feedbackResult.confidence * 100) + '%'}
+              {' · '}{feedbackResult.needsReview ? 'needs operator review' : 'accepted automatically'}
+              {' · '}{feedbackResult.source}
+            </p>
+          </div>
+        )}
+        <div aria-label="Developer/operator feedback review" className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
+          <div className="flex items-center gap-2">
+            <h4 className="text-xs font-bold">Developer/operator review</h4>
+            <span className="ml-auto text-[11px] text-ink3">{feedbackRecords.length} stored locally</span>
+          </div>
+          <p className="text-[11px] text-ink3">
+            Only redacted issue text and structured triage metadata are stored here. Classifier request bodies,
+            secrets, scores, and cloud responses are not stored or exported.
+          </p>
+          {feedbackRecords.length ? (
+            <div className="space-y-2">
+              {feedbackRecords.map((record)=> {
+                const status = record.reviewedAt ? 'Reviewed' : record.needsReview ? 'Needs review' : 'Auto-accepted';
+                return (
+                  <article key={record.id} className="rounded-lg border border-line bg-surface px-2.5 py-2 space-y-1" aria-label={'Feedback ' + record.category}>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="font-bold" data-testid="operator-category">{record.category}</span>
+                      <span className="ml-auto rounded-full border border-line px-1.5 py-0.5 text-[10px] font-semibold">{status}</span>
+                    </div>
+                    <p className="text-[11px] text-ink2 break-words">{record.redactedText || '(empty)'}</p>
+                    <p className="text-[10px] text-ink3">
+                      confidence {record.confidence == null ? '—' : Math.round(record.confidence * 100) + '%'}
+                      {' · '}{record.source}{' · taxonomy v'}{record.taxonomyVersion}
+                    </p>
+                    {!record.reviewedAt && (
+                      <button onClick={()=> reviewFeedback(record.id)} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px]">
+                        Mark reviewed
+                      </button>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-[11px] text-ink3">No feedback submitted on this device yet.</p>
           )}
         </div>
       </section>

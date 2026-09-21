@@ -64,11 +64,57 @@ describe('cloud path thresholds and failures', () => {
     assert.equal(r.source, 'cloud');
     assert.equal(r.needsReview, false);
   });
+  it('keeps the category for the review band', async () => {
+    enable();
+    const review = await M.classifyText('unclear button', { fetchImpl: cloudFetch('usability', 0.79) });
+    assert.equal(review.label, 'usability');
+    assert.equal(review.needsReview, true);
+    const boundary = await M.classifyText('unclear button', { fetchImpl: cloudFetch('usability', 0.6) });
+    assert.equal(boundary.label, 'usability');
+    assert.equal(boundary.needsReview, true);
+  });
   it('low confidence collapses to other', async () => {
     enable();
     const r = await M.classifyText('weird thing', { fetchImpl: cloudFetch('usability', 0.2) });
     assert.equal(r.label, 'other');
     assert.equal(r.needsReview, true);
+  });
+  it('sends semantic descriptions and maps them back to stable ids', async () => {
+    enable();
+    let sent = null;
+    const description = M.FEEDBACK_LABEL_DESCRIPTIONS['exercise-request'];
+    const r = await M.classifyFeedback('please add a movement', {
+      fetchImpl: async (url, options) => {
+        sent = JSON.parse(options.body);
+        return {
+          ok: true,
+          json: async () => ({
+            results: [{
+              label: description,
+              confidence: 0.86,
+              scores: { [description]: 0.86, unknown: 99, other: 'bad' },
+            }],
+          }),
+        };
+      },
+    });
+    assert.deepEqual(sent.labels, M.FEEDBACK_LABELS.map((label) => M.FEEDBACK_LABEL_DESCRIPTIONS[label]));
+    assert.equal(r.label, 'exercise-request');
+    assert.deepEqual(r.scores, { 'exercise-request': 0.86 });
+  });
+  it('redacts and truncates dynamic instructions', async () => {
+    enable();
+    let sent = null;
+    await M.classifyFeedback('broken export', {
+      instructions: 'Contact sam@example.com token: SECRET ' + 'x'.repeat(1000),
+      fetchImpl: async (url, options) => {
+        sent = JSON.parse(options.body);
+        return { ok: true, json: async () => ({ results: [{ label: 'bug', confidence: 0.9 }] }) };
+      },
+    });
+    assert.ok(sent.instructions.length <= M.MAX_INPUT_CHARS);
+    assert.ok(!sent.instructions.includes('sam@example.com'));
+    assert.ok(!sent.instructions.includes('SECRET'));
   });
   it('http error and throw fall back to other', async () => {
     enable();
@@ -102,12 +148,43 @@ describe('cloud path thresholds and failures', () => {
     assert.equal(out.results[0].label, 'bug');
     assert.equal(out.results[1].label, 'other');
   });
+  it('batch skips empty items and preserves non-empty output order', async () => {
+    enable();
+    let sent = null;
+    const out = await M.classifyFeedbackBatch(['  ', 'crash now', '', 'button confusing'], {
+      fetchImpl: async (url, options) => {
+        sent = JSON.parse(options.body);
+        return {
+          ok: true,
+          json: async () => ({
+            results: [
+              { label: 'bug', confidence: 0.9 },
+              { label: 'usability', confidence: 0.9 },
+            ],
+          }),
+        };
+      },
+    });
+    assert.deepEqual(sent.inputs, ['crash now', 'button confusing']);
+    assert.equal(sent.inputs.includes('(empty)'), false);
+    assert.equal(out.results[0].label, 'other');
+    assert.equal(out.results[0].cloudAttempted, false);
+    assert.equal(out.results[0].needsReview, true);
+    assert.equal(out.results[1].label, 'bug');
+    assert.equal(out.results[2].label, 'other');
+    assert.equal(out.results[2].cloudAttempted, false);
+    assert.equal(out.results[3].label, 'usability');
+  });
   it('coach routing returns lanes not prescriptions', async () => {
     enable();
     const q = await M.routeCoachRequest('how should I progress my squat', { fetchImpl: cloudFetch('training-question', 0.95) });
     assert.equal(q.route, 'local-engine');
     const b = await M.routeCoachRequest('app crashed', { fetchImpl: cloudFetch('feedback-or-bug', 0.95) });
     assert.equal(b.route, 'feedback-pipeline');
+    const uncertain = await M.routeCoachRequest('maybe this is a training question', { fetchImpl: cloudFetch('training-question', 0.7) });
+    assert.equal(uncertain.label, 'training-question');
+    assert.equal(uncertain.needsReview, true);
+    assert.equal(uncertain.route, 'clarify');
     const o = await M.routeCoachRequest('the sky is blue', { fetchImpl: cloudFetch('other', 0.95) });
     assert.equal(o.route, 'clarify');
   });

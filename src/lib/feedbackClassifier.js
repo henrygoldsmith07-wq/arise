@@ -28,6 +28,28 @@ export const COACH_ROUTE_LABELS = Object.freeze([
 export const DEFAULT_CONFIDENCE_THRESHOLD = 0.6;
 export const DEFAULT_TIMEOUT_MS = 6000;
 export const MAX_INPUT_CHARS = 500;
+export const CONFIDENCE_REVIEW_THRESHOLD = 0.60;
+export const CONFIDENCE_AUTO_ACCEPT_THRESHOLD = 0.80;
+export const MAX_TIMEOUT_MS = 8000;
+export const FEEDBACK_LABEL_DESCRIPTIONS = Object.freeze({
+  bug: 'a bug, crash, broken feature, or failure',
+  'exercise-request': 'request for a new exercise or exercise variation',
+  'program-request': 'request for a new programme, plan, template, or training split',
+  usability: 'difficulty using the app or an unclear interface',
+  'content-error': 'incorrect exercise or training information',
+  accessibility: 'accessibility problem or assistive technology issue',
+  performance: 'slow, laggy, or resource-heavy app behaviour',
+  'import-data': 'problem importing, exporting, restoring, backing up, or syncing data',
+  other: 'none of these categories',
+});
+export const COACH_ROUTE_LABEL_DESCRIPTIONS = Object.freeze({
+  'training-question': 'a question about how to train or use the local training coach',
+  'feedback-or-bug': 'feedback, a complaint, or a bug report about the app',
+  other: 'none of these requests or an uncertain request',
+});
+export const FEEDBACK_INSTRUCTIONS = 'Categorise feedback for product issue triage only. Never infer training prescriptions, readiness, safety, treatment, study assignment, or causal conclusions.';
+export const ISSUE_INSTRUCTIONS = 'Triage an issue for an offline-first training app. Prefer bug for crashes, import-data for backup sync or CSV, and content-error for wrong exercise information.';
+export const COACH_ROUTING_INSTRUCTIONS = 'Route an assistant request to a lane only. Never generate or modify a workout, progression, substitution, safety decision, treatment, study assignment, or causal analysis.';
 function storage(){
   try{ return typeof localStorage !== 'undefined' ? localStorage : null; }catch{ return null; }
 }
@@ -59,8 +81,8 @@ export function redactTextForClassification(input, { maxLen = MAX_INPUT_CHARS } 
   let text = String(input);
   text = text.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[redacted-email]');
   text = text.replace(/\+?\d[\d\s().-]{7,}\d/g, '[redacted-phone]');
-  text = text.replace(/bearer\s+[a-z0-9._~-]+/gi, 'bearer [redacted]');
-  text = text.replace(/api[_-]?key\s*[:=]\s*\S+/gi, 'api-key [redacted]');
+  text = text.replace(/bearer\s+[a-z0-9._~-]+/gi, 'bearer [redacted-secret]');
+  text = text.replace(/\b(?:api[_ -]?key|secret|token|password|authorization)\s*[:=]\s*\S+/gi, '[redacted-secret]');
   text = text.replace(/password\s*[:=]\s*\S+/gi, 'password [redacted]');
   text = text.replace(/\b\d{6,}\b/g, '[redacted-number]');
   text = text.trim().replace(/\s+/g, ' ');
@@ -102,36 +124,119 @@ export function localKeywordClassify(text){
   }
   return { label: 'other', confidence: null, source: 'local-keywords', needsReview: true };
 }
-function applyThreshold(label, confidence, threshold){
-  if(label === 'other') return { label, needsReview: true };
-  if(!Number.isFinite(confidence)) return { label: 'other', needsReview: true };
-  if(confidence < threshold) return { label: 'other', needsReview: true };
+function normaliseLabelText(value){
+  return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').toLowerCase() : '';
+}
+function descriptionForLabel(label){
+  return FEEDBACK_LABEL_DESCRIPTIONS[label]
+    || COACH_ROUTE_LABEL_DESCRIPTIONS[label]
+    || String(label).replace(/[-_]+/g, ' ');
+}
+function externalLabels(labelSet){
+  return labelSet.map(descriptionForLabel);
+}
+function internalLabelFor(value, labelSet){
+  const normalised = normaliseLabelText(value);
+  if(!normalised) return null;
+  return labelSet.find((label) => (
+    normaliseLabelText(label) === normalised
+    || normaliseLabelText(descriptionForLabel(label)) === normalised
+  )) || null;
+}
+function safeScores(scores, labelSet){
+  if(!scores || typeof scores !== 'object' || Array.isArray(scores)) return null;
+  const out = {};
+  for(const [key, value] of Object.entries(scores)){
+    const label = internalLabelFor(key, labelSet);
+    if(label && typeof value === 'number' && Number.isFinite(value)) out[label] = value;
+  }
+  return Object.keys(out).length ? out : null;
+}
+function parseResultEntry(result, labelSet){
+  if(!result || typeof result !== 'object' || typeof result.label !== 'string') return null;
+  const label = internalLabelFor(result.label, labelSet);
+  const confidence = typeof result.confidence === 'number' ? result.confidence : null;
+  if(!label || !Number.isFinite(confidence)) return null;
+  return { label, confidence, scores: safeScores(result.scores, labelSet) };
+}
+function parseSingleResult(json, labelSet){
+  if(!json || typeof json !== 'object') return null;
+  if(Array.isArray(json.results) && json.results.length) return parseResultEntry(json.results[0], labelSet);
+  return parseResultEntry(json, labelSet);
+}
+function parseBatchResults(json, count, labelSet){
+  if(!json || typeof json !== 'object') return null;
+  if(!Array.isArray(json.results) || json.results.length !== count) return null;
+  const parsed = json.results.map((result) => parseResultEntry(result, labelSet));
+  return parsed.every(Boolean) ? parsed : null;
+}
+function applyConfidenceBands(label, confidence){
+  if(label === 'other') return { label: 'other', needsReview: true };
+  if(!Number.isFinite(confidence) || confidence < 0 || confidence > 1 || confidence < CONFIDENCE_REVIEW_THRESHOLD){
+    return { label: 'other', needsReview: true };
+  }
+  if(confidence < CONFIDENCE_AUTO_ACCEPT_THRESHOLD) return { label, needsReview: true };
   return { label, needsReview: false };
 }
-function parseSingleResult(json){
-  if(!json || typeof json !== 'object') return null;
-  if(Array.isArray(json.results) && json.results.length){
-    const r = json.results[0];
-    if(r && typeof r.label === 'string') return { label: r.label, confidence: Number(r.confidence), scores: r.scores || null };
-  }
-  if(typeof json.label === 'string') return { label: json.label, confidence: Number(json.confidence), scores: json.scores || null };
-  return null;
+function safeTimeout(timeoutMs){
+  const numeric = Number(timeoutMs);
+  if(!Number.isFinite(numeric)) return DEFAULT_TIMEOUT_MS;
+  return Math.min(MAX_TIMEOUT_MS, Math.max(1, Math.floor(numeric)));
 }
-function parseBatchResults(json, count){
-  if(!json || typeof json !== 'object') return null;
-  if(Array.isArray(json.results) && json.results.length === count){
-    return json.results.map((r) => ({
-      label: typeof r?.label === 'string' ? r.label : 'other',
-      confidence: Number(r?.confidence),
-      scores: r?.scores || null,
-    }));
+function safeTier(tier){
+  return tier === 'smart' ? 'smart' : 'fast';
+}
+function safeInstructions(instructions, fallback){
+  if(instructions == null) return fallback;
+  return redactTextForClassification(instructions) || fallback;
+}
+function bodyWithLabels(labelSet, inputs, tier, instructions, fallbackInstructions){
+  return {
+    labels: externalLabels(labelSet),
+    inputs,
+    tier: safeTier(tier),
+    instructions: safeInstructions(instructions, fallbackInstructions),
+  };
+}
+function localCoachRouteClassify(text){
+  const redacted = redactTextForClassification(text);
+  if(!redacted) return { label: 'other', confidence: null, source: 'local-keywords', needsReview: true };
+  if(/\b(crash|error|broken|bug|complaint|feedback|not working|issue)\b/i.test(redacted)){
+    return { label: 'feedback-or-bug', confidence: 0.9, source: 'local-keywords', needsReview: false };
   }
-  return null;
+  if(/\b(how|what|should|progress|train|training|workout|exercise|squat|bench|deadlift)\b/i.test(redacted)){
+    return { label: 'training-question', confidence: 0.9, source: 'local-keywords', needsReview: false };
+  }
+  return { label: 'other', confidence: null, source: 'local-keywords', needsReview: true };
+}
+function localClassifyForLabels(text, labelSet){
+  const local = labelSet.includes('training-question') && labelSet.includes('feedback-or-bug')
+    ? localCoachRouteClassify(text)
+    : localKeywordClassify(text);
+  return {
+    label: labelSet.includes(local.label) ? local.label : 'other',
+    confidence: local.confidence,
+    scores: null,
+    source: local.source,
+    cloudAttempted: false,
+    needsReview: local.needsReview,
+  };
+}
+function fallbackResult({ cloudAttempted = true, error = null } = {}){
+  return {
+    ok: true,
+    label: 'other',
+    confidence: null,
+    scores: null,
+    source: 'fallback-other',
+    cloudAttempted,
+    needsReview: true,
+    ...(error ? { error } : {}),
+  };
 }
 // Core single-text path. Always resolves; never throws into UI flows.
 export async function classifyText(text, {
   labels = FEEDBACK_LABELS,
-  threshold = DEFAULT_CONFIDENCE_THRESHOLD,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   tier = 'fast',
   instructions = null,
@@ -139,37 +244,33 @@ export async function classifyText(text, {
 } = {}){
   const labelSet = normaliseLabels(labels);
   if(!isValidLabelSet(labelSet)){
-    return { ok: false, label: 'other', confidence: null, source: 'fallback-other', cloudAttempted: false, needsReview: true, error: 'Provide at least 2 labels including other.' };
+    return { ok: false, ...fallbackResult({ cloudAttempted: false }), error: 'Provide at least 2 labels including other.' };
   }
   const redacted = redactTextForClassification(text);
-  if(!redacted){
-    return { ok: true, label: 'other', confidence: null, source: 'fallback-other', cloudAttempted: false, needsReview: true };
-  }
+  if(!redacted) return { ok: true, ...fallbackResult({ cloudAttempted: false }) };
   if(!isClassifierEnabled()){
-    const local = localKeywordClassify(redacted);
-    return { ok: true, label: labelSet.includes(local.label) ? local.label : 'other', confidence: local.confidence, scores: null, source: local.source, cloudAttempted: false, needsReview: true };
+    return { ok: true, ...localClassifyForLabels(redacted, labelSet) };
   }
   const doFetch = fetchImpl || (typeof fetch !== 'undefined' ? fetch : null);
   if(!doFetch){
-    return { ok: true, label: 'other', confidence: null, source: 'fallback-other', cloudAttempted: true, needsReview: true, error: 'Network unavailable.' };
+    return fallbackResult({ cloudAttempted: true, error: 'Network unavailable.' });
   }
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  const timer = controller ? setTimeout(() => controller.abort(), safeTimeout(timeoutMs)) : null;
   try{
-    const body = { labels: labelSet, inputs: [redacted], tier };
-    if(instructions) body.instructions = String(instructions).slice(0, 500);
+    const body = bodyWithLabels(labelSet, [redacted], tier, instructions, FEEDBACK_INSTRUCTIONS);
     const res = await doFetch(CLASSIFIER_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller?.signal });
     if(!res.ok){
       const msg = await res.text().catch(() => '');
       return { ok: true, label: 'other', confidence: null, source: 'fallback-other', cloudAttempted: true, needsReview: true, error: `classifier.dev ${res.status}: ${String(msg).slice(0, 120)}` };
     }
     const json = await res.json().catch(() => null);
-    const parsed = parseSingleResult(json);
-    if(!parsed || !labelSet.includes(parsed.label)){
+    const parsed = parseSingleResult(json, labelSet);
+    if(!parsed){
       return { ok: true, label: 'other', confidence: null, source: 'fallback-other', cloudAttempted: true, needsReview: true, error: 'Unparseable classifier response.' };
     }
-    const gated = applyThreshold(parsed.label, parsed.confidence, threshold);
-    return { ok: true, label: gated.label, confidence: Number.isFinite(parsed.confidence) ? parsed.confidence : null, scores: parsed.scores, source: 'cloud', cloudAttempted: true, needsReview: gated.needsReview };
+    const gated = applyConfidenceBands(parsed.label, parsed.confidence);
+    return { ok: true, label: gated.label, confidence: parsed.confidence, scores: parsed.scores, source: 'cloud', cloudAttempted: true, needsReview: gated.needsReview };
   }catch(err){
     const aborted = err?.name === 'AbortError';
     return { ok: true, label: 'other', confidence: null, source: 'fallback-other', cloudAttempted: true, needsReview: true, error: aborted ? 'Request timed out.' : `Request failed: ${String(err?.message || err).slice(0, 120)}` };
@@ -177,14 +278,13 @@ export async function classifyText(text, {
 }
 // Feedback triage wrappers (same adapter, same guarantees).
 export function classifyFeedback(text, opts = {}){
-  return classifyText(text, { ...opts, labels: opts.labels || FEEDBACK_LABELS });
+  return classifyText(text, { ...opts, labels: opts.labels || FEEDBACK_LABELS, instructions: opts.instructions ?? FEEDBACK_INSTRUCTIONS });
 }
 export function classifyIssue(text, opts = {}){
-  return classifyText(text, { ...opts, labels: opts.labels || FEEDBACK_LABELS, instructions: opts.instructions || 'Issue triage for an offline-first training app. Prefer bug for crashes, import-data for backup sync CSV, content-error for wrong exercise data.' });
+  return classifyText(text, { ...opts, labels: opts.labels || FEEDBACK_LABELS, instructions: opts.instructions ?? ISSUE_INSTRUCTIONS });
 }
 export async function classifyFeedbackBatch(texts, {
   labels = FEEDBACK_LABELS,
-  threshold = DEFAULT_CONFIDENCE_THRESHOLD,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   tier = 'fast',
   instructions = null,
@@ -194,48 +294,52 @@ export async function classifyFeedbackBatch(texts, {
   if(!isValidLabelSet(labelSet)) return { ok: false, results: [], error: 'Provide at least 2 labels including other.' };
   const list = Array.isArray(texts) ? texts : [];
   const redactedList = list.map((t) => redactTextForClassification(t));
+  const emptyResult = () => ({ label: 'other', confidence: null, scores: null, source: 'local-keywords', needsReview: true, cloudAttempted: false });
   if(!isClassifierEnabled()){
-    return { ok: true, source: 'local-keywords', cloudAttempted: false, results: redactedList.map((redacted) => {
-      const local = localKeywordClassify(redacted);
-      return { label: labelSet.includes(local.label) ? local.label : 'other', confidence: local.confidence, source: 'local-keywords', needsReview: true, cloudAttempted: false };
-    }) };
+    return { ok: true, source: 'local-keywords', cloudAttempted: false, results: redactedList.map((redacted) => redacted ? localClassifyForLabels(redacted, labelSet) : emptyResult()) };
   }
+  const pending = redactedList.map((input, index) => ({ input, index })).filter(({ input }) => Boolean(input));
+  const results = redactedList.map(() => emptyResult());
+  if(!pending.length) return { ok: true, source: 'fallback-other', cloudAttempted: false, results };
   const doFetch = fetchImpl || (typeof fetch !== 'undefined' ? fetch : null);
   if(!doFetch){
-    return { ok: true, source: 'fallback-other', cloudAttempted: true, error: 'Network unavailable.', results: redactedList.map(() => ({ label: 'other', confidence: null, source: 'fallback-other', needsReview: true, cloudAttempted: true })) };
+    for(const { index } of pending) results[index] = fallbackResult({ cloudAttempted: true });
+    return { ok: true, source: 'fallback-other', cloudAttempted: true, error: 'Network unavailable.', results };
   }
-  if(!redactedList.length) return { ok: true, source: 'cloud', cloudAttempted: true, results: [] };
-  const inputs = redactedList.map((r) => (r ? r : '(empty)'));
+  const inputs = pending.map(({ input }) => input);
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  const timer = controller ? setTimeout(() => controller.abort(), safeTimeout(timeoutMs)) : null;
+  const fallbackPending = () => {
+    for(const { index } of pending) results[index] = fallbackResult({ cloudAttempted: true });
+    return results;
+  };
   try{
-    const body = { labels: labelSet, inputs, tier };
-    if(instructions) body.instructions = String(instructions).slice(0, 500);
+    const body = bodyWithLabels(labelSet, inputs, tier, instructions, FEEDBACK_INSTRUCTIONS);
     const res = await doFetch(CLASSIFIER_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller?.signal });
     if(!res.ok){
       const msg = await res.text().catch(() => '');
-      return { ok: true, source: 'fallback-other', cloudAttempted: true, error: `classifier.dev ${res.status}: ${String(msg).slice(0, 120)}`, results: inputs.map(() => ({ label: 'other', confidence: null, source: 'fallback-other', needsReview: true, cloudAttempted: true })) };
+      return { ok: true, source: 'fallback-other', cloudAttempted: true, error: 'classifier.dev ' + res.status + ': ' + String(msg).slice(0, 120), results: fallbackPending() };
     }
     const json = await res.json().catch(() => null);
-    const parsed = parseBatchResults(json, inputs.length);
+    const parsed = parseBatchResults(json, inputs.length, labelSet);
     if(!parsed){
-      return { ok: true, source: 'fallback-other', cloudAttempted: true, error: 'Unparseable classifier response.', results: inputs.map(() => ({ label: 'other', confidence: null, source: 'fallback-other', needsReview: true, cloudAttempted: true })) };
+      return { ok: true, source: 'fallback-other', cloudAttempted: true, error: 'Unparseable classifier response.', results: fallbackPending() };
     }
-    return { ok: true, source: 'cloud', cloudAttempted: true, results: parsed.map((p) => {
-      const label = labelSet.includes(p.label) ? p.label : 'other';
-      const gated = applyThreshold(label, p.confidence, threshold);
-      return { label: gated.label, confidence: Number.isFinite(p.confidence) ? p.confidence : null, scores: p.scores, source: 'cloud', cloudAttempted: true, needsReview: gated.needsReview };
-    }) };
+    for(const [resultIndex, parsedResult] of parsed.entries()){
+      const gated = applyConfidenceBands(parsedResult.label, parsedResult.confidence);
+      results[pending[resultIndex].index] = { label: gated.label, confidence: parsedResult.confidence, scores: parsedResult.scores, source: 'cloud', cloudAttempted: true, needsReview: gated.needsReview };
+    }
+    return { ok: true, source: 'cloud', cloudAttempted: true, results };
   }catch(err){
     const aborted = err?.name === 'AbortError';
-    return { ok: true, source: 'fallback-other', cloudAttempted: true, error: aborted ? 'Request timed out.' : `Request failed: ${String(err?.message || err).slice(0, 120)}`, results: inputs.map(() => ({ label: 'other', confidence: null, source: 'fallback-other', needsReview: true, cloudAttempted: true })) };
+    return { ok: true, source: 'fallback-other', cloudAttempted: true, error: aborted ? 'Request timed out.' : 'Request failed: ' + String(err?.message || err).slice(0, 120), results: fallbackPending() };
   }finally{ if(timer) clearTimeout(timer); }
 }
 // Optional cloud AI-coach request routing. Returns a LANE, never training
 // prescription: training-question -> local-engine, feedback-or-bug ->
 // feedback-pipeline, other -> clarify.
 export async function routeCoachRequest(text, opts = {}){
-  const r = await classifyText(text, { ...opts, labels: opts.labels || COACH_ROUTE_LABELS, instructions: opts.instructions || 'Route an assistant request: training-question for how to train, feedback-or-bug for crashes complaints asks.' });
-  const route = r.label === 'training-question' ? 'local-engine' : r.label === 'feedback-or-bug' ? 'feedback-pipeline' : 'clarify';
+  const r = await classifyText(text, { ...opts, labels: opts.labels || COACH_ROUTE_LABELS, instructions: opts.instructions ?? COACH_ROUTING_INSTRUCTIONS });
+  const route = r.needsReview ? 'clarify' : r.label === 'training-question' ? 'local-engine' : r.label === 'feedback-or-bug' ? 'feedback-pipeline' : 'clarify';
   return { ...r, route };
 }
