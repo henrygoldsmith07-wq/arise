@@ -103,6 +103,11 @@
 // plus largest-lazy (47.4 ≤ 48) budgets are UNCHANGED — user-perceived load is
 // untouched. Re-baseline is the documented total only; measured total 361.8.
 //
+// total 362 → 367 kB with the opt-in feedback triage product surface:
+// redaction, semantic classifier labels, conservative confidence bands, the
+// local metadata-only review store, and the operator review UI. Boot and the
+// largest lazy chunk remain within their existing budgets; measured total 365.9.
+//
 // The budgets are regression bounds with headroom, not aspirations: a change
 // that crosses one must either undo the bloat or consciously re-baseline here
 // and say why in the PR.
@@ -119,7 +124,7 @@ if(!fs.existsSync(dist)){
 
 const BOOT_BUDGET_KB = 197;
 const CHUNK_BUDGET_KB = 48;
-const TOTAL_BUDGET_KB = 362;
+const TOTAL_BUDGET_KB = 367;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;
