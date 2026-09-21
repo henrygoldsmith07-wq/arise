@@ -1,6 +1,7 @@
 // feedbackClassifier.js — conservative, opt-in classifier.dev adapter.
-// Scope: user-feedback categorisation, developer issue categorisation,
-// optional cloud AI-coach request routing (lane only, never prescription).
+// Scope: optional cloud AI-coach request routing (deterministic intent rules
+// live in aiCoachRoute; this module is the semantic fallback). The classifier
+// may select a LANE only — it never produces a training prescription.
 // Non-goals: readinessClassifier, trainRecommendation, sessionGenerator,
 // progression, substitutions, safety stay local + offline. This module never
 // imports them, and they never import it (enforced by tests).
@@ -117,17 +118,6 @@ function parseSingleResult(json){
   if(typeof json.label === 'string') return { label: json.label, confidence: Number(json.confidence), scores: json.scores || null };
   return null;
 }
-function parseBatchResults(json, count){
-  if(!json || typeof json !== 'object') return null;
-  if(Array.isArray(json.results) && json.results.length === count){
-    return json.results.map((r) => ({
-      label: typeof r?.label === 'string' ? r.label : 'other',
-      confidence: Number(r?.confidence),
-      scores: r?.scores || null,
-    }));
-  }
-  return null;
-}
 // Core single-text path. Always resolves; never throws into UI flows.
 export async function classifyText(text, {
   labels = FEEDBACK_LABELS,
@@ -173,62 +163,6 @@ export async function classifyText(text, {
   }catch(err){
     const aborted = err?.name === 'AbortError';
     return { ok: true, label: 'other', confidence: null, source: 'fallback-other', cloudAttempted: true, needsReview: true, error: aborted ? 'Request timed out.' : `Request failed: ${String(err?.message || err).slice(0, 120)}` };
-  }finally{ if(timer) clearTimeout(timer); }
-}
-// Feedback triage wrappers (same adapter, same guarantees).
-export function classifyFeedback(text, opts = {}){
-  return classifyText(text, { ...opts, labels: opts.labels || FEEDBACK_LABELS });
-}
-export function classifyIssue(text, opts = {}){
-  return classifyText(text, { ...opts, labels: opts.labels || FEEDBACK_LABELS, instructions: opts.instructions || 'Issue triage for an offline-first training app. Prefer bug for crashes, import-data for backup sync CSV, content-error for wrong exercise data.' });
-}
-export async function classifyFeedbackBatch(texts, {
-  labels = FEEDBACK_LABELS,
-  threshold = DEFAULT_CONFIDENCE_THRESHOLD,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
-  tier = 'fast',
-  instructions = null,
-  fetchImpl = null,
-} = {}){
-  const labelSet = normaliseLabels(labels);
-  if(!isValidLabelSet(labelSet)) return { ok: false, results: [], error: 'Provide at least 2 labels including other.' };
-  const list = Array.isArray(texts) ? texts : [];
-  const redactedList = list.map((t) => redactTextForClassification(t));
-  if(!isClassifierEnabled()){
-    return { ok: true, source: 'local-keywords', cloudAttempted: false, results: redactedList.map((redacted) => {
-      const local = localKeywordClassify(redacted);
-      return { label: labelSet.includes(local.label) ? local.label : 'other', confidence: local.confidence, source: 'local-keywords', needsReview: true, cloudAttempted: false };
-    }) };
-  }
-  const doFetch = fetchImpl || (typeof fetch !== 'undefined' ? fetch : null);
-  if(!doFetch){
-    return { ok: true, source: 'fallback-other', cloudAttempted: true, error: 'Network unavailable.', results: redactedList.map(() => ({ label: 'other', confidence: null, source: 'fallback-other', needsReview: true, cloudAttempted: true })) };
-  }
-  if(!redactedList.length) return { ok: true, source: 'cloud', cloudAttempted: true, results: [] };
-  const inputs = redactedList.map((r) => (r ? r : '(empty)'));
-  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
-  try{
-    const body = { labels: labelSet, inputs, tier };
-    if(instructions) body.instructions = String(instructions).slice(0, 500);
-    const res = await doFetch(CLASSIFIER_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller?.signal });
-    if(!res.ok){
-      const msg = await res.text().catch(() => '');
-      return { ok: true, source: 'fallback-other', cloudAttempted: true, error: `classifier.dev ${res.status}: ${String(msg).slice(0, 120)}`, results: inputs.map(() => ({ label: 'other', confidence: null, source: 'fallback-other', needsReview: true, cloudAttempted: true })) };
-    }
-    const json = await res.json().catch(() => null);
-    const parsed = parseBatchResults(json, inputs.length);
-    if(!parsed){
-      return { ok: true, source: 'fallback-other', cloudAttempted: true, error: 'Unparseable classifier response.', results: inputs.map(() => ({ label: 'other', confidence: null, source: 'fallback-other', needsReview: true, cloudAttempted: true })) };
-    }
-    return { ok: true, source: 'cloud', cloudAttempted: true, results: parsed.map((p) => {
-      const label = labelSet.includes(p.label) ? p.label : 'other';
-      const gated = applyThreshold(label, p.confidence, threshold);
-      return { label: gated.label, confidence: Number.isFinite(p.confidence) ? p.confidence : null, scores: p.scores, source: 'cloud', cloudAttempted: true, needsReview: gated.needsReview };
-    }) };
-  }catch(err){
-    const aborted = err?.name === 'AbortError';
-    return { ok: true, source: 'fallback-other', cloudAttempted: true, error: aborted ? 'Request timed out.' : `Request failed: ${String(err?.message || err).slice(0, 120)}`, results: inputs.map(() => ({ label: 'other', confidence: null, source: 'fallback-other', needsReview: true, cloudAttempted: true })) };
   }finally{ if(timer) clearTimeout(timer); }
 }
 // Optional cloud AI-coach request routing. Returns a LANE, never training

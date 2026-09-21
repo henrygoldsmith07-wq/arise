@@ -1,6 +1,8 @@
 // feedbackClassifier.test.js — conservative classifier.dev adapter tests.
 // Proves: opt-in gating, redaction, thresholds, timeout/failure fallback,
-// and that deterministic training systems never touch the network.
+// and that deterministic training systems never touch the network. Also guards
+// that the dead classifyFeedback/classifyIssue/classifyFeedbackBatch wrappers
+// have been removed (no dead infrastructure left behind).
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 class MemoryStorage {
@@ -94,13 +96,12 @@ describe('cloud path thresholds and failures', () => {
     assert.ok(!sent.inputs[0].includes('sam@example.com'));
     assert.ok(sent.inputs[0].includes('[redacted-email]'));
   });
-  it('batch keeps order and per-item fallback', async () => {
-    enable();
-    const fetchImpl = async (u, o) => { const b = JSON.parse(o.body); return { ok: true, json: async () => ({ results: b.inputs.map((t, i) => ({ label: i === 0 ? 'bug' : 'usability', confidence: i === 0 ? 0.95 : 0.1 })) }) }; };
-    const out = await M.classifyFeedbackBatch(['crash now', 'meh'], { fetchImpl });
-    assert.equal(out.results.length, 2);
-    assert.equal(out.results[0].label, 'bug');
-    assert.equal(out.results[1].label, 'other');
+  describe('removed wrappers are gone', () => {
+    it('classifyFeedback/classifyIssue/classifyFeedbackBatch are not exported', () => {
+      assert.equal(typeof M.classifyFeedback, 'undefined');
+      assert.equal(typeof M.classifyIssue, 'undefined');
+      assert.equal(typeof M.classifyFeedbackBatch, 'undefined');
+    });
   });
   it('coach routing returns lanes not prescriptions', async () => {
     enable();
