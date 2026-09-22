@@ -211,4 +211,14 @@ describe('catalog same-kit coverage', () => {
     assert.equal(exerciseAvailable('face-pull', ['cable']), true);
     assert.equal(exerciseAvailable('banded-face-pull', ['bands']), true);
   });
+
+
+  it('supports explicit either-or equipment without pretending both implements are required', () => {
+    assert.equal(exerciseAvailable('goblet-squat', ['dumbbells']), true);
+    assert.equal(exerciseAvailable('goblet-squat', ['kettlebell']), true);
+    assert.equal(exerciseAvailable('goblet-squat', ['bodyweight']), false);
+    assert.equal(exerciseAvailable('pallof-press', ['cable']), true);
+    assert.equal(exerciseAvailable('pallof-press', ['bands']), true);
+    assert.equal(exerciseAvailable('pallof-press', ['bodyweight']), false);
+  });
 });
