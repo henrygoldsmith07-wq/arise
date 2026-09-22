@@ -39,4 +39,12 @@ describe('weight unit input boundary', () => {
     assert.equal(localizeWeightText('bodyweight only', 'lb'), 'bodyweight only');
     assert.equal(localizeWeightText('20 kg', 'kg'), '20 kg');
   });
+
+
+  it('round-trips common imperial equipment values exactly enough for setup', () => {
+    for (const lb of ['2.5', '5', '10', '25', '35', '45']) {
+      const kg = weightInputToKg(lb, 'lb');
+      assert.equal(weightInputValue(kg, 'lb'), lb);
+    }
+  });
 });
