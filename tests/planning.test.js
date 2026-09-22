@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { EXERCISE_BY_ID, exerciseAvailable } from "../src/lib/data.js";
-import { instantiateTemplate, recommendTemplate, templateVersionInfo, listTemplates } from "../src/lib/templates.js";
+import { instantiateTemplate, recommendTemplate, templateVersionInfo, listTemplates, equipmentCoverage } from "../src/lib/templates.js";
 import { volumeBalanceAdvice } from "../src/lib/analytics.js";
 import { fatigueAwareOrder, muscleOverlap, weakPointMuscles } from "../src/lib/warmup.js";
 
@@ -46,6 +46,13 @@ describe("programme templates", ()=>{
   it("throws on an unknown template", ()=>{
     assert.throws(()=> instantiateTemplate({ templateId:'nope', startDateISO:'2026-08-17' }), /Unknown template/);
   });
+  it("counts either-or declared substitutes as valid equipment coverage", ()=>{
+    const program = {
+      weeks: [{ workouts: [{ blocks: [{ exerciseId: 'barbell-squat' }] }] }],
+    };
+    assert.equal(equipmentCoverage(program, ['dumbbells']), 1);
+  });
+
   it("recommends the strength template for a barbell strength profile", ()=>{
     const { top } = recommendTemplate({ goal:'strength', level:'Intermediate', availableEquipment: KIT_BARBELL, daysPerWeek: 4 });
     assert.equal(top.id, 'tpl-strength');
