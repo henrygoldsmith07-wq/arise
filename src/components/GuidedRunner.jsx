@@ -27,7 +27,7 @@ import { createWakeLock } from '../lib/wakeLock.js';
 import { restPresetFor } from '../lib/gymMode.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
 import { RestDock } from './GymModePanel.jsx';
-import { asUnit, fmtWeight, weightInputToKg, weightInputValue } from '../lib/units.ts';
+import { asUnit, fmtWeight, localizeWeightText, weightInputToKg, weightInputValue } from '../lib/units.ts';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
 const TeachingPanel = lazy(() => import('./TeachingPanel.jsx'));
 
@@ -422,7 +422,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
             <button onClick={toggleVoice} aria-pressed={voiceOn} aria-label={voiceOn ? 'Voice coach on' : 'Voice coach off'} title={voiceOn ? 'Voice coach on' : 'Voice coach off'} className={`min-h-11 min-w-11 px-1.5 grid place-items-center rounded-full border text-sm leading-none ${voiceOn ? 'border-ink bg-ink text-bg' : 'border-line bg-surface2 text-ink3'}`}>🗣️</button>
           )}
           <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums" aria-label={`Elapsed time ${formatElapsed(elapsed)}`}>⏱ {formatElapsed(elapsed)}</span>
-          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums">{progress.completed + progress.skipped}/{progress.total} sets • {volume} kg</span>
+          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums">{progress.completed + progress.skipped}/{progress.total} sets • {fmtWeight(volume, unit)} volume</span>
           {pace && (
             <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums" aria-label={paceLabel} title={paceLabel}>🏁 ≈{pace.remainingMin} min</span>
           )}
@@ -438,7 +438,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
             <p className="text-5xl" aria-hidden>🎉</p>
             <p className="text-xl font-black">Workout complete</p>
             <p className="text-sm text-ink2 tabular-nums">
-              {progress.completed}/{progress.total} sets • {volume.toLocaleString()} kg • {formatElapsed(elapsed)}
+              {progress.completed}/{progress.total} sets • {fmtWeight(volume, unit)} volume • {formatElapsed(elapsed)}
             </p>
             <section className="rounded-2xl border border-line bg-surface p-3 space-y-2 text-left">
               <p className="text-xs font-semibold">Session notes</p>
@@ -471,7 +471,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
                     <span className="font-black text-ink">{currentSet?.weightKg?.trim() ? fmtWeight(currentSet.weightKg, unit) : (currentExercise?.supportsWeighted ? 'log load' : 'bodyweight')}</span>
                     {' × '}
                     <span className="font-black text-ink">{currentSet?.reps?.trim() || '—'}</span> reps
-                    {currentBlock.loadHint ? <span className="text-ink3"> · {currentBlock.loadHint}</span> : null}
+                    {currentBlock.loadHint ? <span className="text-ink3"> · {localizeWeightText(currentBlock.loadHint, unit)}</span> : null}
                   </p>
                   {currentExercise?.cues?.[0] && <p className="text-[11px] text-ink3 mt-1">Cue: {currentExercise.cues[0]}</p>}
                   {activeArm && activeRec && (
