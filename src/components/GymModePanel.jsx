@@ -87,28 +87,11 @@ export function swipeRowHandlers({ onComplete, onFail, onLongPress, enabled = tr
 // canonical kg value emitted to the workout draft. Parent echoes of our own
 // conversion do not clobber the in-progress text; external changes (apply
 // recommendation, unit switch, restore) do resynchronise it.
-function useWeightDraft(value, unit, onChange){
-  const [display, setDisplay] = useState(()=> weightInputValue(value, unit));
-  const own = useRef('');
-  const lastUnit = useRef(unit);
-  useEffect(()=>{
-    const canonical=String(value ?? '');
-    if(lastUnit.current!==unit || canonical!==own.current) setDisplay(weightInputValue(value, unit));
-    lastUnit.current=unit;
-  },[value,unit]);
-  const emit=(next, canonical=false)=>{
-    const kg=canonical ? String(next ?? '') : weightInputToKg(next, unit);
-    own.current=kg;
-    setDisplay(canonical ? weightInputValue(kg, unit) : next);
-    onChange(kg);
-  };
-  return [display, next=>emit(next), next=>emit(next,true)];
-}
-
 export function WeightInput({ value, unit = 'kg', onChange, onBlur, ...props }){
-  const [display, emitDisplay] = useWeightDraft(value, unit, onChange);
-  return <input {...props} value={display} onChange={(e)=> emitDisplay(e.target.value)}
-    onBlur={(e)=> { emitDisplay(display); onBlur?.(e); }} />;
+  const [display,setDisplay]=useState(()=>weightInputValue(value,unit));
+  useEffect(()=>setDisplay(weightInputValue(value,unit)),[value,unit]);
+  return <input {...props} value={display} onChange={e=>setDisplay(e.target.value)}
+    onBlur={e=>{ onChange?.(weightInputToKg(display,unit)); onBlur?.(e); }} />;
 }
 
 // ── LoadNumpad ──────────────────────────────────────────────────────────
@@ -122,7 +105,10 @@ export function LoadNumpad({ value, onChange, onClose, equipment = 'barbell', pl
     try{ return quickJumps({ equipment: [equipment], supportsWeighted: true, config: plateConfig }); }
     catch{ return []; }
   }, [equipment, plateConfig]);
-  const [displayValue, emitDisplay, emitCanonical] = useWeightDraft(value, unit, onChange);
+  const [displayValue,setDisplayValue]=useState(()=>weightInputValue(value,unit));
+  useEffect(()=>setDisplayValue(weightInputValue(value,unit)),[unit]);
+  const emitDisplay=next=>{ setDisplayValue(next); onChange(weightInputToKg(next,unit)); };
+  const emitCanonical=next=>{ setDisplayValue(weightInputValue(next,unit)); onChange(next); };
   const formatDelta = kg=> `${Number(kg)<0?'−':'+'}${weightInputValue(Math.abs(Number(kg)||0), unit)}`;
   const press = (key)=>{
     if(key === 'clear') return emitDisplay('');
