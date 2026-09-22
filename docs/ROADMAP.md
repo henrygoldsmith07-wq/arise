@@ -32,6 +32,8 @@ the "today" columns are stale — the architecture gate is still accurate).
 - WebDAV sync with E2E encryption, partial + coach exports
 - PWA: install onboarding, shortcuts, splashes, safe areas, haptics module
 - Testing: 600+ unit, property/fuzz suites, resilience e2e, device matrix
+- **History archive browser** — archived sessions can be searched, paged,
+  inspected at a glance and restored individually without restoring the whole archive
 - CI/CD: format gate, bundle-diff reporting, license gate, release
   automation
 
@@ -49,14 +51,13 @@ the "today" columns are stale — the architecture gate is still accurate).
 
 1. **Charts: screen-reader-explored data views** (beyond text alternatives)
 2. **lb-first equipment setup + residual copy audit** (workout logging now accepts/displays lb while storing kg internally; onboarding plate inventory still uses kg)
-3. **History archive browser** (archive store exists; needs a viewer)
-4. **Widget/shortcuts deep links** on native wrappers (needs Capacitor —
+3. **Widget/shortcuts deep links** on native wrappers (needs Capacitor —
    documented, optional)
-5. **Workout notes: richer templates** (templates exist; a picker UI is
+4. **Workout notes: richer templates** (templates exist; a picker UI is
    missing)
-6. **Weekly Review: export as Markdown**
-7. **Onboarding re-edit flow polish** (re-editable today; flow is clunky)
-8. **Cohort report scheduling helper** (the `npm run study:report` CLI is
+5. **Weekly Review: export as Markdown**
+6. **Onboarding re-edit flow polish** (re-editable today; flow is clunky)
+7. **Cohort report scheduling helper** (the `npm run study:report` CLI is
    manual by design; a wrapper that reminds when exports are due could help
    operators — only if operators ask for it)
 
