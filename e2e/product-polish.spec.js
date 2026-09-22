@@ -59,6 +59,10 @@ test('How-to guide opens inside the runner and never blocks logging', async ({ p
   await runner.getByLabel(/^Reps set \d+$/).first().fill('8');
   await runner.getByRole('button', { name: 'Done' }).first().click();
   await expect(runner.getByRole('button', { name: '✓', exact: true }).first()).toBeVisible({ timeout: 5000 });
+
+  // Structured note snippets are available without replacing free-form notes.
+  await runner.getByLabel('Add a session note template').selectOption('technique');
+  await expect(runner.getByPlaceholder(/What should change next time/)).toHaveValue('Technique: ');
 });
 
 test('template editor: rest, reorder, kit preview, duplicate', async ({ page }) => {
@@ -103,4 +107,47 @@ test('study card: plain-language consent, honest eligibility, no fake joining', 
   await expect(page.getByText(/Turn on local measurements first/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Join the study' })).toHaveCount(0);
   await expect(page.getByText(/Insufficient real-user evidence/)).toBeVisible();
+});
+
+
+test('editing onboarding opens at kit and can save immediately', async ({ page }) => {
+  await completeOnboarding(page);
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit onboarding' }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Onboarding' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'What kit do you have?' })).toBeVisible();
+  await expect(dialog.getByText(/Editing setup · Step 3 of 5/)).toBeVisible();
+
+  await dialog.getByLabel(/Bodyweight/i).click();
+  await dialog.getByRole('button', { name: 'Save changes' }).click();
+  await expect(dialog).toBeHidden();
+
+  const equipment = await page.evaluate(async () => {
+    const { loadStore } = await import('/src/lib/store.js');
+    return loadStore().onboarding?.equipment || [];
+  });
+  expect(equipment).toContain('bodyweight');
+});
+
+test('pound preference makes equipment setup imperial while storage stays kg', async ({ page }) => {
+  await completeOnboarding(page);
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('button', { name: 'Pounds', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit onboarding' }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Onboarding' });
+  await dialog.getByLabel(/Barbell/i).click();
+  await expect(dialog.getByRole('button', { name: '45 lb bar', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: '45 lb', exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: '45 lb bar', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Save changes' }).click();
+
+  const stored = await page.evaluate(async () => {
+    const { loadStore } = await import('/src/lib/store.js');
+    return loadStore().onboarding?.plateConfig?.barWeightKg;
+  });
+  expect(stored).toBeGreaterThan(20);
+  expect(stored).toBeLessThan(21);
 });
