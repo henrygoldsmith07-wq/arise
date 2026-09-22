@@ -32,14 +32,8 @@ the "today" columns are stale — the architecture gate is still accurate).
 - WebDAV sync with E2E encryption, partial + coach exports
 - PWA: install onboarding, shortcuts, splashes, safe areas, haptics module
 - Testing: 600+ unit, property/fuzz suites, resilience e2e, device matrix
-- **History archive browser** — archived sessions can be searched, inspected
-  at a glance and restored individually without restoring the whole archive
 - **Unit-complete workout UX** — kg/lb now covers workout entry, summaries,
   recommendations and equipment setup while canonical storage remains kg
-- **Explorable Progress charts** — visual charts expose a keyboard- and
-  screen-reader-friendly data disclosure with the underlying values
-- **Faster profile re-editing** — existing users reopen setup at kit and can
-  save from any step instead of replaying the whole onboarding flow
 - CI/CD: format gate, bundle-diff reporting, license gate, release
   automation
 
@@ -57,11 +51,16 @@ the "today" columns are stale — the architecture gate is still accurate).
 
 1. **Widget/shortcuts deep links** on native wrappers (needs Capacitor —
    documented, optional)
-2. **Workout note snippet picker** — useful convenience, deferred while the
+2. **History archive browser / selective restore** — integrity-safe bulk
+   archive/restore ships; per-session browsing is deferred by the runtime budget
+3. **Visible chart-data explorer** — screen-reader data remains available;
+   a sighted disclosure is deferred by the runtime budget
+4. **Faster profile re-editing** — useful shortcut, deferred by the runtime budget
+5. **Workout note snippet picker** — useful convenience, deferred while the
    runtime bundle is at its product budget
-3. **Weekly Review Markdown export** — useful convenience, deferred while the
+6. **Weekly Review Markdown export** — useful convenience, deferred while the
    runtime bundle is at its product budget
-4. **Cohort report scheduling helper** (the `npm run study:report` CLI is
+7. **Cohort report scheduling helper** (the `npm run study:report` CLI is
    manual by design; a wrapper that reminds when exports are due could help
    operators — only if operators ask for it)
 
