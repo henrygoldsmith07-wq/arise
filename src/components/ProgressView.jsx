@@ -406,21 +406,16 @@ export default function ProgressView({ store }){
                   <path d={trendBand.band} fill="currentColor" className="text-ink3/20" />
                   <path d={trendBand.line} fill="none" stroke="currentColor" strokeWidth="2" className="text-ink" strokeLinejoin="round" strokeLinecap="round" />
                 </svg>
-                <details className="mt-1 text-[10px] text-ink3">
-                  <summary className="cursor-pointer font-semibold text-ink2">Explore chart data</summary>
-                  <p className="mt-1">{trendBand.summary}</p>
-                  <div className="overflow-x-auto">
-                    <table className="mt-1 w-full text-left">
-                      <caption className="sr-only">Estimated 1RM per session</caption>
-                      <thead><tr><th scope="col">Session</th><th scope="col">Date</th><th scope="col">e1RM ({unitsPref})</th></tr></thead>
-                      <tbody>
-                        {trendBand.rows.map(row=> (
-                          <tr key={row.session}><th scope="row">{row.session}</th><td>{row.date}</td><td>{fmtWeight(row.e1rm, unitsPref)}</td></tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </details>
+                <span className="sr-only">{trendBand.summary}</span>
+                <table className="sr-only">
+                  <caption>Estimated 1RM per session</caption>
+                  <thead><tr><th scope="col">Session</th><th scope="col">Date</th><th scope="col">e1RM ({unitsPref})</th></tr></thead>
+                  <tbody>
+                    {trendBand.rows.map(row=> (
+                      <tr key={row.session}><th scope="row">{row.session}</th><td>{row.date}</td><td>{fmtWeight(row.e1rm, unitsPref)}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
                 <figcaption className="text-[10px] text-ink3 mt-1">
                   e1RM per session (last {trendBand.n}), shaded ±95% band around the mean — a wide band means the trend is not yet settled ({trendBand.half < 1.5 ? 'tight' : 'wide'} here).
                 </figcaption>
