@@ -1301,7 +1301,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
             <summary className="text-sm font-semibold cursor-pointer">Study status{evidenceSummary ? ` — ${evidenceSummary}` : ''}</summary>
             {evidenceData && (
               <div className="mt-3 space-y-3">
-                <Suspense fallback={null}><EvidenceDashboard records={evidenceData.ledger || []} archivedCount={evidenceData.archivedCount} /></Suspense>
+                <Suspense fallback={null}><EvidenceDashboard records={evidenceData.ledger || []} archivedCount={evidenceData.archivedCount} units={prefs.units === 'lb' ? 'lb' : 'kg'} /></Suspense>
                 <div>
                   <p className="text-xs font-bold">Coverage</p>
                   <p className="text-[11px] text-ink3 mt-1">{evidenceData.coverage.totalResolved} resolved pairs · {evidenceData.coverage.openRecords} awaiting their workout · {evidenceData.coverage.exercisesTracked} exercises tracked. Segments need {evidenceData.coverage.minimumSamples}+ pairs to conclude.</p>
