@@ -79,3 +79,11 @@ export function weightInputToKg(value: number | string | null | undefined, units
   const kg = lbToKg(n);
   return String(Math.round(kg * 100000) / 100000);
 }
+
+
+/** Convert simple "<number> kg" fragments in generated UI hints. */
+export function localizeWeightText(text: unknown, units: Unit = 'kg'): string {
+  const source = String(text ?? '');
+  if (units === 'kg' || !source) return source;
+  return source.replace(/(-?\d+(?:\.\d+)?)\s*kg\b/gi, (_match, value) => fmtWeight(Number(value), units));
+}
