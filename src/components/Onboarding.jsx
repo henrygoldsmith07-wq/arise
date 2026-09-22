@@ -2,8 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { useDialogA11y } from '../lib/a11y.js';
 import { EQUIPMENT, EQUIPMENT_PRESETS, LOCATIONS, GOALS, LEVELS, EXERCISES, exerciseAvailable } from '../lib/data.js';
 import { DEFAULT_PLATE_DENOMINATIONS_KG } from '../lib/plates.js';
+import { asUnit, weightInputToKg, weightInputValue } from '../lib/units.ts';
 
-export default function Onboarding({ open, onClose, onComplete, initial, onLoadDemo = null }){
+const IMPERIAL_PLATES_LB = [2.5, 5, 10, 25, 35, 45];
+
+export default function Onboarding({ open, onClose, onComplete, initial, units = 'kg', onLoadDemo = null }){
+  const unit = asUnit(units);
+  const toKg = (value)=> Number(weightInputToKg(value, unit));
+  const defaultBarKg = unit === 'lb' ? toKg(45) : 20;
+  const defaultPlatesKg = unit === 'lb' ? IMPERIAL_PLATES_LB.map(toKg) : DEFAULT_PLATE_DENOMINATIONS_KG;
+  const displayList = (values)=> (values || []).map((value)=> weightInputValue(value, unit)).join(', ');
   const [step,setStep]=useState(0);
   const [goal,setGoal]=useState(initial?.goal || 'general');
   const [equipment,setEquipment]=useState(initial?.equipment || ['bodyweight']);
@@ -13,10 +21,10 @@ export default function Onboarding({ open, onClose, onComplete, initial, onLoadD
   const [minutes,setMinutes]=useState(initial?.availableMinutes || 45);
   const [preferredExerciseIds,setPreferredExerciseIds]=useState(initial?.preferredExerciseIds || []);
   const [dislikedExerciseIds,setDislikedExerciseIds]=useState(initial?.dislikedExerciseIds || []);
-  const [barWeightKg,setBarWeightKg]=useState(initial?.plateConfig?.barWeightKg ?? 20);
-  const [plateDenominationsKg,setPlateDenominationsKg]=useState(initial?.plateConfig?.platesKg || DEFAULT_PLATE_DENOMINATIONS_KG);
-  const [dumbbellsKg,setDumbbellsKg]=useState(Array.isArray(initial?.plateConfig?.dumbbellsKg) ? initial.plateConfig.dumbbellsKg.join(', ') : '');
-  const [machineIncrementKg,setMachineIncrementKg]=useState(initial?.plateConfig?.machineIncrementKg ?? '');
+  const [barWeightKg,setBarWeightKg]=useState(initial?.plateConfig?.barWeightKg ?? defaultBarKg);
+  const [plateDenominationsKg,setPlateDenominationsKg]=useState(initial?.plateConfig?.platesKg || defaultPlatesKg);
+  const [dumbbellsInput,setDumbbellsInput]=useState(Array.isArray(initial?.plateConfig?.dumbbellsKg) ? displayList(initial.plateConfig.dumbbellsKg) : '');
+  const [machineIncrementInput,setMachineIncrementInput]=useState(initial?.plateConfig?.machineIncrementKg != null ? weightInputValue(initial.plateConfig.machineIncrementKg, unit) : '');
   const dialogRef = useRef(null);
 
   // Reset to initial values only when the dialog opens — not whenever the
@@ -32,10 +40,10 @@ export default function Onboarding({ open, onClose, onComplete, initial, onLoadD
     setMinutes(initial?.availableMinutes || 45);
     setPreferredExerciseIds(initial?.preferredExerciseIds || []);
     setDislikedExerciseIds(initial?.dislikedExerciseIds || []);
-    setBarWeightKg(initial?.plateConfig?.barWeightKg ?? 20);
-    setPlateDenominationsKg(initial?.plateConfig?.platesKg || DEFAULT_PLATE_DENOMINATIONS_KG);
-    setDumbbellsKg(Array.isArray(initial?.plateConfig?.dumbbellsKg) ? initial.plateConfig.dumbbellsKg.join(', ') : '');
-    setMachineIncrementKg(initial?.plateConfig?.machineIncrementKg ?? '');
+    setBarWeightKg(initial?.plateConfig?.barWeightKg ?? defaultBarKg);
+    setPlateDenominationsKg(initial?.plateConfig?.platesKg || defaultPlatesKg);
+    setDumbbellsInput(Array.isArray(initial?.plateConfig?.dumbbellsKg) ? displayList(initial.plateConfig.dumbbellsKg) : '');
+    setMachineIncrementInput(initial?.plateConfig?.machineIncrementKg != null ? weightInputValue(initial.plateConfig.machineIncrementKg, unit) : '');
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(()=>{
@@ -67,7 +75,9 @@ export default function Onboarding({ open, onClose, onComplete, initial, onLoadD
   };
 
   const togglePlate = (kg)=>{
-    setPlateDenominationsKg(prev=> prev.includes(kg) ? prev.filter(value=> value!==kg) : [...prev, kg].sort((a, b)=> a - b));
+    setPlateDenominationsKg(prev=> prev.some(value=> Math.abs(value-kg)<0.01)
+      ? prev.filter(value=> Math.abs(value-kg)>=0.01)
+      : [...prev, kg].sort((a, b)=> a - b));
   };
 
   const preferenceKit = [...new Set([...(equipment.length ? equipment : ['bodyweight']), 'bodyweight'])];
@@ -75,7 +85,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, onLoadD
 
   const parseDumbbellList = ()=>{
     return [...new Set(
-      String(dumbbellsKg).split(/[,\s]+/).map(v=> Number(v)).filter(v=> Number.isFinite(v) && v>0)
+      String(dumbbellsInput).split(/[,\s]+/).map(v=> toKg(v)).filter(v=> Number.isFinite(v) && v>0)
     )].sort((a,b)=> a-b);
   };
 
@@ -92,7 +102,10 @@ export default function Onboarding({ open, onClose, onComplete, initial, onLoadD
         plateConfig.platesKg = plateDenominationsKg;
       }
       if(parsedDumbbells.length) plateConfig.dumbbellsKg = parsedDumbbells;
-      if(wantsMachine) plateConfig.machineIncrementKg = Math.max(0.5, Number(machineIncrementKg) || 2.5);
+      if(wantsMachine){
+        const fallback = unit === 'lb' ? toKg(5) : 2.5;
+        plateConfig.machineIncrementKg = Math.max(0.25, toKg(machineIncrementInput) || fallback);
+      }
     }
     const payload = {
       goal,
@@ -187,31 +200,32 @@ export default function Onboarding({ open, onClose, onComplete, initial, onLoadD
                 <p className="text-[11px] text-ink3">Used only to round barbell recommendations to loads you can actually build.</p>
               </div>
               <div className="flex gap-2">
-                {[20,15,0].map(weight=> (
-                  <button key={weight} onClick={()=> setBarWeightKg(weight)} className={`flex-1 min-h-9 rounded-lg border text-xs font-bold ${barWeightKg===weight ? 'bg-ink text-bg border-ink' : 'bg-surface border-line'}`}>{weight ? `${weight}kg bar` : 'No fixed bar'}</button>
+                {(unit === 'lb' ? [45,35,0].map(toKg) : [20,15,0]).map(weight=> (
+                  <button key={weight} onClick={()=> setBarWeightKg(weight)} className={`flex-1 min-h-9 rounded-lg border text-xs font-bold ${Math.abs(barWeightKg-weight)<0.01 ? 'bg-ink text-bg border-ink' : 'bg-surface border-line'}`}>{weight ? `${weightInputValue(weight, unit)} ${unit} bar` : 'No fixed bar'}</button>
                 ))}
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {DEFAULT_PLATE_DENOMINATIONS_KG.map(kg=> (
-                  <button key={kg} onClick={()=> togglePlate(kg)} aria-pressed={plateDenominationsKg.includes(kg)} className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${plateDenominationsKg.includes(kg) ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink3'}`}>{kg}kg</button>
-                ))}
+                {(unit === 'lb' ? IMPERIAL_PLATES_LB.map(toKg) : DEFAULT_PLATE_DENOMINATIONS_KG).map(kg=> {
+                  const selected=plateDenominationsKg.some(value=> Math.abs(value-kg)<0.01);
+                  return <button key={kg} onClick={()=> togglePlate(kg)} aria-pressed={selected} className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${selected ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink3'}`}>{weightInputValue(kg, unit)} {unit}</button>;
+                })}
               </div>
             </div>
           )}
           {equipment.includes('dumbbells') && (
             <div className="rounded-xl border border-line bg-surface2 p-3 space-y-1.5">
-              <label htmlFor="onboarding-dumbbells" className="text-xs font-bold">Your dumbbell weights (kg)</label>
-              <input id="onboarding-dumbbells" value={dumbbellsKg} onChange={e=> setDumbbellsKg(e.target.value)} inputMode="decimal" placeholder="e.g. 5, 10, 15"
+              <label htmlFor="onboarding-dumbbells" className="text-xs font-bold">Your dumbbell weights ({unit})</label>
+              <input id="onboarding-dumbbells" value={dumbbellsInput} onChange={e=> setDumbbellsInput(e.target.value)} inputMode="decimal" placeholder={unit === 'lb' ? 'e.g. 10, 20, 30' : 'e.g. 5, 10, 15'}
                 className="w-full min-h-10 rounded-lg border border-line bg-surface px-3 text-sm" />
               <p className="text-[11px] text-ink3">Comma-separated pairs. Dumbbell targets get rounded to weights you actually own.</p>
             </div>
           )}
           {(equipment.includes('machine') || equipment.includes('cable')) && (
             <div className="rounded-xl border border-line bg-surface2 p-3 space-y-1.5">
-              <label htmlFor="onboarding-machine-increment" className="text-xs font-bold">Machine / cable increment (kg)</label>
-              <input id="onboarding-machine-increment" type="number" min="0.5" step="0.5" inputMode="decimal" value={machineIncrementKg} onChange={e=> setMachineIncrementKg(e.target.value)} placeholder="2.5"
+              <label htmlFor="onboarding-machine-increment" className="text-xs font-bold">Machine / cable increment ({unit})</label>
+              <input id="onboarding-machine-increment" type="number" min="0.25" step="0.5" inputMode="decimal" value={machineIncrementInput} onChange={e=> setMachineIncrementInput(e.target.value)} placeholder={unit === 'lb' ? '5' : '2.5'}
                 className="w-full min-h-10 rounded-lg border border-line bg-surface px-3 text-sm" />
-              <p className="text-[11px] text-ink3">Most stacks move in 2.5kg steps — machine targets snap to real pin positions.</p>
+              <p className="text-[11px] text-ink3">Enter the smallest stack jump on your machine — targets snap to real pin positions.</p>
             </div>
           )}
         </div>
