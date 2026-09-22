@@ -26,8 +26,9 @@ describe("programme templates", ()=>{
     assert.equal(t.sessions.length, 8); // strength-4x: 2 weeks × 4 days
     assert.equal(t.sessions[0].dateISO, '2026-08-17');
     assert.ok(allDoable(t.sessions, KIT_BARBELL));
-    assert.equal(t.substitutions.length, 2); // goblet-squat needs a kettlebell (Lower B, weeks 1 & 2)
-    assert.ok(t.substitutions.every(s=> s.from === 'goblet-squat'));
+    // Goblet squat accepts either a dumbbell or kettlebell, so this kit now
+    // runs the strength template without unnecessary swaps.
+    assert.equal(t.substitutions.length, 0);
   });
   it("swaps missing equipment honestly and logs the swaps", ()=>{
     const t = instantiateTemplate({ templateId:'tpl-strength', startDateISO:'2026-08-17', availableEquipment: KIT_MINIMAL });
