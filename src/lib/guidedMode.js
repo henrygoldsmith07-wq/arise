@@ -6,6 +6,7 @@
 import { EXERCISE_BY_ID } from './data.js';
 import { lastExerciseSets } from './store.js';
 import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, attributePrescribedSets } from './progression.js';
+import { NOTE_PROMPTS } from './sessionNotes.js';
 export { NOTE_PROMPTS } from './sessionNotes.js';
 
 function parseNum(v){ const n=Number(v); return Number.isFinite(n)? n : 0; }
