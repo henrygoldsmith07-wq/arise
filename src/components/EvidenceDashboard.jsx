@@ -6,6 +6,7 @@
 // in benchmark/, excluded from the ledger by construction).
 import { useMemo, useState } from 'react';
 import { evidenceDashboard, renderEvidenceReportMarkdown, downloadEvidenceReport } from '../lib/evidenceMetrics.js';
+import { fmtWeight } from '../lib/units.ts';
 
 // Wilson CI rendered as a thin bar: the estimate is a dot, the interval the
 // whisker. Small n ⇒ wide whisker — uncertainty is the message, not a flaw.
@@ -42,7 +43,7 @@ function Row({ label, metric, children }){
   );
 }
 
-export default function EvidenceDashboard({ records = [], archivedCount = null }){
+export default function EvidenceDashboard({ records = [], archivedCount = null, units = 'kg' }){
   const [showRaw, setShowRaw] = useState(false);
   const [msg, setMsg] = useState(null);
   const dash = useMemo(()=> {
@@ -72,7 +73,7 @@ export default function EvidenceDashboard({ records = [], archivedCount = null }
         <div className="space-y-2" role="table" aria-label="Recommendation outcome metrics">
           <Row label="Followed prescription" metric={dash.adherence.followed} />
           <Row label="Target met when followed" metric={dash.agreement.targetMetWhenFollowed} />
-          <Row label="Load within 2 kg" metric={dash.adherence.deviationWithin2Kg} />
+          <Row label={`Load within ${fmtWeight(2, units === 'lb' ? 'lb' : 'kg')}`} metric={dash.adherence.deviationWithin2Kg} />
           <Row label="Overshoot (failed after progress)" metric={dash.overshoot.overshootRate} />
           <Row label="Deloads recovered" metric={dash.deloadUsefulness.assessed > 0 ? dash.deloadUsefulness.recovered : null}>
             {dash.deloadUsefulness.assessed > 0
