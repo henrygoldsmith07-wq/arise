@@ -27,7 +27,7 @@ import { createWakeLock } from '../lib/wakeLock.js';
 import { restPresetFor } from '../lib/gymMode.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
 import { RestDock, WeightInput } from './GymModePanel.jsx';
-import { asUnit, fmtWeight, localizeWeightText } from '../lib/units.ts';
+import { asUnit, fmtWeight } from '../lib/units.ts';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
 const TeachingPanel = lazy(() => import('./TeachingPanel.jsx'));
 
@@ -471,7 +471,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
                     <span className="font-black text-ink">{currentSet?.weightKg?.trim() ? fmtWeight(currentSet.weightKg, unit) : (currentExercise?.supportsWeighted ? 'log load' : 'bodyweight')}</span>
                     {' × '}
                     <span className="font-black text-ink">{currentSet?.reps?.trim() || '—'}</span> reps
-                    {currentBlock.loadHint ? <span className="text-ink3"> · {localizeWeightText(currentBlock.loadHint, unit)}</span> : null}
+                    {currentBlock.loadHint ? <span className="text-ink3"> · {currentBlock.loadHint}</span> : null}
                   </p>
                   {currentExercise?.cues?.[0] && <p className="text-[11px] text-ink3 mt-1">Cue: {currentExercise.cues[0]}</p>}
                   {activeArm && activeRec && (
