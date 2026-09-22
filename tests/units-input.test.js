@@ -1,0 +1,42 @@
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+
+import {
+  asUnit,
+  fmtWeight,
+  localizeWeightText,
+  weightInputToKg,
+  weightInputValue,
+} from '../src/lib/units.ts';
+
+describe('weight unit input boundary', () => {
+  it('round-trips pound input through canonical kg storage', () => {
+    const storedKg = weightInputToKg('135', 'lb');
+    assert.ok(Math.abs(Number(storedKg) - 61.235) < 0.001);
+    assert.equal(weightInputValue(storedKg, 'lb'), '135');
+  });
+
+  it('preserves kg input text without an unnecessary conversion', () => {
+    assert.equal(weightInputToKg('22.5', 'kg'), '22.5');
+    assert.equal(weightInputValue('22.5', 'kg'), '22.5');
+  });
+
+  it('keeps blank and invalid input safe', () => {
+    assert.equal(weightInputToKg('', 'lb'), '');
+    assert.equal(weightInputValue('', 'lb'), '');
+    assert.equal(weightInputToKg('not-a-number', 'lb'), '');
+  });
+
+  it('formats canonical kg in the selected display unit', () => {
+    assert.equal(fmtWeight(20, 'kg'), '20 kg');
+    assert.equal(fmtWeight(20, 'lb'), '44.1 lb');
+    assert.equal(asUnit('lb'), 'lb');
+    assert.equal(asUnit('stones'), 'kg');
+  });
+
+  it('localises generated kg hints without touching other copy', () => {
+    assert.equal(localizeWeightText('Start at 20 kg, then add 2.5kg', 'lb'), 'Start at 44.1 lb, then add 5.5 lb');
+    assert.equal(localizeWeightText('bodyweight only', 'lb'), 'bodyweight only');
+    assert.equal(localizeWeightText('20 kg', 'kg'), '20 kg');
+  });
+});
