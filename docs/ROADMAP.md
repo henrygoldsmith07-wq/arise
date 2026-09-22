@@ -32,8 +32,18 @@ the "today" columns are stale — the architecture gate is still accurate).
 - WebDAV sync with E2E encryption, partial + coach exports
 - PWA: install onboarding, shortcuts, splashes, safe areas, haptics module
 - Testing: 600+ unit, property/fuzz suites, resilience e2e, device matrix
-- **History archive browser** — archived sessions can be searched, paged,
-  inspected at a glance and restored individually without restoring the whole archive
+- **History archive browser** — archived sessions can be searched, inspected
+  at a glance and restored individually without restoring the whole archive
+- **Unit-complete workout UX** — kg/lb now covers workout entry, summaries,
+  recommendations and equipment setup while canonical storage remains kg
+- **Explorable Progress charts** — visual charts expose a keyboard- and
+  screen-reader-friendly data disclosure with the underlying values
+- **Workout note snippets** — reusable note starters in both Standard and
+  Guided modes, alongside the existing structured tags
+- **Weekly Review Markdown export** — share/copy a portable weekly review with
+  metrics, narrative and queued changes
+- **Faster profile re-editing** — existing users reopen setup at kit and can
+  save from any step instead of replaying the whole onboarding flow
 - CI/CD: format gate, bundle-diff reporting, license gate, release
   automation
 
@@ -49,15 +59,9 @@ the "today" columns are stale — the architecture gate is still accurate).
 
 ## Public backlog (unclaimed, roughly ordered)
 
-1. **Charts: screen-reader-explored data views** (beyond text alternatives)
-2. **lb-first equipment setup + residual copy audit** (workout logging now accepts/displays lb while storing kg internally; onboarding plate inventory still uses kg)
-3. **Widget/shortcuts deep links** on native wrappers (needs Capacitor —
+1. **Widget/shortcuts deep links** on native wrappers (needs Capacitor —
    documented, optional)
-4. **Workout notes: richer templates** (templates exist; a picker UI is
-   missing)
-5. **Weekly Review: export as Markdown**
-6. **Onboarding re-edit flow polish** (re-editable today; flow is clunky)
-7. **Cohort report scheduling helper** (the `npm run study:report` CLI is
+2. **Cohort report scheduling helper** (the `npm run study:report` CLI is
    manual by design; a wrapper that reminds when exports are due could help
    operators — only if operators ask for it)
 
