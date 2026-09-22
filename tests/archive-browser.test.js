@@ -26,16 +26,24 @@ describe('archive browser queries', () => {
     assert.deepEqual(rows.map((row) => row.id), ['old-2', 'old-1']);
   });
 
-  it('restores one archived session without moving the others', async () => {
-    await idbPut('archive', { id: 'session-a', dateISO: '2024-01-10', blocks: [] });
+  it('restores one archived session without moving the others and rebuilds set mirrors', async () => {
+    await idbPut('archive', {
+      id: 'session-a',
+      dateISO: '2024-01-10',
+      blocks: [{ exerciseId: 'bench-press', sets: [{ reps: '8', weightKg: '60', rpe: '8' }] }],
+    });
     await idbPut('archive', { id: 'session-b', dateISO: '2024-02-10', blocks: [] });
 
     assert.equal(await restoreArchivedSession('session-a'), true);
 
     const archived = await listArchivedSessions();
     const live = await idbGetAll('sessions');
+    const sets = await idbGetAll('sets');
     assert.deepEqual(archived.map((row) => row.id), ['session-b']);
     assert.deepEqual(live.map((row) => row.id), ['session-a']);
+    assert.deepEqual(sets.map((row) => row.id), ['session-a:0:0']);
+    assert.equal(sets[0].exerciseId, 'bench-press');
+    assert.equal(sets[0].weightKg, '60');
   });
 
   it('does nothing for missing or metadata ids', async () => {
