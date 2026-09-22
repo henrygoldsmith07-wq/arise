@@ -41,7 +41,7 @@ function lsWrite(value){
   try{ localStorage.setItem(LS_KEY, JSON.stringify(value)); }catch{}
 }
 
-function splitSets(history){
+export function splitSets(history){
   const out = [];
   for(const h of history || []){
     for(const [bi, b] of (h.blocks || []).entries()){
