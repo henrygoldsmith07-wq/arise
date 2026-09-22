@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { auditStore, repairFindings } from '../lib/audit.js';
-import { archiveOldSessions, pruneEvents, archiveCandidateCount, listArchivedSessions, restoreArchivedSession, restoreArchive } from '../lib/archive.js';
+import { archiveOldSessions, pruneEvents, archiveCandidateCount, archivedSessionCount, restoreArchive } from '../lib/archive.js';
 import { listSnapshots, rollbackToSnapshot, captureSnapshot } from '../lib/snapshots.js';
 import { listMigrationLogs } from '../lib/migrationLog.js';
 import { whenPersisted } from '../lib/storage.js';
@@ -24,18 +24,17 @@ const RELOAD_AFTER_MS = 1400;
 export default function StorageDiagnostics({ setMsg }){
   const [diag, setDiag] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [archiveSelected, setArchiveSelected] = useState('');
 
   const refresh = useCallback(async ()=>{
-    const [audit, archiveCandidates, archiveRows, snapshots, migrationLogs, prunePreview] = await Promise.all([
+    const [audit, archiveCandidates, archived, snapshots, migrationLogs, prunePreview] = await Promise.all([
       auditStore(),
       archiveCandidateCount(365),
-      listArchivedSessions(),
+      archivedSessionCount(),
       listSnapshots(),
       listMigrationLogs(),
       pruneEvents({ dryRun: true }),
     ]);
-    setDiag({ audit, archiveCandidates, archived: archiveRows.length, archiveRows, snapshots, migrationLogs, prunePreview });
+    setDiag({ audit, archiveCandidates, archived, snapshots, migrationLogs, prunePreview });
   }, []);
 
   useEffect(()=> { refresh(); }, [refresh]);
@@ -57,9 +56,6 @@ export default function StorageDiagnostics({ setMsg }){
   };
 
   const findings = diag?.audit?.findings || [];
-  const archiveRows = diag?.archiveRows || [];
-  const selectedArchive = archiveRows.find((s)=> s.id === archiveSelected) || archiveRows[0] || null;
-  const sessionSetCount = (session)=> (session?.blocks || []).reduce((sum, block)=> sum + (block?.sets || []).length, 0);
 
   return (
     <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
@@ -90,35 +86,14 @@ export default function StorageDiagnostics({ setMsg }){
               <button disabled={busy} onClick={()=> { if(confirm(`Roll back to the snapshot from ${new Date(diag.snapshots[0].at).toLocaleString()}?\n\nEverything stored since then is replaced. Exports are unaffected.`)) run(()=> rollbackToSnapshot(diag.snapshots[0].id), 'Rolled back — reloading…', { reload: true })(); }} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Roll back to snapshot</button>
             )}
             {diag.archived > 0 && (
-              <button disabled={busy} onClick={run(()=> restoreArchive(), (r)=> `Restored ${r} archived session${r === 1 ? '' : 's'} to live history.`, { reload: true })} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Restore all</button>
+              <button disabled={busy} onClick={run(()=> restoreArchive(), (r)=> `Restored ${r} archived session${r === 1 ? '' : 's'} to live history.`, { reload: true })} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Restore archive</button>
             )}
           </div>
           <p className="text-xs text-ink3">
             {diag.archiveCandidates > 0 && <>{diag.archiveCandidates} session{diag.archiveCandidates === 1 ? '' : 's'} older than a year could be archived. </>}
-            {diag.archived > 0 && <>{diag.archived} archived session{diag.archived === 1 ? '' : 's'} kept on this device — browse or restore them any time. </>}
+            {diag.archived > 0 && <>{diag.archived} archived session{diag.archived === 1 ? '' : 's'} kept on this device — restore them any time. </>}
             Snapshots: {diag.snapshots.length ? `latest ${new Date(diag.snapshots[0].at).toLocaleString()}` : 'none yet — one is taken automatically at boot'}.
           </p>
-          {diag.archived > 0 && selectedArchive && (
-            <details className="rounded-xl border border-line bg-surface2 p-3 text-xs">
-              <summary className="font-semibold cursor-pointer">Browse archive ({diag.archived})</summary>
-              <div className="mt-2 space-y-2">
-                <select
-                  value={selectedArchive.id}
-                  onChange={(e)=> setArchiveSelected(e.target.value)}
-                  aria-label="Archived training session"
-                  className="w-full min-h-10 rounded-xl border border-line bg-surface px-2 text-xs"
-                >
-                  {archiveRows.map((s)=> <option key={s.id} value={s.id}>{s.dateISO || 'Unknown date'} — {s.title || s.name || 'Training session'}</option>)}
-                </select>
-                <p className="text-ink3">{(selectedArchive.blocks || []).length} exercises · {sessionSetCount(selectedArchive)} sets · browsing does not restore data.</p>
-                <button
-                  disabled={busy}
-                  onClick={run(()=> restoreArchivedSession(selectedArchive.id), (restored)=> restored ? 'Session restored to live history.' : 'That archived session was no longer available.')}
-                  className="min-h-9 rounded-xl border border-line px-3 font-bold disabled:opacity-50"
-                >Restore selected</button>
-              </div>
-            </details>
-          )}
           {!!diag.migrationLogs.length && (
             <details className="text-xs">
               <summary className="font-semibold cursor-pointer">Migration log ({diag.migrationLogs.length})</summary>
