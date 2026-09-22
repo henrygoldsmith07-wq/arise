@@ -17,7 +17,7 @@ import { createWakeLock } from '../lib/wakeLock.js';
 import { announce } from '../lib/a11y.js';
 import { restStartCue, restCompleteCue } from '../lib/audioCues.js';
 import { speak, cancelSpeech } from '../lib/voiceCoach.js';
-import { LoadNumpad, RestDock, swipeRowHandlers } from './GymModePanel.jsx';
+import { LoadNumpad, RestDock, WeightInput, swipeRowHandlers } from './GymModePanel.jsx';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
 // Teaching opens on a deliberate tap, so the panel + its derived content
 // ride their own lazy chunk — boot logging weight is untouched.
@@ -1165,7 +1165,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     className={`grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)] gap-1 sm:grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] sm:gap-1.5 items-center rounded-xl ${s.failed ? 'bg-reviewsoft border border-review/30' : ''}`}>
                     <span className={`w-7 h-7 grid place-items-center rounded-full border text-xs font-bold tabular-nums ${s.completed?'bg-success text-bg border-success':s.failed?'bg-review text-bg border-review':'bg-surface2 border-line'}`}>{si+1}</span>
                     <div className="min-w-0 flex items-center gap-1">
-                      <input type="number" min="0" step="0.5" inputMode="decimal" value={weightInputValue(s.weightKg, unit)} onChange={e=> updateSet(bi,si,{weightKg:weightInputToKg(e.target.value, unit)})} {...commitProps('load-field-commit', b.exerciseId, si)} placeholder={supportsWeighted?(unit === 'lb' ? '50' : '22'):'bw'} aria-label={`Load set ${si+1} in ${unit === 'lb' ? 'pounds' : 'kilograms'}`} className={`min-w-0 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
+                      <WeightInput type="text" inputMode="decimal" value={s.weightKg} unit={unit} onChange={v=> updateSet(bi,si,{weightKg:v})} {...commitProps('load-field-commit', b.exerciseId, si)} placeholder={supportsWeighted?(unit === 'lb' ? '50' : '22'):'bw'} aria-label={`Load set ${si+1} in ${unit === 'lb' ? 'pounds' : 'kilograms'}`} className={`min-w-0 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center ${s.completed?'opacity-60':''}`} />
                       {supportsWeighted && !s.completed && (
                         <button onClick={()=> openKeypad(bi,si)} aria-label={`Open load keypad for set ${si+1}`} title="Load keypad" className="shrink-0 w-11 h-11 grid place-items-center rounded-xl border border-line bg-surface2 text-sm font-black">✛</button>
                       )}
@@ -1236,7 +1236,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                 })}
                 {(supportsAssisted || b.unilateral) && b.sets.length>0 && (
                   <div className="grid grid-cols-2 gap-2">
-                    {supportsAssisted && <label className="text-[11px]">Assisted {unit} off (all sets) <input value={weightInputValue(b.sets[0]?.assistedKg||'', unit)} onChange={e=> { const v=weightInputToKg(e.target.value, unit); setBlocks(prev=> prev.map((blk,idx)=> idx!==bi?blk:{...blk, sets: blk.sets.map(x=> ({...x, assistedKg:v}))})); }} placeholder={unit === 'lb' ? 'e.g. 20' : 'e.g. 10'} className="ml-1 rounded-lg border border-line bg-surface2 px-2 py-1 text-xs w-20" /></label>}
+                    {supportsAssisted && <label className="text-[11px]">Assisted {unit} off (all sets) <WeightInput value={b.sets[0]?.assistedKg||''} unit={unit} onChange={v=> { setBlocks(prev=> prev.map((blk,idx)=> idx!==bi?blk:{...blk, sets: blk.sets.map(x=> ({...x, assistedKg:v}))})); }} inputMode="decimal" placeholder={unit === 'lb' ? 'e.g. 20' : 'e.g. 10'} className="ml-1 rounded-lg border border-line bg-surface2 px-2 py-1 text-xs w-20" /></label>}
                     <label className="text-[11px]">ROM (all sets) <input value={b.sets[0]?.rom||''} onChange={e=> { const v=e.target.value; setBlocks(prev=> prev.map((blk,idx)=> idx!==bi?blk:{...blk, sets: blk.sets.map(x=> ({...x, rom:v}))})); }} placeholder="full / partial" className="ml-1 rounded-lg border border-line bg-surface2 px-2 py-1 text-xs w-24" /></label>
                   </div>
                 )}
