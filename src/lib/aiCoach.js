@@ -19,10 +19,51 @@
 import { EXERCISE_BY_ID } from './data.js';
 import { resolveArisePriors } from './priors.js';
 import { reviewCompletedWeek } from './mesocycle.js';
+import { routeCoachRequest } from './feedbackClassifier.js';
 
 const SETTINGS_KEY = 'arise.ai.settings.v1';
 export const NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
 export const DEFAULT_MODEL = 'meta/llama-3.1-8b-instruct';
+export const COACH_FEEDBACK_URL = 'https://github.com/henrygoldsmith07-wq/arise/issues/new?template=feedback.md';
+
+// Deterministic intent rules first, then classifier.dev semantic fallback
+// (opt-in, redacted, offline-local-keyword fallback). The router returns a
+// LANE only — it never produces a training prescription. Lanes:
+//   local-engine    -> the deterministic engine already answers (no cloud coach)
+//   coach-cloud     -> hand off to the existing NVIDIA explanation layer
+//   feedback-pipeline -> route to the feedback channel (bug/feature request)
+//   clarify         -> ask the user to rephrase
+const INTENT_KEYWORDS = [
+  { lane: 'local-engine', re: /\b(how (do|should|to|can) i|progression|progression policy|what (load|weight)|next (set|workout|session|week)|increase|decrease|add weight|too heavy|easy|hard|deload|rest|rerack)\b/i },
+  { lane: 'feedback-pipeline', re: /\b(crash|bug|broken|error|fail|freeze|slow|lag|jank|stuck|broken|import|export|backup|sync|csv|merge|wrong|mismatch|typo|missing|add|feature|request|accessibility|contrast|screen reader|voiceover|talkback|keyboard|font|blur|lag)\b/i },
+  { lane: 'coach-cloud', re: /\b(coach|insight|explain|why|tell me about|summary|recap|analyse|analyze|review|weekly)\b/i },
+];
+const DEFAULT_COACH_FETCH = typeof fetch !== 'undefined' ? fetch : null;
+
+// Opt-in, redacted semantic fallback. Returns only a lane; never a prescription.
+export async function aiCoachRoute(promptText, { fetchImpl = null, timeoutMs = 6000 } = {}){
+  const text = String(promptText == null ? '' : promptText);
+  for(const rule of INTENT_KEYWORDS){
+    if(rule.re.test(text)) return { lane: rule.lane, source: 'deterministic-keyword', classified: false };
+  }
+  // Deterministic rules did not decide -> classifier.dev semantic fallback.
+  // routeCoachRequest only hits the network when the user has explicitly opted
+  // in; otherwise it resolves locally (keyword label, needsReview=true) and
+  // never throws into the UI flow.
+  const r = await routeCoachRequest(text, {
+    fetchImpl: fetchImpl || DEFAULT_COACH_FETCH || undefined,
+    timeoutMs,
+  });
+  // routeCoachRequest maps: training-question -> local-engine (the deterministic
+  // engine owns prescriptions, not the cloud coach), feedback-or-bug ->
+  // feedback-pipeline, anything else -> clarify. The cloud explanation layer
+  // only ever answers general coaching/questions, never training prescriptions.
+  const lane = r.route === 'local-engine' ? 'local-engine'
+    : r.route === 'feedback-pipeline' ? 'feedback-pipeline'
+    : r.route === 'clarify' ? 'clarify'
+    : 'coach-cloud';
+  return { lane, source: r.source, classified: true, needsReview: r.needsReview, label: r.label };
+}
 
 const SYSTEM_PROMPT =
   'You are the explanation layer for Arise, a deterministic strength-training engine. ' +

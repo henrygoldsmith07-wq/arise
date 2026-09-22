@@ -113,6 +113,11 @@
 // and deterministic lane-only coach routing. Boot and largest-lazy budgets
 // remain unchanged; measured total 367.5.
 //
+// total 368 → 369 kB with the user-facing AI coach lane router: deterministic
+// intent routing now gates the existing explanation call, with classifier.dev
+// used only as an opted-in semantic fallback. Boot and largest-lazy budgets
+// remain unchanged; measured total 368.3.
+//
 // The budgets are regression bounds with headroom, not aspirations: a change
 // that crosses one must either undo the bloat or consciously re-baseline here
 // and say why in the PR.
@@ -129,7 +134,7 @@ if(!fs.existsSync(dist)){
 
 const BOOT_BUDGET_KB = 197;
 const CHUNK_BUDGET_KB = 48;
-const TOTAL_BUDGET_KB = 368;
+const TOTAL_BUDGET_KB = 369;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

@@ -14,7 +14,7 @@ import { mergeHealthSummary, pullHealthSummary } from '../lib/health.js';
 import { LOCATIONS, GOALS } from '../lib/data.js';
 import { loadEvaluationLedger, loadArchivedEvaluationCount } from '../lib/longitudinal.js';
 import { deriveProgressionModel } from '../lib/progressionModel.js';
-import { getAiSettings, saveAiSettings, clearAiSettings, buildTrainingContext, requestCoachInsight, DEFAULT_MODEL } from '../lib/aiCoach.js';
+import { getAiSettings, saveAiSettings, clearAiSettings, buildTrainingContext, requestCoachInsight, DEFAULT_MODEL, aiCoachRoute, COACH_FEEDBACK_URL } from '../lib/aiCoach.js';
 import { STUDY_ARMS, studyCoverage, runComparativeStudy, collectDeloadDecisions, validateDeloadDecisions } from '../lib/study.js';
 import { enrollmentAudit } from '../lib/studyEnrollment.js';
 import { isValidStudyParticipantId } from '../lib/studyIdentity.js';
@@ -69,6 +69,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   const [evidenceOpen,setEvidenceOpen]=useState(false);
   const ai = getAiSettings();
   const [aiKeyInput,setAiKeyInput]=useState('');
+  const [aiPrompt,setAiPrompt]=useState('');
   const [aiModelInput,setAiModelInput]=useState(ai.model || DEFAULT_MODEL);
   const [aiEnabled,setAiEnabled]=useState(ai.enabled);
   const [aiBusy,setAiBusy]=useState(false);
@@ -529,12 +530,28 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   const generateInsight = async ()=>{
     if(aiBusy) return;
     const key = aiKeyInput.trim() || ai.apiKey;
-    if(!key){ setAiResult({ ok:false, error:'Paste your NVIDIA API key first.' }); return; }
+    if(!aiPrompt.trim()){ setAiResult({ ok:false, error:'Ask a question first.' }); return; }
     setAiBusy(true);
     setAiResult(null);
     try{
       saveAiSettings({ apiKey: key, model: aiModelInput, enabled: true });
       setAiEnabled(true);
+      // Intent routing happens BEFORE the cloud coach is touched: deterministic
+      // keyword rules -> classifier.dev semantic fallback (opt-in, redacted) ->
+      // lane only. The cloud coach never receives training prescriptions.
+      const route = await aiCoachRoute(aiPrompt);
+      if(route.lane === 'feedback-pipeline'){
+        setAiResult({ ok:true, text:`That sounds like something to report. Please open an issue and include your support bundle (More → Data → Export support bundle).\n\n${COACH_FEEDBACK_URL}` });
+        return;
+      }
+      if(route.lane === 'clarify'){
+        setAiResult({ ok:false, error:'Could you rephrase that? I can explain past sessions or answer general coaching questions — I can’t prescribe future workouts.' });
+        return;
+      }
+      if(route.lane === 'local-engine'){
+        setAiResult({ ok:true, text:'That’s a training/progression question the deterministic engine already shows in Train and Progress — open a session there for the live recommendation and its reasoning.' });
+        return;
+      }
       const context = buildTrainingContext({ history: store.history || [], schedule: store.activeSchedule, readinessLog: store.readinessLog || [], customTemplates: store.customTemplates || [] });
       const result = await requestCoachInsight({ context, apiKey: key, model: aiModelInput });
       setAiResult(result);
@@ -1110,6 +1127,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
             </div>
           )}
         </div>
+        <p className="text-xs text-ink3">Your question is routed first: deterministic intent rules decide whether it needs the engine, the cloud coach, or the feedback channel (bug/feature request). Training prescriptions always come from the deterministic engine — the cloud coach only explains.</p>
         <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
           <label className="block">
             <span className="text-[11px] font-bold">NVIDIA API key</span>
@@ -1119,14 +1137,19 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
             <span className="text-[11px] font-semibold text-ink3">Model</span>
             <input value={aiModelInput} onChange={e=> setAiModelInput(e.target.value)} placeholder={DEFAULT_MODEL} className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-xs" />
           </label>
+          <label className="block">
+            <span className="text-[11px] font-bold">Ask the coach</span>
+            <textarea value={aiPrompt} onChange={e=> setAiPrompt(e.target.value)} placeholder="e.g. summarise last week, explain why my bench stalled, or report a crash"
+              className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm resize-none" rows={3} maxLength={500} />
+          </label>
           <div className="flex flex-wrap gap-2">
-            <button onClick={generateInsight} disabled={aiBusy} className="btn btn-primary min-h-9 rounded-xl px-3 text-xs disabled:opacity-40">{aiBusy ? 'Thinking…' : 'Generate insight'}</button>
+            <button onClick={generateInsight} disabled={aiBusy || !aiPrompt.trim()} className="btn btn-primary min-h-9 rounded-xl px-3 text-xs disabled:opacity-40">{aiBusy ? 'Routing…' : 'Ask'}</button>
             {ai.apiKey && <button onClick={()=> { clearAiSettings(); setAiEnabled(false); setAiResult(null); setAiKeyInput(''); }} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Clear key</button>}
             <span className="ml-auto text-[11px] text-ink3 self-center">{ai.apiKey ? 'key saved on this device' : 'no key stored'} · {ai.enabled || aiBusy ? 'enabled' : 'disabled'}</span>
           </div>
           {aiResult && (
             <div role="status" aria-live="polite" className={`rounded-xl border px-3 py-2 text-xs whitespace-pre-wrap ${aiResult.ok ? 'border-line bg-surface' : 'border-amber-300 bg-amber-50 text-amber-900'}`}>
-              {aiResult.ok ? `${aiResult.text}\n\n— ${aiResult.model}` : `AI request failed: ${aiResult.error}`}
+              {aiResult.ok ? (aiResult.text) : `AI request unavailable: ${aiResult.error}`}
             </div>
           )}
         </div>
