@@ -589,6 +589,7 @@ export default function App(){
         onClose={()=> setOnboardingOpen(false)}
         onComplete={handleCompleteOnboarding}
         initial={store.onboarding}
+        units={store.preferences?.units || 'kg'}
         onLoadDemo={isDemo ? null : loadDemo}
       />
 
