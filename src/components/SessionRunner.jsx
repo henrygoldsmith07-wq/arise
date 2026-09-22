@@ -28,15 +28,7 @@ import { haptic } from '../lib/haptics.js';
 import { painAftercareFor, techniquePromptFor, maxEffortWarning } from '../lib/safety.js';
 import { createVoiceInput, parseSetPhrase } from '../lib/voiceInput.js';
 import { asUnit, fmtWeight, localizeWeightText, weightInputToKg, weightInputValue } from '../lib/units.ts';
-
-const NOTE_PROMPTS = [
-  { id: 'felt-strong', label: 'Felt strong' },
-  { id: 'felt-heavy', label: 'Felt heavy' },
-  { id: 'poor-sleep', label: 'Poor sleep' },
-  { id: 'short-on-time', label: 'Short on time' },
-  { id: 'form-focus', label: 'Form focus' },
-  { id: 'pain-discomfort', label: 'Pain / discomfort' },
-];
+import { NOTE_PROMPTS } from '../lib/sessionNotes.js';
 
 function parseNum(v){ const n=Number(v); return Number.isFinite(n)? n : 0; }
 // Sets are persisted as RPE (engine + history schema), but logged as RIR:
