@@ -28,6 +28,7 @@ import { restPresetFor } from '../lib/gymMode.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
 import { RestDock, WeightInput } from './GymModePanel.jsx';
 import { asUnit, fmtWeight, localizeWeightText } from '../lib/units.ts';
+import { NOTE_TEMPLATES, appendNoteTemplate } from '../lib/sessionNotes.js';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
 const TeachingPanel = lazy(() => import('./TeachingPanel.jsx'));
 
@@ -447,6 +448,15 @@ export default function GuidedRunner({ session, history = [], availableEquipment
                   <button key={prompt.id} onClick={()=> toggleNoteTag(prompt.id)} aria-pressed={noteTags.includes(prompt.id)} className={`text-xs font-semibold px-2.5 py-1.5 rounded-full border ${noteTags.includes(prompt.id)?'bg-ink text-bg border-ink':'bg-surface2 border-line'}`}>{prompt.label}</button>
                 ))}
               </div>
+              <select
+                defaultValue=""
+                onChange={e=> { if(e.target.value) setNote(current=> appendNoteTemplate(current, e.target.value)); e.target.value=''; }}
+                aria-label="Add a session note template"
+                className="w-full min-h-9 rounded-xl border border-line bg-surface2 px-3 text-xs text-ink2"
+              >
+                <option value="">Add note template…</option>
+                {NOTE_TEMPLATES.map(template=> <option key={template.id} value={template.id}>{template.label}</option>)}
+              </select>
               <textarea value={note} onChange={e=> setNote(e.target.value)} rows={2} placeholder="How did it go? Sleep, pain, technique, ROM, load…" className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm" />
             </section>
           </section>
