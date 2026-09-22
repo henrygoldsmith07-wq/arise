@@ -8,7 +8,6 @@ const pctDelta = (a,b)=> b>0 ? Math.round((a-b)/b*1000)/10 : null;
 
 export default function WeeklyReviewCard({ store, setStore }){
   const [expanded,setExpanded]=useState(false);
-  const [exportResult,setExportResult]=useState('');
 
   const data = useMemo(()=>{
     try{
@@ -94,31 +93,7 @@ export default function WeeklyReviewCard({ store, setStore }){
   };
 
   const accept = ()=>{ try{ setStore({ ...store, lastWeeklyReviewAck: data.ackKey }); }catch{} };
-  const exportMarkdown = async ()=>{
-    const [{ renderWeeklyReviewMarkdown }, { shareTextAsFile }] = await Promise.all([
-      import('../lib/weeklyReviewExport.js'),
-      import('../lib/nativeShare.js'),
-    ]);
-    const text = renderWeeklyReviewMarkdown({
-      weekKey: review.reviewedWeekKey,
-      weekNumber: data.weekNumber,
-      completion: data.completion,
-      strength: data.strength,
-      volume: data.volume,
-      readiness: data.readiness,
-      prs: data.prs,
-      narrative: data.narrative,
-      changes: structural.map((directive)=> ({ summary: fmtDir(directive), reason: directive.reason })),
-      deload: review.deloadDecision?.yes === true,
-    });
-    const result = await shareTextAsFile({
-      text,
-      filename: `arise-weekly-review-${review.reviewedWeekKey}.md`,
-      mimeType: 'text/markdown',
-      title: 'Arise weekly review',
-    });
-    setExportResult(result === 'copied' ? 'Markdown copied' : result === 'shared' ? 'Markdown shared' : '');
-  };
+
 
   return (
     <section className="mx-4 mt-4 rounded-2xl border border-line bg-surface p-4 space-y-3" aria-label="Weekly review">
@@ -168,10 +143,6 @@ export default function WeeklyReviewCard({ store, setStore }){
       <div className="flex gap-2">
         <button onClick={accept} className="btn btn-primary flex-1 min-h-10 rounded-xl">Accept week</button>
         <button onClick={()=>setExpanded(e=>!e)} className="btn btn-secondary min-h-10 rounded-xl px-4">{expanded?'Hide details':'Review changes'}</button>
-      </div>
-      <div className="flex items-center gap-2">
-        <button onClick={exportMarkdown} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Export Markdown</button>
-        {exportResult && <span role="status" className="text-[11px] text-ink3">{exportResult}</span>}
       </div>
     </section>
   );
