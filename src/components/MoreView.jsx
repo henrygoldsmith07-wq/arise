@@ -30,7 +30,6 @@ import { captureSnapshot } from '../lib/snapshots.js';
 import { buildSupportBundle } from '../lib/supportDiagnostics.js';
 import { buildSalvagePayload } from '../lib/salvageExport.js';
 import { normaliseHistoryEntry } from '../lib/store.js';
-import { fmtWeight } from '../lib/units.ts';
 import {
   CLASSIFIER_TAXONOMY_VERSION,
   classifyFeedback,
@@ -943,7 +942,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
               <li>Kit: <span className="font-semibold text-ink">{(store.onboarding.equipment||[]).join(', ') || '—'}</span></li>
               <li>Level: <span className="font-semibold text-ink">{store.onboarding.level || '—'}</span> • {store.onboarding.daysPerWeek || '—'}×/week • {store.onboarding.availableMinutes || '—'} min</li>
               <li>Preferences: <span className="font-semibold text-ink">{store.onboarding.preferredExerciseIds?.length || 0} liked</span> • <span className="font-semibold text-ink">{store.onboarding.dislikedExerciseIds?.length || 0} avoided</span></li>
-              {store.onboarding.plateConfig && <li>Barbell setup: <span className="font-semibold text-ink">{fmtWeight(store.onboarding.plateConfig.barWeightKg || 0, prefs.units === 'lb' ? 'lb' : 'kg')} bar • {(store.onboarding.plateConfig.platesKg || []).map(v=>fmtWeight(v, prefs.units === 'lb' ? 'lb' : 'kg')).join(', ')} plates</span></li>}
+              {store.onboarding.plateConfig && <li>Barbell setup: <span className="font-semibold text-ink">{store.onboarding.plateConfig.barWeightKg || 0}kg bar • {(store.onboarding.plateConfig.platesKg || []).join(', ')}kg plates</span></li>}
             </ul>
           )}
         </div>
@@ -1301,7 +1300,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
             <summary className="text-sm font-semibold cursor-pointer">Study status{evidenceSummary ? ` — ${evidenceSummary}` : ''}</summary>
             {evidenceData && (
               <div className="mt-3 space-y-3">
-                <Suspense fallback={null}><EvidenceDashboard records={evidenceData.ledger || []} archivedCount={evidenceData.archivedCount} units={prefs.units === 'lb' ? 'lb' : 'kg'} /></Suspense>
+                <Suspense fallback={null}><EvidenceDashboard records={evidenceData.ledger || []} archivedCount={evidenceData.archivedCount} /></Suspense>
                 <div>
                   <p className="text-xs font-bold">Coverage</p>
                   <p className="text-[11px] text-ink3 mt-1">{evidenceData.coverage.totalResolved} resolved pairs · {evidenceData.coverage.openRecords} awaiting their workout · {evidenceData.coverage.exercisesTracked} exercises tracked. Segments need {evidenceData.coverage.minimumSamples}+ pairs to conclude.</p>
