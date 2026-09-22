@@ -27,6 +27,7 @@ import { tracePhase, traceStart, traceEnd } from '../lib/perfTrace.js';
 import { haptic } from '../lib/haptics.js';
 import { painAftercareFor, techniquePromptFor, maxEffortWarning } from '../lib/safety.js';
 import { createVoiceInput, parseSetPhrase } from '../lib/voiceInput.js';
+import { asUnit, fmtWeight, weightInputToKg, weightInputValue } from '../lib/units.ts';
 
 const NOTE_PROMPTS = [
   { id: 'felt-strong', label: 'Felt strong' },
@@ -93,36 +94,36 @@ function normaliseBlock(block, history, draftBlock, planIndex = 0){
 }
 
 // The ONE clear target shown big on the block: load × reps for this session.
-function clearTargetParts(rec, block){
+function clearTargetParts(rec, block, unit = 'kg'){
   const reps = rec?.reps != null && String(rec.reps).trim() !== '' ? rec.reps : (firstInt(block.reps) || null);
-  if(rec?.assistKg != null) return { text: `${reps ?? '—'} reps @ ${rec.assistKg} kg assist` };
+  if(rec?.assistKg != null) return { text: `${reps ?? '—'} reps @ ${fmtWeight(rec.assistKg, unit)} assist` };
   let load = null;
-  if(rec?.load != null && Number(rec.load) > 0) load = `${rec.load} kg`;
+  if(rec?.load != null && Number(rec.load) > 0) load = fmtWeight(rec.load, unit);
   else if(block.loadHint && /\d/.test(String(block.loadHint))) load = block.loadHint;
   const text = [load, reps ? `× ${reps}` : null].filter(Boolean).join(' ');
   return { text: text || 'working set' };
 }
 
 // Previous performance, summarised: "22 kg × 10, 9, 8" + total reps for the goal.
-function previousSummary(prev){
+function previousSummary(prev, unit = 'kg'){
   if(!prev?.sets?.length) return null;
   const firstW = prev.sets.find(s => s.weightKg != null && String(s.weightKg).trim() !== '')?.weightKg || null;
-  const detail = prev.sets.map(s=> `${s.reps}${s.side?` ${s.side}`:''}${s.assistedKg?` (-${s.assistedKg})`:''}`).join(', ');
+  const detail = prev.sets.map(s=> `${s.reps}${s.side?` ${s.side}`:''}${s.assistedKg?` (-${weightInputValue(s.assistedKg, unit)} ${unit})`:''}`).join(', ');
   const totalReps = prev.sets.reduce((n, s)=> n + parseNum(s.reps), 0);
   const bestKg = prev.sets.reduce((n, s)=> Math.max(n, parseNum(s.weightKg)), 0);
   const maxReps = prev.sets.reduce((n, s)=> Math.max(n, parseNum(s.reps)), 0);
-  return { summary: firstW ? `${firstW} kg × ${detail}` : detail, totalReps, bestKg, maxReps, dateISO: prev.dateISO };
+  return { summary: firstW ? `${fmtWeight(firstW, unit)} × ${detail}` : detail, totalReps, bestKg, maxReps, dateISO: prev.dateISO };
 }
 
 // What changed vs last time — the arrow chip above the engine's explanation.
-function transitionChip(rec, prevSummary){
+function transitionChip(rec, prevSummary, unit = 'kg'){
   if(!rec || !prevSummary) return null;
   const recLoad = Number(rec.load) > 0 ? Number(rec.load) : null;
   const recReps = rec.reps != null && String(rec.reps).trim() !== '' ? parseNum(rec.reps) : null;
   if(recLoad != null && prevSummary.bestKg > 0){
-    if(recLoad > prevSummary.bestKg) return `↑ ${prevSummary.bestKg} → ${recLoad} kg`;
-    if(recLoad < prevSummary.bestKg) return `↓ ${prevSummary.bestKg} → ${recLoad} kg`;
-    return `holds ${recLoad} kg`;
+    if(recLoad > prevSummary.bestKg) return `↑ ${fmtWeight(prevSummary.bestKg, unit)} → ${fmtWeight(recLoad, unit)}`;
+    if(recLoad < prevSummary.bestKg) return `↓ ${fmtWeight(prevSummary.bestKg, unit)} → ${fmtWeight(recLoad, unit)}`;
+    return `holds ${fmtWeight(recLoad, unit)}`;
   }
   if(recReps != null && prevSummary.maxReps > 0){
     if(recReps > prevSummary.maxReps) return `↑ ${prevSummary.maxReps} → ${recReps} reps`;
@@ -147,6 +148,7 @@ function hasUnfinishedSet(blocks, bi, si){
 }
 
 export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, appPrefs = null, gymPrefs = null, onSetRestPreset = null, studyEnrollment = null, participantId = null, onDraftChange, onSave, onCancel }){
+  const unit = asUnit(appPrefs?.units);
   const [blocks,setBlocks]=useState(()=> session.blocks.map((b,i)=> normaliseBlock(b, history, draft?.blocks?.[i], i)));
   // Transient confirmation for the one-tap "apply all" fast-log path.
   const [applyAllNote,setApplyAllNote]=useState(null);
@@ -207,10 +209,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           const si = b.sets.findIndex(x=> !x.completed);
           const idx = si === -1 ? b.sets.length - 1 : si;
           const patch = {};
-          if(parsed.weightKg != null) patch.weightKg = String(parsed.weightKg);
+          if(parsed.weightKg != null) patch.weightKg = weightInputToKg(String(parsed.weightKg), unit);
           if(parsed.reps != null) patch.reps = String(parsed.reps);
           if(Object.keys(patch).length) updateSet(target, idx, patch);
-          announce(`Set ${idx + 1} ${patch.weightKg != null ? `${patch.weightKg} kilograms ` : ''}${patch.reps != null ? `${patch.reps} reps` : ''}`.trim());
+          announce(`Set ${idx + 1} ${patch.weightKg != null ? `${fmtWeight(patch.weightKg, unit)} ` : ''}${patch.reps != null ? `${patch.reps} reps` : ''}`.trim());
         },
         onEnd: ()=> { dictatingRef.current = null; setDictating(null); },
         onError: ()=> { dictatingRef.current = null; setDictating(null); },
@@ -1042,10 +1044,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           const supportsWeighted=ex?.supportsWeighted;
           const supportsAssisted=ex?.supportsAssisted;
           const recommendation=blockMeta.recs.get(b.exerciseId) || null;
-          const clearTarget = clearTargetParts(recommendation, b);
-          const prevSummary = prev ? previousSummary(prev) : null;
+          const clearTarget = clearTargetParts(recommendation, b, unit);
+          const prevSummary = prev ? previousSummary(prev, unit) : null;
           const goalText = prevSummary && prevSummary.totalReps > 0 ? `beat ${prevSummary.totalReps} total reps` : 'set your baseline';
-          const changeChip = transitionChip(recommendation, prevSummary);
+          const changeChip = transitionChip(recommendation, prevSummary, unit);
           // Swap sheet honours the user's liked/disliked movements, and never
           // offers a swap back to the original lift — A→B→A loops would erase
           // the substitution audit trail.
@@ -1142,10 +1144,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
 
               <div className="space-y-2.5">
                 <div className="grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)] gap-1 text-[10px] font-bold uppercase tracking-widest text-ink3 px-1 sm:hidden" aria-hidden>
-                  <span>#</span><span>Load kg</span><span>Reps</span>
+                  <span>#</span><span>Load {unit}</span><span>Reps</span>
                 </div>
                 <div className="hidden sm:grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] gap-1.5 text-[10px] font-bold uppercase tracking-widest text-ink3 px-1">
-                  <span>#</span><span>Load kg</span><span>Reps</span><span>RIR</span><span>{b.unilateral?'L/R':''}</span><span>Done</span><span></span>
+                  <span>#</span><span>Load {unit}</span><span>Reps</span><span>RIR</span><span>{b.unilateral?'L/R':''}</span><span>Done</span><span></span>
                 </div>
                 {b.sets.map((s,si)=> {
                   const activeSetIdx = b.sets.findIndex(x=> !x.completed);
@@ -1163,7 +1165,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     className={`grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)] gap-1 sm:grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] sm:gap-1.5 items-center rounded-xl ${s.failed ? 'bg-reviewsoft border border-review/30' : ''}`}>
                     <span className={`w-7 h-7 grid place-items-center rounded-full border text-xs font-bold tabular-nums ${s.completed?'bg-success text-bg border-success':s.failed?'bg-review text-bg border-review':'bg-surface2 border-line'}`}>{si+1}</span>
                     <div className="min-w-0 flex items-center gap-1">
-                      <input type="number" min="0" step="0.5" inputMode="decimal" value={s.weightKg} onChange={e=> updateSet(bi,si,{weightKg:e.target.value})} {...commitProps('load-field-commit', b.exerciseId, si)} placeholder={supportsWeighted?'22':'bw'} aria-label={`Load set ${si+1} in kilograms`} className={`min-w-0 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
+                      <input type="number" min="0" step="0.5" inputMode="decimal" value={weightInputValue(s.weightKg, unit)} onChange={e=> updateSet(bi,si,{weightKg:weightInputToKg(e.target.value, unit)})} {...commitProps('load-field-commit', b.exerciseId, si)} placeholder={supportsWeighted?(unit === 'lb' ? '50' : '22'):'bw'} aria-label={`Load set ${si+1} in ${unit === 'lb' ? 'pounds' : 'kilograms'}`} className={`min-w-0 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
                       {supportsWeighted && !s.completed && (
                         <button onClick={()=> openKeypad(bi,si)} aria-label={`Open load keypad for set ${si+1}`} title="Load keypad" className="shrink-0 w-11 h-11 grid place-items-center rounded-xl border border-line bg-surface2 text-sm font-black">✛</button>
                       )}
@@ -1234,7 +1236,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                 })}
                 {(supportsAssisted || b.unilateral) && b.sets.length>0 && (
                   <div className="grid grid-cols-2 gap-2">
-                    {supportsAssisted && <label className="text-[11px]">Assisted kg off (all sets) <input value={b.sets[0]?.assistedKg||''} onChange={e=> { const v=e.target.value; setBlocks(prev=> prev.map((blk,idx)=> idx!==bi?blk:{...blk, sets: blk.sets.map(x=> ({...x, assistedKg:v}))})); }} placeholder="e.g. 10" className="ml-1 rounded-lg border border-line bg-surface2 px-2 py-1 text-xs w-20" /></label>}
+                    {supportsAssisted && <label className="text-[11px]">Assisted {unit} off (all sets) <input value={weightInputValue(b.sets[0]?.assistedKg||'', unit)} onChange={e=> { const v=weightInputToKg(e.target.value, unit); setBlocks(prev=> prev.map((blk,idx)=> idx!==bi?blk:{...blk, sets: blk.sets.map(x=> ({...x, assistedKg:v}))})); }} placeholder={unit === 'lb' ? 'e.g. 20' : 'e.g. 10'} className="ml-1 rounded-lg border border-line bg-surface2 px-2 py-1 text-xs w-20" /></label>}
                     <label className="text-[11px]">ROM (all sets) <input value={b.sets[0]?.rom||''} onChange={e=> { const v=e.target.value; setBlocks(prev=> prev.map((blk,idx)=> idx!==bi?blk:{...blk, sets: blk.sets.map(x=> ({...x, rom:v}))})); }} placeholder="full / partial" className="ml-1 rounded-lg border border-line bg-surface2 px-2 py-1 text-xs w-24" /></label>
                   </div>
                 )}
@@ -1249,6 +1251,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                   equipment={ex?.equipment?.[0] || 'barbell'}
                   plateConfig={plateConfig}
                   exerciseName={ex?.name || b.exerciseId}
+                  unit={unit}
                 />
               )}
             </div>
