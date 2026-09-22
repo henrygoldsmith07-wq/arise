@@ -2,6 +2,7 @@ import { beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { idbClearStore, idbGetAll, idbPut } from '../src/lib/idb.js';
+import { auditStore } from '../src/lib/audit.js';
 import {
   ARCHIVE_META_ID,
   listArchivedSessions,
@@ -11,6 +12,7 @@ import {
 beforeEach(async () => {
   await idbClearStore('archive');
   await idbClearStore('sessions');
+  await idbClearStore('sets');
 });
 
 describe('archive browser queries', () => {
@@ -42,5 +44,23 @@ describe('archive browser queries', () => {
     assert.equal(await restoreArchivedSession('missing'), false);
     assert.equal(await restoreArchivedSession(ARCHIVE_META_ID), false);
     assert.deepEqual((await listArchivedSessions()).map((row) => row.id), ['session-a']);
+  });
+
+
+  it('does not report set rows owned by archived sessions as orphaned', async () => {
+    await idbPut('archive', { id: 'session-a', dateISO: '2024-01-10', blocks: [] });
+    await idbPut('sets', {
+      id: 'set-a',
+      sessionId: 'session-a',
+      blockIndex: 0,
+      setIndex: 0,
+      reps: '8',
+      weightKg: '60',
+      dateISO: '2024-01-10',
+    });
+
+    const audit = await auditStore();
+
+    assert.equal(audit.findings.some((finding) => finding.type === 'orphaned-set'), false);
   });
 });
