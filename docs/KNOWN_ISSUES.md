@@ -72,7 +72,7 @@ accepted as documented behaviour in the appropriate doc.
 
 ## Accepted as documented behaviour
 
-- Kg is the storage and engine unit; lb is display-only (`src/lib/units.js`).
+- Kg is the storage and engine unit; workout UI may display and accept lb, converting only at the UI boundary (`src/lib/units.ts`).
 - The evaluation ledger never feeds recommendations (ADR 0008) — evidence
   views are retrospective, never causal.
 - Demo mode starts from a wiped slate and exits to a wiped slate; it never
