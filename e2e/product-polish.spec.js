@@ -107,27 +107,6 @@ test('study card: plain-language consent, honest eligibility, no fake joining', 
 });
 
 
-test('editing onboarding opens at kit and can save immediately', async ({ page }) => {
-  await completeOnboarding(page);
-  await page.getByRole('button', { name: 'More', exact: true }).click();
-  await page.getByRole('button', { name: 'Edit onboarding' }).click();
-
-  const dialog = page.getByRole('dialog', { name: 'Onboarding' });
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('heading', { name: 'What kit do you have?' })).toBeVisible();
-  await expect(dialog.getByText(/Editing setup · Step 3 of 5/)).toBeVisible();
-
-  await dialog.getByLabel(/Bodyweight/i).click();
-  await dialog.getByRole('button', { name: 'Save changes' }).click();
-  await expect(dialog).toBeHidden();
-
-  const equipment = await page.evaluate(async () => {
-    const { loadStore } = await import('/src/lib/store.js');
-    return loadStore().onboarding?.equipment || [];
-  });
-  expect(equipment).toContain('bodyweight');
-});
-
 test('pound preference makes equipment setup imperial while storage stays kg', async ({ page }) => {
   await completeOnboarding(page);
   await page.getByRole('button', { name: 'More', exact: true }).click();
@@ -135,11 +114,15 @@ test('pound preference makes equipment setup imperial while storage stays kg', a
   await page.getByRole('button', { name: 'Edit onboarding' }).click();
 
   const dialog = page.getByRole('dialog', { name: 'Onboarding' });
+  await dialog.getByRole('button', { name: 'Next' }).click();
+  await dialog.getByRole('button', { name: 'Next' }).click();
   await dialog.getByLabel(/Barbell/i).click();
   await expect(dialog.getByRole('button', { name: '45 lb bar', exact: true })).toBeVisible();
   await expect(dialog.getByRole('button', { name: '45 lb', exact: true })).toBeVisible();
   await dialog.getByRole('button', { name: '45 lb bar', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Save changes' }).click();
+  await dialog.getByRole('button', { name: 'Next' }).click();
+  await dialog.getByRole('button', { name: 'Next' }).click();
+  await dialog.getByRole('button', { name: 'Save & continue' }).click();
 
   const stored = await page.evaluate(async () => {
     const { loadStore } = await import('/src/lib/store.js');
