@@ -17,6 +17,7 @@ import { speak, voiceSupported } from '../lib/voiceCoach.js';
 import { fmtRest } from '../lib/guidedMode.js';
 import { announce } from '../lib/a11y.js';
 import { haptic } from '../lib/haptics.js';
+import { kgToLb, weightInputToKg, weightInputValue } from '../lib/units.ts';
 
 // ── Row gestures ────────────────────────────────────────────────────────────
 // One-thumb set handling on the touch rows:
@@ -87,20 +88,30 @@ export function swipeRowHandlers({ onComplete, onFail, onLongPress, enabled = tr
 // instrument; this is thumb-sized digits, ± steps sized to the equipment, and
 // a clear button — then it gets out of the way.
 
-export function LoadNumpad({ value, onChange, onClose, equipment = 'barbell', plateConfig = null, exerciseName = '' }){
+export function LoadNumpad({ value, onChange, onClose, equipment = 'barbell', plateConfig = null, exerciseName = '', unit = 'kg' }){
   const inc = useMemo(()=> {
     try{ return quickJumps({ equipment: [equipment], supportsWeighted: true, config: plateConfig }); }
     catch{ return []; }
   }, [equipment, plateConfig]);
+  const displayValue = weightInputValue(value, unit);
+  const formatDelta = (kg)=>{
+    const shown = unit === 'lb' ? kgToLb(Math.abs(Number(kg) || 0)) : Math.abs(Number(kg) || 0);
+    const rounded = Math.round(shown * 10) / 10;
+    return `${Number(kg) < 0 ? '−' : '+'}${Number.isInteger(rounded) ? rounded : rounded.toFixed(1)}`;
+  };
 
   const press = (key)=>{
     if(key === 'clear') return onChange('');
-    const current = String(value ?? '');
-    if(key === '.') return onChange(current.includes('.') ? current : (current === '' ? '0.' : current + '.'));
-    if(key === '⌫') return onChange(current.slice(0, -1));
-    // Cap at a sane length so a pocket touch can't type a 12-digit load.
-    if(current.replace(/[^0-9]/g, '').length >= 4) return;
-    onChange(current + key);
+    const current = String(displayValue ?? '');
+    let next = current;
+    if(key === '.') next = current.includes('.') ? current : (current === '' ? '0.' : current + '.');
+    else if(key === '⌫') next = current.slice(0, -1);
+    else {
+      // Cap at a sane length so a pocket touch can't type a 12-digit load.
+      if(current.replace(/[^0-9]/g, '').length >= 4) return;
+      next = current + key;
+    }
+    onChange(weightInputToKg(next, unit));
   };
 
   const step = (dir)=>{
@@ -111,15 +122,15 @@ export function LoadNumpad({ value, onChange, onClose, equipment = 'barbell', pl
   return (
     <div className="rounded-2xl border border-line bg-surface2 p-3 space-y-2" role="group" aria-label={`Load keypad${exerciseName ? ` for ${exerciseName}` : ''}`}>
       <div className="flex items-center gap-2">
-        <span className="text-[11px] font-bold uppercase tracking-widest text-ink3">Load kg</span>
-        <span className="ml-auto text-2xl font-black tabular-nums">{value || '—'}</span>
+        <span className="text-[11px] font-bold uppercase tracking-widest text-ink3">Load {unit}</span>
+        <span className="ml-auto text-2xl font-black tabular-nums">{displayValue || '—'}</span>
         <button onClick={onClose} className="min-h-11 px-3 rounded-full border border-line bg-surface text-xs font-bold">Done</button>
       </div>
       <div className="grid grid-cols-4 gap-1.5">
         {inc.map(j=> (
           <button key={j.id} onClick={()=> onChange(applyQuickJump(value, j, { equipment, config: plateConfig }))}
             className="min-h-11 rounded-xl border border-line bg-surface text-sm font-black tabular-nums active:bg-surface2">
-            {j.label}
+            {formatDelta(j.delta)}
           </button>
         ))}
       </div>
