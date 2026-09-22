@@ -143,7 +143,7 @@ describe('guidedMode — save payload', () => {
     assert.equal(payload.blocks[0].sets[0].completed, true);
     assert.equal(payload.blocks[1].sets[0].skipped, true);
     assert.equal(payload.skippedSetsCount, 1);
-    assert.equal(payload.note, 'felt good');
+    assert.equal(payload.note, 'Felt strong · felt good');
     assert.deepEqual(payload.noteTags, ['felt-strong']);
     assert.deepEqual(payload.equipmentSnapshot, ['dumbbells']);
   });
