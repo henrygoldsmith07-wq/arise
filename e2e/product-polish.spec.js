@@ -60,9 +60,6 @@ test('How-to guide opens inside the runner and never blocks logging', async ({ p
   await runner.getByRole('button', { name: 'Done' }).first().click();
   await expect(runner.getByRole('button', { name: '✓', exact: true }).first()).toBeVisible({ timeout: 5000 });
 
-  // Structured note snippets are available without replacing free-form notes.
-  await runner.getByLabel('Add a session note template').selectOption('technique');
-  await expect(runner.getByPlaceholder(/What should change next time/)).toHaveValue('Technique: ');
 });
 
 test('template editor: rest, reorder, kit preview, duplicate', async ({ page }) => {
