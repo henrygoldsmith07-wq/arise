@@ -47,12 +47,6 @@ export async function archiveCandidateCount(olderThanDays = 365){
   return (sessions || []).filter((s) => String(s?.dateISO || '') < cutoff).length;
 }
 
-
-/** Count archived sessions without including the archive metadata row. */
-export async function archivedSessionCount(){
-  return (await listArchivedSessions()).length;
-}
-
 /** Restore everything from the archive back into live history. */
 export async function restoreArchive(){
   const rows = (await idbGetAll('archive')) || [];
