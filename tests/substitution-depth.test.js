@@ -9,7 +9,7 @@ import {
   scoreSubstitution, rankedSubstitutions, substitutionOptions,
   validateSubstitutionChain, substitutionByPerformance, movementPatternFor,
 } from '../src/lib/substitutions.js';
-import { EXERCISES, EXERCISE_BY_ID, validateContentWarnings } from '../src/lib/data.js';
+import { EXERCISES, EXERCISE_BY_ID, exerciseAvailable, validateContentWarnings } from '../src/lib/data.js';
 
 const target = EXERCISE_BY_ID['bench-press-barbell'] || EXERCISES.find((e) => e.id === 'bench-press-barbell');
 assert.ok(target, 'bench-press-barbell must exist in the catalogue');
@@ -197,5 +197,18 @@ describe('catalog same-kit coverage', () => {
     for (const id of ['weighted-pull-up', 'neutral-grip-pull-up', 'weighted-chin-up', 'towel-pull-up']) {
       assert.deepEqual(EXERCISE_BY_ID[id].equipment, ['pullup-bar'], id);
     }
+  });
+
+
+  it('does not require optional loading equipment for bodyweight-capable movements', () => {
+    assert.equal(exerciseAvailable('lunge', ['bodyweight']), true);
+    assert.equal(exerciseAvailable('calf-raise', ['bodyweight']), true);
+  });
+
+  it('uses modality-specific rows instead of requiring two alternative implements', () => {
+    assert.equal(exerciseAvailable('romanian-deadlift', ['barbell']), true);
+    assert.equal(exerciseAvailable('dumbbell-romanian-deadlift', ['dumbbells']), true);
+    assert.equal(exerciseAvailable('face-pull', ['cable']), true);
+    assert.equal(exerciseAvailable('banded-face-pull', ['bands']), true);
   });
 });
