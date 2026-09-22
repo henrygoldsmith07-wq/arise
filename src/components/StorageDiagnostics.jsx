@@ -24,7 +24,7 @@ const RELOAD_AFTER_MS = 1400;
 export default function StorageDiagnostics({ setMsg }){
   const [diag, setDiag] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [archiveQuery, setArchiveQuery] = useState('');
+  const [archiveSelected, setArchiveSelected] = useState('');
 
   const refresh = useCallback(async ()=>{
     const [audit, archiveCandidates, archiveRows, snapshots, migrationLogs, prunePreview] = await Promise.all([
@@ -58,11 +58,7 @@ export default function StorageDiagnostics({ setMsg }){
 
   const findings = diag?.audit?.findings || [];
   const archiveRows = diag?.archiveRows || [];
-  const archiveNeedle = archiveQuery.trim().toLowerCase();
-  const archiveFiltered = archiveNeedle
-    ? archiveRows.filter((session)=> [session?.dateISO, session?.title, session?.name, ...(session?.blocks || []).map((b)=> b?.exerciseId)]
-        .filter(Boolean).join(' ').toLowerCase().includes(archiveNeedle))
-    : archiveRows;
+  const selectedArchive = archiveRows.find((s)=> s.id === archiveSelected) || archiveRows[0] || null;
   const sessionSetCount = (session)=> (session?.blocks || []).reduce((sum, block)=> sum + (block?.sets || []).length, 0);
 
   return (
@@ -102,36 +98,24 @@ export default function StorageDiagnostics({ setMsg }){
             {diag.archived > 0 && <>{diag.archived} archived session{diag.archived === 1 ? '' : 's'} kept on this device — browse or restore them any time. </>}
             Snapshots: {diag.snapshots.length ? `latest ${new Date(diag.snapshots[0].at).toLocaleString()}` : 'none yet — one is taken automatically at boot'}.
           </p>
-          {diag.archived > 0 && (
+          {diag.archived > 0 && selectedArchive && (
             <details className="rounded-xl border border-line bg-surface2 p-3 text-xs">
               <summary className="font-semibold cursor-pointer">Browse archive ({diag.archived})</summary>
               <div className="mt-2 space-y-2">
-                <input
-                  type="search"
-                  value={archiveQuery}
-                  onChange={(e)=> setArchiveQuery(e.target.value)}
-                  placeholder="Search date, session or exercise"
-                  aria-label="Search archived training sessions"
-                  className="w-full min-h-10 rounded-xl border border-line bg-surface px-3 text-xs text-ink"
-                />
-                <p className="text-[11px] text-ink3">{archiveFiltered.length} matching session{archiveFiltered.length === 1 ? '' : 's'} · browsing does not restore data.</p>
-                {archiveFiltered.length ? (
-                  <ul className="space-y-1.5">
-                    {archiveFiltered.map((session)=> (
-                      <li key={session.id} className="rounded-xl border border-line bg-surface px-3 py-2 flex items-start gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="font-semibold truncate">{session.title || session.name || 'Training session'}</p>
-                          <p className="text-ink3">{session.dateISO || 'Unknown date'} · {(session.blocks || []).length} exercises · {sessionSetCount(session)} sets</p>
-                        </div>
-                        <button
-                          disabled={busy}
-                          onClick={run(()=> restoreArchivedSession(session.id), (restored)=> restored ? 'Session restored to live history.' : 'That archived session was no longer available.')}
-                          className="shrink-0 min-h-8 rounded-lg border border-line px-2.5 text-[11px] font-bold disabled:opacity-50"
-                        >Restore</button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : <p className="text-ink3">No archived sessions match that search.</p>}
+                <select
+                  value={selectedArchive.id}
+                  onChange={(e)=> setArchiveSelected(e.target.value)}
+                  aria-label="Archived training session"
+                  className="w-full min-h-10 rounded-xl border border-line bg-surface px-2 text-xs"
+                >
+                  {archiveRows.map((s)=> <option key={s.id} value={s.id}>{s.dateISO || 'Unknown date'} — {s.title || s.name || 'Training session'}</option>)}
+                </select>
+                <p className="text-ink3">{(selectedArchive.blocks || []).length} exercises · {sessionSetCount(selectedArchive)} sets · browsing does not restore data.</p>
+                <button
+                  disabled={busy}
+                  onClick={run(()=> restoreArchivedSession(selectedArchive.id), (restored)=> restored ? 'Session restored to live history.' : 'That archived session was no longer available.')}
+                  className="min-h-9 rounded-xl border border-line px-3 font-bold disabled:opacity-50"
+                >Restore selected</button>
               </div>
             </details>
           )}
