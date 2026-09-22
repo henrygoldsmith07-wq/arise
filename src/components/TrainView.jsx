@@ -8,7 +8,6 @@ import { adaptScheduleForEquipment, programAdherence, recordProgramStart, userPr
 import { generateProgramme } from '../lib/programmeGenerator.js';
 import { trainRecommendation } from '../lib/trainRecommendation.js';
 import { buildEditorTemplate, moveItem, duplicateEditorTemplate, editorSubstitutionPreview } from '../lib/templateEditor.js';
-import { fmtWeight } from '../lib/units.ts';
 
 const EMPTY_DAY = { title: '', exercises: [{ exerciseId: '', sets: 3, reps: '8–12', restSec: 90 }] };
 
@@ -22,7 +21,6 @@ function currentWeek(adherence){
 }
 
 export default function TrainView({ store, setStore, onStartSession, availableEquipment }){
-  const units = store.preferences?.units === 'lb' ? 'lb' : 'kg';
   const [programId,setProgramId]=useState(store.activeSchedule?.programId || PROGRAMS[0].id);
   const [builderOpen,setBuilderOpen]=useState(false);
   // Modal focus capture/trap/restore for the template builder.
