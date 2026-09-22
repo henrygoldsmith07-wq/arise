@@ -24,7 +24,6 @@ import { idbTransaction } from './idb-tx.js';
 import { enforceIntegrity, quarantineBrokenStore } from './integrity.js';
 import { captureSnapshot } from './snapshots.js';
 import { normalizeHistoryForWrite, makeTombstone } from './domain.js';
-import { splitSets } from './setRows.js';
 
 const LS_KEY = 'arise.store.v1';
 const POINTER_KEY = 'arise.store.v1.pointer';
@@ -42,6 +41,28 @@ function lsWrite(value){
   try{ localStorage.setItem(LS_KEY, JSON.stringify(value)); }catch{}
 }
 
+
+export function splitSets(history){
+  const out = [];
+  for(const h of history || []){
+    for(const [bi, b] of (h.blocks || []).entries()){
+      for(const [si, s] of (b.sets || []).entries()){
+        out.push({
+          id: `${h.id}:${bi}:${si}`,
+          sessionId: h.id,
+          dateISO: h.dateISO,
+          exerciseId: b.exerciseId,
+          blockIndex: bi,
+          setIndex: si,
+          reps: s.reps ?? '',
+          weightKg: s.weightKg ?? '',
+          rpe: s.rpe ?? '',
+        });
+      }
+    }
+  }
+  return out;
+}
 
 export function decompose(store){
   const schedule = store.activeSchedule || null;
