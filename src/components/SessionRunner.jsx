@@ -28,7 +28,7 @@ import { haptic } from '../lib/haptics.js';
 import { painAftercareFor, techniquePromptFor, maxEffortWarning } from '../lib/safety.js';
 import { createVoiceInput, parseSetPhrase } from '../lib/voiceInput.js';
 import { asUnit, fmtWeight, localizeWeightText, weightInputToKg, weightInputValue } from '../lib/units.ts';
-import { NOTE_PROMPTS } from '../lib/sessionNotes.js';
+import { NOTE_PROMPTS, NOTE_TEMPLATES, appendNoteTemplate } from '../lib/sessionNotes.js';
 
 function parseNum(v){ const n=Number(v); return Number.isFinite(n)? n : 0; }
 // Sets are persisted as RPE (engine + history schema), but logged as RIR:
@@ -1276,6 +1276,15 @@ export default function SessionRunner({ session, history = [], availableEquipmen
               </button>
             ))}
           </div>
+          <select
+            defaultValue=""
+            onChange={e=> { if(e.target.value) setNote(current=> appendNoteTemplate(current, e.target.value)); e.target.value=''; }}
+            aria-label="Add a session note template"
+            className="w-full min-h-9 rounded-xl border border-line bg-surface2 px-3 text-xs text-ink2"
+          >
+            <option value="">Add note template…</option>
+            {NOTE_TEMPLATES.map(template=> <option key={template.id} value={template.id}>{template.label}</option>)}
+          </select>
           <textarea value={note} onChange={e=> setNote(e.target.value)} rows={2} placeholder="What should change next time? Mention sleep, pain, technique, ROM, time or load." className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm" />
         </section>
 
