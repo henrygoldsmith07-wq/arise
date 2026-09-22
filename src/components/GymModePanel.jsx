@@ -87,34 +87,34 @@ export function swipeRowHandlers({ onComplete, onFail, onLongPress, enabled = tr
 // canonical kg value emitted to the workout draft. Parent echoes of our own
 // conversion do not clobber the in-progress text; external changes (apply
 // recommendation, unit switch, restore) do resynchronise it.
-export function WeightInput({ value, unit = 'kg', onChange, onBlur, ...props }){
-  const [draftValue, setDraftValue] = useState(()=> weightInputValue(value, unit));
-  const lastEmittedRef = useRef(null);
-  const unitRef = useRef(unit);
-
+function useWeightDraft(value, unit, onChange){
+  const [display, setDisplay] = useState(()=> weightInputValue(value, unit));
+  const emitted = useRef(null);
+  const previousUnit = useRef(unit);
   useEffect(()=>{
     const canonical = String(value ?? '');
-    const unitChanged = unitRef.current !== unit;
-    unitRef.current = unit;
-    if(unitChanged || canonical !== lastEmittedRef.current){
-      setDraftValue(weightInputValue(value, unit));
-    }
+    if(previousUnit.current !== unit || canonical !== emitted.current) setDisplay(weightInputValue(value, unit));
+    previousUnit.current = unit;
   }, [value, unit]);
-
-  const handleChange = (event)=>{
-    const raw = event.target.value;
-    setDraftValue(raw);
-    const canonical = weightInputToKg(raw, unit);
-    lastEmittedRef.current = String(canonical);
-    onChange?.(canonical);
+  const emitDisplay = (next)=>{
+    setDisplay(next);
+    const canonical = weightInputToKg(next, unit);
+    emitted.current = String(canonical);
+    onChange(canonical);
   };
-
-  const handleBlur = (event)=>{
-    setDraftValue(weightInputValue(value, unit));
-    onBlur?.(event);
+  const emitCanonical = (next)=>{
+    const canonical = String(next ?? '');
+    emitted.current = canonical;
+    setDisplay(weightInputValue(canonical, unit));
+    onChange(canonical);
   };
+  return [display, emitDisplay, emitCanonical];
+}
 
-  return <input {...props} value={draftValue} onChange={handleChange} onBlur={handleBlur} />;
+export function WeightInput({ value, unit = 'kg', onChange, onBlur, ...props }){
+  const [display, emitDisplay] = useWeightDraft(value, unit, onChange);
+  return <input {...props} value={display} onChange={(e)=> emitDisplay(e.target.value)}
+    onBlur={(e)=> { emitDisplay(display); onBlur?.(e); }} />;
 }
 
 // ── LoadNumpad ──────────────────────────────────────────────────────────
@@ -128,36 +128,12 @@ export function LoadNumpad({ value, onChange, onClose, equipment = 'barbell', pl
     try{ return quickJumps({ equipment: [equipment], supportsWeighted: true, config: plateConfig }); }
     catch{ return []; }
   }, [equipment, plateConfig]);
-  const [displayValue, setDisplayValue] = useState(()=> weightInputValue(value, unit));
-  const lastEmittedRef = useRef(null);
-  const unitRef = useRef(unit);
-  useEffect(()=>{
-    const canonical = String(value ?? '');
-    const unitChanged = unitRef.current !== unit;
-    unitRef.current = unit;
-    if(unitChanged || canonical !== lastEmittedRef.current){
-      setDisplayValue(weightInputValue(value, unit));
-    }
-  }, [value, unit]);
-
+  const [displayValue, emitDisplay, emitCanonical] = useWeightDraft(value, unit, onChange);
   const formatDelta = (kg)=>{
     const shown = unit === 'lb' ? kgToLb(Math.abs(Number(kg) || 0)) : Math.abs(Number(kg) || 0);
     const rounded = Math.round(shown * 10) / 10;
     return `${Number(kg) < 0 ? '−' : '+'}${Number.isInteger(rounded) ? rounded : rounded.toFixed(1)}`;
   };
-  const emitDisplay = (next)=>{
-    setDisplayValue(next);
-    const canonical = weightInputToKg(next, unit);
-    lastEmittedRef.current = String(canonical);
-    onChange(canonical);
-  };
-  const emitCanonical = (next)=>{
-    const canonical = String(next ?? '');
-    lastEmittedRef.current = canonical;
-    setDisplayValue(weightInputValue(canonical, unit));
-    onChange(canonical);
-  };
-
   const press = (key)=>{
     if(key === 'clear') return emitDisplay('');
     const current = String(displayValue ?? '');
