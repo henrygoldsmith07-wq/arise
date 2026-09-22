@@ -6,17 +6,8 @@
 import { EXERCISE_BY_ID } from './data.js';
 import { lastExerciseSets } from './store.js';
 import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, attributePrescribedSets } from './progression.js';
-
-// Kept in sync with SessionRunner's NOTE_PROMPTS (same ids, same labels) so
-// guided and standard sessions produce comparable note tags.
-export const NOTE_PROMPTS = [
-  { id: 'felt-strong', label: 'Felt strong' },
-  { id: 'felt-heavy', label: 'Felt heavy' },
-  { id: 'poor-sleep', label: 'Poor sleep' },
-  { id: 'short-on-time', label: 'Short on time' },
-  { id: 'form-focus', label: 'Form focus' },
-  { id: 'pain-discomfort', label: 'Pain / discomfort' },
-];
+import { NOTE_PROMPTS } from './sessionNotes.js';
+export { NOTE_PROMPTS } from './sessionNotes.js';
 
 function parseNum(v){ const n=Number(v); return Number.isFinite(n)? n : 0; }
 function firstInt(reps){ const m=String(reps).match(/\d+/); return m? m[0] : ''; }
