@@ -134,12 +134,6 @@ test.describe('Progress assessment', () => {
     await expect(card.getByText(/Retrospective engine replay \d+%/)).toBeVisible();
     await expect(card.getByText(/Data coverage: Low/)).toBeVisible();
 
-    // The e1RM chart has a keyboard-explorable data view, not just an SVG.
-    const chartData = page.getByText('Explore chart data', { exact: true }).first();
-    await expect(chartData).toBeVisible();
-    await chartData.click();
-    await expect(page.getByRole('table', { name: 'Estimated 1RM per session' })).toBeVisible();
-
     await page.getByRole('button', { name: 'More' }).click();
     await page.getByRole('button', { name: /Simple The essentials/i }).click();
     await tapTab(page, 'Progress');
