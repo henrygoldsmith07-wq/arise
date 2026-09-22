@@ -48,7 +48,7 @@ the "today" columns are stale — the architecture gate is still accurate).
 ## Public backlog (unclaimed, roughly ordered)
 
 1. **Charts: screen-reader-explored data views** (beyond text alternatives)
-2. **lb-first unit UX** (store kg internally; full display unit audit)
+2. **lb-first equipment setup + residual copy audit** (workout logging now accepts/displays lb while storing kg internally; onboarding plate inventory still uses kg)
 3. **History archive browser** (archive store exists; needs a viewer)
 4. **Widget/shortcuts deep links** on native wrappers (needs Capacitor —
    documented, optional)
