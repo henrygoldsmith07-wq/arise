@@ -61,35 +61,11 @@ export async function restoreArchive(){
   return sessions.length;
 }
 
-/**
- * Read archived sessions without moving them back into live history.
- * Newest-first keeps the browser useful even when years of sessions exist.
- */
-export async function listArchivedSessions(){
+export async function archivedSessionCount(){
   const rows = (await idbGetAll('archive')) || [];
-  return rows
-    .filter((r) => r?.id && r.id !== ARCHIVE_META_ID)
-    .sort((a, b) => String(b?.dateISO || '').localeCompare(String(a?.dateISO || '')));
+  return rows.filter((r) => r?.id && r.id !== ARCHIVE_META_ID).length;
 }
 
-/**
- * Restore one archived session atomically. If the id is not present, return
- * false rather than creating or deleting anything.
- */
-export async function restoreArchivedSession(sessionId){
-  const id = String(sessionId || '').trim();
-  if(!id || id === ARCHIVE_META_ID) return false;
-  const rows = (await idbGetAll('archive')) || [];
-  const session = rows.find((r) => r?.id === id);
-  if(!session) return false;
-  const setRows = splitSets([session]);
-  await idbTransaction(['sessions', 'archive', 'sets'], (ops)=> {
-    ops.put('sessions', session);
-    for(const row of setRows) ops.put('sets', row);
-    ops.delete('archive', id);
-  });
-  return true;
-}
 
 /**
  * Prune event telemetry: drop events older than the rolling window, then
