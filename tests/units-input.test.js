@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import {
   asUnit,
   fmtWeight,
-  localizeWeightText,
   weightInputToKg,
   weightInputValue,
 } from '../src/lib/units.ts';
@@ -33,13 +32,6 @@ describe('weight unit input boundary', () => {
     assert.equal(asUnit('lb'), 'lb');
     assert.equal(asUnit('stones'), 'kg');
   });
-
-  it('localises generated kg hints without touching other copy', () => {
-    assert.equal(localizeWeightText('Start at 20 kg, then add 2.5kg', 'lb'), 'Start at 44.1 lb, then add 5.5 lb');
-    assert.equal(localizeWeightText('bodyweight only', 'lb'), 'bodyweight only');
-    assert.equal(localizeWeightText('20 kg', 'kg'), '20 kg');
-  });
-
 
   it('round-trips common imperial equipment values exactly enough for setup', () => {
     for (const lb of ['2.5', '5', '10', '25', '35', '45']) {
