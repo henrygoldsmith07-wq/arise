@@ -8,7 +8,7 @@ import { hydrateStorage, persistStore, whenPersisted, loadStoreFromIdb } from '.
 import { idbTransaction } from '../src/lib/idb-tx.js';
 import { idbGetAll } from '../src/lib/idb.js';
 import { querySessionsPage, queryMoreSessions, querySetsByExercise, querySetsBySession, querySetsByDate } from '../src/lib/queries.js';
-import { archiveOldSessions, archiveCandidateCount, archivedSessionCount, restoreArchive, pruneEvents } from '../src/lib/archive.js';
+import { archiveOldSessions, archiveCandidateCount, listArchivedSessions, restoreArchive, pruneEvents } from '../src/lib/archive.js';
 import { captureSnapshot, listSnapshots, rollbackToSnapshot } from '../src/lib/snapshots.js';
 import { auditStore, repairFindings } from '../src/lib/audit.js';
 import { dryRunMigration, migrateWithLogging, logMigration, listMigrationLogs } from '../src/lib/migrationLog.js';
@@ -82,7 +82,7 @@ describe('archive mode and event pruning', ()=>{
     const result = await archiveOldSessions(365);
     assert.equal(result.archived, 1);
     assert.equal((await loadStoreFromIdb()).history.length, 2);
-    assert.equal(await archivedSessionCount(), 1);
+    assert.equal((await listArchivedSessions()).length, 1);
     const restored = await restoreArchive();
     assert.equal(restored, 1);
     assert.equal((await loadStoreFromIdb()).history.length, 3);
