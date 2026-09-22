@@ -7,13 +7,16 @@ accepted as documented behaviour in the appropriate doc.
 
 ## Current
 
-1. **Band-kit exercises can lack a same-equipment substitution.** The
-   substitution graph spans equipment families by design, but a few
-   bands-only lifts (e.g. band row) have no reachable fallback when bands are
-   the user's only kit. **Experience:** the swap sheet can offer nothing for
-   those exercises. **Workaround:** pick a different exercise for the day or
-   note the swap manually. **Tracked:** the content lint reports all such
-   gaps via `validateContentWarnings()` (currently ~34 entries).
+1. **Some exercises lack a curated same-kit substitution edge.** The
+   substitution graph spans equipment families by design, and the soft
+   content lint still reports rows without a declared fallback reachable
+   using only the source exercise's kit. **Experience:** the runtime swap
+   engine still widens to kit-compatible alternatives; exact movement-pattern
+   matches are now ranked above near-pattern and unrelated fallbacks using the
+   full exercise taxonomy. The remaining warning is therefore a curation
+   quality issue, not a dead-end in the swap sheet. **Tracked:**
+   `validateContentWarnings()` remains the work queue for adding explicit
+   graph edges over time.
 
 2. **Offline fallback page is static.** `public/offline.html` is a friendly
    dead end by design — the real app keeps working from its cached shell, so
