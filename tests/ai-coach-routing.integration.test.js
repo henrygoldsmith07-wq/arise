@@ -55,6 +55,28 @@ describe('aiCoachRoute uses the classifier only as semantic fallback', () => {
     assert.equal(res.source, 'deterministic-keyword');
   });
 
+  it('production router resolves the training, feedback, and explanation examples locally', async () => {
+    const cases = [
+      ['Can I add another set?', 'local-engine'],
+      ['Should I add weight?', 'local-engine'],
+      ['What exercise should I add?', 'local-engine'],
+      ['Can I increase my reps?', 'local-engine'],
+      ['Please add a new exercise', 'feedback-pipeline'],
+      ['Feature request: add dark-mode scheduling', 'feedback-pipeline'],
+      ['The app crashes when I export', 'feedback-pipeline'],
+      ['Could you summarise my last week?', 'coach-cloud'],
+    ];
+    let calls = 0;
+    for(const [prompt, lane] of cases){
+      const result = await aiCoachRoute(prompt, {
+        fetchImpl: () => { calls += 1; throw new Error('deterministic prompts must not fetch'); },
+      });
+      assert.equal(result.lane, lane, prompt);
+      assert.equal(result.prescription, undefined, prompt);
+    }
+    assert.equal(calls, 0);
+  });
+
   it('classifier.dev is consulted only when keywords are silent (and not opted in)', async () => {
     const ls = new MemoryStorage();
     const prev = globalThis.localStorage;
@@ -67,7 +89,7 @@ describe('aiCoachRoute uses the classifier only as semantic fallback', () => {
       // Without opt-in, routeCoachRequest resolves locally and never fetches.
       assert.equal(called, false);
       assert.equal(res.lane, 'clarify');
-      assert.equal(res.source, 'local-keywords');
+      assert.equal(res.source, 'deterministic-keyword');
     }finally{ globalThis.localStorage = prev; }
   });
 
@@ -98,10 +120,10 @@ describe('aiCoachRoute uses the classifier only as semantic fallback', () => {
     globalThis.localStorage = ls;
     try{
       saveCoachRoutingSettings({ enabled: true });
-      // "what rep range builds muscle" contains no deterministic keyword, so it
-      // falls through to classifier.dev, which the cloud mock labels as a
-      // training question -> local-engine lane (engine owns prescriptions).
-      const res = await aiCoachRoute('what rep range builds muscle', {
+      // This prompt is intentionally unresolved locally so the opted-in cloud
+      // fallback can label it as a training question. The engine still owns
+      // prescriptions after the lane is selected.
+      const res = await aiCoachRoute('please interpret this request', {
         fetchImpl: () => cloudFetch('training-question', 0.95)(),
       });
       assert.equal(res.classified, true);

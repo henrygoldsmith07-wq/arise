@@ -124,17 +124,26 @@ test('feedback classification stays local when cloud assistance is disabled', as
   await expect(page.getByLabel('Local feedback review queue')).toContainText('local-keywords');
 });
 
-test('coach routing consent is independent and cloud escalation is ambiguous-only', async ({ page }) => {
+test('the real Ask the coach flow routes locally first and keeps cloud consent independent', async ({ page }) => {
   await completeOnboarding(page);
-  let calls = 0;
+  let classifierCalls = 0;
+  let coachCalls = 0;
   let requestBody = null;
   await page.route('**classifier.dev**', async (route) => {
-    calls += 1;
+    classifierCalls += 1;
     requestBody = JSON.parse(route.request().postData() || '{}');
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ results: [{ label: 'a question about how to train or use the local training coach', confidence: 0.72 }] }),
+    });
+  });
+  await page.route('**integrate.api.nvidia.com/**', async (route) => {
+    coachCalls += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ choices: [{ message: { content: 'A concise weekly explanation from the existing coach path.' } }] }),
     });
   });
   await openFeedback(page);
@@ -143,22 +152,41 @@ test('coach routing consent is independent and cloud escalation is ambiguous-onl
   const coachConsent = page.getByRole('checkbox', { name: 'Cloud-assisted coach request routing' });
   await expect(feedbackConsent).not.toBeChecked();
   await expect(coachConsent).not.toBeChecked();
-  await page.getByLabel('Ask a coach-routing question').fill('maybe this is a training question');
-  await page.getByRole('button', { name: 'Route coach question' }).click();
-  await expect(page.getByTestId('coach-route-result')).toContainText('clarify');
-  expect(calls).toBe(0);
+
+  const ask = page.getByLabel('Ask the coach');
+  const askButton = page.getByRole('button', { name: 'Ask', exact: true });
+  const aiResult = page.locator('#sec-ai [role="status"]');
+
+  await ask.fill('Can I add another set?');
+  await askButton.click();
+  await expect(aiResult).toContainText('deterministic engine already shows');
+  expect(classifierCalls).toBe(0);
+  expect(coachCalls).toBe(0);
+
+  await ask.fill('Please add a new exercise');
+  await askButton.click();
+  await expect(aiResult).toContainText('That sounds like something to report');
+  expect(classifierCalls).toBe(0);
+  expect(coachCalls).toBe(0);
+
+  await ask.fill('maybe this is a training question');
+  await askButton.click();
+  await expect(aiResult).toContainText('Could you rephrase that?');
+  expect(classifierCalls).toBe(0);
 
   await coachConsent.check();
   expect(await page.evaluate(() => localStorage.getItem('arise.classifier.feedback.settings.v1'))).toBeNull();
   expect(await page.evaluate(() => localStorage.getItem('arise.classifier.coach-routing.settings.v1'))).toBe('{"enabled":true}');
-  await page.getByRole('button', { name: 'Route coach question' }).click();
-  await expect(page.getByTestId('coach-route-result')).toContainText('clarify');
-  expect(calls).toBe(1);
+  await ask.click();
+  await askButton.click();
+  await expect(aiResult).toContainText('Could you rephrase that?');
+  expect(classifierCalls).toBe(1);
   expect(requestBody.inputs).toEqual(['maybe this is a training question']);
   expect(requestBody.labels).not.toContain('training-question');
 
-  await page.getByLabel('Describe the issue or request').fill('The export is broken');
-  await page.getByRole('button', { name: 'Save feedback locally' }).click();
-  await expect(page.getByTestId('feedback-result')).toContainText('bug');
-  expect(calls).toBe(1);
+  await page.getByLabel('NVIDIA API key').fill('nvapi-test');
+  await ask.fill('Could you summarise my last week?');
+  await askButton.click();
+  await expect(aiResult).toContainText('A concise weekly explanation');
+  expect(coachCalls).toBe(1);
 });

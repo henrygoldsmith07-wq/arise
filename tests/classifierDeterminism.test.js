@@ -63,10 +63,10 @@ describe('engine outputs are identical with classifier on/off/unreachable', () =
       subs: rankedSubstitutions('bench-press-barbell', ['dumbbells'], 3, history).map((s) => s.id),
       safe: safetyPanel(history, readinessLog, { today: '2026-06-20' }),
     });
-    const { saveClassifierSettings } = await import('../src/lib/feedbackClassifier.js');
+    const { saveFeedbackClassifierSettings } = await import('../src/lib/feedbackClassifier.js');
     globalThis.localStorage = new Mem();
     const off = runAll();
-    saveClassifierSettings({ enabled: true });
+    saveFeedbackClassifierSettings({ enabled: true });
     const on = runAll();
     globalThis.fetch = async () => { throw new Error('network must never be touched by the engine'); };
     const unreachable = runAll();

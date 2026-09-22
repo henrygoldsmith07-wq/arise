@@ -18,17 +18,17 @@ function cloudFetch(label, confidence = 0.92){
 }
 describe('classifier settings default off', () => {
   it('disabled by default and round-trips', () => {
-    assert.equal(M.isClassifierEnabled(), false);
-    assert.deepEqual(M.getClassifierSettings(), { enabled: false });
-    assert.deepEqual(M.getClassifierConsentSettings(), { feedbackEnabled: false, coachRoutingEnabled: false });
-    assert.equal(M.saveClassifierSettings({ enabled: true }), true);
-    assert.equal(M.isClassifierEnabled(), true);
+    assert.equal(M.isFeedbackClassifierEnabled(), false);
+    assert.deepEqual(M.getFeedbackClassifierSettings(), { enabled: false });
+    assert.deepEqual(M.getCoachRoutingSettings(), { enabled: false });
+    assert.equal(M.saveFeedbackClassifierSettings({ enabled: true }), true);
+    assert.equal(M.isFeedbackClassifierEnabled(), true);
     assert.equal(M.isCoachRoutingEnabled(), false);
     assert.equal(M.saveCoachRoutingSettings({ enabled: true }), true);
-    assert.equal(M.isClassifierEnabled(), true);
+    assert.equal(M.isFeedbackClassifierEnabled(), true);
     assert.equal(M.isCoachRoutingEnabled(), true);
     M.clearClassifierSettings();
-    assert.equal(M.isClassifierEnabled(), false);
+    assert.equal(M.isFeedbackClassifierEnabled(), false);
     assert.equal(M.isCoachRoutingEnabled(), false);
   });
   it('legacy feedback consent never grants new coach-routing consent', () => {
@@ -167,41 +167,6 @@ describe('cloud path thresholds and failures', () => {
     assert.ok(!sent.inputs[0].includes('sam@example.com'));
     assert.ok(sent.inputs[0].includes('[redacted-email]'));
   });
-  it('batch keeps order and per-item fallback', async () => {
-    enable();
-    const fetchImpl = async (u, o) => { const b = JSON.parse(o.body); return { ok: true, json: async () => ({ results: b.inputs.map((t, i) => ({ label: i === 0 ? 'bug' : 'usability', confidence: i === 0 ? 0.95 : 0.1 })) }) }; };
-    const out = await M.classifyFeedbackBatch(['crash now', 'meh'], { fetchImpl });
-    assert.equal(out.results.length, 2);
-    assert.equal(out.results[0].label, 'bug');
-    assert.equal(out.results[1].label, 'other');
-  });
-  it('batch skips empty items and preserves non-empty output order', async () => {
-    enable();
-    let sent = null;
-    const out = await M.classifyFeedbackBatch(['  ', 'crash now', '', 'button confusing'], {
-      fetchImpl: async (url, options) => {
-        sent = JSON.parse(options.body);
-        return {
-          ok: true,
-          json: async () => ({
-            results: [
-              { label: 'bug', confidence: 0.9 },
-              { label: 'usability', confidence: 0.9 },
-            ],
-          }),
-        };
-      },
-    });
-    assert.deepEqual(sent.inputs, ['crash now', 'button confusing']);
-    assert.equal(sent.inputs.includes('(empty)'), false);
-    assert.equal(out.results[0].label, 'other');
-    assert.equal(out.results[0].cloudAttempted, false);
-    assert.equal(out.results[0].needsReview, true);
-    assert.equal(out.results[1].label, 'bug');
-    assert.equal(out.results[2].label, 'other');
-    assert.equal(out.results[2].cloudAttempted, false);
-    assert.equal(out.results[3].label, 'usability');
-  });
   it('coach routing returns lanes not prescriptions', async () => {
     M.saveCoachRoutingSettings({ enabled: true });
     const q = await M.routeCoachRequest('how should I progress my squat', { fetchImpl: cloudFetch('training-question', 0.95) });
@@ -221,7 +186,11 @@ describe('cloud path thresholds and failures', () => {
     assert.equal((await M.routeCoachRequest('Can I add another set?', { fetchImpl })).route, 'local-engine');
     assert.equal((await M.routeCoachRequest('Should I add weight?', { fetchImpl })).route, 'local-engine');
     assert.equal((await M.routeCoachRequest('What exercise should I add?', { fetchImpl })).route, 'local-engine');
+    assert.equal((await M.routeCoachRequest('Can I increase my reps?', { fetchImpl })).route, 'local-engine');
     assert.equal((await M.routeCoachRequest('Please add a new exercise', { fetchImpl })).route, 'feedback-pipeline');
+    assert.equal((await M.routeCoachRequest('Feature request: add dark-mode scheduling', { fetchImpl })).route, 'feedback-pipeline');
+    assert.equal((await M.routeCoachRequest('The app crashes when I export', { fetchImpl })).route, 'feedback-pipeline');
+    assert.equal((await M.routeCoachRequest('Could you summarise my last week?', { fetchImpl })).route, 'coach-cloud');
     assert.equal(called, false);
     M.saveCoachRoutingSettings({ enabled: true });
     const ambiguous = await M.routeCoachRequest('maybe this is a training question', { fetchImpl: cloudFetch('training-question', 0.7) });

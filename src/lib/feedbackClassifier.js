@@ -52,7 +52,6 @@ export const COACH_ROUTE_LABEL_DESCRIPTIONS = Object.freeze({
   other: 'none of these requests or an uncertain request',
 });
 export const FEEDBACK_INSTRUCTIONS = 'Categorise feedback for product issue triage only. Never infer training prescriptions, readiness, safety, treatment, study assignment, or causal conclusions.';
-export const ISSUE_INSTRUCTIONS = 'Triage an issue for an offline-first training app. Prefer bug for crashes, import-data for backup sync or CSV, and content-error for wrong exercise information.';
 export const COACH_ROUTING_INSTRUCTIONS = 'Route an assistant request to a lane only. Never generate or modify a workout, progression, substitution, safety decision, treatment, study assignment, or causal analysis.';
 function storage(){
   try{ return typeof localStorage !== 'undefined' ? localStorage : null; }catch{ return null; }
@@ -90,17 +89,6 @@ export function saveCoachRoutingSettings({ enabled = null } = {}){
   const current = getCoachRoutingSettings().enabled;
   return writeEnabled(CLASSIFIER_COACH_ROUTING_SETTINGS_KEY, enabled == null ? current : enabled);
 }
-export function getClassifierConsentSettings(){
-  return {
-    feedbackEnabled: getFeedbackClassifierSettings().enabled,
-    coachRoutingEnabled: getCoachRoutingSettings().enabled,
-  };
-}
-// Compatibility aliases for the original feedback-only adapter API.
-export function getClassifierSettings(){ return getFeedbackClassifierSettings(); }
-export function saveClassifierSettings({ enabled = null } = {}){
-  return saveFeedbackClassifierSettings({ enabled });
-}
 export function clearClassifierSettings(){
   const s = storage();
   try{ s?.removeItem(CLASSIFIER_SETTINGS_KEY); }catch{}
@@ -112,9 +100,6 @@ export function isFeedbackClassifierEnabled(){
 }
 export function isCoachRoutingEnabled(){
   return getCoachRoutingSettings().enabled === true;
-}
-export function isClassifierEnabled(){
-  return isFeedbackClassifierEnabled();
 }
 // Redaction: best-effort scrub before anything leaves the device. Callers
 // must still gate on opt-in and must never persist raw text next to labels.
@@ -206,12 +191,6 @@ function parseSingleResult(json, labelSet){
   if(Array.isArray(json.results) && json.results.length) return parseResultEntry(json.results[0], labelSet);
   return parseResultEntry(json, labelSet);
 }
-function parseBatchResults(json, count, labelSet){
-  if(!json || typeof json !== 'object') return null;
-  if(!Array.isArray(json.results) || json.results.length !== count) return null;
-  const parsed = json.results.map((result) => parseResultEntry(result, labelSet));
-  return parsed.every(Boolean) ? parsed : null;
-}
 function applyConfidenceBands(label, confidence){
   if(label === 'other') return { label: 'other', needsReview: true };
   if(!Number.isFinite(confidence) || confidence < 0 || confidence > 1 || confidence < CONFIDENCE_REVIEW_THRESHOLD){
@@ -240,25 +219,38 @@ function bodyWithLabels(labelSet, inputs, tier, instructions, fallbackInstructio
     instructions: safeInstructions(instructions, fallbackInstructions),
   };
 }
+// This is the single deterministic source of truth for Ask-the-coach intent.
+// Keep product-feedback phrases specific: generic words such as "add",
+// "missing", "increase", and "exercise" can describe a training question.
+const COACH_TRAINING_QUESTION_RE = /\b(?:can|could|should|would|may|how|what|which|when|do|does)\b[\s\S]{0,120}\b(?:add|increase|decrease|progress(?:ion)?|train(?:ing)?|workout|session|exercise|movement|sets?|weights?|load|reps?|volume|deload|rest|plateau|routine|program(?:me)?)\b/i;
+const COACH_FEEDBACK_RE = /\b(?:bug|issue|crash(?:ed|es|ing)?|error|broken|not\s+working|complaint|feedback|feature\s+request|request\s+(?:a\s+)?feature|missing\s+(?:exercise|feature)|export|import|backup|restore|sync|please\s+(?:add|include|support|fix|remove)|add\s+(?:(?:an?|new|another)\s+)?(?:exercise|feature)|dark[- ]mode)\b/i;
+const COACH_TRAINING_ACTION_RE = /\b(?:add|increase|decrease|progress(?:ion)?|change|adjust)\s+(?:another|more|my|the|a|an)?\s*(?:sets?|reps?|weights?|load|volume|exercise|movement|training|workout)\b/i;
+const COACH_EXPLANATION_RE = /\b(?:summari[sz]e|recap|review|explain|why|insight|analyse|analyze|last\s+week|weekly)\b/i;
+
 function localCoachRouteClassify(text){
   const redacted = redactTextForClassification(text);
   if(!redacted) return { label: 'other', confidence: null, source: 'local-keywords', needsReview: true };
-  // Training-domain questions win when a phrase also contains "add" or
-  // "exercise". This keeps questions such as "Can I add another set?" out of
-  // the product-feedback lane.
-  if(/\b(?:can|could|should|would|may|how|what|which|when)\b[\s\S]{0,100}\b(?:add|increase|progress|train|training|workout|exercise|set|sets|weight|load|reps)\b/i.test(redacted)){
-    return { label: 'training-question', confidence: 0.9, source: 'local-keywords', needsReview: false };
+  // Question-shaped training intent wins over generic words such as "add" or
+  // "exercise". That keeps "What exercise should I add?" in the engine lane.
+  if(COACH_TRAINING_QUESTION_RE.test(redacted)){
+    return { label: 'training-question', route: 'local-engine', confidence: 0.9, source: 'local-keywords', needsReview: false };
   }
-  if(/\b(?:report\s+(?:a\s+)?(?:bug|issue)|bug\s+report|crash(?:ed|es|ing)?|error|broken|not\s+working|complaint|feedback|feature\s+request|missing\s+(?:exercise|feature)|please\s+add\b|add\s+(?:(?:an?|new|another)\s+)?(?:exercise|feature))\b/i.test(redacted)){
-    return { label: 'feedback-or-bug', confidence: 0.9, source: 'local-keywords', needsReview: false };
+  if(COACH_FEEDBACK_RE.test(redacted)){
+    return { label: 'feedback-or-bug', route: 'feedback-pipeline', confidence: 0.9, source: 'local-keywords', needsReview: false };
   }
-  return { label: 'other', confidence: null, source: 'local-keywords', needsReview: true };
+  if(COACH_TRAINING_ACTION_RE.test(redacted)){
+    return { label: 'training-question', route: 'local-engine', confidence: 0.9, source: 'local-keywords', needsReview: false };
+  }
+  if(COACH_EXPLANATION_RE.test(redacted)){
+    return { label: 'other', route: 'coach-cloud', confidence: 0.9, source: 'local-keywords', needsReview: false };
+  }
+  return { label: 'other', route: 'clarify', confidence: null, source: 'local-keywords', needsReview: true };
 }
 function localClassifyForLabels(text, labelSet){
   const local = labelSet.includes('training-question') && labelSet.includes('feedback-or-bug')
     ? localCoachRouteClassify(text)
     : localKeywordClassify(text);
-  return {
+  const result = {
     label: labelSet.includes(local.label) ? local.label : 'other',
     confidence: local.confidence,
     scores: null,
@@ -266,6 +258,8 @@ function localClassifyForLabels(text, labelSet){
     cloudAttempted: false,
     needsReview: local.needsReview,
   };
+  if(local.route) result.route = local.route;
+  return result;
 }
 function fallbackResult({ cloudAttempted = true, error = null } = {}){
   return {
@@ -296,7 +290,7 @@ export async function classifyText(text, {
   const redacted = redactTextForClassification(text);
   if(!redacted) return { ok: true, ...fallbackResult({ cloudAttempted: false }) };
   const local = localClassifyForLabels(redacted, labelSet);
-  if(cloudOnlyIfLocalUncertain && !local.needsReview && local.label !== 'other'){
+  if(cloudOnlyIfLocalUncertain && !local.needsReview){
     return { ok: true, ...local };
   }
   const cloudEnabled = consent === 'coach-routing' ? isCoachRoutingEnabled() : isFeedbackClassifierEnabled();
@@ -332,64 +326,9 @@ export async function classifyText(text, {
 export function classifyFeedback(text, opts = {}){
   return classifyText(text, { ...opts, labels: opts.labels || FEEDBACK_LABELS, instructions: opts.instructions ?? FEEDBACK_INSTRUCTIONS, consent: 'feedback' });
 }
-export function classifyIssue(text, opts = {}){
-  return classifyText(text, { ...opts, labels: opts.labels || FEEDBACK_LABELS, instructions: opts.instructions ?? ISSUE_INSTRUCTIONS, consent: 'feedback' });
-}
-export async function classifyFeedbackBatch(texts, {
-  labels = FEEDBACK_LABELS,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
-  tier = 'fast',
-  instructions = null,
-  fetchImpl = null,
-} = {}){
-  const labelSet = normaliseLabels(labels);
-  if(!isValidLabelSet(labelSet)) return { ok: false, results: [], error: 'Provide at least 2 labels including other.' };
-  const list = Array.isArray(texts) ? texts : [];
-  const redactedList = list.map((t) => redactTextForClassification(t));
-  const emptyResult = () => ({ label: 'other', confidence: null, scores: null, source: 'local-keywords', needsReview: true, cloudAttempted: false });
-  if(!isFeedbackClassifierEnabled()){
-    return { ok: true, source: 'local-keywords', cloudAttempted: false, results: redactedList.map((redacted) => redacted ? localClassifyForLabels(redacted, labelSet) : emptyResult()) };
-  }
-  const pending = redactedList.map((input, index) => ({ input, index })).filter(({ input }) => Boolean(input));
-  const results = redactedList.map(() => emptyResult());
-  if(!pending.length) return { ok: true, source: 'fallback-other', cloudAttempted: false, results };
-  const doFetch = fetchImpl || (typeof fetch !== 'undefined' ? fetch : null);
-  if(!doFetch){
-    for(const { index } of pending) results[index] = fallbackResult({ cloudAttempted: true });
-    return { ok: true, source: 'fallback-other', cloudAttempted: true, error: 'Network unavailable.', results };
-  }
-  const inputs = pending.map(({ input }) => input);
-  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const timer = controller ? setTimeout(() => controller.abort(), safeTimeout(timeoutMs)) : null;
-  const fallbackPending = () => {
-    for(const { index } of pending) results[index] = fallbackResult({ cloudAttempted: true });
-    return results;
-  };
-  try{
-    const body = bodyWithLabels(labelSet, inputs, tier, instructions, FEEDBACK_INSTRUCTIONS);
-    const res = await doFetch(CLASSIFIER_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller?.signal });
-    if(!res.ok){
-      const msg = await res.text().catch(() => '');
-      return { ok: true, source: 'fallback-other', cloudAttempted: true, error: 'classifier.dev ' + res.status + ': ' + String(msg).slice(0, 120), results: fallbackPending() };
-    }
-    const json = await res.json().catch(() => null);
-    const parsed = parseBatchResults(json, inputs.length, labelSet);
-    if(!parsed){
-      return { ok: true, source: 'fallback-other', cloudAttempted: true, error: 'Unparseable classifier response.', results: fallbackPending() };
-    }
-    for(const [resultIndex, parsedResult] of parsed.entries()){
-      const gated = applyConfidenceBands(parsedResult.label, parsedResult.confidence);
-      results[pending[resultIndex].index] = { label: gated.label, confidence: parsedResult.confidence, scores: parsedResult.scores, source: 'cloud', cloudAttempted: true, needsReview: gated.needsReview };
-    }
-    return { ok: true, source: 'cloud', cloudAttempted: true, results };
-  }catch(err){
-    const aborted = err?.name === 'AbortError';
-    return { ok: true, source: 'fallback-other', cloudAttempted: true, error: aborted ? 'Request timed out.' : 'Request failed: ' + String(err?.message || err).slice(0, 120), results: fallbackPending() };
-  }finally{ if(timer) clearTimeout(timer); }
-}
 // Optional cloud AI-coach request routing. Returns a LANE, never training
 // prescription: training-question -> local-engine, feedback-or-bug ->
-// feedback-pipeline, other -> clarify.
+// feedback-pipeline, general explanation -> coach-cloud, other -> clarify.
 export async function routeCoachRequest(text, opts = {}){
   const r = await classifyText(text, {
     ...opts,
@@ -398,6 +337,6 @@ export async function routeCoachRequest(text, opts = {}){
     consent: 'coach-routing',
     cloudOnlyIfLocalUncertain: true,
   });
-  const route = r.needsReview ? 'clarify' : r.label === 'training-question' ? 'local-engine' : r.label === 'feedback-or-bug' ? 'feedback-pipeline' : 'clarify';
+  const route = r.route || (r.needsReview ? 'clarify' : r.label === 'training-question' ? 'local-engine' : r.label === 'feedback-or-bug' ? 'feedback-pipeline' : 'clarify');
   return { ...r, route };
 }

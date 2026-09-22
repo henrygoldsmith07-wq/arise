@@ -37,7 +37,6 @@ import {
   getCoachRoutingSettings,
   getFeedbackClassifierSettings,
   redactTextForClassification,
-  routeCoachRequest,
   saveCoachRoutingSettings,
   saveFeedbackClassifierSettings,
 } from '../lib/feedbackClassifier.js';
@@ -76,9 +75,6 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   const [aiResult,setAiResult]=useState(null);
   const [feedbackClassifierEnabled,setFeedbackClassifierEnabled]=useState(()=> getFeedbackClassifierSettings().enabled);
   const [coachRoutingEnabled,setCoachRoutingEnabled]=useState(()=> getCoachRoutingSettings().enabled);
-  const [coachQuestion,setCoachQuestion]=useState('');
-  const [coachRouteBusy,setCoachRouteBusy]=useState(false);
-  const [coachRouteResult,setCoachRouteResult]=useState(null);
   const [feedbackText,setFeedbackText]=useState('');
   const [feedbackBusy,setFeedbackBusy]=useState(false);
   const [feedbackResult,setFeedbackResult]=useState(null);
@@ -438,28 +434,6 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
 
   const reviewFeedback = (id)=>{
     if(markFeedbackReviewed(id)) setFeedbackRecords(loadFeedbackRecords());
-  };
-
-  const routeCoachQuestion = async ()=>{
-    const question = coachQuestion.trim();
-    if(!question){
-      setCoachRouteResult({ route:'clarify', message:'Enter a coach question to route.' });
-      return;
-    }
-    setCoachRouteBusy(true);
-    try{
-      const result = await routeCoachRequest(question);
-      const message = result.route === 'local-engine'
-        ? 'Training question → existing local training path. Classifier.dev cannot create prescriptions.'
-        : result.route === 'feedback-pipeline'
-          ? 'Feedback or bug → use the local feedback queue. Nothing was sent to the developer.'
-          : 'Please clarify whether this is a training question or product feedback.';
-      setCoachRouteResult({ ...result, message });
-    }catch(err){
-      setCoachRouteResult({ route:'clarify', message:String(err?.message || err).slice(0, 140) });
-    }finally{
-      setCoachRouteBusy(false);
-    }
   };
 
   const prepareFeedbackShare = (record)=>{
@@ -1104,30 +1078,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
           onChange={setCoachRoutingConsent}
           hint="Off by default. Routing is deterministic and local first. When switched on, only an ambiguous redacted coach question may reach classifier.dev; it selects a lane only and never creates training prescriptions."
         />
-        <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2" data-testid="coach-routing-panel">
-          <label htmlFor="coach-question" className="block text-[11px] font-bold">Ask a coach-routing question</label>
-          <textarea
-            id="coach-question"
-            value={coachQuestion}
-            onChange={e=> setCoachQuestion(e.target.value)}
-            maxLength={500}
-            rows={2}
-            placeholder="For example: Can I add another set?"
-            className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={routeCoachQuestion} disabled={coachRouteBusy} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs disabled:opacity-40">
-              {coachRouteBusy ? 'Routing…' : 'Route coach question'}
-            </button>
-            <span className="text-[11px] text-ink3">{coachRoutingEnabled ? 'Ambiguous routing may use classifier.dev.' : 'Routing stays local.'}</span>
-          </div>
-          {coachRouteResult && (
-            <div data-testid="coach-route-result" role="status" aria-live="polite" className="rounded-lg border border-line bg-surface px-2.5 py-2 text-[11px]">
-              <span className="font-bold">Route: {coachRouteResult.route}</span> · {coachRouteResult.message}
-            </div>
-          )}
-        </div>
-        <p className="text-xs text-ink3">Your question is routed first: deterministic intent rules decide whether it needs the engine, the cloud coach, or the feedback channel (bug/feature request). Training prescriptions always come from the deterministic engine — the cloud coach only explains.</p>
+        <p className="text-xs text-ink3">Ask the coach routes your request invisibly: deterministic intent rules choose the local engine, the explanation path, or the local feedback queue. Training prescriptions always come from the deterministic engine — the cloud coach only explains.</p>
         <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
           <label className="block">
             <span className="text-[11px] font-bold">NVIDIA API key</span>
