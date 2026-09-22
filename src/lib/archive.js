@@ -63,6 +63,35 @@ export async function archivedSessionCount(){
   return rows.filter((r) => r?.id && r.id !== ARCHIVE_META_ID).length;
 }
 
+
+/**
+ * Read archived sessions without moving them back into live history.
+ * Newest-first keeps the browser useful even when years of sessions exist.
+ */
+export async function listArchivedSessions(){
+  const rows = (await idbGetAll('archive')) || [];
+  return rows
+    .filter((r) => r?.id && r.id !== ARCHIVE_META_ID)
+    .sort((a, b) => String(b?.dateISO || '').localeCompare(String(a?.dateISO || '')));
+}
+
+/**
+ * Restore one archived session atomically. If the id is not present, return
+ * false rather than creating or deleting anything.
+ */
+export async function restoreArchivedSession(sessionId){
+  const id = String(sessionId || '').trim();
+  if(!id || id === ARCHIVE_META_ID) return false;
+  const rows = (await idbGetAll('archive')) || [];
+  const session = rows.find((r) => r?.id === id);
+  if(!session) return false;
+  await idbTransaction(['sessions', 'archive'], (ops)=> {
+    ops.put('sessions', session);
+    ops.delete('archive', id);
+  });
+  return true;
+}
+
 /**
  * Prune event telemetry: drop events older than the rolling window, then
  * enforce a hard cap (newest survive). Events power recent-behaviour models;
