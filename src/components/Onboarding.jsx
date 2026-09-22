@@ -4,13 +4,10 @@ import { EQUIPMENT, EQUIPMENT_PRESETS, LOCATIONS, GOALS, LEVELS, EXERCISES, exer
 import { DEFAULT_PLATE_DENOMINATIONS_KG } from '../lib/plates.js';
 import { asUnit, weightInputToKg, weightInputValue } from '../lib/units.ts';
 
-const IMPERIAL_PLATES_LB = [2.5, 5, 10, 25, 35, 45];
 
 export default function Onboarding({ open, onClose, onComplete, initial, units = 'kg', onLoadDemo = null }){
   const unit = asUnit(units);
   const toKg = (value)=> Number(weightInputToKg(value, unit));
-  const defaultBarKg = unit === 'lb' ? toKg(45) : 20;
-  const defaultPlatesKg = unit === 'lb' ? IMPERIAL_PLATES_LB.map(toKg) : DEFAULT_PLATE_DENOMINATIONS_KG;
   const displayList = (values)=> (values || []).map((value)=> weightInputValue(value, unit)).join(', ');
   const [step,setStep]=useState(0);
   const [goal,setGoal]=useState(initial?.goal || 'general');
@@ -21,8 +18,8 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
   const [minutes,setMinutes]=useState(initial?.availableMinutes || 45);
   const [preferredExerciseIds,setPreferredExerciseIds]=useState(initial?.preferredExerciseIds || []);
   const [dislikedExerciseIds,setDislikedExerciseIds]=useState(initial?.dislikedExerciseIds || []);
-  const [barWeightKg,setBarWeightKg]=useState(initial?.plateConfig?.barWeightKg ?? defaultBarKg);
-  const [plateDenominationsKg,setPlateDenominationsKg]=useState(initial?.plateConfig?.platesKg || defaultPlatesKg);
+  const [barWeightKg,setBarWeightKg]=useState(initial?.plateConfig?.barWeightKg ?? 20);
+  const [plateDenominationsKg,setPlateDenominationsKg]=useState(initial?.plateConfig?.platesKg || DEFAULT_PLATE_DENOMINATIONS_KG);
   const [dumbbellsInput,setDumbbellsInput]=useState(Array.isArray(initial?.plateConfig?.dumbbellsKg) ? displayList(initial.plateConfig.dumbbellsKg) : '');
   const [machineIncrementInput,setMachineIncrementInput]=useState(initial?.plateConfig?.machineIncrementKg != null ? weightInputValue(initial.plateConfig.machineIncrementKg, unit) : '');
   const dialogRef = useRef(null);
@@ -40,8 +37,8 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
     setMinutes(initial?.availableMinutes || 45);
     setPreferredExerciseIds(initial?.preferredExerciseIds || []);
     setDislikedExerciseIds(initial?.dislikedExerciseIds || []);
-    setBarWeightKg(initial?.plateConfig?.barWeightKg ?? defaultBarKg);
-    setPlateDenominationsKg(initial?.plateConfig?.platesKg || defaultPlatesKg);
+    setBarWeightKg(initial?.plateConfig?.barWeightKg ?? 20);
+    setPlateDenominationsKg(initial?.plateConfig?.platesKg || DEFAULT_PLATE_DENOMINATIONS_KG);
     setDumbbellsInput(Array.isArray(initial?.plateConfig?.dumbbellsKg) ? displayList(initial.plateConfig.dumbbellsKg) : '');
     setMachineIncrementInput(initial?.plateConfig?.machineIncrementKg != null ? weightInputValue(initial.plateConfig.machineIncrementKg, unit) : '');
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -75,9 +72,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
   };
 
   const togglePlate = (kg)=>{
-    setPlateDenominationsKg(prev=> prev.some(value=> Math.abs(value-kg)<0.01)
-      ? prev.filter(value=> Math.abs(value-kg)>=0.01)
-      : [...prev, kg].sort((a, b)=> a - b));
+    setPlateDenominationsKg(prev=> prev.includes(kg) ? prev.filter(value=> value!==kg) : [...prev, kg].sort((a, b)=> a - b));
   };
 
   const preferenceKit = [...new Set([...(equipment.length ? equipment : ['bodyweight']), 'bodyweight'])];
@@ -103,8 +98,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
       }
       if(parsedDumbbells.length) plateConfig.dumbbellsKg = parsedDumbbells;
       if(wantsMachine){
-        const fallback = unit === 'lb' ? toKg(5) : 2.5;
-        plateConfig.machineIncrementKg = Math.max(0.25, toKg(machineIncrementInput) || fallback);
+        plateConfig.machineIncrementKg = Math.max(0.25, toKg(machineIncrementInput) || 2.5);
       }
     }
     const payload = {
@@ -200,15 +194,14 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
                 <p className="text-[11px] text-ink3">Used only to round barbell recommendations to loads you can actually build.</p>
               </div>
               <div className="flex gap-2">
-                {(unit === 'lb' ? [45,35,0].map(toKg) : [20,15,0]).map(weight=> (
-                  <button key={weight} onClick={()=> setBarWeightKg(weight)} className={`flex-1 min-h-9 rounded-lg border text-xs font-bold ${Math.abs(barWeightKg-weight)<0.01 ? 'bg-ink text-bg border-ink' : 'bg-surface border-line'}`}>{weight ? `${weightInputValue(weight, unit)} ${unit} bar` : 'No fixed bar'}</button>
+                {[20,15,0].map(weight=> (
+                  <button key={weight} onClick={()=> setBarWeightKg(weight)} className={`flex-1 min-h-9 rounded-lg border text-xs font-bold ${barWeightKg===weight ? 'bg-ink text-bg border-ink' : 'bg-surface border-line'}`}>{weight ? `${weightInputValue(weight, unit)} ${unit} bar` : 'No fixed bar'}</button>
                 ))}
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {(unit === 'lb' ? IMPERIAL_PLATES_LB.map(toKg) : DEFAULT_PLATE_DENOMINATIONS_KG).map(kg=> {
-                  const selected=plateDenominationsKg.some(value=> Math.abs(value-kg)<0.01);
-                  return <button key={kg} onClick={()=> togglePlate(kg)} aria-pressed={selected} className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${selected ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink3'}`}>{weightInputValue(kg, unit)} {unit}</button>;
-                })}
+                {DEFAULT_PLATE_DENOMINATIONS_KG.map(kg=> (
+                  <button key={kg} onClick={()=> togglePlate(kg)} aria-pressed={plateDenominationsKg.includes(kg)} className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${plateDenominationsKg.includes(kg) ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink3'}`}>{weightInputValue(kg, unit)} {unit}</button>
+                ))}
               </div>
             </div>
           )}
