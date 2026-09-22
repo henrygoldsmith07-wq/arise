@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { auditStore, repairFindings } from '../lib/audit.js';
-import { archiveOldSessions, pruneEvents, archiveCandidateCount, archivedSessionCount, listArchivedSessions, restoreArchivedSession, restoreArchive } from '../lib/archive.js';
+import { archiveOldSessions, pruneEvents, archiveCandidateCount, listArchivedSessions, restoreArchivedSession, restoreArchive } from '../lib/archive.js';
 import { listSnapshots, rollbackToSnapshot, captureSnapshot } from '../lib/snapshots.js';
 import { listMigrationLogs } from '../lib/migrationLog.js';
 import { whenPersisted } from '../lib/storage.js';
