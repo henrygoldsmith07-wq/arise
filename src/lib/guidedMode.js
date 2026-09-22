@@ -179,6 +179,8 @@ export function buildGuidedPayload({ session, blocks, note = '', noteTags = [], 
   const started = Date.parse(startedAtISO);
   const durationMinutes = Number.isFinite(started) ? Math.max(1, Math.round((Date.parse(nowISO) - started) / 60000)) : 1;
   const painDiscomfort = noteTags.includes('pain-discomfort');
+  const labels = noteTags.map(id=> NOTE_PROMPTS.find(prompt=> prompt.id === id)?.label).filter(Boolean);
+  const finalNote = [labels.join(', '), note.trim()].filter(Boolean).join(' · ');
   const substitutions = blocks.filter(b=> b.substitutionFrom).map(b=> ({ from: b.substitutionFrom, to: b.exerciseId, reason: b.substitutionReason }));
   const exerciseOrder = blocks.map(b=> b.exerciseId);
   return {
@@ -230,7 +232,7 @@ export function buildGuidedPayload({ session, blocks, note = '', noteTags = [], 
       }),
     })),
     skippedSetsCount: blocks.reduce((n,b)=> n + b.sets.filter(s=> !s.completed).length, 0),
-    note: note.trim() || undefined,
+    note: finalNote || undefined,
     noteTags: noteTags.length ? noteTags : undefined,
     sessionDuration: durationMinutes,
   };
