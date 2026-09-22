@@ -7,16 +7,14 @@ accepted as documented behaviour in the appropriate doc.
 
 ## Current
 
-1. **Some exercises lack a curated same-kit substitution edge.** The
-   substitution graph spans equipment families by design, and the soft
-   content lint still reports rows without a declared fallback reachable
-   using only the source exercise's kit. **Experience:** the runtime swap
-   engine still widens to kit-compatible alternatives; exact movement-pattern
-   matches are now ranked above near-pattern and unrelated fallbacks using the
-   full exercise taxonomy. The remaining warning is therefore a curation
-   quality issue, not a dead-end in the swap sheet. **Tracked:**
-   `validateContentWarnings()` remains the work queue for adding explicit
-   graph edges over time.
+1. **Two special-case exercises still lack a truthful curated same-kit
+   substitution:** `battle-ropes` and `doorway-chest-stretch`. The broader
+   curation pass reduced the soft warning queue to these two rows and corrected
+   pull-up equipment metadata along the way. **Experience:** the runtime swap
+   engine still widens to kit-compatible alternatives, so neither is a dead
+   end; the warning is retained rather than adding a misleading movement
+   match. **Tracked:** `validateContentWarnings()` is regression-tested to
+   these two intentional cases.
 
 2. **Offline fallback page is static.** `public/offline.html` is a friendly
    dead end by design — the real app keeps working from its cached shell, so
