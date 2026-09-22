@@ -38,10 +38,6 @@ the "today" columns are stale — the architecture gate is still accurate).
   recommendations and equipment setup while canonical storage remains kg
 - **Explorable Progress charts** — visual charts expose a keyboard- and
   screen-reader-friendly data disclosure with the underlying values
-- **Workout note snippets** — reusable note starters in both Standard and
-  Guided modes, alongside the existing structured tags
-- **Weekly Review Markdown export** — share/copy a portable weekly review with
-  metrics, narrative and queued changes
 - **Faster profile re-editing** — existing users reopen setup at kit and can
   save from any step instead of replaying the whole onboarding flow
 - CI/CD: format gate, bundle-diff reporting, license gate, release
@@ -61,7 +57,11 @@ the "today" columns are stale — the architecture gate is still accurate).
 
 1. **Widget/shortcuts deep links** on native wrappers (needs Capacitor —
    documented, optional)
-2. **Cohort report scheduling helper** (the `npm run study:report` CLI is
+2. **Workout note snippet picker** — useful convenience, deferred while the
+   runtime bundle is at its product budget
+3. **Weekly Review Markdown export** — useful convenience, deferred while the
+   runtime bundle is at its product budget
+4. **Cohort report scheduling helper** (the `npm run study:report` CLI is
    manual by design; a wrapper that reminds when exports are due could help
    operators — only if operators ask for it)
 
