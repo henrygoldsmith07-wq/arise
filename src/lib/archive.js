@@ -9,7 +9,7 @@
 
 import { idbGetAll } from './idb.js';
 import { idbTransaction } from './idb-tx.js';
-import { splitSets } from './setRows.js';
+import { splitSets } from './storage.js';
 
 export const ARCHIVE_META_ID = 'archive:meta';
 
@@ -60,12 +60,6 @@ export async function restoreArchive(){
   });
   return sessions.length;
 }
-
-export async function archivedSessionCount(){
-  const rows = (await idbGetAll('archive')) || [];
-  return rows.filter((r) => r?.id && r.id !== ARCHIVE_META_ID).length;
-}
-
 
 /**
  * Read archived sessions without moving them back into live history.
