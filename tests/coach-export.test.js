@@ -102,6 +102,15 @@ describe('markdown rendering', () => {
     assert.doesNotMatch(md, /## Weekly volume/);
     assert.doesNotMatch(md, /## Session detail/);
   });
+
+
+  it('renders coach-facing loads in the selected display unit', () => {
+    const lbStore = { ...store, preferences: { ...store.preferences, units: 'lb' } };
+    const md = renderCoachMarkdown(buildCoachExport(lbStore, { sections: { performance: true, detail: true } }));
+    assert.match(md, /best set 187\.4 lb × 5/);
+    assert.match(md, /5×176\.4 lb/);
+    assert.doesNotMatch(md, /best set 85 kg/);
+  });
 });
 
 describe('partial exports', () => {
