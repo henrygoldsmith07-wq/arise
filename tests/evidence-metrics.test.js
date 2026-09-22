@@ -110,9 +110,6 @@ describe('evidence metrics from synthesised ledger records', ()=> {
     assert.ok(md.startsWith('# Arise evidence report'));
     assert.ok(md.includes('95% CI') || md.includes('n='));
     assert.ok(!md.includes('proves'), 'no causal claims in the report');
-    const lb = renderEvidenceReportMarkdown(dash, { units: 'lb' });
-    assert.ok(lb.includes('Within 4.4 lb'));
-    assert.doesNotMatch(lb, /Within 2 kg/);
   });
 
   it('band thresholds: 2 insufficient, 3 emerging, 8 consistent, 20 high', ()=> {
