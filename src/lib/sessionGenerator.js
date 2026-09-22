@@ -1,13 +1,13 @@
 // sessionGenerator.js — build a session from goal + availableEquipment + recent history.
 // Explains why each block was chosen.
-import { EXERCISES, EXERCISE_BY_ID } from "./data.js";
+import { EXERCISES, EXERCISE_BY_ID, exerciseFitsEquipment } from "./data.js";
 import { recommendNext, personalisedRate, strategyForExercise } from "./progression.js";
 import { rankedSubstitutions } from "./substitutions.js";
 import { warmupSets, recommendedRest, predictSessionDuration, bestSupersets, fatigueAwareOrder, weakPointMuscles } from "./warmup.js";
 
 export function generateSession({ goal="general", availableEquipment=[], history=[], length=5, includeWarmup=true }){
   const has = new Set(availableEquipment);
-  let pool = EXERCISES.filter(e=> e.equipment.every(eq=> has.has(eq)) || (e.equipment.length===1 && e.equipment[0]==="bodyweight"));
+  let pool = EXERCISES.filter(e=> exerciseFitsEquipment(e, has));
   if(!pool.length) pool = EXERCISES.filter(e=> e.equipment.length===1 && e.equipment[0]==="bodyweight");
   // History-based substitution: prefer exercises the user has actually progressed on
   const performed = new Set();
