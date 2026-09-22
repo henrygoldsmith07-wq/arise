@@ -1,4 +1,3 @@
-import { asUnit, fmtWeight } from './units.ts';
 // evidenceMetrics.js — recommendation-outcome agreement metrics, adherence,
 // acceptance/rejection, deviation, overshoot, deload usefulness, plateau
 // resolution and calibration, computed PURELY from evaluation-ledger records.
@@ -242,9 +241,9 @@ export function evidenceDashboard(records = [], options = {}){
 // The PDF path is the browser print dialog over a print-styled document; this
 // produces the identical content as a .md file.
 
-export function downloadEvidenceReport(dash, options = {}){
+export function downloadEvidenceReport(dash){
   try{
-    const blob = new Blob([renderEvidenceReportMarkdown(dash, options)], { type: 'text/markdown;charset=utf-8' });
+    const blob = new Blob([renderEvidenceReportMarkdown(dash)], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -257,8 +256,7 @@ export function downloadEvidenceReport(dash, options = {}){
   }catch{ return false; }
 }
 
-export function renderEvidenceReportMarkdown(dash, { units = 'kg' } = {}){
-  const unit = asUnit(units);
+export function renderEvidenceReportMarkdown(dash){
   const p = (metric)=> metric?.rate == null ? '—' : `${Math.round(metric.rate * 100)}% (n=${metric.n}${metric.ci ? `, 95% CI ${Math.round(metric.ci.low*100)}–${Math.round(metric.ci.high*100)}%` : ''})`;
   const lines = [];
   lines.push('# Arise evidence report');
@@ -274,8 +272,8 @@ export function renderEvidenceReportMarkdown(dash, { units = 'kg' } = {}){
   lines.push('');
   lines.push('## Adherence');
   lines.push(`- Followed the prescription: ${p(dash.adherence.followed)}`);
-  lines.push(`- Mean load deviation when it differed: ${dash.adherence.meanDeviationKg == null ? '—' : fmtWeight(dash.adherence.meanDeviationKg, unit)}`);
-  lines.push(`- Within ${fmtWeight(2, unit)}: ${p(dash.adherence.deviationWithin2Kg)}`);
+  lines.push(`- Mean load deviation when it differed: ${dash.adherence.meanDeviationKg == null ? '—' : `${dash.adherence.meanDeviationKg} kg`}`);
+  lines.push(`- Within 2 kg: ${p(dash.adherence.deviationWithin2Kg)}`);
   lines.push(`- Explicit user overrides: ${dash.acceptance.userOverrides.count}`);
   lines.push('');
   lines.push('## Recommendation–outcome agreement');
