@@ -77,6 +77,28 @@ describe('scoreSubstitution invariants', () => {
     assert.equal(scoreSubstitution(target, a), scoreSubstitution(target, a));
     assert.equal(scoreSubstitution(target, b), scoreSubstitution(target, b));
   });
+
+  it('rewards exact movement-pattern matches above near and unrelated patterns', () => {
+    // These objects keep muscle/equipment/level neutral so the ordering comes
+    // from movement pattern alone. incline/decline bench are taxonomy-derived
+    // horizontal pushes, not entries in the small curated PATTERN map.
+    const base = { muscle: 'Synthetic', equipment: [], level: 'Beginner' };
+    const source = { ...base, id: 'incline-bench-press' };
+    const exact = { ...base, id: 'decline-bench-press' };
+    const near = { ...base, id: 'overhead-press-barbell' };
+    const unrelated = { ...base, id: 'barbell-squat' };
+
+    assert.equal(movementPatternFor(source.id), 'horizontal-push');
+    assert.equal(movementPatternFor(exact.id), 'horizontal-push');
+    assert.equal(movementPatternFor(near.id), 'vertical-push');
+
+    const exactScore = scoreSubstitution(source, exact);
+    const nearScore = scoreSubstitution(source, near);
+    const unrelatedScore = scoreSubstitution(source, unrelated);
+
+    assert.ok(exactScore > nearScore, `exact ${exactScore} should beat near ${nearScore}`);
+    assert.ok(nearScore > unrelatedScore, `near ${nearScore} should beat unrelated ${unrelatedScore}`);
+  });
 });
 
 describe('rankedSubstitutions', () => {

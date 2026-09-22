@@ -33,6 +33,10 @@ export const MOVEMENT_PATTERNS = PATTERN;
 
 function patternScore(a, b){
   if(!a || !b) return 0;
+  // Exact pattern preservation is the strongest movement-specific signal.
+  // Previously exact matches received 0 while only "near" patterns received
+  // a bonus, which could make a less faithful swap outrank an equivalent one.
+  if(a === b) return 2.5;
   const near = new Set(["squat|lunge","horizontal-push|vertical-push","horizontal-pull|vertical-pull","hinge|hip-extension","core-isometric|core-control"]);
   const key = [a,b].sort().join("|");
   if(near.has(key)) return 1.5;
@@ -44,7 +48,10 @@ export function scoreSubstitution(target, candidate, opts={}){
   if(target.muscle===candidate.muscle) s+=3;
   const overlap = target.equipment.filter(e=> candidate.equipment.includes(e)).length;
   s += overlap * 0.6;
-  s += patternScore(PATTERN[target.id], PATTERN[candidate.id]);
+  // Use the complete taxonomy, not only the small curated map. Curated
+  // overrides still win inside patternFor(), while derived rules cover the
+  // rest of the exercise library.
+  s += patternScore(patternFor(target.id), patternFor(candidate.id));
   const d = Math.abs((DIFF[target.level]||2) - (DIFF[candidate.level]||2)); if(d===0) s+=1; else if(d===1) s+=0.3;
   // unilateral match
   const tUni = !!(target.unilateral || isUnilateral(target.id));
@@ -158,7 +165,9 @@ export function substitutionOptions(targetId, { availableEquipment = null, histo
       const score = scoreSubstitution(target, ex, { historyCounts, declared: declared.has(ex.id), preferred, disliked, shortSession });
       const reasons = [];
       if(ex.muscle===target.muscle) reasons.push(`same ${target.muscle.toLowerCase()} focus`);
-      if(PATTERN[target.id] && PATTERN[target.id]===PATTERN[ex.id]) reasons.push('same movement pattern');
+      const targetPattern = patternFor(target.id);
+      const candidatePattern = patternFor(ex.id);
+      if(targetPattern && targetPattern===candidatePattern) reasons.push('same movement pattern');
       if(has) reasons.push('fits your available kit');
       if(historyCounts[ex.id]) reasons.push('you have logged it before');
       if(declared.has(ex.id)) reasons.push('listed programme alternative');
