@@ -27,7 +27,7 @@ import { tracePhase, traceStart, traceEnd } from '../lib/perfTrace.js';
 import { haptic } from '../lib/haptics.js';
 import { painAftercareFor, techniquePromptFor, maxEffortWarning } from '../lib/safety.js';
 import { createVoiceInput, parseSetPhrase } from '../lib/voiceInput.js';
-import { asUnit, fmtWeight, localizeWeightText, weightInputToKg, weightInputValue } from '../lib/units.ts';
+import { asUnit, fmtWeight, weightInputToKg, weightInputValue } from '../lib/units.ts';
 import { NOTE_PROMPTS } from '../lib/sessionNotes.js';
 
 function parseNum(v){ const n=Number(v); return Number.isFinite(n)? n : 0; }
@@ -91,7 +91,7 @@ function clearTargetParts(rec, block, unit = 'kg'){
   if(rec?.assistKg != null) return { text: `${reps ?? '—'} reps @ ${fmtWeight(rec.assistKg, unit)} assist` };
   let load = null;
   if(rec?.load != null && Number(rec.load) > 0) load = fmtWeight(rec.load, unit);
-  else if(block.loadHint && /\d/.test(String(block.loadHint))) load = localizeWeightText(block.loadHint, unit);
+  else if(block.loadHint && /\d/.test(String(block.loadHint))) load = block.loadHint;
   const text = [load, reps ? `× ${reps}` : null].filter(Boolean).join(' ');
   return { text: text || 'working set' };
 }
