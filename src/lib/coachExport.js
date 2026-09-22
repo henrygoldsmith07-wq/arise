@@ -1,4 +1,3 @@
-import { asUnit, fmtWeight } from './units.ts';
 // coachExport.js — a plain-language training summary a user can hand to a
 // human coach (or paste into an email). Deliberately NOT the raw backup:
 //   - optional fields only: the user picks which sections travel
@@ -82,7 +81,6 @@ export function buildCoachExport(store, { sections = {}, weeks = 8, sinceISO = n
     app: 'arise',
     kind: 'coach-export',
     generatedAt: new Date().toISOString(),
-    units: asUnit(store?.preferences?.units),
     range: { from: sinceISO || first, to: last, sessions: history.length },
   };
   if(picked.summary){
@@ -115,9 +113,10 @@ export function buildCoachExport(store, { sections = {}, weeks = 8, sinceISO = n
 }
 
 /** Render the export as plain-text Markdown an email can carry as-is. */
+const fmtKg = (n) => `${n} kg`;
+
+/** Render the export as plain-text Markdown an email can carry as-is. */
 export function renderCoachMarkdown(exportData){
-  const units = asUnit(exportData?.units);
-  const weight = (kg)=> fmtWeight(kg, units);
   const lines = [];
   lines.push('# Training summary');
   lines.push('');
@@ -131,13 +130,13 @@ export function renderCoachMarkdown(exportData){
   }
   if(exportData.weeklyVolume?.length){
     lines.push('## Weekly volume');
-    for(const w of exportData.weeklyVolume) lines.push(`- Week of ${w.weekStart}: ${weight(w.volumeKg)} across ${w.sessions} session(s)`);
+    for(const w of exportData.weeklyVolume) lines.push(`- Week of ${w.weekStart}: ${fmtKg(w.volumeKg)} across ${w.sessions} session(s)`);
     lines.push('');
   }
   if(exportData.exercises?.length){
     lines.push('## Exercises (by total volume)');
     for(const e of exportData.exercises.slice(0, 12)){
-      lines.push(`- ${e.exerciseId}: best set ${weight(e.topSetKg)} × ${e.topReps} · ${e.sets} set(s) over ${e.sessions} session(s) · volume ${weight(e.volumeKg)}`);
+      lines.push(`- ${e.exerciseId}: best set ${fmtKg(e.topSetKg)} × ${e.topReps} · ${e.sets} set(s) over ${e.sessions} session(s) · volume ${fmtKg(e.volumeKg)}`);
     }
     lines.push('');
   }
@@ -152,7 +151,7 @@ export function renderCoachMarkdown(exportData){
     for(const s of exportData.sessions){
       lines.push(`### ${s.dateISO}`);
       for(const b of s.blocks){
-        const sets = b.sets.map((set) => `${set.reps}×${set.weightKg == null || set.weightKg === '' ? 'BW' : weight(set.weightKg)}${set.rpe != null ? ` @${set.rpe}` : ''}`).join(', ');
+        const sets = b.sets.map((set) => `${set.reps}×${set.weightKg ?? 'BW'}${set.rpe != null ? ` @${set.rpe}` : ''}`).join(', ');
         lines.push(`- ${b.exerciseId}: ${sets}`);
       }
       lines.push('');
