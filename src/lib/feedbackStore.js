@@ -93,6 +93,27 @@ export function markFeedbackReviewed(id, reviewedAt = new Date().toISOString()){
   try{ s.setItem(FEEDBACK_STORAGE_KEY, JSON.stringify(records)); return true; }catch{ return false; }
 }
 
+// Build the only payload the UI may offer to an external share action. This
+// is deliberately separate from the local queue record: no id, timestamps,
+// scores, classifier response, training data, readiness, study identity or
+// credentials can cross the sharing boundary.
+export function buildFeedbackSharePayload(record, { appVersion = null } = {}){
+  const safe = safeRecord(record);
+  if(!safe) return null;
+  return {
+    feedback: safe.redactedText,
+    category: safe.category,
+    confidence: safe.confidence,
+    needsReview: safe.needsReview,
+    appVersion: typeof appVersion === 'string' && appVersion.trim() ? appVersion.trim().slice(0, 32) : null,
+  };
+}
+
+export function formatFeedbackSharePayload(payload){
+  if(!payload || typeof payload !== 'object' || Array.isArray(payload)) return '';
+  return JSON.stringify(payload, null, 2);
+}
+
 export function clearFeedbackRecords(){
   try{ storage()?.removeItem(FEEDBACK_STORAGE_KEY); }catch{}
 }

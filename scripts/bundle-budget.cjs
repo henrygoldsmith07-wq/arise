@@ -108,6 +108,11 @@
 // local metadata-only review store, and the operator review UI. Boot and the
 // largest lazy chunk remain within their existing budgets; measured total 365.9.
 //
+// total 367 → 368 kB with the consent-scope/share-separation pass: independent
+// feedback and coach-routing permissions, explicit redacted-share preview,
+// and deterministic lane-only coach routing. Boot and largest-lazy budgets
+// remain unchanged; measured total 367.5.
+//
 // The budgets are regression bounds with headroom, not aspirations: a change
 // that crosses one must either undo the bloat or consciously re-baseline here
 // and say why in the PR.
@@ -124,7 +129,7 @@ if(!fs.existsSync(dist)){
 
 const BOOT_BUDGET_KB = 197;
 const CHUNK_BUDGET_KB = 48;
-const TOTAL_BUDGET_KB = 367;
+const TOTAL_BUDGET_KB = 368;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

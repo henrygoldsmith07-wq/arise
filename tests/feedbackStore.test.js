@@ -56,4 +56,33 @@ describe('local feedback metadata store', () => {
     assert.equal(reviewed.needsReview, true);
     assert.equal(reviewed.category, 'usability');
   });
+
+  it('builds an explicit-share payload from redacted feedback only', () => {
+    const record = M.buildFeedbackRecord({
+      text: 'Email sam@example.com token: SECRET — the app is broken',
+      classification: { label: 'bug', confidence: 0.64, needsReview: true, source: 'cloud', cloudAttempted: true },
+    });
+    const payload = M.buildFeedbackSharePayload({
+      ...record,
+      scores: { bug: 0.64 },
+      response: { raw: 'cloud response' },
+      trainingHistory: [{ exercise: 'squat', load: 100 }],
+      readiness: { score: 5 },
+      studyParticipantId: 'participant-secret',
+      apiKey: 'nvapi-secret',
+    }, { appVersion: '0.1.0' });
+    assert.deepEqual(payload, {
+      feedback: 'Email [redacted-email] [redacted-secret] — the app is broken',
+      category: 'bug',
+      confidence: 0.64,
+      needsReview: true,
+      appVersion: '0.1.0',
+    });
+    const text = M.formatFeedbackSharePayload(payload);
+    assert.ok(text.includes('[redacted-email]'));
+    assert.ok(!text.includes('SECRET'));
+    assert.ok(!text.includes('cloud response'));
+    assert.ok(!text.includes('participant-secret'));
+    assert.ok(!text.includes('nvapi-secret'));
+  });
 });

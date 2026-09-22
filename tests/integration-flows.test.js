@@ -12,6 +12,8 @@ import assert from 'node:assert/strict';
 globalThis.localStorage = { _m:{}, getItem(k){ return k in this._m ? this._m[k] : null; }, setItem(k,v){ this._m[k]=String(v); }, removeItem(k){ delete this._m[k]; }, clear(){ this._m = {}; } };
 
 import { hydrateStorage, persistStore, clearAllStoredData, whenPersisted, loadStoreFromIdb } from '../src/lib/storage.js';
+import { saveFeedbackClassifierSettings, saveCoachRoutingSettings, CLASSIFIER_FEEDBACK_SETTINGS_KEY, CLASSIFIER_COACH_ROUTING_SETTINGS_KEY } from '../src/lib/feedbackClassifier.js';
+import { buildFeedbackRecord, saveFeedbackRecord, loadFeedbackRecords, FEEDBACK_STORAGE_KEY } from '../src/lib/feedbackStore.js';
 import { idbTransaction } from '../src/lib/idb-tx.js';
 import { enforceIntegrity, repairStore } from '../src/lib/integrity.js';
 import {
@@ -86,10 +88,23 @@ describe('integration: persistence flows', () => {
   });
 
   it('clearAllStoredData empties everything — deleted data does not resurrect', async () => {
+    saveFeedbackClassifierSettings({ enabled: true });
+    saveCoachRoutingSettings({ enabled: true });
+    saveFeedbackRecord(buildFeedbackRecord({
+      text: 'A local feedback item',
+      classification: { label: 'bug', confidence: 0.9, needsReview: false, source: 'local-keywords' },
+    }));
+    assert.ok(localStorage.getItem(CLASSIFIER_FEEDBACK_SETTINGS_KEY));
+    assert.ok(localStorage.getItem(CLASSIFIER_COACH_ROUTING_SETTINGS_KEY));
+    assert.equal(loadFeedbackRecords().length, 1);
     await persistStore(fullStore());
     await whenPersisted();
     await clearAllStoredData();
     assert.equal(await loadStoreFromIdb(), null, 'stores are empty → recomposition yields nothing');
+    assert.equal(localStorage.getItem(CLASSIFIER_FEEDBACK_SETTINGS_KEY), null);
+    assert.equal(localStorage.getItem(CLASSIFIER_COACH_ROUTING_SETTINGS_KEY), null);
+    assert.equal(localStorage.getItem(FEEDBACK_STORAGE_KEY), null);
+    assert.deepEqual(loadFeedbackRecords(), []);
     // Re-persisting after a deliberate clear works (cleared latch resets).
     await hydrateStorage();
     await persistStore(fullStore());

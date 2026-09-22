@@ -12,7 +12,7 @@ class MemoryStorage {
 globalThis.localStorage = new MemoryStorage();
 const M = await import('../src/lib/feedbackClassifier.js');
 beforeEach(() => { globalThis.localStorage = new MemoryStorage(); });
-function enable(){ globalThis.localStorage.setItem(M.CLASSIFIER_SETTINGS_KEY, JSON.stringify({ enabled: true })); }
+function enable(){ M.saveFeedbackClassifierSettings({ enabled: true }); }
 function cloudFetch(label, confidence = 0.92){
   return async () => ({ ok: true, json: async () => ({ results: [{ label, confidence, scores: { [label]: confidence } }] }) });
 }
@@ -20,10 +20,21 @@ describe('classifier settings default off', () => {
   it('disabled by default and round-trips', () => {
     assert.equal(M.isClassifierEnabled(), false);
     assert.deepEqual(M.getClassifierSettings(), { enabled: false });
+    assert.deepEqual(M.getClassifierConsentSettings(), { feedbackEnabled: false, coachRoutingEnabled: false });
     assert.equal(M.saveClassifierSettings({ enabled: true }), true);
     assert.equal(M.isClassifierEnabled(), true);
+    assert.equal(M.isCoachRoutingEnabled(), false);
+    assert.equal(M.saveCoachRoutingSettings({ enabled: true }), true);
+    assert.equal(M.isClassifierEnabled(), true);
+    assert.equal(M.isCoachRoutingEnabled(), true);
     M.clearClassifierSettings();
     assert.equal(M.isClassifierEnabled(), false);
+    assert.equal(M.isCoachRoutingEnabled(), false);
+  });
+  it('legacy feedback consent never grants new coach-routing consent', () => {
+    globalThis.localStorage.setItem(M.CLASSIFIER_SETTINGS_KEY, JSON.stringify({ enabled: true }));
+    assert.equal(M.isFeedbackClassifierEnabled(), true);
+    assert.equal(M.isCoachRoutingEnabled(), false);
   });
 });
 describe('redaction and taxonomy', () => {
@@ -102,6 +113,22 @@ describe('cloud path thresholds and failures', () => {
     assert.equal(r.label, 'exercise-request');
     assert.deepEqual(r.scores, { 'exercise-request': 0.86 });
   });
+  it('rejects malformed responses and non-finite scores', async () => {
+    enable();
+    const malformed = await M.classifyText('unclear thing', {
+      fetchImpl: async () => ({ ok: true, json: async () => ({ results: [{ nope: true }] }) }),
+    });
+    assert.equal(malformed.label, 'other');
+    assert.equal(malformed.needsReview, true);
+
+    const finiteOnly = await M.classifyText('unclear thing', {
+      fetchImpl: async () => ({
+        ok: true,
+        json: async () => ({ results: [{ label: 'usability', confidence: 0.9, scores: { usability: 0.9, bug: Infinity, unknown: 4 } }] }),
+      }),
+    });
+    assert.deepEqual(finiteOnly.scores, { usability: 0.9 });
+  });
   it('redacts and truncates dynamic instructions', async () => {
     enable();
     let sent = null;
@@ -176,7 +203,7 @@ describe('cloud path thresholds and failures', () => {
     assert.equal(out.results[3].label, 'usability');
   });
   it('coach routing returns lanes not prescriptions', async () => {
-    enable();
+    M.saveCoachRoutingSettings({ enabled: true });
     const q = await M.routeCoachRequest('how should I progress my squat', { fetchImpl: cloudFetch('training-question', 0.95) });
     assert.equal(q.route, 'local-engine');
     const b = await M.routeCoachRequest('app crashed', { fetchImpl: cloudFetch('feedback-or-bug', 0.95) });
@@ -187,5 +214,35 @@ describe('cloud path thresholds and failures', () => {
     assert.equal(uncertain.route, 'clarify');
     const o = await M.routeCoachRequest('the sky is blue', { fetchImpl: cloudFetch('other', 0.95) });
     assert.equal(o.route, 'clarify');
+  });
+  it('coach routing is local-first and tightens add/missing intent', async () => {
+    let called = false;
+    const fetchImpl = async () => { called = true; return { ok: true, json: async () => ({ results: [{ label: 'feedback-or-bug', confidence: 0.99 }] }) }; };
+    assert.equal((await M.routeCoachRequest('Can I add another set?', { fetchImpl })).route, 'local-engine');
+    assert.equal((await M.routeCoachRequest('Should I add weight?', { fetchImpl })).route, 'local-engine');
+    assert.equal((await M.routeCoachRequest('What exercise should I add?', { fetchImpl })).route, 'local-engine');
+    assert.equal((await M.routeCoachRequest('Please add a new exercise', { fetchImpl })).route, 'feedback-pipeline');
+    assert.equal(called, false);
+    M.saveCoachRoutingSettings({ enabled: true });
+    const ambiguous = await M.routeCoachRequest('maybe this is a training question', { fetchImpl: cloudFetch('training-question', 0.7) });
+    assert.equal(ambiguous.route, 'clarify');
+    assert.equal(ambiguous.needsReview, true);
+  });
+  it('separate consents gate only their own cloud path', async () => {
+    let feedbackCalls = 0;
+    let coachCalls = 0;
+    const feedbackFetch = async () => { feedbackCalls += 1; return { ok: true, json: async () => ({ results: [{ label: 'bug', confidence: 0.95 }] }) }; };
+    const coachFetch = async () => { coachCalls += 1; return { ok: true, json: async () => ({ results: [{ label: 'training-question', confidence: 0.95 }] }) }; };
+    M.saveCoachRoutingSettings({ enabled: true });
+    await M.classifyFeedback('unrecognised feedback', { fetchImpl: feedbackFetch });
+    assert.equal(feedbackCalls, 0);
+    await M.routeCoachRequest('maybe ambiguous', { fetchImpl: coachFetch });
+    assert.equal(coachCalls, 1);
+    M.clearClassifierSettings();
+    M.saveFeedbackClassifierSettings({ enabled: true });
+    await M.routeCoachRequest('maybe ambiguous again', { fetchImpl: coachFetch });
+    assert.equal(coachCalls, 1);
+    await M.classifyFeedback('unrecognised feedback', { fetchImpl: feedbackFetch });
+    assert.equal(feedbackCalls, 1);
   });
 });

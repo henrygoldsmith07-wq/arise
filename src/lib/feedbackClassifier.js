@@ -7,7 +7,11 @@
 // Privacy: cloud-only opt-in, redacted + truncated input, no raw text in
 // telemetry/exports/logs, timeout/failure fallback to other, confidence gate.
 export const CLASSIFIER_ENDPOINT = 'https://classifier.dev';
+// CLASSIFIER_SETTINGS_KEY is the pre-split feedback consent key. It remains
+// readable for existing users, but it never grants coach-routing consent.
 export const CLASSIFIER_SETTINGS_KEY = 'arise.classifier.settings.v1';
+export const CLASSIFIER_FEEDBACK_SETTINGS_KEY = 'arise.classifier.feedback.settings.v1';
+export const CLASSIFIER_COACH_ROUTING_SETTINGS_KEY = 'arise.classifier.coach-routing.settings.v1';
 export const CLASSIFIER_TAXONOMY_VERSION = 1;
 export const FEEDBACK_LABELS = Object.freeze([
   'bug',
@@ -53,26 +57,64 @@ export const COACH_ROUTING_INSTRUCTIONS = 'Route an assistant request to a lane 
 function storage(){
   try{ return typeof localStorage !== 'undefined' ? localStorage : null; }catch{ return null; }
 }
-export function getClassifierSettings(){
+function readEnabled(key){
   const s = storage();
-  if(!s) return { enabled: false };
+  if(!s) return null;
   try{
-    const parsed = JSON.parse(s.getItem(CLASSIFIER_SETTINGS_KEY) || '{}');
-    return { enabled: parsed.enabled === true };
-  }catch{ return { enabled: false }; }
+    const raw = s.getItem(key);
+    if(raw == null) return null;
+    const parsed = JSON.parse(raw);
+    return parsed.enabled === true;
+  }catch{ return false; }
 }
-export function saveClassifierSettings({ enabled = null } = {}){
+function writeEnabled(key, enabled){
   const s = storage();
   if(!s) return false;
-  const cur = getClassifierSettings();
-  const next = { enabled: enabled == null ? cur.enabled : !!enabled };
-  try{ s.setItem(CLASSIFIER_SETTINGS_KEY, JSON.stringify(next)); return true; }catch{ return false; }
+  try{ s.setItem(key, JSON.stringify({ enabled: !!enabled })); return true; }catch{ return false; }
+}
+export function getFeedbackClassifierSettings(){
+  const current = readEnabled(CLASSIFIER_FEEDBACK_SETTINGS_KEY);
+  if(current != null) return { enabled: current };
+  // Backward compatibility is intentionally one-way: an old feedback opt-in
+  // remains feedback-only and never becomes coach-routing consent.
+  return { enabled: readEnabled(CLASSIFIER_SETTINGS_KEY) === true };
+}
+export function saveFeedbackClassifierSettings({ enabled = null } = {}){
+  const current = getFeedbackClassifierSettings().enabled;
+  return writeEnabled(CLASSIFIER_FEEDBACK_SETTINGS_KEY, enabled == null ? current : enabled);
+}
+export function getCoachRoutingSettings(){
+  return { enabled: readEnabled(CLASSIFIER_COACH_ROUTING_SETTINGS_KEY) === true };
+}
+export function saveCoachRoutingSettings({ enabled = null } = {}){
+  const current = getCoachRoutingSettings().enabled;
+  return writeEnabled(CLASSIFIER_COACH_ROUTING_SETTINGS_KEY, enabled == null ? current : enabled);
+}
+export function getClassifierConsentSettings(){
+  return {
+    feedbackEnabled: getFeedbackClassifierSettings().enabled,
+    coachRoutingEnabled: getCoachRoutingSettings().enabled,
+  };
+}
+// Compatibility aliases for the original feedback-only adapter API.
+export function getClassifierSettings(){ return getFeedbackClassifierSettings(); }
+export function saveClassifierSettings({ enabled = null } = {}){
+  return saveFeedbackClassifierSettings({ enabled });
 }
 export function clearClassifierSettings(){
-  try{ storage()?.removeItem(CLASSIFIER_SETTINGS_KEY); }catch{}
+  const s = storage();
+  try{ s?.removeItem(CLASSIFIER_SETTINGS_KEY); }catch{}
+  try{ s?.removeItem(CLASSIFIER_FEEDBACK_SETTINGS_KEY); }catch{}
+  try{ s?.removeItem(CLASSIFIER_COACH_ROUTING_SETTINGS_KEY); }catch{}
+}
+export function isFeedbackClassifierEnabled(){
+  return getFeedbackClassifierSettings().enabled === true;
+}
+export function isCoachRoutingEnabled(){
+  return getCoachRoutingSettings().enabled === true;
 }
 export function isClassifierEnabled(){
-  return getClassifierSettings().enabled === true;
+  return isFeedbackClassifierEnabled();
 }
 // Redaction: best-effort scrub before anything leaves the device. Callers
 // must still gate on opt-in and must never persist raw text next to labels.
@@ -201,11 +243,14 @@ function bodyWithLabels(labelSet, inputs, tier, instructions, fallbackInstructio
 function localCoachRouteClassify(text){
   const redacted = redactTextForClassification(text);
   if(!redacted) return { label: 'other', confidence: null, source: 'local-keywords', needsReview: true };
-  if(/\b(crash|error|broken|bug|complaint|feedback|not working|issue)\b/i.test(redacted)){
-    return { label: 'feedback-or-bug', confidence: 0.9, source: 'local-keywords', needsReview: false };
-  }
-  if(/\b(how|what|should|progress|train|training|workout|exercise|squat|bench|deadlift)\b/i.test(redacted)){
+  // Training-domain questions win when a phrase also contains "add" or
+  // "exercise". This keeps questions such as "Can I add another set?" out of
+  // the product-feedback lane.
+  if(/\b(?:can|could|should|would|may|how|what|which|when)\b[\s\S]{0,100}\b(?:add|increase|progress|train|training|workout|exercise|set|sets|weight|load|reps)\b/i.test(redacted)){
     return { label: 'training-question', confidence: 0.9, source: 'local-keywords', needsReview: false };
+  }
+  if(/\b(?:report\s+(?:a\s+)?(?:bug|issue)|bug\s+report|crash(?:ed|es|ing)?|error|broken|not\s+working|complaint|feedback|feature\s+request|missing\s+(?:exercise|feature)|please\s+add\b|add\s+(?:(?:an?|new|another)\s+)?(?:exercise|feature))\b/i.test(redacted)){
+    return { label: 'feedback-or-bug', confidence: 0.9, source: 'local-keywords', needsReview: false };
   }
   return { label: 'other', confidence: null, source: 'local-keywords', needsReview: true };
 }
@@ -241,6 +286,8 @@ export async function classifyText(text, {
   tier = 'fast',
   instructions = null,
   fetchImpl = null,
+  consent = 'feedback',
+  cloudOnlyIfLocalUncertain = false,
 } = {}){
   const labelSet = normaliseLabels(labels);
   if(!isValidLabelSet(labelSet)){
@@ -248,8 +295,13 @@ export async function classifyText(text, {
   }
   const redacted = redactTextForClassification(text);
   if(!redacted) return { ok: true, ...fallbackResult({ cloudAttempted: false }) };
-  if(!isClassifierEnabled()){
-    return { ok: true, ...localClassifyForLabels(redacted, labelSet) };
+  const local = localClassifyForLabels(redacted, labelSet);
+  if(cloudOnlyIfLocalUncertain && !local.needsReview && local.label !== 'other'){
+    return { ok: true, ...local };
+  }
+  const cloudEnabled = consent === 'coach-routing' ? isCoachRoutingEnabled() : isFeedbackClassifierEnabled();
+  if(!cloudEnabled){
+    return { ok: true, ...local };
   }
   const doFetch = fetchImpl || (typeof fetch !== 'undefined' ? fetch : null);
   if(!doFetch){
@@ -278,10 +330,10 @@ export async function classifyText(text, {
 }
 // Feedback triage wrappers (same adapter, same guarantees).
 export function classifyFeedback(text, opts = {}){
-  return classifyText(text, { ...opts, labels: opts.labels || FEEDBACK_LABELS, instructions: opts.instructions ?? FEEDBACK_INSTRUCTIONS });
+  return classifyText(text, { ...opts, labels: opts.labels || FEEDBACK_LABELS, instructions: opts.instructions ?? FEEDBACK_INSTRUCTIONS, consent: 'feedback' });
 }
 export function classifyIssue(text, opts = {}){
-  return classifyText(text, { ...opts, labels: opts.labels || FEEDBACK_LABELS, instructions: opts.instructions ?? ISSUE_INSTRUCTIONS });
+  return classifyText(text, { ...opts, labels: opts.labels || FEEDBACK_LABELS, instructions: opts.instructions ?? ISSUE_INSTRUCTIONS, consent: 'feedback' });
 }
 export async function classifyFeedbackBatch(texts, {
   labels = FEEDBACK_LABELS,
@@ -295,7 +347,7 @@ export async function classifyFeedbackBatch(texts, {
   const list = Array.isArray(texts) ? texts : [];
   const redactedList = list.map((t) => redactTextForClassification(t));
   const emptyResult = () => ({ label: 'other', confidence: null, scores: null, source: 'local-keywords', needsReview: true, cloudAttempted: false });
-  if(!isClassifierEnabled()){
+  if(!isFeedbackClassifierEnabled()){
     return { ok: true, source: 'local-keywords', cloudAttempted: false, results: redactedList.map((redacted) => redacted ? localClassifyForLabels(redacted, labelSet) : emptyResult()) };
   }
   const pending = redactedList.map((input, index) => ({ input, index })).filter(({ input }) => Boolean(input));
@@ -339,7 +391,13 @@ export async function classifyFeedbackBatch(texts, {
 // prescription: training-question -> local-engine, feedback-or-bug ->
 // feedback-pipeline, other -> clarify.
 export async function routeCoachRequest(text, opts = {}){
-  const r = await classifyText(text, { ...opts, labels: opts.labels || COACH_ROUTE_LABELS, instructions: opts.instructions ?? COACH_ROUTING_INSTRUCTIONS });
+  const r = await classifyText(text, {
+    ...opts,
+    labels: opts.labels || COACH_ROUTE_LABELS,
+    instructions: opts.instructions ?? COACH_ROUTING_INSTRUCTIONS,
+    consent: 'coach-routing',
+    cloudOnlyIfLocalUncertain: true,
+  });
   const route = r.needsReview ? 'clarify' : r.label === 'training-question' ? 'local-engine' : r.label === 'feedback-or-bug' ? 'feedback-pipeline' : 'clarify';
   return { ...r, route };
 }

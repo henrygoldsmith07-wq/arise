@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { buildExportPayload, downloadJson, parseImportFile, mergeStores, portableCsv, deletionPreview, downloadBackup, parseBackupFile } from '../lib/export.js';
-import { buildImportPreview } from '../lib/exportPolicy.js';
+import { buildImportPreview, getAppVersion } from '../lib/exportPolicy.js';
 import { clearStore } from '../lib/store.js';
 import { clearAllStoredData, getIntegrityNotice, clearIntegrityNotice, whenPersisted } from '../lib/storage.js';
 import { buildPartialExportPayload } from '../lib/export.js';
@@ -34,13 +34,18 @@ import {
   CLASSIFIER_TAXONOMY_VERSION,
   classifyFeedback,
   clearClassifierSettings,
-  getClassifierSettings,
+  getCoachRoutingSettings,
+  getFeedbackClassifierSettings,
   redactTextForClassification,
-  saveClassifierSettings,
+  routeCoachRequest,
+  saveCoachRoutingSettings,
+  saveFeedbackClassifierSettings,
 } from '../lib/feedbackClassifier.js';
 import {
   buildFeedbackRecord,
+  buildFeedbackSharePayload,
   clearFeedbackRecords,
+  formatFeedbackSharePayload,
   loadFeedbackRecords,
   markFeedbackReviewed,
   saveFeedbackRecord,
@@ -68,11 +73,16 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   const [aiEnabled,setAiEnabled]=useState(ai.enabled);
   const [aiBusy,setAiBusy]=useState(false);
   const [aiResult,setAiResult]=useState(null);
-  const [classifierEnabled,setClassifierEnabled]=useState(()=> getClassifierSettings().enabled);
+  const [feedbackClassifierEnabled,setFeedbackClassifierEnabled]=useState(()=> getFeedbackClassifierSettings().enabled);
+  const [coachRoutingEnabled,setCoachRoutingEnabled]=useState(()=> getCoachRoutingSettings().enabled);
+  const [coachQuestion,setCoachQuestion]=useState('');
+  const [coachRouteBusy,setCoachRouteBusy]=useState(false);
+  const [coachRouteResult,setCoachRouteResult]=useState(null);
   const [feedbackText,setFeedbackText]=useState('');
   const [feedbackBusy,setFeedbackBusy]=useState(false);
   const [feedbackResult,setFeedbackResult]=useState(null);
   const [feedbackRecords,setFeedbackRecords]=useState(()=> loadFeedbackRecords());
+  const [feedbackSharePreview,setFeedbackSharePreview]=useState(null);
 
   // Computed lazily — only while the study details panel is open.
   let evidenceData = null;
@@ -373,12 +383,21 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   };
   const integrity = !noticeDismissed ? getIntegrityNotice() : null;
 
-  const setClassifierConsent = (enabled)=>{
-    saveClassifierSettings({ enabled });
-    setClassifierEnabled(enabled);
+  const setFeedbackClassifierConsent = (enabled)=>{
+    saveFeedbackClassifierSettings({ enabled });
+    setFeedbackClassifierEnabled(enabled);
     setMsg(enabled
-      ? 'Cloud-assisted feedback categorisation enabled. Only redacted feedback is sent when you submit it.'
-      : 'Cloud-assisted feedback categorisation disabled. Feedback stays local.');
+      ? 'Feedback cloud categorisation enabled. Only redacted feedback may reach classifier.dev when you categorise it; nothing was shared with the developer.'
+      : 'Feedback cloud categorisation disabled. Categorisation stays local.');
+    setTimeout(()=> setMsg(null), 4500);
+  };
+
+  const setCoachRoutingConsent = (enabled)=>{
+    saveCoachRoutingSettings({ enabled });
+    setCoachRoutingEnabled(enabled);
+    setMsg(enabled
+      ? 'Coach cloud routing enabled. Only ambiguous, redacted coach questions may reach classifier.dev.'
+      : 'Coach cloud routing disabled. Routing stays local.');
     setTimeout(()=> setMsg(null), 4500);
   };
 
@@ -406,7 +425,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
       setFeedbackRecords(loadFeedbackRecords());
       setFeedbackResult(record);
       setFeedbackText('');
-      setMsg('Feedback submitted for local developer/operator review.');
+      setMsg('Feedback categorised and saved locally. Nothing was sent to the developer.');
       setTimeout(()=> setMsg(null), 4500);
     }catch(err){
       setMsg(String(err?.message || err));
@@ -418,6 +437,51 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
 
   const reviewFeedback = (id)=>{
     if(markFeedbackReviewed(id)) setFeedbackRecords(loadFeedbackRecords());
+  };
+
+  const routeCoachQuestion = async ()=>{
+    const question = coachQuestion.trim();
+    if(!question){
+      setCoachRouteResult({ route:'clarify', message:'Enter a coach question to route.' });
+      return;
+    }
+    setCoachRouteBusy(true);
+    try{
+      const result = await routeCoachRequest(question);
+      const message = result.route === 'local-engine'
+        ? 'Training question → existing local training path. Classifier.dev cannot create prescriptions.'
+        : result.route === 'feedback-pipeline'
+          ? 'Feedback or bug → use the local feedback queue. Nothing was sent to the developer.'
+          : 'Please clarify whether this is a training question or product feedback.';
+      setCoachRouteResult({ ...result, message });
+    }catch(err){
+      setCoachRouteResult({ route:'clarify', message:String(err?.message || err).slice(0, 140) });
+    }finally{
+      setCoachRouteBusy(false);
+    }
+  };
+
+  const prepareFeedbackShare = (record)=>{
+    const payload = buildFeedbackSharePayload(record, { appVersion: getAppVersion() || '0.1.0' });
+    if(!payload) return;
+    setFeedbackSharePreview({ text: formatFeedbackSharePayload(payload) });
+  };
+
+  const shareFeedbackWithDeveloper = async ()=>{
+    if(!feedbackSharePreview) return;
+    const outcome = await shareTextAsFile({
+      text: feedbackSharePreview.text,
+      filename: `arise-feedback-${new Date().toISOString().slice(0, 10)}.json`,
+      mimeType: 'application/json',
+      title: 'Arise feedback report',
+    });
+    setMsg(outcome === 'shared'
+      ? 'Redacted feedback report shared — no local record was sent automatically.'
+      : outcome === 'copied'
+        ? 'Redacted feedback report copied. Choose the developer as the recipient yourself.'
+        : 'Sharing cancelled; nothing left the device.');
+    if(outcome !== 'cancelled') setFeedbackSharePreview(null);
+    setTimeout(()=> setMsg(null), 5000);
   };
 
   // Support bundle: environment + shape summary only, never training data.
@@ -990,7 +1054,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
           <summary className="text-sm font-semibold cursor-pointer">What is shared?</summary>
           <div className="text-xs text-ink3 mt-2 space-y-1.5">
             <p><span className="font-semibold text-ink">By default: nothing.</span> No account, no analytics service, no trackers (enforced by this app's Content-Security-Policy, not just a promise).</p>
-            <p>Each channel is separately consented: Pulse sharing, the optional health-platform summary import, and local telemetry. Each shows its current state here and can be switched off at any time.</p>
+            <p>Separate consent controls Pulse sharing, health-platform summary import, local telemetry, classifier.dev feedback categorisation, and classifier.dev coach-request routing. The feedback channel sends only redacted feedback for triage; the coach channel sends only an ambiguous redacted question for lane selection. Both classifier.dev channels are off by default. Neither sends feedback to the Arise developer or creates training prescriptions.</p>
             <p>Exercise illustrations load from one static host (bryllim.github.io). That request carries no identity beyond your IP — the browser sends nothing else.</p>
           </div>
         </details>
@@ -1017,6 +1081,35 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
       <section id="sec-ai" className="rounded-2xl border border-line bg-surface p-4 space-y-2">
         <h3 className="text-sm font-bold">AI coach (optional)</h3>
         <p className="text-xs text-ink3">Optional: an NVIDIA-hosted model reads <span className="font-semibold text-ink">aggregated numbers only</span> (weekly sets/volume, adherence, readiness average) and returns short coaching notes. Your key is stored on this device only — never exported, synced, or included in backups.</p>
+        <ToggleRow
+          label="Cloud-assisted coach request routing"
+          checked={coachRoutingEnabled}
+          onChange={setCoachRoutingConsent}
+          hint="Off by default. Routing is deterministic and local first. When switched on, only an ambiguous redacted coach question may reach classifier.dev; it selects a lane only and never creates training prescriptions."
+        />
+        <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2" data-testid="coach-routing-panel">
+          <label htmlFor="coach-question" className="block text-[11px] font-bold">Ask a coach-routing question</label>
+          <textarea
+            id="coach-question"
+            value={coachQuestion}
+            onChange={e=> setCoachQuestion(e.target.value)}
+            maxLength={500}
+            rows={2}
+            placeholder="For example: Can I add another set?"
+            className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={routeCoachQuestion} disabled={coachRouteBusy} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs disabled:opacity-40">
+              {coachRouteBusy ? 'Routing…' : 'Route coach question'}
+            </button>
+            <span className="text-[11px] text-ink3">{coachRoutingEnabled ? 'Ambiguous routing may use classifier.dev.' : 'Routing stays local.'}</span>
+          </div>
+          {coachRouteResult && (
+            <div data-testid="coach-route-result" role="status" aria-live="polite" className="rounded-lg border border-line bg-surface px-2.5 py-2 text-[11px]">
+              <span className="font-bold">Route: {coachRouteResult.route}</span> · {coachRouteResult.message}
+            </div>
+          )}
+        </div>
         <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
           <label className="block">
             <span className="text-[11px] font-bold">NVIDIA API key</span>
@@ -1042,20 +1135,21 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
       <section id="sec-feedback" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
         <h3 className="text-sm font-bold">Feedback &amp; issue triage</h3>
         <p className="text-xs text-ink3">
-          Tell us about a problem, accessibility issue, content error, or request. Feedback is classified for
-          developer/operator triage only — it never changes progression, readiness, workout generation, substitutions,
-          safety, treatment, study gates, or evidence.
+          Tell us about a problem, accessibility issue, content error, or request. Classification is local by default;
+          when enabled, redacted feedback may be sent to classifier.dev. Categorisation does not send feedback to the
+          Arise developer and never changes progression, readiness, workouts, substitutions, safety, treatment, study
+          gates, or evidence.
         </p>
         <ToggleRow
           label="Cloud-assisted feedback categorisation"
-          checked={classifierEnabled}
-          onChange={setClassifierConsent}
+          checked={feedbackClassifierEnabled}
+          onChange={setFeedbackClassifierConsent}
           hint="Off by default. When switched on, feedback text may be sent to classifier.dev after obvious personal identifiers are redacted first. Training decisions never use this service. Switching it off keeps classification local."
         />
         <form
           onSubmit={(event)=> { event.preventDefault(); void submitFeedback(); }}
           className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2"
-          aria-label="Submit feedback"
+          aria-label="Save feedback locally"
         >
           <label htmlFor="feedback-issue" className="block text-xs font-bold">Describe the issue or request</label>
           <textarea
@@ -1069,10 +1163,10 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
           />
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[11px] text-ink3">
-              {classifierEnabled ? 'Cloud classification is on for this submission.' : 'Classification stays on this device.'}
+              {feedbackClassifierEnabled ? 'Redacted feedback may be sent to classifier.dev for categorisation; developer sharing is separate.' : 'Classification stays on this device and is not sent to the developer.'}
             </span>
             <button type="submit" disabled={feedbackBusy} className="btn btn-primary min-h-9 rounded-xl px-3 text-xs disabled:opacity-40">
-              {feedbackBusy ? 'Categorising…' : 'Submit feedback'}
+              {feedbackBusy ? 'Categorising…' : 'Save feedback locally'}
             </button>
           </div>
         </form>
@@ -1086,15 +1180,26 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
             </p>
           </div>
         )}
-        <div aria-label="Developer/operator feedback review" className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
+        <div aria-label="Local feedback review queue" className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
           <div className="flex items-center gap-2">
-            <h4 className="text-xs font-bold">Developer/operator review</h4>
+            <h4 className="text-xs font-bold">Local feedback review queue</h4>
             <span className="ml-auto text-[11px] text-ink3">{feedbackRecords.length} stored locally</span>
           </div>
           <p className="text-[11px] text-ink3">
-            Only redacted issue text and structured triage metadata are stored here. Classifier request bodies,
-            secrets, scores, and cloud responses are not stored or exported.
+            This device-only queue is not a developer inbox. Saving or categorising feedback never sends it to the
+            Arise developer. Only redacted issue text and triage metadata are stored; request bodies, secrets, scores,
+            and cloud responses are not stored or exported.
           </p>
+          {feedbackSharePreview && (
+            <div data-testid="feedback-share-preview" className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 space-y-2">
+              <p className="text-[11px] font-bold text-amber-950">Exactly this redacted report will leave the device only if you confirm sharing:</p>
+              <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-amber-200 bg-white px-2 py-1.5 text-[10px] text-amber-950">{feedbackSharePreview.text}</pre>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={shareFeedbackWithDeveloper} className="btn btn-primary min-h-8 rounded-lg px-2.5 text-[11px]">Share externally</button>
+                <button type="button" onClick={()=> setFeedbackSharePreview(null)} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px]">Cancel</button>
+              </div>
+            </div>
+          )}
           {feedbackRecords.length ? (
             <div className="space-y-2">
               {feedbackRecords.map((record)=> {
@@ -1115,6 +1220,9 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
                         Mark reviewed
                       </button>
                     )}
+                    <button onClick={()=> prepareFeedbackShare(record)} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px]">
+                      Share with developer
+                    </button>
                   </article>
                 );
               })}

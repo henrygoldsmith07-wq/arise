@@ -271,6 +271,8 @@ export async function clearAllStoredData(){
   try{ localStorage.removeItem(POINTER_KEY); }catch{}
   try{ localStorage.removeItem('arise.feedback.v1'); }catch{}
   try{ localStorage.removeItem('arise.classifier.settings.v1'); }catch{}
+  try{ localStorage.removeItem('arise.classifier.feedback.settings.v1'); }catch{}
+  try{ localStorage.removeItem('arise.classifier.coach-routing.settings.v1'); }catch{}
 }
 
 export function isCleared(){ return cleared; }
