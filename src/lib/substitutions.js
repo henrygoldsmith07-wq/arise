@@ -2,7 +2,7 @@
 // Uses movement pattern + muscle + difficulty, plus history-driven performance.
 // When history is supplied, prefers variants user has progressed on.
 
-import { EXERCISES, EXERCISE_BY_ID } from "./data.js";
+import { EXERCISES, EXERCISE_BY_ID, exerciseFitsEquipment } from "./data.js";
 import { isDeprecated } from "./exerciseTaxonomy.js";
 // Derived pattern fallbacks: the curated PATTERN map stays authoritative for
 // the exercises it names; the taxonomy fills every remaining exercise so the
@@ -94,7 +94,7 @@ export function rankedSubstitutions(targetId, availableEquipment=null, limit=4, 
   const has = availableEquipment ? new Set(availableEquipment) : null;
   // Deprecated rows resolve for historical data but never surface as swaps.
   let pool = EXERCISES.filter(e=> e.id!==targetId && !isDeprecated(e));
-  if(has) pool = pool.filter(e=> e.equipment.every(eq=> has.has(eq)) || (e.equipment.length===1 && e.equipment[0]==="bodyweight"));
+  if(has) pool = pool.filter(e=> exerciseFitsEquipment(e, has));
   let historyCounts=null;
   if(history){
     const histArray = Array.isArray(history) ? history : (history.history || []);
@@ -122,7 +122,7 @@ export function rankedSubstitutions(targetId, availableEquipment=null, limit=4, 
     .map(c=> ({ ex: c, score: scoreSubstitution(target, c, { historyCounts, preferred, disliked, loadability, shortSession, progressionAchievable }) }))
     .sort((a,b)=> b.score - a.score).map(r=> r.ex);
   const declaredRaw = (target.substitution||[]).filter(id => EXERCISE_BY_ID[id] && !isDeprecated(EXERCISE_BY_ID[id])).map(id=> EXERCISE_BY_ID[id])
-    .filter(c=> !has || c.equipment.every(eq=> has.has(eq)) || (c.equipment.length===1 && c.equipment[0]==="bodyweight"))
+    .filter(c=> !has || exerciseFitsEquipment(c, has))
     .filter(c=> !(disliked && disliked.has(c.id)));
   // Prefer declared that matches user preference
   const declared = declaredRaw.sort((a,b)=>{
@@ -140,7 +140,7 @@ export function rankedSubstitutions(targetId, availableEquipment=null, limit=4, 
     ? [...merged.filter(ex=> preferred.has(ex.id)), ...merged.filter(ex=> !preferred.has(ex.id))]
     : merged;
   // Chain validation: ensure result does not require missing equipment after substitution
-  const validated = ordered.filter(ex=> !has || ex.equipment.every(eq=> has.has(eq)) || (ex.equipment.length===1 && ex.equipment[0]==='bodyweight'));
+  const validated = ordered.filter(ex=> !has || exerciseFitsEquipment(ex, has));
   return validated.slice(0, limit);
 }
 
@@ -152,7 +152,7 @@ export function substitutionOptions(targetId, { availableEquipment = null, histo
   const has = availableEquipment ? new Set(availableEquipment) : null;
   // Never offer deprecated rows (declared edges included).
   const declaredAlive = ids => (ids||[]).filter(id => EXERCISE_BY_ID[id] && !isDeprecated(EXERCISE_BY_ID[id]));
-  const fits = ex => !has || ex.equipment.every(eq=> has.has(eq)) || (ex.equipment.length===1 && ex.equipment[0]==='bodyweight');
+  const fits = ex => !has || exerciseFitsEquipment(ex, has);
   const historyCounts = {};
   for(const h of history||[]) for(const b of h.blocks||[]) historyCounts[b.exerciseId]=(historyCounts[b.exerciseId]||0)+1;
   const declared = new Set((target.substitution||[]).filter(id => EXERCISE_BY_ID[id] && !isDeprecated(EXERCISE_BY_ID[id])));
@@ -190,7 +190,7 @@ export function validateSubstitutionChain(sessions, availableEquipment){
   const fits = exId => {
     const ex = EXERCISE_BY_ID[exId];
     if(!ex) return false;
-    return ex.equipment.every(eq=> has.has(eq)) || (ex.equipment.length===1 && ex.equipment[0]==='bodyweight');
+    return exerciseFitsEquipment(ex, has);
   };
   const issues = [];
   for(const session of sessions||[]){
