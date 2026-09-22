@@ -12,8 +12,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
   const defaultBarKg = unit === 'lb' ? toKg(45) : 20;
   const defaultPlatesKg = unit === 'lb' ? IMPERIAL_PLATES_LB.map(toKg) : DEFAULT_PLATE_DENOMINATIONS_KG;
   const displayList = (values)=> (values || []).map((value)=> weightInputValue(value, unit)).join(', ');
-  const editing = Boolean(initial);
-  const [step,setStep]=useState(editing ? 2 : 0);
+  const [step,setStep]=useState(0);
   const [goal,setGoal]=useState(initial?.goal || 'general');
   const [equipment,setEquipment]=useState(initial?.equipment || ['bodyweight']);
   const [location,setLocation]=useState(initial?.location || 'home');
@@ -32,7 +31,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
   // parent re-creates onClose, which would silently wipe in-progress edits.
   useEffect(()=>{
     if(!open) return;
-    setStep(initial ? 2 : 0);
+    setStep(0);
     setGoal(initial?.goal || 'general');
     setEquipment(initial?.equipment || ['bodyweight']);
     setLocation(initial?.location || 'home');
@@ -317,7 +316,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
           <div className="mt-3 flex gap-1.5" aria-hidden>
             {steps.map((_,i)=> <span key={i} className={`h-1.5 flex-1 rounded-full ${i<=step ? 'bg-ink' : 'bg-line'}`} />)}
           </div>
-          <p className="text-[11px] text-ink3 mt-2">{editing ? 'Editing setup · ' : ''}Step {step+1} of {steps.length}</p>
+          <p className="text-[11px] text-ink3 mt-2">Step {step+1} of {steps.length}</p>
           {step === 0 && onLoadDemo && (
             <p className="text-[11px] text-ink3 mt-1">
               Just looking?{' '}
@@ -329,12 +328,11 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
         <div className="flex-1 overflow-auto p-6">{cur.body}</div>
         <div className="p-4 border-t border-line flex gap-2 bg-surface2">
           <button disabled={step===0} onClick={()=> setStep(s=> Math.max(0,s-1))} className="btn btn-secondary flex-1 min-h-11 rounded-xl disabled:opacity-40">Back</button>
-          {editing && <button onClick={complete} className="btn btn-primary flex-1 min-h-11 rounded-xl">Save changes</button>}
           {step < steps.length-1 ? (
-            <button onClick={()=> setStep(s=> Math.min(steps.length-1,s+1))} className={`btn ${editing ? 'btn-secondary' : 'btn-primary'} flex-1 min-h-11 rounded-xl`}>Next</button>
-          ) : !editing ? (
+            <button onClick={()=> setStep(s=> Math.min(steps.length-1,s+1))} className="btn btn-primary flex-1 min-h-11 rounded-xl">Next</button>
+          ) : (
             <button onClick={complete} className="btn btn-primary flex-1 min-h-11 rounded-xl">Save & continue</button>
-          ) : null}
+          )}
         </div>
       </div>
     </div>
