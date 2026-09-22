@@ -17,7 +17,7 @@ import { speak, voiceSupported } from '../lib/voiceCoach.js';
 import { fmtRest } from '../lib/guidedMode.js';
 import { announce } from '../lib/a11y.js';
 import { haptic } from '../lib/haptics.js';
-import { kgToLb, weightInputToKg, weightInputValue } from '../lib/units.ts';
+import { weightInputToKg, weightInputValue } from '../lib/units.ts';
 
 // ── Row gestures ────────────────────────────────────────────────────────────
 // One-thumb set handling on the touch rows:
@@ -89,26 +89,20 @@ export function swipeRowHandlers({ onComplete, onFail, onLongPress, enabled = tr
 // recommendation, unit switch, restore) do resynchronise it.
 function useWeightDraft(value, unit, onChange){
   const [display, setDisplay] = useState(()=> weightInputValue(value, unit));
-  const emitted = useRef(null);
-  const previousUnit = useRef(unit);
+  const own = useRef('');
+  const lastUnit = useRef(unit);
   useEffect(()=>{
-    const canonical = String(value ?? '');
-    if(previousUnit.current !== unit || canonical !== emitted.current) setDisplay(weightInputValue(value, unit));
-    previousUnit.current = unit;
-  }, [value, unit]);
-  const emitDisplay = (next)=>{
-    setDisplay(next);
-    const canonical = weightInputToKg(next, unit);
-    emitted.current = String(canonical);
-    onChange(canonical);
+    const canonical=String(value ?? '');
+    if(lastUnit.current!==unit || canonical!==own.current) setDisplay(weightInputValue(value, unit));
+    lastUnit.current=unit;
+  },[value,unit]);
+  const emit=(next, canonical=false)=>{
+    const kg=canonical ? String(next ?? '') : weightInputToKg(next, unit);
+    own.current=kg;
+    setDisplay(canonical ? weightInputValue(kg, unit) : next);
+    onChange(kg);
   };
-  const emitCanonical = (next)=>{
-    const canonical = String(next ?? '');
-    emitted.current = canonical;
-    setDisplay(weightInputValue(canonical, unit));
-    onChange(canonical);
-  };
-  return [display, emitDisplay, emitCanonical];
+  return [display, next=>emit(next), next=>emit(next,true)];
 }
 
 export function WeightInput({ value, unit = 'kg', onChange, onBlur, ...props }){
@@ -129,11 +123,7 @@ export function LoadNumpad({ value, onChange, onClose, equipment = 'barbell', pl
     catch{ return []; }
   }, [equipment, plateConfig]);
   const [displayValue, emitDisplay, emitCanonical] = useWeightDraft(value, unit, onChange);
-  const formatDelta = (kg)=>{
-    const shown = unit === 'lb' ? kgToLb(Math.abs(Number(kg) || 0)) : Math.abs(Number(kg) || 0);
-    const rounded = Math.round(shown * 10) / 10;
-    return `${Number(kg) < 0 ? '−' : '+'}${Number.isInteger(rounded) ? rounded : rounded.toFixed(1)}`;
-  };
+  const formatDelta = kg=> `${Number(kg)<0?'−':'+'}${weightInputValue(Math.abs(Number(kg)||0), unit)}`;
   const press = (key)=>{
     if(key === 'clear') return emitDisplay('');
     const current = String(displayValue ?? '');
