@@ -54,6 +54,7 @@ import { adaptActiveSchedule } from './lib/programming.js';
 import { reviewCompletedWeek, applyWeeklyReview } from './lib/mesocycle.js';
 import { attachOutcome } from './lib/longitudinal.js';
 import { setRestPreset } from './lib/gymMode.js';
+import { fmtWeight } from './lib/units.ts';
 
 // Suspense fallback for lazy tabs: same chrome height as a view header so
 // the tab bar doesn't jump when the chunk resolves.
@@ -337,7 +338,7 @@ export default function App(){
       title: `${payload.title} saved`,
       detail: [
         `${savedSets} set${savedSets===1?'':'s'}`,
-        savedVolume > 0 ? `${Math.round(savedVolume).toLocaleString()} kg` : null,
+        savedVolume > 0 ? fmtWeight(savedVolume, next.preferences?.units === 'lb' ? 'lb' : 'kg') : null,
         `${payload.durationMinutes} min`,
       ].filter(Boolean).join(' · '),
       note: adaptation?.changed ? 'Your next sessions were adjusted from this result.' : null,
