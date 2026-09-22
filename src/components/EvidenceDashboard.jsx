@@ -101,9 +101,9 @@ export default function EvidenceDashboard({ records = [], archivedCount = null, 
       <p className="text-[10px] text-ink3 border-t border-line pt-1.5">{dash.disclaimer}</p>
 
       <div className="flex flex-wrap gap-2">
-        <button onClick={()=> { downloadEvidenceReport(dash); flash('Report downloaded.'); }}
+        <button onClick={()=> { downloadEvidenceReport(dash, { units }); flash('Report downloaded.'); }}
           className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Export report (.md)</button>
-        <button onClick={()=> { const w = window.open('', '_blank', 'width=800,height=1000'); if(!w){ flash('Allow pop-ups to print.'); return; } w.document.title = 'Arise evidence report'; const pre = w.document.createElement('pre'); pre.style.cssText = "font: 12px/1.5 ui-monospace,monospace; white-space: pre-wrap; margin: 24px"; pre.textContent = renderEvidenceReportMarkdown(dash); w.document.body.appendChild(pre); w.print(); }}
+        <button onClick={()=> { const w = window.open('', '_blank', 'width=800,height=1000'); if(!w){ flash('Allow pop-ups to print.'); return; } w.document.title = 'Arise evidence report'; const pre = w.document.createElement('pre'); pre.style.cssText = "font: 12px/1.5 ui-monospace,monospace; white-space: pre-wrap; margin: 24px"; pre.textContent = renderEvidenceReportMarkdown(dash, { units }); w.document.body.appendChild(pre); w.print(); }}
           className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Print / save as PDF</button>
         <button onClick={()=> setShowRaw(v=> !v)} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">{showRaw ? 'Hide' : 'Show'} raw records</button>
       </div>
