@@ -117,9 +117,9 @@ test('pound preference makes equipment setup imperial while storage stays kg', a
   await dialog.getByRole('button', { name: 'Next' }).click();
   await dialog.getByRole('button', { name: 'Next' }).click();
   await dialog.getByLabel(/Barbell/i).click();
-  await expect(dialog.getByRole('button', { name: '45 lb bar', exact: true })).toBeVisible();
-  await expect(dialog.getByRole('button', { name: '45 lb', exact: true })).toBeVisible();
-  await dialog.getByRole('button', { name: '45 lb bar', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: '44.09 lb bar', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: '44.09 lb', exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: '44.09 lb bar', exact: true }).click();
   await dialog.getByRole('button', { name: 'Next' }).click();
   await dialog.getByRole('button', { name: 'Next' }).click();
   await dialog.getByRole('button', { name: 'Save & continue' }).click();
@@ -128,6 +128,5 @@ test('pound preference makes equipment setup imperial while storage stays kg', a
     const { loadStore } = await import('/src/lib/store.js');
     return loadStore().onboarding?.plateConfig?.barWeightKg;
   });
-  expect(stored).toBeGreaterThan(20);
-  expect(stored).toBeLessThan(21);
+  expect(stored).toBe(20);
 });
