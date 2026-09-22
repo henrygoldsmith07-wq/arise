@@ -82,6 +82,41 @@ export function swipeRowHandlers({ onComplete, onFail, onLongPress, enabled = tr
   };
 }
 
+// ── Unit-aware weight field ───────────────────────────────────────────────
+// Keeps the user's transient display text ("13.", "13.5") separate from the
+// canonical kg value emitted to the workout draft. Parent echoes of our own
+// conversion do not clobber the in-progress text; external changes (apply
+// recommendation, unit switch, restore) do resynchronise it.
+export function WeightInput({ value, unit = 'kg', onChange, onBlur, ...props }){
+  const [draftValue, setDraftValue] = useState(()=> weightInputValue(value, unit));
+  const lastEmittedRef = useRef(null);
+  const unitRef = useRef(unit);
+
+  useEffect(()=>{
+    const canonical = String(value ?? '');
+    const unitChanged = unitRef.current !== unit;
+    unitRef.current = unit;
+    if(unitChanged || canonical !== lastEmittedRef.current){
+      setDraftValue(weightInputValue(value, unit));
+    }
+  }, [value, unit]);
+
+  const handleChange = (event)=>{
+    const raw = event.target.value;
+    setDraftValue(raw);
+    const canonical = weightInputToKg(raw, unit);
+    lastEmittedRef.current = String(canonical);
+    onChange?.(canonical);
+  };
+
+  const handleBlur = (event)=>{
+    setDraftValue(weightInputValue(value, unit));
+    onBlur?.(event);
+  };
+
+  return <input {...props} value={draftValue} onChange={handleChange} onBlur={handleBlur} />;
+}
+
 // ── LoadNumpad ──────────────────────────────────────────────────────────
 // A dedicated numeric keypad for the load field. On a gym floor the OS
 // keyboard covers half the screen and its decimal point is a precision
@@ -93,15 +128,38 @@ export function LoadNumpad({ value, onChange, onClose, equipment = 'barbell', pl
     try{ return quickJumps({ equipment: [equipment], supportsWeighted: true, config: plateConfig }); }
     catch{ return []; }
   }, [equipment, plateConfig]);
-  const displayValue = weightInputValue(value, unit);
+  const [displayValue, setDisplayValue] = useState(()=> weightInputValue(value, unit));
+  const lastEmittedRef = useRef(null);
+  const unitRef = useRef(unit);
+  useEffect(()=>{
+    const canonical = String(value ?? '');
+    const unitChanged = unitRef.current !== unit;
+    unitRef.current = unit;
+    if(unitChanged || canonical !== lastEmittedRef.current){
+      setDisplayValue(weightInputValue(value, unit));
+    }
+  }, [value, unit]);
+
   const formatDelta = (kg)=>{
     const shown = unit === 'lb' ? kgToLb(Math.abs(Number(kg) || 0)) : Math.abs(Number(kg) || 0);
     const rounded = Math.round(shown * 10) / 10;
     return `${Number(kg) < 0 ? '−' : '+'}${Number.isInteger(rounded) ? rounded : rounded.toFixed(1)}`;
   };
+  const emitDisplay = (next)=>{
+    setDisplayValue(next);
+    const canonical = weightInputToKg(next, unit);
+    lastEmittedRef.current = String(canonical);
+    onChange(canonical);
+  };
+  const emitCanonical = (next)=>{
+    const canonical = String(next ?? '');
+    lastEmittedRef.current = canonical;
+    setDisplayValue(weightInputValue(canonical, unit));
+    onChange(canonical);
+  };
 
   const press = (key)=>{
-    if(key === 'clear') return onChange('');
+    if(key === 'clear') return emitDisplay('');
     const current = String(displayValue ?? '');
     let next = current;
     if(key === '.') next = current.includes('.') ? current : (current === '' ? '0.' : current + '.');
@@ -111,12 +169,12 @@ export function LoadNumpad({ value, onChange, onClose, equipment = 'barbell', pl
       if(current.replace(/[^0-9]/g, '').length >= 4) return;
       next = current + key;
     }
-    onChange(weightInputToKg(next, unit));
+    emitDisplay(next);
   };
 
   const step = (dir)=>{
     const next = adjacentLoad(value || 0, dir, { equipment, config: plateConfig });
-    onChange(next);
+    emitCanonical(next);
   };
 
   return (
@@ -128,7 +186,7 @@ export function LoadNumpad({ value, onChange, onClose, equipment = 'barbell', pl
       </div>
       <div className="grid grid-cols-4 gap-1.5">
         {inc.map(j=> (
-          <button key={j.id} onClick={()=> onChange(applyQuickJump(value, j, { equipment, config: plateConfig }))}
+          <button key={j.id} onClick={()=> emitCanonical(applyQuickJump(value, j, { equipment, config: plateConfig }))}
             className="min-h-11 rounded-xl border border-line bg-surface text-sm font-black tabular-nums active:bg-surface2">
             {formatDelta(j.delta)}
           </button>
