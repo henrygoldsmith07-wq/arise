@@ -9,7 +9,7 @@ import {
   scoreSubstitution, rankedSubstitutions, substitutionOptions,
   validateSubstitutionChain, substitutionByPerformance, movementPatternFor,
 } from '../src/lib/substitutions.js';
-import { EXERCISES, EXERCISE_BY_ID } from '../src/lib/data.js';
+import { EXERCISES, EXERCISE_BY_ID, validateContentWarnings } from '../src/lib/data.js';
 
 const target = EXERCISE_BY_ID['bench-press-barbell'] || EXERCISES.find((e) => e.id === 'bench-press-barbell');
 assert.ok(target, 'bench-press-barbell must exist in the catalogue');
@@ -179,6 +179,23 @@ describe('substitutionByPerformance', () => {
     const ids = ranked.map((r) => r.id || r.exerciseId || r);
     if(ids.includes('bench-press-dumbbell')){
       assert.ok(ids.indexOf('bench-press-dumbbell') <= 2, 'a well-performed substitute should rank high');
+    }
+  });
+});
+
+
+describe('catalog same-kit coverage', () => {
+  it('keeps the soft substitution-gap work queue limited to intentional special cases', () => {
+    const warnings = validateContentWarnings();
+    assert.deepEqual(warnings, [
+      'Exercise battle-ropes has no substitution reachable with its own equipment',
+      'Exercise doorway-chest-stretch has no substitution reachable with its own equipment',
+    ]);
+  });
+
+  it('marks pull-up variants as requiring a pull-up bar', () => {
+    for (const id of ['weighted-pull-up', 'neutral-grip-pull-up', 'weighted-chin-up', 'towel-pull-up']) {
+      assert.deepEqual(EXERCISE_BY_ID[id].equipment, ['pullup-bar'], id);
     }
   });
 });
