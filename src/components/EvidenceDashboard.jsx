@@ -6,7 +6,6 @@
 // in benchmark/, excluded from the ledger by construction).
 import { useMemo, useState } from 'react';
 import { evidenceDashboard, renderEvidenceReportMarkdown, downloadEvidenceReport } from '../lib/evidenceMetrics.js';
-import { fmtWeight } from '../lib/units.ts';
 
 // Wilson CI rendered as a thin bar: the estimate is a dot, the interval the
 // whisker. Small n ⇒ wide whisker — uncertainty is the message, not a flaw.
@@ -43,7 +42,7 @@ function Row({ label, metric, children }){
   );
 }
 
-export default function EvidenceDashboard({ records = [], archivedCount = null, units = 'kg' }){
+export default function EvidenceDashboard({ records = [], archivedCount = null }){
   const [showRaw, setShowRaw] = useState(false);
   const [msg, setMsg] = useState(null);
   const dash = useMemo(()=> {
@@ -73,7 +72,7 @@ export default function EvidenceDashboard({ records = [], archivedCount = null, 
         <div className="space-y-2" role="table" aria-label="Recommendation outcome metrics">
           <Row label="Followed prescription" metric={dash.adherence.followed} />
           <Row label="Target met when followed" metric={dash.agreement.targetMetWhenFollowed} />
-          <Row label={`Load within ${fmtWeight(2, units === 'lb' ? 'lb' : 'kg')}`} metric={dash.adherence.deviationWithin2Kg} />
+          <Row label="Load within 2 kg" metric={dash.adherence.deviationWithin2Kg} />
           <Row label="Overshoot (failed after progress)" metric={dash.overshoot.overshootRate} />
           <Row label="Deloads recovered" metric={dash.deloadUsefulness.assessed > 0 ? dash.deloadUsefulness.recovered : null}>
             {dash.deloadUsefulness.assessed > 0
@@ -101,9 +100,9 @@ export default function EvidenceDashboard({ records = [], archivedCount = null, 
       <p className="text-[10px] text-ink3 border-t border-line pt-1.5">{dash.disclaimer}</p>
 
       <div className="flex flex-wrap gap-2">
-        <button onClick={()=> { downloadEvidenceReport(dash, { units }); flash('Report downloaded.'); }}
+        <button onClick={()=> { downloadEvidenceReport(dash); flash('Report downloaded.'); }}
           className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Export report (.md)</button>
-        <button onClick={()=> { const w = window.open('', '_blank', 'width=800,height=1000'); if(!w){ flash('Allow pop-ups to print.'); return; } w.document.title = 'Arise evidence report'; const pre = w.document.createElement('pre'); pre.style.cssText = "font: 12px/1.5 ui-monospace,monospace; white-space: pre-wrap; margin: 24px"; pre.textContent = renderEvidenceReportMarkdown(dash, { units }); w.document.body.appendChild(pre); w.print(); }}
+        <button onClick={()=> { const w = window.open('', '_blank', 'width=800,height=1000'); if(!w){ flash('Allow pop-ups to print.'); return; } w.document.title = 'Arise evidence report'; const pre = w.document.createElement('pre'); pre.style.cssText = "font: 12px/1.5 ui-monospace,monospace; white-space: pre-wrap; margin: 24px"; pre.textContent = renderEvidenceReportMarkdown(dash); w.document.body.appendChild(pre); w.print(); }}
           className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Print / save as PDF</button>
         <button onClick={()=> setShowRaw(v=> !v)} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">{showRaw ? 'Hide' : 'Show'} raw records</button>
       </div>
