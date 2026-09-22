@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { reviewCompletedWeek, weekOf } from '../lib/mesocycle.js';
 import { e1rm } from '../lib/progression.js';
 import { EXERCISE_BY_ID } from '../lib/data.js';
+import { totalVolumeKg } from '../lib/store.js';
 
 const pctDelta = (a,b)=> b>0 ? Math.round((a-b)/b*1000)/10 : null;
 
@@ -22,15 +23,13 @@ export default function WeeklyReviewCard({ store, setStore }){
       const prevSessions = previousWeekKey ? allPrev.filter(h=> weekOf(h.dateISO)===previousWeekKey) : [];
       const weekE1=[] , prevE1=[];
       const collect=(sessions,arr)=> {
-        let volume=0;
         for(const h of sessions) for(const b of h.blocks||[]) for(const s of b.sets||[]){
           const r=Number(s.reps)||0,w=Number(s.weightKg)||0;
-          volume += r*w;
           arr.push(e1rm(w,r));
         }
-        return volume;
       };
-      const volW=collect(wkSessions,weekE1), volP=collect(prevSessions,prevE1);
+      collect(wkSessions,weekE1); collect(prevSessions,prevE1);
+      const volW=totalVolumeKg(wkSessions), volP=totalVolumeKg(prevSessions);
       const strength = (weekE1.length&&prevE1.length)? pctDelta(Math.max(...weekE1),Math.max(...prevE1)) : null;
       const volume = volP>0 ? pctDelta(volW,volP) : null;
       const rs=(store.readinessLog||[]).map(r=>Number(r.score)).filter(Number.isFinite).slice(-8);
