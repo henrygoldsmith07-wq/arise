@@ -1,6 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AppShell from './components/AppShell.jsx';
 import TodayView from './components/TodayView.jsx';
+import Onboarding from './components/Onboarding.jsx';
 import LiveAnnouncer from './components/LiveAnnouncer.jsx';
 
 // Route-level code splitting: the boot path ships only the shell, Today view
@@ -8,7 +9,6 @@ import LiveAnnouncer from './components/LiveAnnouncer.jsx';
 // is ALSO warmed up after first paint (warmLazyViews below), so on anything
 // but a cold offline start the chunk is local before the user taps the tab:
 // splitting is for boot bytes, not for navigation jank.
-const loadOnboarding = ()=> import('./components/Onboarding.jsx');
 const loadTrainView = ()=> import('./components/TrainView.jsx');
 const loadExerciseBrowser = ()=> import('./components/ExerciseBrowser.jsx');
 const loadProgressView = ()=> import('./components/ProgressView.jsx');
@@ -16,7 +16,6 @@ const loadMoreView = ()=> import('./components/MoreView.jsx');
 const loadSessionRunner = ()=> import('./components/SessionRunner.jsx');
 const loadGuidedRunner = ()=> import('./components/GuidedRunner.jsx');
 
-const Onboarding = lazy(loadOnboarding);
 const TrainView = lazy(loadTrainView);
 const ExerciseBrowser = lazy(loadExerciseBrowser);
 const ProgressView = lazy(loadProgressView);
@@ -36,7 +35,7 @@ function warmLazyViews(){
     // cold offline start the code is local before the user taps its tab:
     // splitting is for boot bytes, not for navigation jank. Failures are
     // harmless — the real navigation retries through Suspense.
-    for(const load of [loadOnboarding, loadTrainView, loadExerciseBrowser, loadProgressView, loadMoreView, loadSessionRunner, loadGuidedRunner]) {
+    for(const load of [loadTrainView, loadExerciseBrowser, loadProgressView, loadMoreView, loadSessionRunner, loadGuidedRunner]) {
       load().catch(()=>{});
     }
   });
@@ -585,14 +584,14 @@ export default function App(){
         /></Suspense>
       )}
 
-      <Suspense fallback={null}><Onboarding
+      <Onboarding
         open={onboardingOpen}
         onClose={()=> setOnboardingOpen(false)}
         onComplete={handleCompleteOnboarding}
         initial={store.onboarding}
         units={store.preferences?.units || 'kg'}
         onLoadDemo={isDemo ? null : loadDemo}
-      /></Suspense>
+      />
 
       {!store.onboarding && !onboardingOpen && !isDemo && (
         <div className="fixed bottom-20 inset-x-4 z-10 rounded-2xl border border-review/30 bg-reviewsoft px-4 py-3 flex items-center gap-3">
