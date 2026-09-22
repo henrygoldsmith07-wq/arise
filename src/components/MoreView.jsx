@@ -784,7 +784,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
 
         <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
           <p className="text-xs font-bold">Weight units</p>
-          <p className="text-[11px] text-ink3">Workout entry and display follow this choice. Logs, engine math and backups still stay in canonical kilograms so switching units never rewrites history.</p>
+          <p className="text-[11px] text-ink3">Workout entry and display use this unit. Storage, engine math and backups stay in kilograms.</p>
           <div className="flex gap-1.5" role="group" aria-label="Weight units">
             {[['kg','Kilograms'],['lb','Pounds']].map(([value, label]) => (
               <button key={value} onClick={()=> setPreference({ units: value })} aria-pressed={(prefs.units || 'kg') === value}
