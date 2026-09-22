@@ -27,7 +27,7 @@ import { tracePhase, traceStart, traceEnd } from '../lib/perfTrace.js';
 import { haptic } from '../lib/haptics.js';
 import { painAftercareFor, techniquePromptFor, maxEffortWarning } from '../lib/safety.js';
 import { createVoiceInput, parseSetPhrase } from '../lib/voiceInput.js';
-import { asUnit, fmtWeight, weightInputToKg, weightInputValue } from '../lib/units.ts';
+import { asUnit, fmtWeight, localizeWeightText, weightInputToKg, weightInputValue } from '../lib/units.ts';
 
 const NOTE_PROMPTS = [
   { id: 'felt-strong', label: 'Felt strong' },
@@ -99,7 +99,7 @@ function clearTargetParts(rec, block, unit = 'kg'){
   if(rec?.assistKg != null) return { text: `${reps ?? '—'} reps @ ${fmtWeight(rec.assistKg, unit)} assist` };
   let load = null;
   if(rec?.load != null && Number(rec.load) > 0) load = fmtWeight(rec.load, unit);
-  else if(block.loadHint && /\d/.test(String(block.loadHint))) load = block.loadHint;
+  else if(block.loadHint && /\d/.test(String(block.loadHint))) load = localizeWeightText(block.loadHint, unit);
   const text = [load, reps ? `× ${reps}` : null].filter(Boolean).join(' ');
   return { text: text || 'working set' };
 }
@@ -974,7 +974,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
             title={gymMode ? 'Gym mode: focus on — one exercise at a time' : 'Gym mode: focus off'}
             className={`min-h-11 min-w-11 grid place-items-center rounded-full border text-base ${gymMode ? 'bg-ink text-bg border-ink' : 'border-line bg-surface2'}`}
           >🏋️</button>
-          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums">{completedSets}/{totalSets} sets • {volume} kg</span>
+          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums">{completedSets}/{totalSets} sets • {fmtWeight(volume, unit)} volume</span>
           {pace && (
             <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums" aria-label={paceLabel} title={paceLabel}>🏁 ≈{pace.remainingMin} min</span>
           )}
@@ -1109,7 +1109,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                       {b.warmups?.length ? <p>Warm-ups: {b.warmups.map(w=> `${w.reps}×${w.weightKg||'bw'}${w.note?` (${w.note})`:''}`).join(' • ')}</p> : null}
                       {b.restSec ? <p>Rest {fmtRest(b.restSec)} · load hint: {b.loadHint || '—'}</p> : null}
                       {b.why && <p className="italic">Prescribed: {b.why}</p>}
-                      {recommendation?.plateLoad && <p>Plate check · {recommendation.plateLoad.exact ? `${recommendation.plateLoad.loadKg}kg exact` : `${recommendation.plateLoad.targetKg}kg → ${recommendation.plateLoad.loadKg}kg ${recommendation.plateLoad.direction}`} · per side: {formatPlateStack(recommendation.plateLoad.platesPerSide)}</p>}
+                      {recommendation?.plateLoad && <p>Plate check · {recommendation.plateLoad.exact ? `${fmtWeight(recommendation.plateLoad.loadKg, unit)} exact` : `${fmtWeight(recommendation.plateLoad.targetKg, unit)} → ${fmtWeight(recommendation.plateLoad.loadKg, unit)} ${recommendation.plateLoad.direction}`} · per side: {formatPlateStack(recommendation.plateLoad.platesPerSide)}</p>}
                       {b.substitutionReason && <p className="italic">Swap rationale: {b.substitutionReason}</p>}
                     </div>
                   </details>
