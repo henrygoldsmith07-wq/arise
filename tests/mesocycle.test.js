@@ -49,6 +49,8 @@ describe('reviewCompletedWeek', ()=>{
     const review = reviewCompletedWeek({ schedule, history: doneHistory(), todayISO: TODAY });
     assert.equal(review.ready, true);
     assert.equal(review.reviewedWeekKey, '2026-01-05');
+    assert.equal(review.reviewedSessionCount, 2);
+    assert.equal(review.completedSessionCount, 2);
     assert.equal(review.targetWeekKey, '2026-01-12');
     const d = review.directives.find(x => x.exerciseId === 'bench-press-dumbbell');
     assert.ok(d, 'missing directive for bench');
@@ -105,6 +107,20 @@ describe('reviewCompletedWeek', ()=>{
   it('refuses to review when nothing is complete', ()=>{
     const review = reviewCompletedWeek({ schedule: buildSchedule(), history: [], todayISO: TODAY });
     assert.equal(review.ready, false);
+  });
+
+
+  it('reports scheduled and completed session counts separately', ()=>{
+    const schedule = buildSchedule();
+    // Mark one reviewed-week session as done in the schedule so the week can
+    // close while only one matching history row exists.
+    schedule.sessions = schedule.sessions.map((s)=> s.id === 'w1d2' ? { ...s, status: 'done' } : s);
+    const history = doneHistory().filter((h)=> h.id === 'w1d1');
+    const review = reviewCompletedWeek({ schedule, history, todayISO: TODAY });
+
+    assert.equal(review.ready, true);
+    assert.equal(review.reviewedSessionCount, 2);
+    assert.equal(review.completedSessionCount, 1);
   });
 });
 

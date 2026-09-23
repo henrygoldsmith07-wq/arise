@@ -17,6 +17,7 @@ import { speak, voiceSupported } from '../lib/voiceCoach.js';
 import { fmtRest } from '../lib/guidedMode.js';
 import { announce } from '../lib/a11y.js';
 import { haptic } from '../lib/haptics.js';
+import { weightInputToKg, weightInputValue } from '../lib/units.ts';
 
 // ── Row gestures ────────────────────────────────────────────────────────────
 // One-thumb set handling on the touch rows:
@@ -81,45 +82,65 @@ export function swipeRowHandlers({ onComplete, onFail, onLongPress, enabled = tr
   };
 }
 
+// ── Unit-aware weight field ───────────────────────────────────────────────
+// Keeps the user's transient display text ("13.", "13.5") separate from the
+// canonical kg value emitted to the workout draft. Parent echoes of our own
+// conversion do not clobber the in-progress text; external changes (apply
+// recommendation, unit switch, restore) do resynchronise it.
+export function WeightInput({ value, unit = 'kg', onChange, onBlur, ...props }){
+  const [display,setDisplay]=useState(()=>weightInputValue(value,unit));
+  useEffect(()=>setDisplay(weightInputValue(value,unit)),[value,unit]);
+  return <input {...props} value={display} onChange={e=>setDisplay(e.target.value)}
+    onBlur={e=>{ onChange?.(weightInputToKg(display,unit)); onBlur?.(e); }} />;
+}
+
 // ── LoadNumpad ──────────────────────────────────────────────────────────
 // A dedicated numeric keypad for the load field. On a gym floor the OS
 // keyboard covers half the screen and its decimal point is a precision
 // instrument; this is thumb-sized digits, ± steps sized to the equipment, and
 // a clear button — then it gets out of the way.
 
-export function LoadNumpad({ value, onChange, onClose, equipment = 'barbell', plateConfig = null, exerciseName = '' }){
+export function LoadNumpad({ value, onChange, onClose, equipment = 'barbell', plateConfig = null, exerciseName = '', unit = 'kg' }){
   const inc = useMemo(()=> {
     try{ return quickJumps({ equipment: [equipment], supportsWeighted: true, config: plateConfig }); }
     catch{ return []; }
   }, [equipment, plateConfig]);
-
+  const [displayValue,setDisplayValue]=useState(()=>weightInputValue(value,unit));
+  useEffect(()=>setDisplayValue(weightInputValue(value,unit)),[unit]);
+  const emitDisplay=next=>{ setDisplayValue(next); onChange(weightInputToKg(next,unit)); };
+  const emitCanonical=next=>{ setDisplayValue(weightInputValue(next,unit)); onChange(next); };
+  const formatDelta = kg=> `${Number(kg)<0?'−':'+'}${weightInputValue(Math.abs(Number(kg)||0), unit)}`;
   const press = (key)=>{
-    if(key === 'clear') return onChange('');
-    const current = String(value ?? '');
-    if(key === '.') return onChange(current.includes('.') ? current : (current === '' ? '0.' : current + '.'));
-    if(key === '⌫') return onChange(current.slice(0, -1));
-    // Cap at a sane length so a pocket touch can't type a 12-digit load.
-    if(current.replace(/[^0-9]/g, '').length >= 4) return;
-    onChange(current + key);
+    if(key === 'clear') return emitDisplay('');
+    const current = String(displayValue ?? '');
+    let next = current;
+    if(key === '.') next = current.includes('.') ? current : (current === '' ? '0.' : current + '.');
+    else if(key === '⌫') next = current.slice(0, -1);
+    else {
+      // Cap at a sane length so a pocket touch can't type a 12-digit load.
+      if(current.replace(/[^0-9]/g, '').length >= 4) return;
+      next = current + key;
+    }
+    emitDisplay(next);
   };
 
   const step = (dir)=>{
     const next = adjacentLoad(value || 0, dir, { equipment, config: plateConfig });
-    onChange(next);
+    emitCanonical(next);
   };
 
   return (
     <div className="rounded-2xl border border-line bg-surface2 p-3 space-y-2" role="group" aria-label={`Load keypad${exerciseName ? ` for ${exerciseName}` : ''}`}>
       <div className="flex items-center gap-2">
-        <span className="text-[11px] font-bold uppercase tracking-widest text-ink3">Load kg</span>
-        <span className="ml-auto text-2xl font-black tabular-nums">{value || '—'}</span>
+        <span className="text-[11px] font-bold uppercase tracking-widest text-ink3">Load {unit}</span>
+        <span className="ml-auto text-2xl font-black tabular-nums">{displayValue || '—'}</span>
         <button onClick={onClose} className="min-h-11 px-3 rounded-full border border-line bg-surface text-xs font-bold">Done</button>
       </div>
       <div className="grid grid-cols-4 gap-1.5">
         {inc.map(j=> (
-          <button key={j.id} onClick={()=> onChange(applyQuickJump(value, j, { equipment, config: plateConfig }))}
+          <button key={j.id} onClick={()=> emitCanonical(applyQuickJump(value, j, { equipment, config: plateConfig }))}
             className="min-h-11 rounded-xl border border-line bg-surface text-sm font-black tabular-nums active:bg-surface2">
-            {j.label}
+            {formatDelta(j.delta)}
           </button>
         ))}
       </div>

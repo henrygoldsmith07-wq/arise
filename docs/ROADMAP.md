@@ -32,6 +32,8 @@ the "today" columns are stale — the architecture gate is still accurate).
 - WebDAV sync with E2E encryption, partial + coach exports
 - PWA: install onboarding, shortcuts, splashes, safe areas, haptics module
 - Testing: 600+ unit, property/fuzz suites, resilience e2e, device matrix
+- **Unit-complete workout UX** — kg/lb now covers workout entry, summaries,
+  recommendations and equipment setup while canonical storage remains kg
 - CI/CD: format gate, bundle-diff reporting, license gate, release
   automation
 
@@ -47,16 +49,18 @@ the "today" columns are stale — the architecture gate is still accurate).
 
 ## Public backlog (unclaimed, roughly ordered)
 
-1. **Charts: screen-reader-explored data views** (beyond text alternatives)
-2. **lb-first unit UX** (store kg internally; full display unit audit)
-3. **History archive browser** (archive store exists; needs a viewer)
-4. **Widget/shortcuts deep links** on native wrappers (needs Capacitor —
+1. **Widget/shortcuts deep links** on native wrappers (needs Capacitor —
    documented, optional)
-5. **Workout notes: richer templates** (templates exist; a picker UI is
-   missing)
-6. **Weekly Review: export as Markdown**
-7. **Onboarding re-edit flow polish** (re-editable today; flow is clunky)
-8. **Cohort report scheduling helper** (the `npm run study:report` CLI is
+2. **History archive browser / selective restore** — integrity-safe bulk
+   archive/restore ships; per-session browsing is deferred by the runtime budget
+3. **Visible chart-data explorer** — screen-reader data remains available;
+   a sighted disclosure is deferred by the runtime budget
+4. **Faster profile re-editing** — useful shortcut, deferred by the runtime budget
+5. **Workout note snippet picker** — useful convenience, deferred while the
+   runtime bundle is at its product budget
+6. **Weekly Review Markdown export** — useful convenience, deferred while the
+   runtime bundle is at its product budget
+7. **Cohort report scheduling helper** (the `npm run study:report` CLI is
    manual by design; a wrapper that reminds when exports are due could help
    operators — only if operators ask for it)
 

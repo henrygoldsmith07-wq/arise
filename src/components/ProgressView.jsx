@@ -85,10 +85,10 @@ export default function ProgressView({ store }){
       // shows sighted users.
       first: r1,
       direction,
-      summary: `Estimated 1RM moved ${direction} from ${r1} to ${rN} kilograms over ${n} sessions. Mean ${Math.round(mean * 10) / 10}, ±95% band ±${Math.round(half * 10) / 10} — ${half < 1.5 ? 'tight' : 'wide'}.`,
+      summary: `Estimated 1RM moved ${direction} from ${fmtWeight(r1, unitsPref)} to ${fmtWeight(rN, unitsPref)} over ${n} sessions. Mean ${fmtWeight(mean, unitsPref)}, 95% band ±${fmtWeight(half, unitsPref)} — ${half < 1.5 ? 'tight' : 'wide'}.`,
       rows: pts.map((p,i)=> ({ session: i + 1, date: p.dateISO || '', e1rm: Math.round(p.e1rm * 10) / 10 })),
     };
-  }, [history, exerciseId]);
+  }, [history, exerciseId, unitsPref]);
   const plateau = useMemo(()=> exerciseId ? plateauDetection(history, exerciseId, { readinessLog: store.readinessLog || [] }) : null, [history, exerciseId, store.readinessLog]);
   const deloadValidation = useMemo(()=> validateDeloadLogic({ history, readinessLog: store.readinessLog || [] }), [history, store.readinessLog]);
   const calibration = useMemo(()=> recommendationCalibration(history, {
@@ -147,7 +147,7 @@ export default function ProgressView({ store }){
         </div>
         <div className="ml-auto shrink-0 flex gap-4 text-xs">
           <div>
-            <p className="font-bold tabular-nums">{vol.toLocaleString()}<span className="font-semibold text-ink3"> kg</span></p>
+            <p className="font-bold tabular-nums">{fmtWeight(vol, unitsPref)}</p>
             <p className="text-ink3">volume</p>
           </div>
           <div className="pl-4 border-l border-line">
@@ -270,7 +270,7 @@ export default function ProgressView({ store }){
         <section className="rounded-2xl border border-line bg-surface p-4 space-y-1">
           <h3 className="text-sm font-bold">{digest.month} digest</h3>
           <p className="text-xs text-ink3">
-            {digest.sessions} session{digest.sessions === 1 ? '' : 's'} · {digest.sets} sets · {digest.volume.toLocaleString()} kg volume
+            {digest.sessions} session{digest.sessions === 1 ? '' : 's'} · {digest.sets} sets · {fmtWeight(digest.volume, unitsPref)} volume
             {digest.minutes ? ` · ~${Math.round(digest.minutes / 60 * 10) / 10} h under the bar` : ''}
             {digest.topMuscle ? ` · most-trained: ${digest.topMuscle}` : ''}.
           </p>
@@ -293,7 +293,7 @@ export default function ProgressView({ store }){
         <h3 className="text-sm font-bold">Weekly volume</h3>
         {!wv.length ? <p className="text-xs text-ink3 mt-2">Log a couple sessions — then trends appear.</p> : (
           <div className="mt-2 flex items-end gap-1 h-14">
-            {wv.slice(-8).map(w=>{ const max=Math.max(...wv.map(x=>x.vol),1); const h=Math.max(4, Math.round(w.vol/max*48)); return <div key={w.week} title={`${w.week}: ${w.vol} kg`} className="flex-1 rounded bg-ink" style={{height:`${h}px`}} />; })}
+            {wv.slice(-8).map(w=>{ const max=Math.max(...wv.map(x=>x.vol),1); const h=Math.max(4, Math.round(w.vol/max*48)); return <div key={w.week} title={`${w.week}: ${fmtWeight(w.vol, unitsPref)} volume`} className="flex-1 rounded bg-ink" style={{height:`${h}px`}} />; })}
           </div>
         )}
         {!!wv.length && <p className="text-xs text-ink3 mt-2">{wv[wv.length-1]?.vol> (wv[wv.length-2]?.vol||0)*1.2 ? `Volume up ${Math.round((wv[wv.length-1].vol/(wv[wv.length-2]?.vol||1)-1)*100)}% vs last week — hold steady or deload if RPE was high.` : wv[wv.length-1]?.vol < (wv[wv.length-2]?.vol||0)*0.8 ? 'Volume dipped — good if planned deload, otherwise add a session.' : 'Trends look steady — keep progressing where RIR ≥2.'}</p>}
@@ -409,10 +409,10 @@ export default function ProgressView({ store }){
                 <span className="sr-only">{trendBand.summary}</span>
                 <table className="sr-only">
                   <caption>Estimated 1RM per session</caption>
-                  <thead><tr><th scope="col">Session</th><th scope="col">Date</th><th scope="col">e1RM (kg)</th></tr></thead>
+                  <thead><tr><th scope="col">Session</th><th scope="col">Date</th><th scope="col">e1RM ({unitsPref})</th></tr></thead>
                   <tbody>
                     {trendBand.rows.map(row=> (
-                      <tr key={row.session}><th scope="row">{row.session}</th><td>{row.date}</td><td>{row.e1rm}</td></tr>
+                      <tr key={row.session}><th scope="row">{row.session}</th><td>{row.date}</td><td>{fmtWeight(row.e1rm, unitsPref)}</td></tr>
                     ))}
                   </tbody>
                 </table>
@@ -435,8 +435,8 @@ export default function ProgressView({ store }){
               {exerciseSummary.rows.slice(-5).reverse().map(row=> (
                 <li key={row.sessionId || `${row.dateISO}-${row.title}`} className="flex items-center gap-2 text-xs border border-line rounded-xl px-3 py-2 bg-surface2">
                   <span className="font-bold tabular-nums w-20">{row.dateISO}</span>
-                  <span>{row.sets} sets • {row.volumeKg}kg</span>
-                  <span className="ml-auto text-ink3">{row.best ? `${row.best.weightKg ? `${row.best.weightKg}kg × ` : ''}${row.best.reps}` : 'no loaded best'}</span>
+                  <span>{row.sets} sets • {fmtWeight(row.volumeKg, unitsPref)} volume</span>
+                  <span className="ml-auto text-ink3">{row.best ? `${row.best.weightKg ? `${fmtWeight(row.best.weightKg, unitsPref)} × ` : ''}${row.best.reps}` : 'no loaded best'}</span>
                 </li>
               ))}
             </ul>
@@ -477,7 +477,7 @@ export default function ProgressView({ store }){
         </div>
         <p className="text-xs text-ink3">{calibration.backtest?.comparisons || 0} point-in-time comparisons, replayed against <strong className="text-ink">your own logged history</strong>. Future sessions are hidden while each recommendation is reconstructed; observed outcomes are scored afterward.</p>
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-          <span>{calibration.backtest?.metrics?.loadRecommendationError?.meanAbsKg == null ? '—' : `${calibration.backtest.metrics.loadRecommendationError.meanAbsKg}kg load MAE`}</span>
+          <span>{calibration.backtest?.metrics?.loadRecommendationError?.meanAbsKg == null ? '—' : `${fmtWeight(calibration.backtest.metrics.loadRecommendationError.meanAbsKg, unitsPref)} load MAE`}</span>
           <span>{calibration.backtest?.metrics?.repRecommendationError?.meanAbsReps == null ? '—' : `${calibration.backtest.metrics.repRecommendationError.meanAbsReps} rep MAE`}</span>
           <span>{calibration.backtest?.metrics?.completionProbability?.brier == null ? '—' : `completion Brier ${calibration.backtest.metrics.completionProbability.brier}`}</span>
           <span>{calibration.backtest?.metrics?.progressionTiming?.actionAgreement == null ? '—' : `${Math.round(calibration.backtest.metrics.progressionTiming.actionAgreement * 100)}% timing agreement`}</span>
@@ -617,8 +617,8 @@ export default function ProgressView({ store }){
             return (
               <div className="mt-2 rounded-xl border border-line bg-surface2 px-3 py-3">
                 <p className="text-sm font-bold">{last.title} <span className="text-xs text-ink3">• {last.dateISO}</span></p>
-                <p className="text-xs text-ink3 mt-1">{sets} sets • {Math.round(vol).toLocaleString()} kg volume • {last.blocks.length} exercises</p>
-                <p className="text-xs text-ink3 mt-1">{last.blocks.map(b=> `${EXERCISE_BY_ID[b.exerciseId]?.name || b.exerciseId}: ${b.sets.map(s=> `${s.reps}${s.weightKg?`@${s.weightKg}kg`:''}${s.side?` ${s.side}`:''}`).join(', ')}`).join(' • ')}</p>
+                <p className="text-xs text-ink3 mt-1">{sets} sets • {fmtWeight(Math.round(vol), unitsPref)} volume • {last.blocks.length} exercises</p>
+                <p className="text-xs text-ink3 mt-1">{last.blocks.map(b=> `${EXERCISE_BY_ID[b.exerciseId]?.name || b.exerciseId}: ${b.sets.map(s=> `${s.reps}${s.weightKg?`@${fmtWeight(s.weightKg, unitsPref)}`:''}${s.side?` ${s.side}`:''}`).join(', ')}`).join(' • ')}</p>
                 {last.note && <p className="text-xs mt-2 italic">“{last.note}”</p>}
               </div>
             );
@@ -629,7 +629,7 @@ export default function ProgressView({ store }){
       <section className="rounded-2xl border border-line bg-surface p-4">
         <h3 className="text-sm font-bold">History</h3>
         {!history.length ? <p className="text-sm text-ink3 mt-2">No sessions yet — schedule a program and run it from Today.</p> : (
-          <SessionHistoryList history={history} />
+          <SessionHistoryList history={history} unitsPref={unitsPref} />
         )}
       </section>
     </div>
@@ -642,7 +642,7 @@ export default function ProgressView({ store }){
 // exactly when it already runs its evaluation. (max-h-80 scroll kept.)
 const HISTORY_PAGE = 15;
 
-function SessionHistoryList({ history }){
+function SessionHistoryList({ history, unitsPref = 'kg' }){
   const [visibleCount, setVisibleCount] = useState(HISTORY_PAGE);
   const visible = useMemo(()=> [...history].slice(-visibleCount).reverse(), [history, visibleCount]);
   const remaining = Math.max(0, history.length - visibleCount);
@@ -653,7 +653,7 @@ function SessionHistoryList({ history }){
         {visible.map(h=> (
           <li key={h.id} className="rounded-xl border border-line bg-surface2 px-3 py-2">
             <p className="text-sm font-bold">{h.title} <span className="text-xs text-ink3">• {h.dateISO} • W{h.week} D{h.day}</span></p>
-            <p className="text-xs text-ink3">{h.blocks.map(b=> `${EXERCISE_BY_ID[b.exerciseId]?.name || b.exerciseId}: ${b.sets.map(s=> `${s.reps}${s.weightKg?`@${s.weightKg}kg`:''}${s.side?` ${s.side}`:''}${s.rom?` ${s.rom}`:''}`).join(', ')}`).join(' • ')}</p>
+            <p className="text-xs text-ink3">{h.blocks.map(b=> `${EXERCISE_BY_ID[b.exerciseId]?.name || b.exerciseId}: ${b.sets.map(s=> `${s.reps}${s.weightKg?`@${fmtWeight(s.weightKg, unitsPref)}`:''}${s.side?` ${s.side}`:''}${s.rom?` ${s.rom}`:''}`).join(', ')}`).join(' • ')}</p>
           </li>
         ))}
       </ul>

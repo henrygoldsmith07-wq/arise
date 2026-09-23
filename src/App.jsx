@@ -337,7 +337,7 @@ export default function App(){
       title: `${payload.title} saved`,
       detail: [
         `${savedSets} set${savedSets===1?'':'s'}`,
-        savedVolume > 0 ? `${Math.round(savedVolume).toLocaleString()} kg` : null,
+        null,
         `${payload.durationMinutes} min`,
       ].filter(Boolean).join(' · '),
       note: adaptation?.changed ? 'Your next sessions were adjusted from this result.' : null,
@@ -589,6 +589,7 @@ export default function App(){
         onClose={()=> setOnboardingOpen(false)}
         onComplete={handleCompleteOnboarding}
         initial={store.onboarding}
+        units={store.preferences?.units || 'kg'}
         onLoadDemo={isDemo ? null : loadDemo}
       />
 

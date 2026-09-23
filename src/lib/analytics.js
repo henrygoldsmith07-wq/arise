@@ -184,16 +184,17 @@ export function strengthSeriesWithConfidence(history, exerciseId){
 // Extract future recommendations from workout notes (e.g. "next time try 22kg", "add a set")
 export function extractNoteRecommendations(history){
   const out=[];
-  for(const h of history||[]) if(h.note && h.note.trim()){
-    const note = h.note.trim();
+  for(const h of history||[]){
+    const note = String(h.note || '').trim();
     const lower = note.toLowerCase();
+    const tags = new Set(h.noteTags || []);
     const hints=[];
-    const loadM = note.match(/(\d+(?:\.\d+)?)\s*kg/);
-    if(loadM) hints.push(`suggested load ${loadM[1]}kg`);
+    const loadM = note.match(/(\d+(?:\.\d+)?)\s*(kg|lb)\b/i);
+    if(loadM) hints.push(`suggested load ${loadM[1]} ${loadM[2].toLowerCase()}`);
     if(/add.*set|extra set/.test(lower)) hints.push('add a set');
     if(/deload|easier|lighter/.test(lower)) hints.push('consider deload');
-    if(/form|technique|rom|depth/.test(lower)) hints.push('form focus noted');
-    if(hints.length) out.push({ dateISO: h.dateISO, note, hints });
+    if(/form|technique|rom|depth/.test(lower) || tags.has('form-focus')) hints.push('form focus noted');
+    if(hints.length) out.push({ dateISO: h.dateISO, note: note || 'Structured session note', hints });
   }
   return out;
 }

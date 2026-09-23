@@ -26,8 +26,8 @@ function entered(v){ return v !== '' && v !== null && v !== undefined; }
  * @returns {{ findings: Array<{type, ids: string[], detail}>, ok: boolean }}
  */
 export async function auditStore(){
-  const [sessions, sets, profile] = await Promise.all([
-    idbGetAll('sessions'), idbGetAll('sets'), idbGet('profile', 'profile'),
+  const [sessions, sets, profile, archived] = await Promise.all([
+    idbGetAll('sessions'), idbGetAll('sets'), idbGet('profile', 'profile'), idbGetAll('archive'),
   ]);
   const findings = [];
   const find = (type, ids, detail) => findings.push({ type, ids, detail });
@@ -55,7 +55,14 @@ export async function auditStore(){
   }
 
   // orphaned sets: rows whose parent session no longer exists
-  const known = new Set((sessions || []).map((s) => s.id));
+  // Archived sessions deliberately leave their flattened set rows in the
+  // canonical sets store so a restore does not need to reconstruct them.
+  // Treat archived parent ids as valid; otherwise diagnostics would label
+  // those rows orphaned and "Repair issues" could delete real training data.
+  const known = new Set([
+    ...(sessions || []).map((s) => s.id),
+    ...(archived || []).filter((s) => s?.id && s.id !== 'archive:meta').map((s) => s.id),
+  ]);
   const orphans = (sets || []).filter((r) => r?.sessionId && !known.has(r.sessionId));
   if(orphans.length) find('orphaned-set', orphans.map((r) => r.id), `${orphans.length} set rows have no parent session`);
 

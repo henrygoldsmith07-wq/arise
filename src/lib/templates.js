@@ -141,7 +141,7 @@ export function equipmentCoverage(program, availableEquipment){
     if(exerciseAvailable(b.exerciseId, kit)) { ok++; continue; }
     // declared substitutions that fit the kit count as covered (honest swap)
     const declared = (EXERCISE_BY_ID[b.exerciseId]?.substitution || []).map(id=> EXERCISE_BY_ID[id]).filter(Boolean);
-    const covered = declared.some(c=> c.equipment.every(eq=> has.has(eq) || (c.equipment.length===1 && c.equipment[0]==='bodyweight')));
+    const covered = declared.some(c=> exerciseAvailable(c.id, kit));
     if(covered) ok++;
   }
   return ok/blocks.length;

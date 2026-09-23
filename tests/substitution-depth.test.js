@@ -9,7 +9,7 @@ import {
   scoreSubstitution, rankedSubstitutions, substitutionOptions,
   validateSubstitutionChain, substitutionByPerformance, movementPatternFor,
 } from '../src/lib/substitutions.js';
-import { EXERCISES, EXERCISE_BY_ID } from '../src/lib/data.js';
+import { EXERCISES, EXERCISE_BY_ID, exerciseAvailable, validateContentWarnings } from '../src/lib/data.js';
 
 const target = EXERCISE_BY_ID['bench-press-barbell'] || EXERCISES.find((e) => e.id === 'bench-press-barbell');
 assert.ok(target, 'bench-press-barbell must exist in the catalogue');
@@ -180,5 +180,45 @@ describe('substitutionByPerformance', () => {
     if(ids.includes('bench-press-dumbbell')){
       assert.ok(ids.indexOf('bench-press-dumbbell') <= 2, 'a well-performed substitute should rank high');
     }
+  });
+});
+
+
+describe('catalog same-kit coverage', () => {
+  it('keeps the soft substitution-gap work queue limited to intentional special cases', () => {
+    const warnings = validateContentWarnings();
+    assert.deepEqual(warnings, [
+      'Exercise battle-ropes has no substitution reachable with its own equipment',
+      'Exercise doorway-chest-stretch has no substitution reachable with its own equipment',
+    ]);
+  });
+
+  it('marks pull-up variants as requiring a pull-up bar', () => {
+    for (const id of ['weighted-pull-up', 'neutral-grip-pull-up', 'weighted-chin-up', 'towel-pull-up']) {
+      assert.deepEqual(EXERCISE_BY_ID[id].equipment, ['pullup-bar'], id);
+    }
+  });
+
+
+  it('does not require optional loading equipment for bodyweight-capable movements', () => {
+    assert.equal(exerciseAvailable('lunge', ['bodyweight']), true);
+    assert.equal(exerciseAvailable('calf-raise', ['bodyweight']), true);
+  });
+
+  it('uses modality-specific rows instead of requiring two alternative implements', () => {
+    assert.equal(exerciseAvailable('romanian-deadlift', ['barbell']), true);
+    assert.equal(exerciseAvailable('dumbbell-romanian-deadlift', ['dumbbells']), true);
+    assert.equal(exerciseAvailable('face-pull', ['cable']), true);
+    assert.equal(exerciseAvailable('banded-face-pull', ['bands']), true);
+  });
+
+
+  it('supports explicit either-or equipment without pretending both implements are required', () => {
+    assert.equal(exerciseAvailable('goblet-squat', ['dumbbells']), true);
+    assert.equal(exerciseAvailable('goblet-squat', ['kettlebell']), true);
+    assert.equal(exerciseAvailable('goblet-squat', ['bodyweight']), false);
+    assert.equal(exerciseAvailable('pallof-press', ['cable']), true);
+    assert.equal(exerciseAvailable('pallof-press', ['bands']), true);
+    assert.equal(exerciseAvailable('pallof-press', ['bodyweight']), false);
   });
 });

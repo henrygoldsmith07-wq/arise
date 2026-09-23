@@ -6,17 +6,8 @@
 import { EXERCISE_BY_ID } from './data.js';
 import { lastExerciseSets } from './store.js';
 import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, attributePrescribedSets } from './progression.js';
-
-// Kept in sync with SessionRunner's NOTE_PROMPTS (same ids, same labels) so
-// guided and standard sessions produce comparable note tags.
-export const NOTE_PROMPTS = [
-  { id: 'felt-strong', label: 'Felt strong' },
-  { id: 'felt-heavy', label: 'Felt heavy' },
-  { id: 'poor-sleep', label: 'Poor sleep' },
-  { id: 'short-on-time', label: 'Short on time' },
-  { id: 'form-focus', label: 'Form focus' },
-  { id: 'pain-discomfort', label: 'Pain / discomfort' },
-];
+import { NOTE_PROMPTS } from './sessionNotes.js';
+export { NOTE_PROMPTS } from './sessionNotes.js';
 
 function parseNum(v){ const n=Number(v); return Number.isFinite(n)? n : 0; }
 function firstInt(reps){ const m=String(reps).match(/\d+/); return m? m[0] : ''; }
@@ -189,6 +180,8 @@ export function buildGuidedPayload({ session, blocks, note = '', noteTags = [], 
   const started = Date.parse(startedAtISO);
   const durationMinutes = Number.isFinite(started) ? Math.max(1, Math.round((Date.parse(nowISO) - started) / 60000)) : 1;
   const painDiscomfort = noteTags.includes('pain-discomfort');
+  const labels = noteTags.map(id=> NOTE_PROMPTS.find(prompt=> prompt.id === id)?.label).filter(Boolean);
+  const finalNote = [labels.join(', '), note.trim()].filter(Boolean).join(' · ');
   const substitutions = blocks.filter(b=> b.substitutionFrom).map(b=> ({ from: b.substitutionFrom, to: b.exerciseId, reason: b.substitutionReason }));
   const exerciseOrder = blocks.map(b=> b.exerciseId);
   return {
@@ -240,7 +233,7 @@ export function buildGuidedPayload({ session, blocks, note = '', noteTags = [], 
       }),
     })),
     skippedSetsCount: blocks.reduce((n,b)=> n + b.sets.filter(s=> !s.completed).length, 0),
-    note: note.trim() || undefined,
+    note: finalNote || undefined,
     noteTags: noteTags.length ? noteTags : undefined,
     sessionDuration: durationMinutes,
   };

@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { EXERCISE_BY_ID, exerciseAvailable } from "../src/lib/data.js";
-import { instantiateTemplate, recommendTemplate, templateVersionInfo, listTemplates } from "../src/lib/templates.js";
+import { instantiateTemplate, recommendTemplate, templateVersionInfo, listTemplates, equipmentCoverage } from "../src/lib/templates.js";
 import { volumeBalanceAdvice } from "../src/lib/analytics.js";
 import { fatigueAwareOrder, muscleOverlap, weakPointMuscles } from "../src/lib/warmup.js";
 
@@ -26,8 +26,9 @@ describe("programme templates", ()=>{
     assert.equal(t.sessions.length, 8); // strength-4x: 2 weeks × 4 days
     assert.equal(t.sessions[0].dateISO, '2026-08-17');
     assert.ok(allDoable(t.sessions, KIT_BARBELL));
-    assert.equal(t.substitutions.length, 2); // goblet-squat needs a kettlebell (Lower B, weeks 1 & 2)
-    assert.ok(t.substitutions.every(s=> s.from === 'goblet-squat'));
+    // Goblet squat accepts either a dumbbell or kettlebell, so this kit now
+    // runs the strength template without unnecessary swaps.
+    assert.equal(t.substitutions.length, 0);
   });
   it("swaps missing equipment honestly and logs the swaps", ()=>{
     const t = instantiateTemplate({ templateId:'tpl-strength', startDateISO:'2026-08-17', availableEquipment: KIT_MINIMAL });
@@ -45,6 +46,13 @@ describe("programme templates", ()=>{
   it("throws on an unknown template", ()=>{
     assert.throws(()=> instantiateTemplate({ templateId:'nope', startDateISO:'2026-08-17' }), /Unknown template/);
   });
+  it("counts either-or declared substitutes as valid equipment coverage", ()=>{
+    const program = {
+      weeks: [{ workouts: [{ blocks: [{ exerciseId: 'barbell-squat' }] }] }],
+    };
+    assert.equal(equipmentCoverage(program, ['dumbbells']), 1);
+  });
+
   it("recommends the strength template for a barbell strength profile", ()=>{
     const { top } = recommendTemplate({ goal:'strength', level:'Intermediate', availableEquipment: KIT_BARBELL, daysPerWeek: 4 });
     assert.equal(top.id, 'tpl-strength');

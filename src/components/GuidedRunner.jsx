@@ -26,7 +26,8 @@ import { announce } from '../lib/a11y.js';
 import { createWakeLock } from '../lib/wakeLock.js';
 import { restPresetFor } from '../lib/gymMode.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
-import { RestDock } from './GymModePanel.jsx';
+import { RestDock, WeightInput } from './GymModePanel.jsx';
+import { asUnit, fmtWeight } from '../lib/units.ts';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
 const TeachingPanel = lazy(() => import('./TeachingPanel.jsx'));
 
@@ -35,6 +36,7 @@ const TeachingPanel = lazy(() => import('./TeachingPanel.jsx'));
 // with { session, blocks, ... }), so crash recovery and cross-tab protection
 // in App.jsx work identically for both modes.
 export default function GuidedRunner({ session, history = [], availableEquipment = [], draft = null, measurementConsent = false, soundCues = true, onToggleSoundCues = null, voiceCoach = false, onToggleVoiceCoach = null, voiceRate = 1, wakeLock = false, gymPrefs = null, onSetRestPreset = null, studyEnrollment = null, participantId = null, plateConfig = null, appPrefs = null, onDraftChange, onSave, onCancel }){
+  const unit = asUnit(appPrefs?.units);
   const startedAtRef=useRef(draft?.startedAt || new Date().toISOString());
   // Time of the last logged guided step (complete or skip), for per-step
   // elapsed times — the same "time since last logged action" contract as the
@@ -174,7 +176,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
     const load = String(set?.weightKg || '').trim();
     const parts = [`${name}.`, `Set ${stepArg.setIndex + 1} of ${block.sets.length}.`];
     if(reps) parts.push(`${reps} reps`);
-    if(load) parts.push(`at ${load} kilograms`);
+    if(load) parts.push(`at ${fmtWeight(load, unit)}`);
     if(on){
       speak(parts.join(' '), voiceRate);
       announce(parts.join(' '), { key: 'guided-step', spoken: true });
@@ -420,7 +422,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
             <button onClick={toggleVoice} aria-pressed={voiceOn} aria-label={voiceOn ? 'Voice coach on' : 'Voice coach off'} title={voiceOn ? 'Voice coach on' : 'Voice coach off'} className={`min-h-11 min-w-11 px-1.5 grid place-items-center rounded-full border text-sm leading-none ${voiceOn ? 'border-ink bg-ink text-bg' : 'border-line bg-surface2 text-ink3'}`}>🗣️</button>
           )}
           <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums" aria-label={`Elapsed time ${formatElapsed(elapsed)}`}>⏱ {formatElapsed(elapsed)}</span>
-          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums">{progress.completed + progress.skipped}/{progress.total} sets • {volume} kg</span>
+          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums">{progress.completed + progress.skipped}/{progress.total} sets • {fmtWeight(volume, unit)} volume</span>
           {pace && (
             <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums" aria-label={paceLabel} title={paceLabel}>🏁 ≈{pace.remainingMin} min</span>
           )}
@@ -436,7 +438,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
             <p className="text-5xl" aria-hidden>🎉</p>
             <p className="text-xl font-black">Workout complete</p>
             <p className="text-sm text-ink2 tabular-nums">
-              {progress.completed}/{progress.total} sets • {volume.toLocaleString()} kg • {formatElapsed(elapsed)}
+              {progress.completed}/{progress.total} sets • {fmtWeight(volume, unit)} volume • {formatElapsed(elapsed)}
             </p>
             <section className="rounded-2xl border border-line bg-surface p-3 space-y-2 text-left">
               <p className="text-xs font-semibold">Session notes</p>
@@ -466,7 +468,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
                   <p className="text-xl font-black tracking-tight">{currentExercise?.name || currentBlock.exerciseId}{currentBlock.unilateral ? <span className="text-xs font-semibold text-ink3"> (per side — {currentSet?.side || 'L'} first)</span> : null}</p>
                   <div className="mt-1"><Suspense fallback={null}><TeachingPanel exerciseId={currentBlock.exerciseId} variant="inline" /></Suspense></div>
                   <p className="text-sm text-ink2 mt-1 tabular-nums">
-                    <span className="font-black text-ink">{currentSet?.weightKg?.trim() ? `${currentSet.weightKg} kg` : (currentExercise?.supportsWeighted ? 'log load' : 'bodyweight')}</span>
+                    <span className="font-black text-ink">{currentSet?.weightKg?.trim() ? fmtWeight(currentSet.weightKg, unit) : (currentExercise?.supportsWeighted ? 'log load' : 'bodyweight')}</span>
                     {' × '}
                     <span className="font-black text-ink">{currentSet?.reps?.trim() || '—'}</span> reps
                     {currentBlock.loadHint ? <span className="text-ink3"> · {currentBlock.loadHint}</span> : null}
@@ -474,7 +476,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
                   {currentExercise?.cues?.[0] && <p className="text-[11px] text-ink3 mt-1">Cue: {currentExercise.cues[0]}</p>}
                   {activeArm && activeRec && (
                     <p className="text-[11px] text-ink3 mt-1">
-                      Study policy — {activeArm === 'double-progression' ? 'double progression' : 'Arise'}: {activeRec.reps ?? '—'} reps{activeRec.load ? ` at ${activeRec.load} kg` : ''}{activeRec.assistKg != null ? ` (assisted ${activeRec.assistKg} kg)` : ''}.
+                      Study policy — {activeArm === 'double-progression' ? 'double progression' : 'Arise'}: {activeRec.reps ?? '—'} reps{activeRec.load ? ` at ${fmtWeight(activeRec.load, unit)}` : ''}{activeRec.assistKg != null ? ` (assisted ${fmtWeight(activeRec.assistKg, unit)})` : ''}.
                     </p>
                   )}
                   {currentBlock.why && <p className="text-[11px] text-ink3 italic mt-0.5">Prescribed: {currentBlock.why}</p>}
@@ -482,8 +484,8 @@ export default function GuidedRunner({ session, history = [], availableEquipment
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                <label className="text-[11px]">Load kg
-                  <input type="number" min="0" step="0.5" inputMode="decimal" value={currentSet?.weightKg || ''} onChange={e=> updateSet(step.blockIndex, step.setIndex, { weightKg: e.target.value })} onFocus={trackFieldFocus} onBlur={(e)=> { if(fieldCommitted(e)){ try{ recordEvent('load-field-commit', { sessionId: session.id, exerciseId: currentBlock.exerciseId, setIndex: step.setIndex, mode: 'guided' }); }catch{} } }} placeholder={currentExercise?.supportsWeighted ? '22' : 'bw'} aria-label="Load in kilograms" className="mt-1 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                <label className="text-[11px]">Load {unit}
+                  <WeightInput type="text" inputMode="decimal" value={currentSet?.weightKg || ''} unit={unit} onChange={v=> updateSet(step.blockIndex, step.setIndex, { weightKg: v })} onFocus={trackFieldFocus} onBlur={(e)=> { if(fieldCommitted(e)){ try{ recordEvent('load-field-commit', { sessionId: session.id, exerciseId: currentBlock.exerciseId, setIndex: step.setIndex, mode: 'guided' }); }catch{} } }} placeholder={currentExercise?.supportsWeighted ? (unit === 'lb' ? '50' : '22') : 'bw'} aria-label={`Load in ${unit === 'lb' ? 'pounds' : 'kilograms'}`} className="mt-1 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center" />
                 </label>
                 <label className="text-[11px]">Reps
                   <input type="number" min="0" step="1" inputMode="numeric" value={currentSet?.reps || ''} onChange={e=> updateSet(step.blockIndex, step.setIndex, { reps: e.target.value })} onFocus={trackFieldFocus} onBlur={(e)=> { if(fieldCommitted(e)){ try{ recordEvent('reps-field-commit', { sessionId: session.id, exerciseId: currentBlock.exerciseId, setIndex: step.setIndex, mode: 'guided' }); }catch{} } }} placeholder="9" aria-label="Reps" className="mt-1 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
@@ -513,7 +515,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
                   .map(item=> (
                     <li key={`${item.bi}-${item.si}`} className="text-[11px] text-ink3 flex gap-2">
                       <span className="tabular-nums w-12 shrink-0">{item.b.sets.length ? `${item.si+1}×` : ''}</span>
-                      <span className="truncate">{EXERCISE_BY_ID[item.b.exerciseId]?.name || item.b.exerciseId} · {item.s.reps || '—'} reps{item.s.weightKg ? ` @ ${item.s.weightKg}kg` : ''}</span>
+                      <span className="truncate">{EXERCISE_BY_ID[item.b.exerciseId]?.name || item.b.exerciseId} · {item.s.reps || '—'} reps{item.s.weightKg ? ` @ ${fmtWeight(item.s.weightKg, unit)}` : ''}</span>
                     </li>
                   ))}
               </ul>

@@ -248,6 +248,8 @@ export function reviewCompletedWeek({ schedule, history = [], readinessLog = [],
   return {
     ready: true,
     reviewedWeekKey: reviewedWeek.key,
+    reviewedSessionCount: reviewedWeek.sessions.length,
+    completedSessionCount: weekHistory.length,
     targetWeekKey: nextKey,
     targetWeekNumber: upcomingWeekNumber,
     directives,

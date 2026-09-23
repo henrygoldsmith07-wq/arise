@@ -112,6 +112,7 @@ export function buildCoachExport(store, { sections = {}, weeks = 8, sinceISO = n
   return out;
 }
 
+/** Render the export as plain-text Markdown an email can carry as-is. */
 const fmtKg = (n) => `${n} kg`;
 
 /** Render the export as plain-text Markdown an email can carry as-is. */

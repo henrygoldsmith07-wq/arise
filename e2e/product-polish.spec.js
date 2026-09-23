@@ -59,6 +59,7 @@ test('How-to guide opens inside the runner and never blocks logging', async ({ p
   await runner.getByLabel(/^Reps set \d+$/).first().fill('8');
   await runner.getByRole('button', { name: 'Done' }).first().click();
   await expect(runner.getByRole('button', { name: '✓', exact: true }).first()).toBeVisible({ timeout: 5000 });
+
 });
 
 test('template editor: rest, reorder, kit preview, duplicate', async ({ page }) => {
@@ -103,4 +104,29 @@ test('study card: plain-language consent, honest eligibility, no fake joining', 
   await expect(page.getByText(/Turn on local measurements first/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Join the study' })).toHaveCount(0);
   await expect(page.getByText(/Insufficient real-user evidence/)).toBeVisible();
+});
+
+
+test('pound preference makes equipment setup imperial while storage stays kg', async ({ page }) => {
+  await completeOnboarding(page);
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('button', { name: 'Pounds', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit onboarding' }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Onboarding' });
+  await dialog.getByRole('button', { name: 'Next' }).click();
+  await dialog.getByRole('button', { name: 'Next' }).click();
+  await dialog.getByLabel(/Barbell/i).click();
+  await expect(dialog.getByRole('button', { name: '44.09 lb bar', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: '44.09 lb', exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: '44.09 lb bar', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Next' }).click();
+  await dialog.getByRole('button', { name: 'Next' }).click();
+  await dialog.getByRole('button', { name: 'Save & continue' }).click();
+
+  const stored = await page.evaluate(async () => {
+    const { loadStore } = await import('/src/lib/store.js');
+    return loadStore().onboarding?.plateConfig?.barWeightKg;
+  });
+  expect(stored).toBe(20);
 });

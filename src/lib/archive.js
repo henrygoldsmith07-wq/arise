@@ -9,6 +9,7 @@
 
 import { idbGetAll } from './idb.js';
 import { idbTransaction } from './idb-tx.js';
+import { splitSets } from './storage.js';
 
 export const ARCHIVE_META_ID = 'archive:meta';
 
@@ -51,8 +52,10 @@ export async function restoreArchive(){
   const rows = (await idbGetAll('archive')) || [];
   const sessions = rows.filter((r) => r?.id && r.id !== ARCHIVE_META_ID);
   if(!sessions.length) return 0;
-  await idbTransaction(['sessions', 'archive'], (ops)=> {
+  const setRows = splitSets(sessions);
+  await idbTransaction(['sessions', 'archive', 'sets'], (ops)=> {
     for(const s of sessions) ops.put('sessions', s);
+    for(const row of setRows) ops.put('sets', row);
     for(const s of sessions) ops.delete('archive', s.id);
   });
   return sessions.length;
@@ -62,6 +65,7 @@ export async function archivedSessionCount(){
   const rows = (await idbGetAll('archive')) || [];
   return rows.filter((r) => r?.id && r.id !== ARCHIVE_META_ID).length;
 }
+
 
 /**
  * Prune event telemetry: drop events older than the rolling window, then

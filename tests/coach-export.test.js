@@ -102,6 +102,9 @@ describe('markdown rendering', () => {
     assert.doesNotMatch(md, /## Weekly volume/);
     assert.doesNotMatch(md, /## Session detail/);
   });
+
+
+
 });
 
 describe('partial exports', () => {
