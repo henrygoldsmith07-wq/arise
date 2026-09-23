@@ -629,7 +629,7 @@ export default function ProgressView({ store }){
       <section className="rounded-2xl border border-line bg-surface p-4">
         <h3 className="text-sm font-bold">History</h3>
         {!history.length ? <p className="text-sm text-ink3 mt-2">No sessions yet — schedule a program and run it from Today.</p> : (
-          <SessionHistoryList history={history} />
+          <SessionHistoryList history={history} unitsPref={unitsPref} />
         )}
       </section>
     </div>
@@ -642,7 +642,7 @@ export default function ProgressView({ store }){
 // exactly when it already runs its evaluation. (max-h-80 scroll kept.)
 const HISTORY_PAGE = 15;
 
-function SessionHistoryList({ history }){
+function SessionHistoryList({ history, unitsPref = 'kg' }){
   const [visibleCount, setVisibleCount] = useState(HISTORY_PAGE);
   const visible = useMemo(()=> [...history].slice(-visibleCount).reverse(), [history, visibleCount]);
   const remaining = Math.max(0, history.length - visibleCount);
