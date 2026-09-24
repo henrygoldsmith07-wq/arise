@@ -6,7 +6,9 @@ synthetic fixture the script creates). The command builds and starts its own
 temporary production preview, so no separate dev server is required. Set
 `SHOT_URL` only when intentionally capturing an already-running deployment.
 
-The checked-in images are release documentation. Re-run the command after
+The checked-in images are release documentation. Last full regeneration:
+2026-09-05. The study onboarding card and template editor shipped after that
+capture and are not pictured yet. Re-run the now self-contained command after
 meaningful UI changes and review the generated gallery before committing it.
 
 ## Today — the session for today
