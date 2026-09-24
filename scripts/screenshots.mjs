@@ -81,11 +81,14 @@ async function startPreview(){
   });
   try{
     await Promise.race([waitForServer(BASE), earlyExit]);
+    return child;
+  }catch(error){
+    await stopPreview(child);
+    throw error;
   }finally{
     child.off('error', onError);
     child.off('exit', onExit);
   }
-  return child;
 }
 
 async function stopPreview(child){
