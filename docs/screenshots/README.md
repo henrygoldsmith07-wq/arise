@@ -2,12 +2,12 @@
 
 Captured from the real app by `npm run screenshots` (Playwright drives
 onboarding, a scheduled program and a logged session; the data is the
-synthetic fixture the script creates). Re-run after meaningful UI changes.
+synthetic fixture the script creates). The command builds and starts its own
+temporary production preview, so no separate dev server is required. Set
+`SHOT_URL` only when intentionally capturing an already-running deployment.
 
-Last full regeneration: 2026-09-05. The study onboarding card (eligibility →
-join → withdraw lifecycle) and the template editor shipped after that date
-and are not yet pictured here — re-run `npm run screenshots` before the next
-release and re-capture.
+The checked-in images are release documentation. Re-run the command after
+meaningful UI changes and review the generated gallery before committing it.
 
 ## Today — the session for today
 
