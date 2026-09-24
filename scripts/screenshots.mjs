@@ -11,15 +11,96 @@
 //
 //   npm run screenshots
 //
+// With no SHOT_URL, this command is self-contained: it builds the production
+// app, starts a temporary Vite preview server, waits until it is reachable,
+// captures the gallery, then shuts the server down. Set SHOT_URL to capture an
+// already-running deployment instead.
 import { chromium } from '@playwright/test';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const BASE = process.env.SHOT_URL || 'http://localhost:4173';
+const EXTERNAL_BASE = process.env.SHOT_URL?.replace(/\/$/, '');
+const BASE = EXTERNAL_BASE || 'http://127.0.0.1:4173';
 const OUT = path.resolve('docs/screenshots');
 fs.mkdirSync(OUT, { recursive: true });
 
 const SHOTS = [];
+
+
+function run(command, args){
+  return new Promise((resolve, reject)=>{
+    const child = spawn(command, args, { stdio: 'inherit', env: process.env });
+    child.once('error', reject);
+    child.once('exit', (code, signal)=>{
+      if(code === 0) resolve();
+      else reject(new Error(`${command} ${args.join(' ')} exited with ${signal || code}`));
+    });
+  });
+}
+
+async function waitForServer(url, timeoutMs = 30_000){
+  const deadline = Date.now() + timeoutMs;
+  let lastError = null;
+  while(Date.now() < deadline){
+    try{
+      const response = await fetch(url, { redirect: 'manual' });
+      if(response.status < 500) return;
+      lastError = new Error(`HTTP ${response.status}`);
+    }catch(error){
+      lastError = error;
+    }
+    await new Promise(resolve=> setTimeout(resolve, 250));
+  }
+  throw new Error(`Timed out waiting for screenshot server at ${url}: ${lastError?.message || 'unreachable'}`);
+}
+
+async function startPreview(){
+  if(EXTERNAL_BASE){
+    await waitForServer(BASE);
+    return null;
+  }
+
+  console.log('Building production app for screenshots…');
+  const viteBin = path.resolve('node_modules', 'vite', 'bin', 'vite.js');
+  await run(process.execPath, ['scripts/gen-offline.cjs']);
+  await run(process.execPath, [viteBin, 'build']);
+  const child = spawn(process.execPath, [
+    viteBin, 'preview', '--host', '127.0.0.1', '--port', '4173', '--strictPort',
+  ], { stdio: ['ignore', 'inherit', 'inherit'], env: process.env });
+
+  let onError;
+  let onExit;
+  const earlyExit = new Promise((_, reject)=>{
+    onError = reject;
+    onExit = (code, signal)=>{
+      reject(new Error(`Screenshot preview exited before becoming ready (${signal || code})`));
+    };
+    child.once('error', onError);
+    child.once('exit', onExit);
+  });
+  try{
+    await Promise.race([waitForServer(BASE), earlyExit]);
+    return child;
+  }catch(error){
+    await stopPreview(child);
+    throw error;
+  }finally{
+    child.off('error', onError);
+    child.off('exit', onExit);
+  }
+}
+
+async function stopPreview(child){
+  if(!child || child.exitCode != null) return;
+  const exited = new Promise(resolve=> child.once('exit', resolve));
+  child.kill('SIGTERM');
+  await Promise.race([
+    exited,
+    new Promise(resolve=> setTimeout(resolve, 2_000)),
+  ]);
+  if(child.exitCode == null) child.kill('SIGKILL');
+}
 
 async function shot(page, name, label){
   const file = path.join(OUT, `${name}.png`);
@@ -107,8 +188,11 @@ async function gotoTab(page, tab){
   await page.waitForTimeout(700); // let charts/illustrations settle
 }
 
-const browser = await chromium.launch();
+let preview = null;
+let browser = null;
 try {
+  preview = await startPreview();
+  browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   const page = await ctx.newPage();
 
@@ -149,5 +233,6 @@ try {
   fs.writeFileSync(path.join(OUT, 'README.md'), md);
   console.log(`\n${SHOTS.length} screenshots + index written to docs/screenshots/`);
 } finally {
-  await browser.close();
+  await browser?.close();
+  await stopPreview(preview);
 }
