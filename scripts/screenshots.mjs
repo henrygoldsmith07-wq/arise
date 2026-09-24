@@ -70,21 +70,31 @@ async function startPreview(){
     viteBin, 'preview', '--host', '127.0.0.1', '--port', '4173', '--strictPort',
   ], { stdio: ['ignore', 'inherit', 'inherit'], env: process.env });
 
+  let onError;
+  let onExit;
   const earlyExit = new Promise((_, reject)=>{
-    child.once('error', reject);
-    child.once('exit', (code, signal)=>{
+    onError = reject;
+    onExit = (code, signal)=>{
       reject(new Error(`Screenshot preview exited before becoming ready (${signal || code})`));
-    });
+    };
+    child.once('error', onError);
+    child.once('exit', onExit);
   });
-  await Promise.race([waitForServer(BASE), earlyExit]);
+  try{
+    await Promise.race([waitForServer(BASE), earlyExit]);
+  }finally{
+    child.off('error', onError);
+    child.off('exit', onExit);
+  }
   return child;
 }
 
 async function stopPreview(child){
   if(!child || child.exitCode != null) return;
+  const exited = new Promise(resolve=> child.once('exit', resolve));
   child.kill('SIGTERM');
   await Promise.race([
-    new Promise(resolve=> child.once('exit', resolve)),
+    exited,
     new Promise(resolve=> setTimeout(resolve, 2_000)),
   ]);
   if(child.exitCode == null) child.kill('SIGKILL');
