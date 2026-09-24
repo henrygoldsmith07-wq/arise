@@ -34,6 +34,10 @@ the "today" columns are stale — the architecture gate is still accurate).
 - Testing: 600+ unit, property/fuzz suites, resilience e2e, device matrix
 - **Unit-complete workout UX** — kg/lb now covers workout entry, summaries,
   recommendations and equipment setup while canonical storage remains kg
+- **Self-contained screenshot gallery capture** — `npm run screenshots`
+  builds production, starts a temporary preview, captures synthetic app states
+  and cleans up automatically; `SHOT_URL` remains available for intentional
+  remote captures
 - CI/CD: format gate, bundle-diff reporting, license gate, release
   automation
 
@@ -41,7 +45,6 @@ the "today" columns are stale — the architecture gate is still accurate).
 
 | Item | Why now | Gate |
 |---|---|---|
-| Screenshot gallery automation | docs ship with real captures | none — local-only tooling |
 | Mutation testing on the core engine | raise confidence in progression invariants | CI-time cost; run nightly, not per-PR |
 | Visual regression gate | screenshots already collected as artifacts | needs a baselining policy (device-dependent pixel noise) |
 | First cohort of consented field-study participants | onboarding, lifecycle and the operations tooling all ship; the study now needs people | participant recruitment + the analysis gates in `docs/EVIDENCE.md` |
