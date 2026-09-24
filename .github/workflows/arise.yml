@@ -1,7 +1,11 @@
 name: Arise
 
 on:
+  # Feature branches are validated by pull_request. Restrict push validation
+  # to main so an open PR does not run the entire suite twice for every commit.
   push:
+    branches:
+      - main
     paths:
       - "**"
       - ".github/workflows/arise.yml"
