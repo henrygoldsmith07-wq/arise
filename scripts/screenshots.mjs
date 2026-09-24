@@ -61,11 +61,10 @@ async function startPreview(){
     return null;
   }
 
-  const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   console.log('Building production app for screenshots…');
-  await run(npm, ['run', 'build']);
-
   const viteBin = path.resolve('node_modules', 'vite', 'bin', 'vite.js');
+  await run(process.execPath, ['scripts/gen-offline.cjs']);
+  await run(process.execPath, [viteBin, 'build']);
   const child = spawn(process.execPath, [
     viteBin, 'preview', '--host', '127.0.0.1', '--port', '4173', '--strictPort',
   ], { stdio: ['ignore', 'inherit', 'inherit'], env: process.env });
