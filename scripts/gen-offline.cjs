@@ -23,15 +23,16 @@ const PAGE = `<!doctype html>
          font-family: Inter, system-ui, sans-serif; background: #fafafa; color: #17171a; }
   @media (prefers-color-scheme: dark) {
     body { background: #131316; color: #f5f5f4; }
-    .card { border-color: #2c2c30 !important; }
+    .card { background: #1c1c20 !important; border-color: #34343a !important; }
   }
   .card { max-width: 26rem; margin: 1rem; padding: 2rem; text-align: center;
           border: 1px solid #e5e5e3; border-radius: 1.25rem; background: #fff; }
   .emoji { font-size: 2rem; }
   h1 { font-size: 1.125rem; font-weight: 800; margin: .75rem 0 .25rem; }
-  p { font-size: .8125rem; opacity: .65; line-height: 1.5; margin: .25rem 0; }
+  p { font-size: .8125rem; opacity: .72; line-height: 1.5; margin: .25rem 0; }
   button { margin-top: 1rem; padding: .65rem 1.25rem; border: 0; border-radius: .75rem;
-           background: #17171a; color: #fff; font-weight: 700; font-size: .8125rem; }
+           background: #17171a; color: #fff; font-weight: 700; font-size: .8125rem; cursor: pointer; }
+  button:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
   @media (prefers-color-scheme: dark) {
     button { background: #f5f5f4; color: #17171a; }
   }
@@ -44,7 +45,7 @@ const PAGE = `<!doctype html>
     <p>This page needs the network, but the app itself keeps working from its
        cached shell — your training data is stored on this device.</p>
     <p>Close this tab and reopen Arise from your home screen, or retry below.</p>
-    <button onclick="location.assign('./')">Open Arise</button>
+    <button type="button" onclick="location.assign('./')">Open Arise</button>
   </main>
 </body>
 </html>
