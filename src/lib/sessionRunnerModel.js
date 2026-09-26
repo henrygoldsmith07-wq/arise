@@ -5,11 +5,16 @@
 import { EXERCISE_BY_ID } from './data.js';
 import { lastExerciseSets } from './store.js';
 import {
+  applySwapToBlocks,
+  attachPrescription,
+  attributePrescribedSets,
+  buildPrescriptionSnapshot,
   carryPrescription,
   freezePrescriptionBlock,
   removeSetAt,
   userAddedSet,
 } from './progression.js';
+import { runnerRecommendationForBlock } from './runnerRecommendations.js';
 import { NOTE_PROMPTS } from './sessionNotes.js';
 import { fmtWeight, weightInputValue } from './units.ts';
 
@@ -226,6 +231,90 @@ export function nextActionableBlockIndex(blocks, currentIndex){
     if(blocks[next]?.sets.some(set=> !set.completed && !set.failed)) return next;
   }
   return currentIndex;
+}
+
+export function captureVisiblePrescriptions({
+  blocks = [],
+  visibleIndexes = [],
+  session,
+  recommendations = new Map(),
+  policy = 'standard',
+  shownAt,
+  makeId,
+} = {}){
+  const visible = new Set(visibleIndexes);
+  let changed = false;
+  const next = blocks.map((block, index)=>{
+    if(block?.prescription || !visible.has(index)) return block;
+    const planIndex = Number.isInteger(block.planIndex) ? block.planIndex : index;
+    const planned = session?.blocks?.[planIndex] || {};
+    const snapshot = buildPrescriptionSnapshot({
+      session,
+      block:{ ...planned, exerciseId:block.exerciseId, sets:block.sets },
+      blockIndex:planIndex,
+      recommendation:recommendations.get(block.exerciseId) || null,
+      shownAt,
+      policy,
+    });
+    if(!snapshot) return block;
+    changed = true;
+    return attachPrescription(
+      attributePrescribedSets(block, snapshot.prescriptionId, makeId),
+      snapshot,
+    );
+  });
+  return changed ? next : blocks;
+}
+
+export function buildRunnerSwapTransition({
+  blocks = [],
+  index,
+  option,
+  session,
+  history = [],
+  dateISO,
+  plateConfig = null,
+  study = null,
+  studyEnrollment = null,
+  policy = 'standard',
+  nowISO,
+  makeId,
+} = {}){
+  const target = blocks[index];
+  if(!target || !option?.id || option.id === target.exerciseId){
+    return { blocks, replacementIndex:null, changed:false };
+  }
+  const planIndex = Number.isInteger(target.planIndex) ? target.planIndex : index;
+  const { recommendation } = runnerRecommendationForBlock({
+    block:{ exerciseId:option.id, reps:target.reps || session?.blocks?.[planIndex]?.reps },
+    history,
+    dateISO:dateISO || session?.dateISO,
+    plateConfig,
+    study,
+    studyEnrollment,
+    policy,
+  });
+  const next = applySwapToBlocks({
+    blocks,
+    index,
+    option,
+    session,
+    recommendation:recommendation || null,
+    priorSets:lastExerciseSets(history, option.id)?.sets || [],
+    planIndex,
+    policy,
+    nowISO,
+    newSet:newRunnerSet,
+    makeId,
+  });
+  const replacementIndex = next.findIndex(block=>
+    block && block.exerciseId === option.id && block.substitutedAt === nowISO
+  );
+  return {
+    blocks:next,
+    replacementIndex:replacementIndex === -1 ? null : replacementIndex,
+    changed:next !== blocks,
+  };
 }
 
 export function applyRecommendationToBlock(block, recommendation){

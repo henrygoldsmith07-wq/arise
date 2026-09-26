@@ -118,6 +118,13 @@
 // used only as an opted-in semantic fallback. Boot and largest-lazy budgets
 // remain unchanged; measured total 368.3.
 //
+// total 369 → 367 kB after compacting the generated exercise-illustration
+// registry: 295 runtime records now retain only upstream slug/type/secondary
+// muscle/stretch data, while name/equipment/primary muscle come from Arise's
+// canonical exercise catalogue and the universal 3-frame shape is a constant.
+// The generator dependency is declared and CI checks the committed registry is
+// reproducible. Measured total 364.9 kB; boot/largest-lazy are unchanged.
+//
 // The budgets are regression bounds with headroom, not aspirations: a change
 // that crosses one must either undo the bloat or consciously re-baseline here
 // and say why in the PR.
@@ -134,7 +141,7 @@ if(!fs.existsSync(dist)){
 
 const BOOT_BUDGET_KB = 197;
 const CHUNK_BUDGET_KB = 48;
-const TOTAL_BUDGET_KB = 369;
+const TOTAL_BUDGET_KB = 367;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

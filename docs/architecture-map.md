@@ -59,7 +59,7 @@ src/core/*                Cross-cutting: config, flags, errors, DI container
 | Feedback classification/review/share lifecycle | `src/services/feedbackService.js` |
 | Evidence snapshot/study/export workflow | `src/services/evidenceService.js` |
 | Shared runner clock/wake-lock/draft lifecycle | `src/hooks/useWorkoutRuntime.js` |
-| Standard runner deterministic set/recommendation/save transitions | `src/lib/sessionRunnerModel.js` |
+| Standard runner set/recommendation/prescription/swap/save model | `src/lib/sessionRunnerModel.js` |
 | Shared Standard/Guided treatment + prospective evidence contract | `src/lib/runnerRecommendations.js` |
 | Quota warning/snapshot orchestration | `src/lib/quotaGuard.js` |
 | Cross-tab invalidation/reconciliation | `src/lib/crossTabStore.js` |
@@ -108,8 +108,14 @@ separate presentations but share runtime ownership for clocks, wake lock and
 crash-draft persistence, plus one treatment/prospective-evidence resolver so
 the prescription displayed in Standard and Guided modes cannot drift. `SessionRunner.jsx` keeps UI/event orchestration while
 its deterministic set editing, carry-forward, recommendation application,
-save eligibility and history-payload construction live in
+first-visible prescription capture, swap planning, save eligibility and
+history-payload construction live in
 `sessionRunnerModel.js`, where those invariants are directly unit-tested.
+
+Exercise illustrations use a generated compact runtime registry
+(`src/lib/exerciseImages.js`). The upstream workout-guide package is a declared
+development dependency; CI regenerates the registry in check mode, while
+duplicated name/equipment/primary-muscle data stays canonical in `data.js`.
 
 Large components may still call pure recommendation/safety/selectors directly;
 future extraction should continue to target cohesive workflows (for example
