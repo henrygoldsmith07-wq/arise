@@ -1,4 +1,4 @@
-﻿import { getCachedStore, setCachedStore, isCleared } from './storage.js';
+import { getCachedStore, setCachedStore, isCleared, resetHydratedCache } from './storage.js';
 import { ensureStudyParticipantId, generateStudyParticipantId } from './studyIdentity.js';
 
 const KEY = 'arise.store.v1';
@@ -211,10 +211,7 @@ export async function clearStore(){
     const { idbClearStore, STORES: IDB_STORES } = await import('./idb.js');
     for(const store of IDB_STORES) await idbClearStore(store);
   }catch{}
-  try{
-    const storage = await import('./storage.js');
-    storage.resetHydratedCache();
-  }catch{}
+  resetHydratedCache();
 }
 
 export function runMigrations(raw){

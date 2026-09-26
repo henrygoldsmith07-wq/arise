@@ -51,6 +51,8 @@ src/core/*                Cross-cutting: config, flags, errors, DI container
 | Workout save/cancel/adaptation/integration workflow | `src/services/workoutService.js` |
 | Programme generation/scheduling/template mutation | `src/services/programmeService.js` |
 | Settings object transitions | `src/services/settingsService.js` |
+| Device-data lifecycle / storage health | `src/services/dataLifecycleService.js` |
+| Storage diagnostics / maintenance | `src/services/storageDiagnosticsService.js` |
 | Cloud-coach routing/explanation lifecycle | `src/services/coachService.js` |
 | Feedback classification/review/share lifecycle | `src/services/feedbackService.js` |
 | Evidence snapshot/study/export workflow | `src/services/evidenceService.js` |
@@ -89,7 +91,10 @@ session completed in another tab.
 The service boundary is intentionally incremental rather than fictional.
 Workout completion/cancellation, programme/template workflows, cloud-coach
 routing, feedback handling and evidence/study actions now leave React through
-application services. `MoreView` remains the composition/search container while
+application services. Device-data deletion, integrity notices, browser storage
+health and persisted-state diagnostics now also cross explicit lifecycle service
+boundaries; feature components no longer import the canonical storage/IDB
+modules directly. `MoreView` remains the composition/search container while
 AI, feedback, appearance/accessibility, guided settings, policy and evidence
 sections own their local interaction state. Standard and Guided runners remain
 separate presentations but share runtime ownership for clocks, wake lock and

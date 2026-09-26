@@ -41,14 +41,13 @@ function warmLazyViews(){
   });
 }
 import { loadStore, saveStore } from './lib/store.js';
-import { refreshCachedStoreFromIdb, subscribeStoreCommits, whenPersisted } from './lib/storage.js';
+import { clearAllStoredData, refreshCachedStoreFromIdb, subscribeStoreCommits, whenPersisted } from './lib/storage.js';
 import { recommendExercises } from './lib/data.js';
 import { recordEvent, recordErrorEvent } from './lib/telemetry.js';
 import { watchStandaloneBodyClass, consumeShortcut } from './lib/pwa.js';
 import { setHapticsSource } from './lib/haptics.js';
 import OfflineBanner from './components/OfflineBanner.jsx';
 import DemoBanner from './components/DemoBanner.jsx';
-import { captureSnapshot } from './lib/snapshots.js';
 const InstallCard = lazy(() => import('./components/InstallCard.jsx'));
 import { setRestPreset } from './lib/gymMode.js';
 import { cancellationPlan, completeWorkoutWorkflow, recordWorkoutEvents, runPostSaveIntegrations } from './services/workoutService.js';
@@ -100,19 +99,44 @@ export default function App(){
   // back to a true empty start. Demo data never mingles with real data
   // because demo mode only ever starts from a wiped slate.
   const isDemo = Boolean(store.demo);
-  const loadDemo = useCallback(async () => {
-    try{ await captureSnapshot({ force: true, reason: 'pre-demo' }); }catch{}
-    try{ const { clearAllStoredData } = await import('./lib/storage.js'); await clearAllStoredData(); }catch{}
-    // Lazy: the seeded generator is demo-only and never belongs in the boot chunk.
-    const { makeDemoStore } = await import('./lib/demoData.js');
-    const demo = makeDemoStore();
-    setStoreState(demo);
-    saveStore(demo);
-    setOnboardingOpen(false);
-    setConsentOpen(false);
-    setTab('today');
-    setToast({ title: 'Demo loaded — explore freely', detail: 'Sample training data, clearly labeled. “Start fresh” in the banner erases it.', note: 'Nothing syncs while in demo mode.' });
+  const prepareDestructiveTransition = useCallback(async (reason)=>{
+    // Snapshot is best-effort; the wipe is not. If clearing canonical storage
+    // fails we must never proceed into demo/fresh state and risk mixing worlds.
+    // Flush first so the safety snapshot includes the latest queued React save.
+    await whenPersisted();
+    try{
+      const { captureSnapshot } = await import('./lib/snapshots.js');
+      await captureSnapshot({ force: true, reason });
+    }catch{}
+    await clearAllStoredData({ preserveSnapshots:true });
   }, []);
+
+  const loadDemo = useCallback(async () => {
+    try{
+      await prepareDestructiveTransition('pre-demo');
+      // Lazy: the seeded generator is demo-only and never belongs in the boot chunk.
+      const { makeDemoStore } = await import('./lib/demoData.js');
+      const demo = makeDemoStore();
+      setStoreState(demo);
+      saveStore(demo);
+      setOnboardingOpen(false);
+      setConsentOpen(false);
+      setTab('today');
+      setToast({ title: 'Demo loaded — explore freely', detail: 'Sample training data, clearly labeled. “Start fresh” in the banner erases it.', note: 'Nothing syncs while in demo mode.' });
+      return true;
+    }catch(err){
+      setToast({
+        title: 'Demo could not start',
+        detail: 'Arise could not safely clear the current device data, so your existing data was left in place.',
+        note: String(err?.message || err || 'Storage operation failed.'),
+      });
+      return false;
+    }
+  }, [prepareDestructiveTransition]);
+
+  const exitDemo = useCallback(async ()=>{
+    await prepareDestructiveTransition('pre-exit-demo');
+  }, [prepareDestructiveTransition]);
 
   // State-setting wrapper kept for all call sites and child views. Persistence
   // happens once, in the [store] effect below — never inside the setter.
@@ -431,7 +455,7 @@ export default function App(){
   return (
     <AppShell tab={tab} setTab={setTab} storeVersion={store.version} theme={theme} onCycleTheme={cycleTheme}>
       <OfflineBanner />
-      {isDemo && <DemoBanner />}
+      {isDemo && <DemoBanner onExitDemo={exitDemo} />}
       <LiveAnnouncer />
       {tab==='today' && <Suspense fallback={null}><InstallCard /></Suspense>}
       {updateReady && (
@@ -523,7 +547,7 @@ export default function App(){
         </>
       )}
       {tab==='progress' && <Suspense fallback={<TabFallback label="Progress" />}><ProgressView store={store} /></Suspense>}
-      {tab==='more' && <Suspense fallback={<TabFallback label="More" />}><MoreView store={store} setStore={setStore} setTab={setTab} onboardingOpen={onboardingOpen} setOnboardingOpen={setOnboardingOpen} /></Suspense>}
+      {tab==='more' && <Suspense fallback={<TabFallback label="More" />}><MoreView store={store} setStore={setStore} onboardingOpen={onboardingOpen} setOnboardingOpen={setOnboardingOpen} onLoadDemo={loadDemo} /></Suspense>}
 
       {activeSession && activeSession.mode === 'guided' && (
         <Suspense fallback={null}><GuidedRunner

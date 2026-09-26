@@ -22,9 +22,9 @@
 import { idbGet, idbGetAll, idbPut, idbDelete, idbClearStore, STORES } from './idb.js';
 import { idbTransaction } from './idb-tx.js';
 import { enforceIntegrity, quarantineBrokenStore } from './integrity.js';
-import { captureSnapshot } from './snapshots.js';
 import { normalizeHistoryForWrite, makeTombstone } from './domain.js';
 import { reconcileStoreSnapshots } from './storeReconcile.js';
+import { splitSets } from './storageRecords.js';
 
 const LS_KEY = 'arise.store.v1';
 const POINTER_KEY = 'arise.store.v1.pointer';
@@ -51,28 +51,6 @@ function lsWrite(value){
   try{ localStorage.setItem(LS_KEY, JSON.stringify(value)); }catch{}
 }
 
-
-export function splitSets(history){
-  const out = [];
-  for(const h of history || []){
-    for(const [bi, b] of (h.blocks || []).entries()){
-      for(const [si, s] of (b.sets || []).entries()){
-        out.push({
-          id: `${h.id}:${bi}:${si}`,
-          sessionId: h.id,
-          dateISO: h.dateISO,
-          exerciseId: b.exerciseId,
-          blockIndex: bi,
-          setIndex: si,
-          reps: s.reps ?? '',
-          weightKg: s.weightKg ?? '',
-          rpe: s.rpe ?? '',
-        });
-      }
-    }
-  }
-  return out;
-}
 
 export function decompose(store){
   const schedule = store.activeSchedule || null;
@@ -254,7 +232,10 @@ export function hydrateStorage(){
       // Automatic local backup: a last-known-good snapshot at every boot
       // (rate-limited by snapshots.js), forced past the rate limit right
       // after a repair so the repaired state itself becomes recoverable.
-      try{ await captureSnapshot({ force: Boolean(integrityNotice), reason: integrityNotice ? 'post-repair' : 'boot' }); }catch{}
+      try{
+        const { captureSnapshot } = await import('./snapshots.js');
+        await captureSnapshot({ force: Boolean(integrityNotice), reason: integrityNotice ? 'post-repair' : 'boot' });
+      }catch{}
     }
     cache = store || undefined;
     return cache || null;
@@ -280,15 +261,18 @@ export function resetHydratedCache(){
 // started) persist writes no-op, so a save in flight at tap time cannot
 // resurrect the data a moment after the stores were cleared. A write already
 // executing is harmless: IndexedDB serializes overlapping transactions, so
-// the clear below commits after it and wins.
+// the clear below commits after it and wins. Demo transitions may preserve the
+// snapshot store so the explicitly captured pre-demo safety copy survives the
+// wipe; full deletion keeps the default and removes snapshots too.
 let cleared = false;
-export async function clearAllStoredData(){
+export async function clearAllStoredData({ preserveSnapshots = false } = {}){
   cleared = true;
   resetHydratedCache();
+  const storesToClear = preserveSnapshots ? STORES.filter((name)=> name !== 'snapshots') : [...STORES];
   try{
-    await idbTransaction([...STORES], (ops)=> { for(const s of STORES) ops.clearStore(s); });
+    await idbTransaction(storesToClear, (ops)=> { for(const s of storesToClear) ops.clearStore(s); });
   }catch{
-    for(const s of STORES){ try{ await idbClearStore(s); }catch{} }
+    for(const s of storesToClear){ try{ await idbClearStore(s); }catch{} }
   }
   // The legacy localStorage payload is a live import source at every boot
   // until the pointer marks the migration done — leaving it here would

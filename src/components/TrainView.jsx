@@ -4,7 +4,7 @@ import { PROGRAMS, PROGRAM_BY_ID, PROGRAM_TEMPLATES, programHistory as programVe
 import { encodeShareCode } from '../lib/shareCodes.js';
 import { adaptScheduleForEquipment, programAdherence, userProgramHistory } from '../lib/programming.js';
 import { trainRecommendation } from '../lib/trainRecommendation.js';
-import { moveItem, editorSubstitutionPreview } from '../lib/templateEditor.js';
+import { buildEditorTemplate, moveItem, editorSubstitutionPreview } from '../lib/templateEditor.js';
 import { applyEquipmentAdaptation, duplicateCustomTemplate, fallbackProgrammeId, generateProgrammeFromProfile, installSharedTemplate, restoreCustomTemplate, saveCustomTemplate, softDeleteCustomTemplate, startProgramme } from '../services/programmeService.js';
 
 const EMPTY_DAY = { title: '', exercises: [{ exerciseId: '', sets: 3, reps: '8–12', restSec: 90 }] };

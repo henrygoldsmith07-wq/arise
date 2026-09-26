@@ -34,6 +34,14 @@ async function completeOnboarding(page){
   await page.getByRole('button', { name: 'Next' }).click();
   await page.getByRole('button', { name: /Save & continue/i }).click();
   await expect(page.getByRole('dialog', { name: 'Onboarding' })).toBeHidden();
+  // Onboarding updates React immediately and persists asynchronously. Tests
+  // that reload/open a peer tab must wait for canonical IndexedDB, otherwise
+  // a fast CI runner can legitimately reload before the profile transaction
+  // commits and see the onboarding dialog again.
+  await page.evaluate(async () => {
+    const { whenPersisted } = await import('/src/lib/storage.js');
+    await whenPersisted();
+  });
 }
 
 async function openRunner(page){
@@ -153,7 +161,8 @@ test.describe('cross-tab safety', () => {
     await expect(page2.locator('html')).not.toHaveClass(/dark/, { timeout:10_000 });
 
     const runner = await openRunner(page2);
-    await page.getByRole('button', { name:'More', exact:true }).click();
+    // page is already on More. Re-clicking the fixed mobile nav here created a
+    // pure hit-test race under 2-core CI while the other tab opened its runner.
     await page.locator('#sec-appearance').getByRole('button', { name:'Dark', exact:true }).click();
     await expect(page.locator('html')).toHaveClass(/dark/);
     await page2.waitForTimeout(1200);
