@@ -28,6 +28,7 @@ import { mergeStores } from './export.js';
 import { isValidAssignedStudyTransition, evaluateStudyReadiness, STUDY_GATES, PRIMARY_STUDY_ARMS } from './studyReadiness.js';
 import { prospectiveTransitionKey } from './evaluation.js';
 import { createHash } from 'node:crypto';
+import { localDateISO } from './dateOnly.js';
 
 const round = (v, d = 3)=> Number.isFinite(Number(v)) ? Math.round(Number(v) * 10 ** d) / 10 ** d : null;
 const pct = (part, whole)=> whole ? round(part / whole) : null;
@@ -50,7 +51,7 @@ const ACTIVE_WINDOW_DAYS = 28;
 
 function todayISO(nowISO = null){
   if(nowISO) return String(nowISO).slice(0, 10);
-  return new Date().toISOString().slice(0, 10);
+  return localDateISO();
 }
 
 function daysBetween(fromISO, toISO){

@@ -5,14 +5,20 @@ import {
   buildTrainingContext, requestCoachInsight, DEFAULT_MODEL,
 } from '../src/lib/aiCoach.js';
 
-async function withStorage(fn){
-  const mem = {};
+function withStorage(fn){
+  const localMem = {};
+  const sessionMem = {};
   globalThis.localStorage = {
-    getItem: k => (k in mem ? mem[k] : null),
-    setItem: (k,v)=> { mem[k] = String(v); },
-    removeItem: k => { delete mem[k]; },
+    getItem: k => (k in localMem ? localMem[k] : null),
+    setItem: (k,v)=> { localMem[k] = String(v); },
+    removeItem: k => { delete localMem[k]; },
   };
-  try{ fn(mem); }finally{ delete globalThis.localStorage; }
+  globalThis.sessionStorage = {
+    getItem: k => (k in sessionMem ? sessionMem[k] : null),
+    setItem: (k,v)=> { sessionMem[k] = String(v); },
+    removeItem: k => { delete sessionMem[k]; },
+  };
+  try{ fn({ localMem, sessionMem }); }finally{ delete globalThis.localStorage; delete globalThis.sessionStorage; }
 }
 function sess(id, dateISO, blocks){ return { id, dateISO, blocks }; }
 function set(reps, kg){ return { reps:String(reps), weightKg:String(kg), rpe:'' }; }
@@ -23,18 +29,46 @@ function isoDaysAgo(days){
 }
 
 describe('ai settings storage', ()=>{
-  it('round-trips and clears; never enabled by default', ()=>{
-    withStorage(()=>{
+  it('keeps API keys session-only by default and clears both stores', ()=>{
+    withStorage(({ localMem, sessionMem })=>{
       const fresh = getAiSettings();
       assert.equal(fresh.enabled, false);
       assert.equal(fresh.apiKey, '');
       assert.equal(fresh.model, DEFAULT_MODEL);
+      assert.equal(fresh.persistKey, false);
       saveAiSettings({ apiKey:'nvapi-test', enabled:true });
       assert.equal(getAiSettings().apiKey, 'nvapi-test');
+      assert.equal(getAiSettings().persistKey, false);
+      assert.equal(JSON.parse(localMem['arise.ai.settings.v1']).apiKey, undefined);
+      assert.equal(sessionMem['arise.ai.session-key.v1'], 'nvapi-test');
       saveAiSettings({ enabled:false });
       assert.equal(getAiSettings().enabled, false);
       clearAiSettings();
-      assert.deepEqual(getAiSettings(), { enabled:false, apiKey:'', model: DEFAULT_MODEL });
+      assert.equal(localMem['arise.ai.settings.v1'], undefined);
+      assert.equal(sessionMem['arise.ai.session-key.v1'], undefined);
+      assert.deepEqual(getAiSettings(), { enabled:false, apiKey:'', model: DEFAULT_MODEL, persistKey:false });
+    });
+  });
+
+  it('persists a key only after explicit opt-in', ()=>{
+    withStorage(({ localMem, sessionMem })=>{
+      saveAiSettings({ apiKey:'nvapi-persist', enabled:true, persistKey:true });
+      const settings = getAiSettings();
+      assert.equal(settings.apiKey, 'nvapi-persist');
+      assert.equal(settings.persistKey, true);
+      assert.equal(JSON.parse(localMem['arise.ai.settings.v1']).apiKey, 'nvapi-persist');
+      assert.equal(sessionMem['arise.ai.session-key.v1'], undefined);
+    });
+  });
+
+  it('migrates legacy persisted keys into session-only storage', ()=>{
+    withStorage(({ localMem, sessionMem })=>{
+      localMem['arise.ai.settings.v1'] = JSON.stringify({ enabled:true, apiKey:'nvapi-legacy', model:DEFAULT_MODEL });
+      const settings = getAiSettings();
+      assert.equal(settings.apiKey, 'nvapi-legacy');
+      assert.equal(settings.persistKey, false);
+      assert.equal(JSON.parse(localMem['arise.ai.settings.v1']).apiKey, undefined);
+      assert.equal(sessionMem['arise.ai.session-key.v1'], 'nvapi-legacy');
     });
   });
 });

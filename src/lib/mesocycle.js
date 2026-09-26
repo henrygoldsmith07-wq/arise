@@ -29,6 +29,7 @@ import { rankedSubstitutions } from './substitutions.js';
 import { deloadReadinessAssessment } from './sessionQuality.js';
 import { resolvePolicy, sustainedDeloadCheck } from './progressionPolicies.js';
 import { classifyReadiness } from './readinessClassifier.js';
+import { localDateISO } from './dateOnly.js';
 
 function mondayKey(dateISO){
   const d = new Date(`${dateISO}T00:00:00Z`);
@@ -52,7 +53,7 @@ function addDaysISO(dateISO, days){
 export function reviewCompletedWeek({ schedule, history = [], readinessLog = [], availableEquipment = null, config = null, todayISO = null, policy = 'standard' } = {}){
   const cfg = resolveArisePriors(config);
   if(!schedule?.sessions?.length) return { ready: false, reason: 'No active schedule.' };
-  const todayStr = todayISO || new Date().toISOString().slice(0, 10);
+  const todayStr = todayISO || localDateISO();
   const program = PROGRAM_BY_ID[schedule.programId];
 
   const doneIds = new Set((history || []).map(h => h.id));
@@ -379,7 +380,7 @@ function phaseFromWeekSessions(weekSessions, weekNumber, mesoDeloadWeek = null){
 }
 
 function isoTodaySafe(){
-  try{ return new Date().toISOString().slice(0, 10); }catch{ return ''; }
+  try{ return localDateISO(); }catch{ return ''; }
 }
 
 function doneIdsOf(schedule){

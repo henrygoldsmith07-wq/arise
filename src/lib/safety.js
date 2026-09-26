@@ -12,6 +12,8 @@
 // All thresholds live in SAFETY_CONFIG so future "cautious mode" or user
 // tuning adjusts one object. Weeks are calendar buckets by dateISO.
 
+import { localDateISO } from './dateOnly.js';
+
 // ── Tunables ──────────────────────────────────────────────────────────────
 export const SAFETY_CONFIG = {
   // Pain: two painful exposures of the same exercise within this window
@@ -339,7 +341,7 @@ export function deloadSafetyPrompt(history, { today = null, config = SAFETY_CONF
  */
 export function restartAdvice(history, { today = null, reason = 'break', config = SAFETY_CONFIG } = {}){
   const cfg = { ...SAFETY_CONFIG, ...config };
-  const anchor = today || new Date().toISOString().slice(0, 10);
+  const anchor = today || localDateISO();
   const sorted = [...(history || [])].sort((a, b) => sessionDate(b).localeCompare(sessionDate(a)));
   const last = sorted[0];
   if(!last) return null;

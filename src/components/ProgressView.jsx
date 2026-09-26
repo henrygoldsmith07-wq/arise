@@ -3,7 +3,8 @@ import { deriveAttributes, levelFromAttributes } from '../lib/attributes.js';
 import { totalVolumeKg } from '../lib/store.js';
 import { fmtWeight } from '../lib/units.ts';
 import { EXERCISE_BY_ID } from '../lib/data.js';
-import { weeklyVolume, frequencyByMuscleSync, volumeLandmarks, volumeDistribution, strengthSeriesWithConfidence, extractNoteRecommendations, plannedVsCompletedStats } from '../lib/analytics.js';
+import { weeklyVolume, frequencyByMuscleSync, volumeLandmarks, volumeDistribution, strengthSeries, extractNoteRecommendations, plannedVsCompletedStats } from '../lib/analytics.js';
+import { linearRegressionIntervals } from '../lib/statistics.js';
 import { strengthTrendWithConfidence, classifyPR } from '../lib/progression.js';
 import { exerciseHistorySummary, plateauDetection, programAdherence, recommendationCalibration, validateDeloadLogic } from '../lib/programming.js';
 import { badSessionAttribution, plateauAttribution } from '../lib/sessionQuality.js';
@@ -57,36 +58,47 @@ export default function ProgressView({ store }){
   const [selectedExerciseId, setSelectedExerciseId] = useState('');
   const exerciseId = exerciseOptions.includes(selectedExerciseId) ? selectedExerciseId : exerciseOptions[0];
   const exerciseSummary = useMemo(()=> exerciseId ? exerciseHistorySummary(history, exerciseId) : null, [history, exerciseId]);
-  // Trend chart with a 95% prediction band: the shaded region is the honest
-  // read of the series — a tight band says the trend is real, a wide one says
-  // "don't over-read three sessions".
+  // Regression trend with a 95% confidence band for the fitted mean response.
+  // This is deliberately not labelled a prediction interval: the wider
+  // prediction interval describes a future observation and is not what we draw.
   const trendBand = useMemo(()=> {
     if(!exerciseId) return null;
-    const series = strengthSeriesWithConfidence(history, exerciseId);
-    const pts = series.pts || [];
+    const series = strengthSeries(history, exerciseId);
+    const regression = linearRegressionIntervals(series.map(p=> p.e1rm));
+    const pts = regression.points.map((point, index)=> ({ ...point, dateISO: series[index]?.dateISO || '' }));
     if(pts.length < 2) return null;
-    const ys = pts.map(p=> p.e1rm);
-    const n = ys.length;
-    const mean = ys.reduce((a,b)=> a + b, 0) / n;
-    const sd = n > 1 ? Math.sqrt(ys.reduce((a,y)=> a + (y - mean) ** 2, 0) / (n - 1)) : 0;
-    const half = 1.96 * sd / Math.sqrt(Math.max(1, n));
+    const ys = pts.map(p=> p.observed);
+    const n = regression.n;
     const W = 320, H = 84, pad = 4;
-    const min = Math.min(...ys) - 1, max = Math.max(...ys) + 1;
+    const intervalValues = regression.intervalAvailable
+      ? pts.flatMap(p=> [p.confidenceLow, p.confidenceHigh]).filter(Number.isFinite)
+      : [];
+    const min = Math.min(...ys, ...intervalValues) - 1, max = Math.max(...ys, ...intervalValues) + 1;
     const xAt = i=> pad + (i / Math.max(1, n - 1)) * (W - 2 * pad);
     const yAt = v=> pad + (1 - (v - min) / Math.max(0.001, max - min)) * (H - 2 * pad);
-    const line = pts.map((p,i)=> `${i ? 'L' : 'M'}${xAt(i).toFixed(1)},${yAt(p.e1rm).toFixed(1)}`).join(' ');
-    const band = `M${xAt(0).toFixed(1)},${yAt(mean + half).toFixed(1)} L${xAt(n - 1).toFixed(1)},${yAt(mean + half).toFixed(1)} L${xAt(n - 1).toFixed(1)},${yAt(Math.max(min, mean - half)).toFixed(1)} L${xAt(0).toFixed(1)},${yAt(Math.max(min, mean - half)).toFixed(1)} Z`;
+    const line = pts.map((p,i)=> `${i ? 'L' : 'M'}${xAt(i).toFixed(1)},${yAt(p.observed).toFixed(1)}`).join(' ');
+    const band = regression.intervalAvailable
+      ? [
+          ...pts.map((p,i)=> `${i ? 'L' : 'M'}${xAt(i).toFixed(1)},${yAt(p.confidenceHigh).toFixed(1)}`),
+          ...[...pts].reverse().map((p,reverseIndex)=> {
+            const i = n - 1 - reverseIndex;
+            return `L${xAt(i).toFixed(1)},${yAt(p.confidenceLow).toFixed(1)}`;
+          }),
+          'Z',
+        ].join(' ')
+      : null;
     const r1 = Math.round(ys[0] * 10) / 10, rN = Math.round(ys[n - 1] * 10) / 10;
     const direction = rN - r1 > 0.5 ? 'upward' : rN - r1 < -0.5 ? 'downward' : 'roughly flat';
     return {
-      line, band, last: ys[ys.length - 1], mean, half, n,
+      line, band, n,
+      intervalAvailable: regression.intervalAvailable,
       // Text alternative for the chart: a one-line read plus a real data
       // table (rendered sr-only) so screen readers get the numbers the SVG
       // shows sighted users.
-      first: r1,
-      direction,
-      summary: `Estimated 1RM moved ${direction} from ${fmtWeight(r1, unitsPref)} to ${fmtWeight(rN, unitsPref)} over ${n} sessions. Mean ${fmtWeight(mean, unitsPref)}, 95% band ±${fmtWeight(half, unitsPref)} — ${half < 1.5 ? 'tight' : 'wide'}.`,
-      rows: pts.map((p,i)=> ({ session: i + 1, date: p.dateISO || '', e1rm: Math.round(p.e1rm * 10) / 10 })),
+      summary: regression.intervalAvailable
+        ? `e1RM moved ${direction} from ${fmtWeight(r1, unitsPref)} to ${fmtWeight(rN, unitsPref)} over ${n} sessions. Shading is a 95% confidence interval for the fitted linear trend, not a next-session prediction interval.`
+        : `e1RM moved ${direction} from ${fmtWeight(r1, unitsPref)} to ${fmtWeight(rN, unitsPref)} over ${n} sessions. Too few observations for a regression uncertainty interval.` ,
+      rows: pts.map((p,i)=> ({ session: i + 1, date: p.dateISO || '', e1rm: Math.round(p.observed * 10) / 10 })),
     };
   }, [history, exerciseId, unitsPref]);
   const plateau = useMemo(()=> exerciseId ? plateauDetection(history, exerciseId, { readinessLog: store.readinessLog || [] }) : null, [history, exerciseId, store.readinessLog]);
@@ -365,17 +377,13 @@ export default function ProgressView({ store }){
           <p className="text-sm text-ink3 mt-3 border border-dashed border-line rounded-xl p-4 text-center">No loaded sets yet. Log weight to track progressive overload.</p>
         ) : (
           <ul className="mt-3 space-y-2">
-            {prs.slice(0,8).map(r=> {
-              const conf = strengthSeriesWithConfidence(history, r.exerciseId);
-              return (
-                <li key={r.exerciseId} className="flex items-center gap-3 text-sm border border-line rounded-xl px-3 py-2 bg-surface2">
-                  <span className="font-bold truncate">{EXERCISE_BY_ID[r.exerciseId]?.name || r.exerciseId}</span>
-                  <span className="ml-auto tabular-nums font-black">{fmtWeight(r.e1rm, unitsPref)}</span>
-                  <span className="text-xs text-ink3 tabular-nums">{r.weight}×{r.reps} on {r.dateISO}</span>
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${conf.confidence==='high'?'bg-successsoft border-success/30 text-success':conf.confidence==='medium'?'bg-reviewsoft border-review/30 text-review':'bg-surface border-line text-ink3'}`}>{conf.confidence} trend</span>
-                </li>
-              );
-            })}
+            {prs.slice(0,8).map(r=> (
+              <li key={r.exerciseId} className="flex items-center gap-3 text-sm border border-line rounded-xl px-3 py-2 bg-surface2">
+                <span className="font-bold truncate">{EXERCISE_BY_ID[r.exerciseId]?.name || r.exerciseId}</span>
+                <span className="ml-auto tabular-nums font-black">{fmtWeight(r.e1rm, unitsPref)}</span>
+                <span className="text-xs text-ink3 tabular-nums">{r.weight}×{r.reps} on {r.dateISO}</span>
+              </li>
+            ))}
           </ul>
         )}
       </section>
@@ -396,14 +404,13 @@ export default function ProgressView({ store }){
             <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink3">
               <span><strong className="text-ink">{exerciseSummary.sessions}</strong> exposures</span>
               <span><strong className="text-ink">{exerciseSummary.best?.e1rm ? fmtWeight(exerciseSummary.best.e1rm, unitsPref) : '—'}</strong> best e1RM</span>
-              <span><strong className="text-ink">{exerciseSummary.trend.confidence}</strong> trend confidence</span>
               <span className={plateau?.detected ? 'font-bold text-review' : ''}>{plateau?.detected ? 'Plateau detected' : plateau?.status === 'fatigue' ? 'Fatigue signal' : 'No plateau'}</span>
             </div>
             <p className="text-xs text-ink3">{plateau?.reason || 'Keep logging consistent sets before judging a plateau.'}</p>
             {trendBand && (
-              <figure className="rounded-xl border border-line bg-surface2 px-3 py-2" aria-label="Estimated 1RM trend with 95% confidence band">
+              <figure className="rounded-xl border border-line bg-surface2 px-3 py-2">
                 <svg viewBox="0 0 320 84" className="w-full h-20" role="img" aria-hidden="true" focusable="false">
-                  <path d={trendBand.band} fill="currentColor" className="text-ink3/20" />
+                  {trendBand.band && <path d={trendBand.band} fill="currentColor" className="text-ink3/20" />}
                   <path d={trendBand.line} fill="none" stroke="currentColor" strokeWidth="2" className="text-ink" strokeLinejoin="round" strokeLinecap="round" />
                 </svg>
                 <span className="sr-only">{trendBand.summary}</span>
@@ -417,7 +424,7 @@ export default function ProgressView({ store }){
                   </tbody>
                 </table>
                 <figcaption className="text-[10px] text-ink3 mt-1">
-                  e1RM per session (last {trendBand.n}), shaded ±95% band around the mean — a wide band means the trend is not yet settled ({trendBand.half < 1.5 ? 'tight' : 'wide'} here).
+                  e1RM per session (last {trendBand.n}){trendBand.intervalAvailable ? '; shading = 95% confidence interval for the fitted trend.' : '. More sessions are needed for an uncertainty interval.'}
                 </figcaption>
               </figure>
             )}

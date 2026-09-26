@@ -14,13 +14,13 @@ export default defineConfig({
   workers: 1,
   reporter: [['list']],
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: 'http://127.0.0.1:4187',
     trace: 'on-first-retry',
   },
   webServer: {
-    command: 'npx vite preview --port 4173 --strictPort --host 127.0.0.1',
-    url: 'http://127.0.0.1:4173',
-    reuseExistingServer: !process.env.CI,
+    command: 'npx vite preview --port 4187 --strictPort --host 127.0.0.1',
+    url: 'http://127.0.0.1:4187',
+    reuseExistingServer: false,
     timeout: 60_000,
   },
   projects: [

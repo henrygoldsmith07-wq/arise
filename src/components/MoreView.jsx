@@ -71,6 +71,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   const [aiPrompt,setAiPrompt]=useState('');
   const [aiModelInput,setAiModelInput]=useState(ai.model || DEFAULT_MODEL);
   const [aiEnabled,setAiEnabled]=useState(ai.enabled);
+  const [aiPersistKey,setAiPersistKey]=useState(ai.persistKey === true);
   const [aiBusy,setAiBusy]=useState(false);
   const [aiResult,setAiResult]=useState(null);
   const [feedbackClassifierEnabled,setFeedbackClassifierEnabled]=useState(()=> getFeedbackClassifierSettings().enabled);
@@ -508,7 +509,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
     setAiBusy(true);
     setAiResult(null);
     try{
-      saveAiSettings({ apiKey: key, model: aiModelInput, enabled: true });
+      saveAiSettings({ apiKey: key, model: aiModelInput, enabled: true, persistKey: aiPersistKey });
       setAiEnabled(true);
       // Intent routing happens BEFORE the cloud coach is touched: deterministic
       // keyword rules -> classifier.dev semantic fallback (opt-in, redacted) ->
@@ -1071,7 +1072,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
 
       <section id="sec-ai" className="rounded-2xl border border-line bg-surface p-4 space-y-2">
         <h3 className="text-sm font-bold">AI coach (optional)</h3>
-        <p className="text-xs text-ink3">Optional: an NVIDIA-hosted model reads <span className="font-semibold text-ink">aggregated numbers only</span> (weekly sets/volume, adherence, readiness average) and returns short coaching notes. Your key is stored on this device only — never exported, synced, or included in backups.</p>
+        <p className="text-xs text-ink3">NVIDIA gets <span className="font-semibold text-ink">aggregated training data and engine findings only</span>. Keys default to session-only and never enter exports, sync, diagnostics or backups.</p>
         <ToggleRow
           label="Cloud-assisted coach request routing"
           checked={coachRoutingEnabled}
@@ -1088,6 +1089,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
             <span className="text-[11px] font-semibold text-ink3">Model</span>
             <input value={aiModelInput} onChange={e=> setAiModelInput(e.target.value)} placeholder={DEFAULT_MODEL} className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-xs" />
           </label>
+          <ToggleRow label="Remember key" checked={aiPersistKey} onChange={setAiPersistKey} hint="Off: session only. On: saved until cleared." />
           <label className="block">
             <span className="text-[11px] font-bold">Ask the coach</span>
             <textarea value={aiPrompt} onChange={e=> setAiPrompt(e.target.value)} placeholder="e.g. summarise last week, explain why my bench stalled, or report a crash"
@@ -1095,8 +1097,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
           </label>
           <div className="flex flex-wrap gap-2">
             <button onClick={generateInsight} disabled={aiBusy || !aiPrompt.trim()} className="btn btn-primary min-h-9 rounded-xl px-3 text-xs disabled:opacity-40">{aiBusy ? 'Routing…' : 'Ask'}</button>
-            {ai.apiKey && <button onClick={()=> { clearAiSettings(); setAiEnabled(false); setAiResult(null); setAiKeyInput(''); }} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Clear key</button>}
-            <span className="ml-auto text-[11px] text-ink3 self-center">{ai.apiKey ? 'key saved on this device' : 'no key stored'} · {ai.enabled || aiBusy ? 'enabled' : 'disabled'}</span>
+            {ai.apiKey && <button onClick={()=> { clearAiSettings(); setAiEnabled(false); setAiPersistKey(false); setAiResult(null); setAiKeyInput(''); }} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Clear key</button>}
           </div>
           {aiResult && (
             <div role="status" aria-live="polite" className={`rounded-xl border px-3 py-2 text-xs whitespace-pre-wrap ${aiResult.ok ? 'border-line bg-surface' : 'border-amber-300 bg-amber-50 text-amber-900'}`}>

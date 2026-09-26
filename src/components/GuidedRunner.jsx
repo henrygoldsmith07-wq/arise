@@ -22,7 +22,7 @@ import { treatmentRecommendation } from '../lib/treatment.js';
 import { restStartCue, restTickCue, restCompleteCue } from '../lib/audioCues.js';
 import { speak, cancelSpeech, voiceSupported } from '../lib/voiceCoach.js';
 import { haptic } from '../lib/haptics.js';
-import { announce } from '../lib/a11y.js';
+import { announce, useDialogA11y } from '../lib/a11y.js';
 import { createWakeLock } from '../lib/wakeLock.js';
 import { restPresetFor } from '../lib/gymMode.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
@@ -59,8 +59,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   const spokenStepRef=useRef(null);
   const wakeLockRef=useRef(null);
   const draftRef=useRef(null);
-  const rootRef=useRef(null);
-  const closeRef=useRef(null);
+  const { rootRef, closeRef, trapTab } = useDialogA11y();
   // Randomised field study: the SAME frozen arm assignment the standard
   // runner enforces (shared studyArmFor + treatmentRecommendation), so
   // treatment follows the exercise and participant, never the workout mode.
@@ -97,22 +96,6 @@ export default function GuidedRunner({ session, history = [], availableEquipment
     return ()=> window.removeEventListener('keydown', onKey);
   }, [onCancel]);
 
-  // Dialog semantics: move focus in on mount, restore it on unmount.
-  useEffect(()=>{
-    const previous=document.activeElement;
-    closeRef.current?.focus();
-    return ()=> { try{ previous?.focus?.(); }catch{} };
-  },[]);
-
-  // Focus trap: aria-modal promises AT that background content is unreachable.
-  const trapTab=(e)=>{
-    if(e.key!=='Tab' || !rootRef.current) return;
-    const focusables=[...rootRef.current.querySelectorAll('button, input, select, textarea, a[href], [tabindex]:not([tabindex="-1"])')].filter(el=> !el.disabled && el.offsetParent!==null);
-    if(!focusables.length) return;
-    const first=focusables[0], last=focusables[focusables.length-1];
-    if(e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
-    else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
-  };
 
   // Session timer ticks every second while running; rest countdown ticks
   // faster for a smooth expiry check. Wall-clock based, so refresh/sleep safe.

@@ -14,7 +14,7 @@ import { quickJumps, applyQuickJump, skipTo, restPresetFor, visiblePrescriptionI
 import { SESSION_QUALITY_OPTIONS, sessionQualityLabel } from '../lib/gymMode.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
 import { createWakeLock } from '../lib/wakeLock.js';
-import { announce } from '../lib/a11y.js';
+import { announce, useDialogA11y } from '../lib/a11y.js';
 import { restStartCue, restCompleteCue } from '../lib/audioCues.js';
 import { speak, cancelSpeech } from '../lib/voiceCoach.js';
 import { LoadNumpad, RestDock, WeightInput, swipeRowHandlers } from './GymModePanel.jsx';
@@ -220,8 +220,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   const wakeLockRef=useRef(null);
   const announcedRestRef=useRef(null);
   const draftRef=useRef(null);
-  const rootRef=useRef(null);
-  const closeRef=useRef(null);
+  const { rootRef, closeRef, trapTab } = useDialogA11y();
   const keepEditingRef=useRef(null);
   const startedAtRef=useRef(draft?.startedAt || new Date().toISOString());
   const lastSetAtRef=useRef(draft?.lastSetAt || startedAtRef.current);
@@ -285,24 +284,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   // Leaving the runner stops any queued speech.
   useEffect(()=> ()=> { try{ cancelSpeech(); }catch{} }, []);
 
-  // Dialog semantics: move focus in on mount, restore it on unmount.
-  useEffect(()=>{
-    tracePhase('session-runner:open', ()=> {}, 'mount');
-    const previous=document.activeElement;
-    closeRef.current?.focus();
-    return ()=> { try{ previous?.focus?.(); }catch{} };
-  },[]);
-
-  // Focus trap: aria-modal promises AT that background content is unreachable;
-  // Tab cycling keeps that promise true for keyboard users too.
-  const trapTab=(e)=>{
-    if(e.key!=='Tab' || !rootRef.current) return;
-    const focusables=[...rootRef.current.querySelectorAll('button, input, select, textarea, a[href], [tabindex]:not([tabindex="-1"])')].filter(el=> !el.disabled && el.offsetParent!==null);
-    if(!focusables.length) return;
-    const first=focusables[0], last=focusables[focusables.length-1];
-    if(e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
-    else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
-  };
+  useEffect(()=>{ tracePhase('session-runner:open', ()=> {}, 'mount'); },[]);
   useEffect(()=>{
     if(discardConfirmOpen) keepEditingRef.current?.focus();
   },[discardConfirmOpen]);

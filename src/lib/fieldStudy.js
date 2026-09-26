@@ -18,6 +18,7 @@ import { enrollmentAudit } from './studyEnrollment.js';
 import { runComparativeStudy, collectDeloadDecisions, validateDeloadDecisions } from './study.js';
 import { recommendationAcceptanceStats, loggingTimeStats } from './telemetry.js';
 import { isValidAssignedStudyTransition, evaluateStudyReadiness, STUDY_GATES } from './studyReadiness.js';
+import { localDateISO } from './dateOnly.js';
 
 const round = (v, d = 3)=> Number.isFinite(Number(v)) ? Math.round(Number(v) * 10 ** d) / 10 ** d : null;
 const pct = (part, whole)=> whole ? round(part / whole) : null;
@@ -68,7 +69,7 @@ export function measureParticipant({ code, store }, { config = null } = {}){
   // Adherence / completion / missed sessions.
   const sessions = schedule?.sessions || [];
   const histIds = new Set(history.map(h => h.id));
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateISO();
   const done = sessions.filter(s => histIds.has(s.id) || s.status === 'done').length;
   const missed = sessions.filter(s => !(histIds.has(s.id) || s.status === 'done') && String(s.dateISO) < todayStr).length;
 

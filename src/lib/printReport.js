@@ -15,6 +15,7 @@ import { deriveAttributes, levelFromAttributes } from './attributes.js';
 import { milestoneState, trainingAgeDisplay, consistencyInsights, healthyStreak, monthlyDigest } from './product.js';
 import { EXERCISE_BY_ID } from './data.js';
 import { fmtWeight } from './units.ts';
+import { localDateISO } from './dateOnly.js';
 
 /** Best e1RM per exercise (technique-flagged notes excluded), Progress-view parity. */
 function computePRs(history){
@@ -33,7 +34,7 @@ function computePRs(history){
 
 export function buildProgressReport(store, { today = null, units = 'kg', includeSets = false } = {}){
   const history = Array.isArray(store?.history) ? store.history : [];
-  const now = today || new Date().toISOString().slice(0, 10);
+  const now = today || localDateISO();
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
   const attrs = deriveAttributes(history);
   const prs = computePRs(history).slice(0, 8);

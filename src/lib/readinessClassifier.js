@@ -28,6 +28,7 @@ import { resolveArisePriors } from './priors.js';
 import { readinessEMA, strengthTrendWithConfidence } from './progression.js';
 import { deloadReadinessAssessment, noisySessionContext } from './sessionQuality.js';
 import { collectDeloadDecisions, validateDeloadDecisions } from './study.js';
+import { localDateISO } from './dateOnly.js';
 
 export const READINESS_RECOMMENDATIONS = ['as-planned', 'small-adjustment', 'recovery-session', 'genuine-deload'];
 
@@ -174,7 +175,7 @@ export function classifyReadiness({
   const cfg = resolveArisePriors(config);
   const rc = cfg.readinessClassifier;
   const recovery = cfg.recovery;
-  const todayStr = todayISO || new Date().toISOString().slice(0, 10);
+  const todayStr = todayISO || localDateISO();
   const rows = normalisedReadiness(readinessLog, todayStr);
   const setLogs = logs != null ? logs : derivedSetLogs(history);
   if(recentRpes == null) recentRpes = setLogs.map(l=> l.rpe).filter(r=> r != null && String(r).trim() !== '');

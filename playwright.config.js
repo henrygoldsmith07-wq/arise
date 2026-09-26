@@ -12,13 +12,15 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: 'http://127.0.0.1:5187',
     trace: 'on-first-retry',
   },
   webServer: {
-    command: 'npm run dev',
-    url: 'http://127.0.0.1:5173',
-    reuseExistingServer: !process.env.CI,
+    command: 'npm run dev -- --port 5187 --strictPort --host 127.0.0.1',
+    url: 'http://127.0.0.1:5187',
+    // Never reuse an arbitrary process on the test port. Local multi-project
+    // workspaces can otherwise point Arise's E2E suite at a different Vite app.
+    reuseExistingServer: false,
     timeout: 120_000,
   },
   projects: [

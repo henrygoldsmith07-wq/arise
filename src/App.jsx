@@ -40,7 +40,7 @@ function warmLazyViews(){
     }
   });
 }
-import { loadStore, saveStore, upsertHistory } from './lib/store.js';
+import { loadStore, saveStore } from './lib/store.js';
 import { recommendExercises } from './lib/data.js';
 import { recordEvent, recordErrorEvent } from './lib/telemetry.js';
 import { ensureStandaloneBodyClass, consumeShortcut } from './lib/pwa.js';
@@ -50,10 +50,9 @@ import DemoBanner from './components/DemoBanner.jsx';
 import { captureSnapshot } from './lib/snapshots.js';
 const InstallCard = lazy(() => import('./components/InstallCard.jsx'));
 import { pushToPulse } from './lib/pulse.js';
-import { adaptActiveSchedule } from './lib/programming.js';
-import { reviewCompletedWeek, applyWeeklyReview } from './lib/mesocycle.js';
 import { attachOutcome } from './lib/longitudinal.js';
 import { setRestPreset } from './lib/gymMode.js';
+import { completeWorkout } from './services/workoutService.js';
 
 // Suspense fallback for lazy tabs: same chrome height as a view header so
 // the tab bar doesn't jump when the chunk resolves.
@@ -274,8 +273,8 @@ export default function App(){
     // payload build + store write only (auto-sync below is fire-and-forget and
     // deliberately excluded). Consent-gated like every other measurement.
     const saveStartedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : null;
-    let next = { ...store };
-    const hist = upsertHistory(next.history || [], payload);
+    const completed = completeWorkout({ store, payload });
+    const { store: next, historyBefore, history: hist, adaptation, weeklyReview, summary } = completed;
     // Longitudinal evaluation: resolve open recommendation records against this
     // real outcome. Uses the pre-save history as "before" context; consent-gated
     // and stored separately from training history.
@@ -284,38 +283,11 @@ export default function App(){
         sessionId: payload.id,
         dateISO: payload.dateISO,
         blocks: payload.blocks,
-        historyBefore: next.history || [],
+        historyBefore,
         sessionMeta: payload,
         preferences: next.preferences?.telemetryEnabled === true ? { telemetryEnabled: true } : null,
       });
     }catch{}
-    let activeSchedule = next.activeSchedule;
-    if(activeSchedule){
-      activeSchedule = { ...activeSchedule, sessions: activeSchedule.sessions.map(s=> s.id===payload.id ? { ...s, status:'done' } : s) };
-    }
-    const adaptation = activeSchedule ? adaptActiveSchedule(activeSchedule, hist, {
-      readinessLog: next.readinessLog || [],
-      availableEquipment: next.onboarding?.equipment || [],
-    }) : null;
-    if(adaptation?.changed) activeSchedule = adaptation.schedule;
-    // Week-level roll-up: when this save closed out the training week (no
-    // unfinished sessions left in its ISO week), review the week and direct
-    // the next one. Runs after per-session adaptation so both layers compose.
-    let weeklyReview = null;
-    try{
-      const review = reviewCompletedWeek({
-        schedule: activeSchedule,
-        history: hist,
-        readinessLog: next.readinessLog || [],
-        availableEquipment: next.onboarding?.equipment || [],
-        policy: next.preferences?.progressionPolicy || 'standard',
-      });
-      if(review.ready && review.directives.some(d => d.kind !== 'hold')){
-        const applied = applyWeeklyReview(activeSchedule, review);
-        if(applied.changed){ activeSchedule = applied.schedule; weeklyReview = applied; }
-      }
-    }catch{}
-    next = { ...next, history: hist, activeSchedule, activeWorkout: null };
     setStore(next);
     // Auto-sync: when enabled and configured, converge with the remote in the
     // background after every saved session. Fire-and-forget — failures surface
@@ -327,16 +299,10 @@ export default function App(){
     setActiveSession(null);
     setRecoveryOpen(false);
     setTab('progress');
-    const savedSets = payload.blocks.reduce((n,b)=> n + b.sets.filter(s=> s.completed).length, 0);
-    const savedVolume = payload.blocks.reduce((n,b)=> n + b.sets.reduce((m,s)=> {
-      if(!s.completed) return m;
-      const load = Math.max(0, (Number(s.weightKg)||0) - (Number(s.assistedKg)||0));
-      return m + (Number(s.reps)||0) * load;
-    }, 0), 0);
     setToast({
       title: `${payload.title} saved`,
       detail: [
-        `${savedSets} set${savedSets===1?'':'s'}`,
+        `${summary.savedSets} set${summary.savedSets===1?'':'s'}`,
         null,
         `${payload.durationMinutes} min`,
       ].filter(Boolean).join(' · '),

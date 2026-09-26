@@ -8,6 +8,7 @@ import { adaptScheduleForEquipment, programAdherence, recordProgramStart, userPr
 import { generateProgramme } from '../lib/programmeGenerator.js';
 import { trainRecommendation } from '../lib/trainRecommendation.js';
 import { buildEditorTemplate, moveItem, duplicateEditorTemplate, editorSubstitutionPreview } from '../lib/templateEditor.js';
+import { localDateISO } from '../lib/dateOnly.js';
 
 const EMPTY_DAY = { title: '', exercises: [{ exerciseId: '', sets: 3, reps: '8–12', restSec: 90 }] };
 
@@ -66,7 +67,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
       availableEquipment: store.onboarding.equipment || [],
       history: store.history || [],
       customTemplates: store.customTemplates || [],
-      startDateISO: new Date().toISOString().slice(0, 10),
+      startDateISO: localDateISO(),
     });
     const next = { ...store, activeSchedule: generated, programHistory: recordProgramStart(store.programHistory || [], { programId: generated.programId, version: generated.programVersion || 1, startDateISO: generated.startDateISO }) };
     setProgramId(generated.programId);
@@ -75,7 +76,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
 
   const start = ()=>{
     const custom = customTemplates.find(t => t.id === programId);
-    const startDateISO = new Date().toISOString().slice(0, 10);
+    const startDateISO = localDateISO();
     const next = custom
       ? { ...store, activeSchedule: scheduleProgram({ programId, startDateISO, program: custom.program }) }
       : startProgram(store, programId);
@@ -206,7 +207,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
       availableEquipment: store.onboarding.equipment || [],
       history: store.history || [],
       customTemplates: store.customTemplates || [],
-      startDateISO: new Date().toISOString().slice(0, 10),
+      startDateISO: localDateISO(),
     });
     const next = { ...store, activeSchedule: generated, programHistory: recordProgramStart(store.programHistory || [], { programId: generated.programId, version: generated.programVersion || 1, startDateISO: generated.startDateISO }) };
     setProgramId(generated.programId);

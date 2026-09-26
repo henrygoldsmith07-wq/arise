@@ -24,6 +24,7 @@ import { recommendTemplate } from './templates.js';
 import { GOALS, PROGRAM_BY_ID } from './data.js';
 import { blockDurationMinutes } from './programming.js';
 import { generateProgramme } from './programmeGenerator.js';
+import { localDateISO } from './dateOnly.js';
 
 function goalLabel(goalId){
   return GOALS.find(g => g.id === goalId)?.label || goalId || 'General fitness';
@@ -115,7 +116,7 @@ export function trainRecommendation({ onboarding = null, customTemplates = [], h
       availableEquipment: equipment,
       history,
       customTemplates,
-      startDateISO: new Date().toISOString().slice(0, 10),
+      startDateISO: localDateISO(),
     });
   }catch{ /* preview is best-effort; the card falls back to template measurement */ }
 

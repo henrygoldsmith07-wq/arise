@@ -12,7 +12,8 @@ site serves application files; it does not receive, store, or process your
 training data, and there is no account. Analytics/telemetry is off by
 default and, when you enable it, stays on your device. If you configure
 sync, your data goes only to the storage provider you choose, encrypted
-end-to-end when you set a passphrase.
+end-to-end when you set a passphrase. Optional AI/classifier/Pulse integrations
+have separate controls and are described explicitly below.
 
 ## What we collect
 
@@ -29,8 +30,10 @@ end-to-end when you set a passphrase.
 - **Training data** (sessions, sets, programs, readiness, the optional
   evaluation ledger) — in IndexedDB, in your browser, on your device.
   Field-by-field: `docs/DATA_DICTIONARY.md`.
-- **Lightweight flags** (legacy-migration pointer, paint-critical theme
-  preference) — in localStorage on your device.
+- **Browser-local settings and ledgers** — paint-critical preferences,
+  migration pointers, local measurement events, integration settings and the
+  anonymous merge id use browser storage. AI credentials are session-only by
+  default; persistent key storage requires an explicit opt-in.
 - **Local measurement events** (logging time, session abandonment,
   recommendation acceptance) — recorded **only if you opt in** at the
   consent prompt or in More → Privacy, and stored on your device. They are
@@ -41,6 +44,9 @@ end-to-end when you set a passphrase.
   minimized to training-relevant fields, never included in logs.
 - **Sync credentials** (optional WebDAV) — stored only on your device, never
   exported, never sent anywhere except to the endpoint you configured.
+- **AI-coach API key** — stored in `sessionStorage` by default. If you turn on
+  “Remember API key on this device”, it is kept in local browser storage until
+  cleared. It is excluded from backups, sync payloads and diagnostics.
 
 ## What leaves your device, and when
 
@@ -49,9 +55,24 @@ end-to-end when you set a passphrase.
    whenever you set a passphrase (recommended). Arise has no sync server.
 3. **AI insight, if you use it** — More → More Tools offers an optional
    AI-coach text summary. It sends a **minimized, aggregated** training
-   context (no raw set-by-set history, no health data) to the model endpoint
-   **you** configure with an API key **you** paste. Off by default.
-4. Nothing else. No crash reporting, no error telemetry.
+   context and deterministic engine findings (no raw set-by-set history,
+   notes or health summary) to NVIDIA's configured model endpoint. Your API
+   key is sent to that endpoint as the authentication credential. Off by
+   default in the sense that no request can occur without you providing a key
+   and pressing Ask.
+4. **classifier.dev, if separately enabled** — feedback categorisation may
+   send redacted feedback text; coach routing may send only an ambiguous,
+   redacted coach question after deterministic local routing was insufficient.
+   The service returns classification/routing only and never a training
+   prescription. Both controls are off by default.
+5. **Pulse connector, if enabled and configured** — sends the completed-workout
+   summary and aggregate volume/trend payloads through the adapter supplied by
+   the integrator/user. Arise does not ship a Pulse account or hosted adapter.
+
+Arise itself has no remote crash-reporting or analytics service. Local error
+and measurement records are not transmitted automatically. Third-party
+service retention for NVIDIA/classifier.dev/Pulse is outside Arise's control;
+WebDAV data remains at the storage provider you chose until removed there.
 
 ## Your rights (GDPR/CCPA-style, self-serve)
 
@@ -62,8 +83,9 @@ without contacting anyone:
   store (training data, events, preferences) in a documented, versioned
   format (`docs/IMPORT_EXPORT.md`). CSV export covers exercise history.
 - **Erasure:** `More → Data → Clear local data` (and the demo banner's
-  "Start fresh") wipes IndexedDB and the legacy localStorage payload on the
-  device. Because the hosted site holds no copy, this is complete deletion.
+  "Start fresh") wipes Arise's IndexedDB/browser-local data on the device.
+  Remote data you deliberately sent (for example a WebDAV backup) must also
+  be removed at that destination if you want it erased there.
 - **Rectification:** edit any session, note, or readiness entry in the app.
 - **Objection / withdrawal of consent:** measurement events and the health
   summary are consent-gated and can be disabled at any time in More →

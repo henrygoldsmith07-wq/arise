@@ -5,10 +5,21 @@ import { test, expect } from '@playwright/test';
 // focus; light and dark themes must both render real contrast (screenshot
 // pairs checked into test-results for review).
 
-async function completeOnboarding(page){
+async function resetFreshUserState(page){
   await page.goto('/');
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => new Promise((resolve) => {
+    localStorage.clear();
+    sessionStorage.clear();
+    try{
+      const request = indexedDB.deleteDatabase('arise-idb-v1');
+      request.onsuccess = request.onerror = request.onblocked = () => resolve();
+    }catch{ resolve(); }
+  }));
   await page.reload();
+}
+
+async function completeOnboarding(page){
+  await resetFreshUserState(page);
   await expect(page.getByRole('dialog', { name: 'Onboarding' })).toBeVisible({ timeout: 10_000 });
   await page.getByRole('button', { name: /Get stronger/i }).click();
   await page.getByRole('button', { name: 'Next' }).click();
@@ -125,9 +136,7 @@ test.describe('cross-tab safety', () => {
 
 test.describe('accessibility', () => {
   test('onboarding dialog traps focus and the modal is labelled', async ({ page }) => {
-    await page.goto('/');
-    await page.evaluate(() => localStorage.clear());
-    await page.reload();
+    await resetFreshUserState(page);
     const dialog = page.getByRole('dialog', { name: 'Onboarding' });
     await expect(dialog).toBeVisible({ timeout: 10_000 });
     // Interactive controls live inside the dialog; tabbing stays within the

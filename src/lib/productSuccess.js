@@ -14,6 +14,7 @@
 
 import { resolveArisePriors } from './priors.js';
 import { recommendationAcceptanceStats, loggingTimeStats, workoutCompletionStats } from './telemetry.js';
+import { localDateISO } from './dateOnly.js';
 
 const round = (v, d = 3)=> Number.isFinite(Number(v)) ? Math.round(Number(v) * 10 ** d) / 10 ** d : null;
 
@@ -145,10 +146,10 @@ export function measureProductSuccess(store, { config = null, nowISO = null } = 
   // Study adherence: scheduled vs actually-done on the active schedule.
   const doneIds = new Set(history.map(h => h.id));
   const scheduledDone = scheduled.filter(s => doneIds.has(s.id) || s?.status === 'done').length;
-  const scheduledMissed = scheduled.filter(s => !doneIds.has(s.id) && s?.status !== 'done' && String(s?.dateISO || '') < String(nowISO || new Date().toISOString().slice(0, 10))).length;
+  const scheduledMissed = scheduled.filter(s => !doneIds.has(s.id) && s?.status !== 'done' && String(s?.dateISO || '') < String(nowISO || localDateISO())).length;
 
   // Retention.
-  const todayStr = String(nowISO || new Date().toISOString()).slice(0, 10);
+  const todayStr = String(nowISO || localDateISO()).slice(0, 10);
   const retention = retentionOf(store, todayStr);
 
   // Dropout: had sessions, then a gap > 28 days from the last one to now.

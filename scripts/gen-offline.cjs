@@ -30,11 +30,11 @@ const PAGE = `<!doctype html>
   .emoji { font-size: 2rem; }
   h1 { font-size: 1.125rem; font-weight: 800; margin: .75rem 0 .25rem; }
   p { font-size: .8125rem; opacity: .72; line-height: 1.5; margin: .25rem 0; }
-  button { margin-top: 1rem; padding: .65rem 1.25rem; border: 0; border-radius: .75rem;
-           background: #17171a; color: #fff; font-weight: 700; font-size: .8125rem; cursor: pointer; }
-  button:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
+  .button { display: inline-block; margin-top: 1rem; padding: .65rem 1.25rem; border: 0; border-radius: .75rem;
+           background: #17171a; color: #fff; font-weight: 700; font-size: .8125rem; cursor: pointer; text-decoration: none; }
+  .button:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
   @media (prefers-color-scheme: dark) {
-    button { background: #f5f5f4; color: #17171a; }
+    .button { background: #f5f5f4; color: #17171a; }
   }
 </style>
 </head>
@@ -45,7 +45,7 @@ const PAGE = `<!doctype html>
     <p>This page needs the network, but the app itself keeps working from its
        cached shell — your training data is stored on this device.</p>
     <p>Close this tab and reopen Arise from your home screen, or retry below.</p>
-    <button type="button" onclick="location.assign('./')">Open Arise</button>
+    <a class="button" href="./">Open Arise</a>
   </main>
 </body>
 </html>

@@ -25,8 +25,10 @@ versioned; imports are previewed before anything is applied.
   open the file; `payloadVersion`/`schemaVersion` describe the data itself.
 - `device` is an anonymous per-device id (generated locally) — it marks
   provenance in merges, it is not an identity.
-- **Credentials never travel:** WebDAV config and the sync passphrase are
-  stripped from every export and denied on import.
+- **Credentials never travel:** WebDAV config/sync passphrase are stripped
+  from every export and denied on import. The NVIDIA AI-coach key is stored
+  outside the exportable app store entirely (session-only by default), so it
+  is not present in backups, partial exports, sync payloads or coach exports.
 
 **Optional encryption.** Passphrase-derived (PBKDF2) AES-GCM sealed file —
 the passphrase never leaves the device and is never stored in the backup.

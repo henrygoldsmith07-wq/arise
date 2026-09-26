@@ -163,24 +163,6 @@ export function volumeBalanceAdvice(history, byId, { goal = 'general', weeks = 4
   return { goal, weeks: window.length, entries: verdicts, advice, n: window.length };
 }
 
-export function strengthSeriesWithConfidence(history, exerciseId){
-  const pts = strengthSeries(history, exerciseId);
-  if(pts.length < 3) return { pts, slope: 0, confidence: 'low', n: pts.length };
-  const ys = pts.map(p=> p.e1rm);
-  const xs = ys.map((_,i)=> i);
-  const mean = ys.reduce((a,b)=>a+b,0)/ys.length;
-  const mx = xs.reduce((a,b)=>a+b,0)/xs.length;
-  let num=0, den=0; for(let i=0;i<ys.length;i++){ num+=(xs[i]-mx)*(ys[i]-mean); den+=(xs[i]-mx)**2; }
-  const slope = den ? num/den : 0;
-  const ssTot = ys.reduce((a,y)=> a + (y-mean)**2,0);
-  if(ssTot===0) return { pts, slope: Math.round(slope*100)/100, confidence: 'high', n: pts.length, r2: 1 };
-  const yhat = xs.map(x=> mean + slope*(x-mx));
-  const ssRes = ys.reduce((a,y,i)=> a + (y-yhat[i])**2,0);
-  const r2 = Math.max(0, 1 - ssRes/ssTot);
-  const confidence = r2>0.6 ? 'high' : r2>0.3 ? 'medium' : 'low';
-  return { pts, slope: Math.round(slope*100)/100, r2: Math.round(r2*100)/100, confidence, n: pts.length };
-}
-
 // Extract future recommendations from workout notes (e.g. "next time try 22kg", "add a set")
 export function extractNoteRecommendations(history){
   const out=[];

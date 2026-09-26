@@ -1,10 +1,9 @@
 import { scheduleProgram, PROGRAM_BY_ID } from './data.js';
 import { upsertHistory } from './store.js';
+import { localDateISO } from './dateOnly.js';
 
 export function todayISO(){
-  const d = new Date();
-  const pad = value=> String(value).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  return localDateISO();
 }
 
 export function sessionForToday(schedule){

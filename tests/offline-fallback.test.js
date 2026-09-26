@@ -14,6 +14,7 @@ test('generated offline fallback keeps dark mode readable and keyboard focus vis
 
   assert.match(html, /prefers-color-scheme:\s*dark/);
   assert.match(html, /\.card\s*\{\s*background:\s*#1c1c20\s*!important;/);
-  assert.match(html, /button:focus-visible\s*\{/);
-  assert.match(html, /<button type="button"/);
+  assert.match(html, /\.button:focus-visible\s*\{/);
+  assert.match(html, /<a class="button" href="\.\/">Open Arise<\/a>/);
+  assert.doesNotMatch(html, /onclick=/i);
 });

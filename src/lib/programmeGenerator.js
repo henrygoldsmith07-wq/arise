@@ -6,6 +6,7 @@ import { EXERCISE_BY_ID, exerciseAvailable, PROGRAM_BY_ID } from './data.js';
 import { recommendTemplate, instantiateTemplate } from './templates.js';
 import { rankedSubstitutions } from './substitutions.js';
 import { shortWorkoutMode } from './programming.js';
+import { localDateISO } from './dateOnly.js';
 
 function dateAt(dateISO){ return new Date(`${dateISO}T00:00:00Z`); }
 function toISO(date){
@@ -117,7 +118,7 @@ export function generateProgramme({
   customTemplates = [],
   startDateISO,
 } = {}){
-  const start = startDateISO || new Date().toISOString().slice(0, 10);
+  const start = startDateISO || localDateISO();
   // The scorer must see the same pool the Train hero recommends from —
   // otherwise "Start" could build a DIFFERENT programme than the card showed.
   const extraTemplates = (customTemplates || []).filter(t => t && !t.deletedAt && t.isCustom && t.program);
