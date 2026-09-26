@@ -9,7 +9,7 @@
 
 import { idbGetAll } from './idb.js';
 import { idbTransaction } from './idb-tx.js';
-import { splitSets } from './storage.js';
+import { splitSets } from './storageRecords.js';
 
 export const ARCHIVE_META_ID = 'archive:meta';
 

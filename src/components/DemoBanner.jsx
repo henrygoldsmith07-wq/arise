@@ -1,6 +1,4 @@
 import { useState } from 'react';
-import { captureSnapshot } from '../lib/snapshots.js';
-import { clearAllStoredData } from '../lib/storage.js';
 
 /**
  * The demo-mode banner: fixed under the app header while `store.demo` is
@@ -13,7 +11,7 @@ import { clearAllStoredData } from '../lib/storage.js';
  *      demo itself is recoverable via More → diagnostics if someone exits
  *      by accident and changes their mind before the wipe completes).
  */
-export default function DemoBanner(){
+export default function DemoBanner({ onExitDemo }){
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -21,8 +19,7 @@ export default function DemoBanner(){
     if(!window.confirm('Exit demo mode? All sample data is erased and Arise starts empty.')) return;
     setBusy(true); setErr(null);
     try{
-      await captureSnapshot({ force: true, reason: 'pre-exit-demo' });
-      await clearAllStoredData();
+      await onExitDemo?.();
       window.location.reload();
     }catch(e){
       setErr(e?.message || 'Exit failed — try More → Clear local data.');

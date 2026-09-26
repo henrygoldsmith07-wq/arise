@@ -4,11 +4,7 @@
 // shows what is actually persisted, not just the hydrated in-memory view.
 
 import { useCallback, useEffect, useState } from 'react';
-import { auditStore, repairFindings } from '../lib/audit.js';
-import { archiveOldSessions, pruneEvents, archiveCandidateCount, archivedSessionCount, restoreArchive } from '../lib/archive.js';
-import { listSnapshots, rollbackToSnapshot, captureSnapshot } from '../lib/snapshots.js';
-import { listMigrationLogs } from '../lib/migrationLog.js';
-import { whenPersisted } from '../lib/storage.js';
+import { storageDiagnosticsService } from '../services/storageDiagnosticsService.js';
 
 const FINDING_LABELS = {
   'duplicate-session': 'Duplicate sessions',
@@ -26,15 +22,7 @@ export default function StorageDiagnostics({ setMsg }){
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async ()=>{
-    const [audit, archiveCandidates, archived, snapshots, migrationLogs, prunePreview] = await Promise.all([
-      auditStore(),
-      archiveCandidateCount(365),
-      archivedSessionCount(),
-      listSnapshots(),
-      listMigrationLogs(),
-      pruneEvents({ dryRun: true }),
-    ]);
-    setDiag({ audit, archiveCandidates, archived, snapshots, migrationLogs, prunePreview });
+    setDiag(await storageDiagnosticsService.inspect({ olderThanDays: 365 }));
   }, []);
 
   useEffect(()=> { refresh(); }, [refresh]);
@@ -43,7 +31,6 @@ export default function StorageDiagnostics({ setMsg }){
     setBusy(true);
     try{
       const result = await fn();
-      await whenPersisted();
       setMsg(typeof message === 'function' ? message(result) : message);
       if(reload) setTimeout(()=> location.reload(), RELOAD_AFTER_MS);
       else await refresh();
@@ -77,16 +64,16 @@ export default function StorageDiagnostics({ setMsg }){
           </div>
           <div className="flex flex-wrap gap-2 text-xs">
             {findings.length > 0 && (
-              <button disabled={busy} onClick={run(()=> repairFindings(findings), (r)=> `Repaired: ${r.deletedSessions} sessions and ${r.deletedSets} set rows removed, ${r.neutralisedSets} values corrected.`, { reload: true })} className="btn btn-primary min-h-10 rounded-xl px-4 disabled:opacity-50">Repair issues</button>
+              <button disabled={busy} onClick={run(()=> storageDiagnosticsService.repair(findings), (r)=> `Repaired: ${r.deletedSessions} sessions and ${r.deletedSets} set rows removed, ${r.neutralisedSets} values corrected.`, { reload: true })} className="btn btn-primary min-h-10 rounded-xl px-4 disabled:opacity-50">Repair issues</button>
             )}
-            <button disabled={busy || !diag.archiveCandidates} onClick={run(()=> archiveOldSessions(365), (r)=> `Archived ${r.archived} session${r.archived === 1 ? '' : 's'} older than a year. They stay on this device and can be restored.`, { reload: true })} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Archive old sessions</button>
-            <button disabled={busy || !diag.prunePreview.pruned} onClick={run(()=> pruneEvents({}), (r)=> `Pruned ${r.pruned} old event${r.pruned === 1 ? '' : 's'} (telemetry only — training data untouched).`, { reload: true })} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Prune old events</button>
-            <button disabled={busy} onClick={run(()=> captureSnapshot({ force: true, reason: 'manual' }), 'Snapshot captured — a restorable copy of everything stored.')} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Snapshot now</button>
+            <button disabled={busy || !diag.archiveCandidates} onClick={run(()=> storageDiagnosticsService.archiveOld(365), (r)=> `Archived ${r.archived} session${r.archived === 1 ? '' : 's'} older than a year. They stay on this device and can be restored.`, { reload: true })} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Archive old sessions</button>
+            <button disabled={busy || !diag.prunePreview.pruned} onClick={run(()=> storageDiagnosticsService.pruneEvents(), (r)=> `Pruned ${r.pruned} old event${r.pruned === 1 ? '' : 's'} (telemetry only — training data untouched).`, { reload: true })} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Prune old events</button>
+            <button disabled={busy} onClick={run(()=> storageDiagnosticsService.captureSnapshot({ force: true, reason: 'manual' }), 'Snapshot captured — a restorable copy of everything stored.')} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Snapshot now</button>
             {diag.snapshots.length > 0 && (
-              <button disabled={busy} onClick={()=> { if(confirm(`Roll back to the snapshot from ${new Date(diag.snapshots[0].at).toLocaleString()}?\n\nEverything stored since then is replaced. Exports are unaffected.`)) run(()=> rollbackToSnapshot(diag.snapshots[0].id), 'Rolled back — reloading…', { reload: true })(); }} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Roll back to snapshot</button>
+              <button disabled={busy} onClick={()=> { if(confirm(`Roll back to the snapshot from ${new Date(diag.snapshots[0].at).toLocaleString()}?\n\nEverything stored since then is replaced. Exports are unaffected.`)) run(()=> storageDiagnosticsService.rollbackToSnapshot(diag.snapshots[0].id), 'Rolled back — reloading…', { reload: true })(); }} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Roll back to snapshot</button>
             )}
             {diag.archived > 0 && (
-              <button disabled={busy} onClick={run(()=> restoreArchive(), (r)=> `Restored ${r} archived session${r === 1 ? '' : 's'} to live history.`, { reload: true })} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Restore archive</button>
+              <button disabled={busy} onClick={run(()=> storageDiagnosticsService.restoreArchive(), (r)=> `Restored ${r} archived session${r === 1 ? '' : 's'} to live history.`, { reload: true })} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Restore archive</button>
             )}
           </div>
           <p className="text-xs text-ink3">

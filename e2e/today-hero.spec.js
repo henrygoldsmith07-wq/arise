@@ -85,6 +85,8 @@ test.describe('Today hero — single dominant CTA with Options', () => {
         changes: [{ sessionId: store.activeSchedule.sessions[0].id, exerciseId: 'push-up', reason: 'e2e seeded audit entry' }],
       };
       mod.saveStore(store);
+      const { whenPersisted } = await import('/src/lib/storage.js');
+      await whenPersisted();
     });
     await page.reload();
 

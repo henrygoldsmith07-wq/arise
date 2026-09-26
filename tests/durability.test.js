@@ -5,7 +5,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { hydrateStorage, persistStore, loadStoreFromIdb, whenPersisted, clearAllStoredData } from '../src/lib/storage.js';
-import { idbGetAll } from '../src/lib/idb.js';
+import { idbGetAll, idbPut } from '../src/lib/idb.js';
 import { idbTransaction } from '../src/lib/idb-tx.js';
 import { enforceIntegrity, repairStore, latestQuarantinedStore, quarantineBrokenStore } from '../src/lib/integrity.js';
 import { storageHealth } from '../src/lib/storageQuota.js';
@@ -67,7 +67,7 @@ describe('atomic persistence', ()=>{
     await persistStore(fullStore());
     await whenPersisted();
     await clearAllStoredData();
-    for(const store of ['profile','sessions','sets','programme','recommendations','outcomes','events','readiness','templates','quarantine']){
+    for(const store of ['profile','sessions','sets','programme','recommendations','outcomes','events','readiness','templates','quarantine','snapshots','archive','tombstones']){
       assert.equal((await idbGetAll(store)).length, 0, `${store} should be empty`);
     }
     // Re-persisting after a deliberate clear works (cleared latch resets).
@@ -75,6 +75,21 @@ describe('atomic persistence', ()=>{
     await persistStore(fullStore());
     await whenPersisted();
     assert.equal((await loadStoreFromIdb()).history.length, 2);
+  });
+
+  it('demo-style clearing preserves an explicit safety snapshot only', async ()=>{
+    await persistStore(fullStore());
+    await idbPut('snapshots', { id:'pre-demo', at:'2026-09-26T12:00:00.000Z', payload:fullStore() });
+    await clearAllStoredData({ preserveSnapshots:true });
+
+    assert.equal((await idbGetAll('snapshots')).length, 1);
+    assert.equal((await idbGetAll('snapshots'))[0].id, 'pre-demo');
+    assert.equal((await idbGetAll('sessions')).length, 0);
+    assert.equal((await idbGetAll('profile')).length, 0);
+
+    // Reset the cleared latch for later tests in this file without recreating
+    // live training data; the preserved snapshot remains available to recovery.
+    await hydrateStorage();
   });
 });
 

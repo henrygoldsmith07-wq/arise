@@ -88,7 +88,7 @@ export default function AiCoachSettings({ store }){
             {result.ok ? result.text : `AI request unavailable: ${result.error}`}
           </div>
         )}
-        {message && <p role="status" className="text-[11px] text-ink3">{message}</p>}
+        {message && <p aria-live="polite" className="text-[11px] text-ink3">{message}</p>}
       </div>
     </section>
   );

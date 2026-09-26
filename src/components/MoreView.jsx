@@ -1,26 +1,20 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { buildExportPayload, downloadJson, parseImportFile, mergeStores, portableCsv, deletionPreview, downloadBackup, parseBackupFile } from '../lib/export.js';
 import { buildImportPreview } from '../lib/exportPolicy.js';
-import { clearStore } from '../lib/store.js';
-import { clearAllStoredData, getIntegrityNotice, clearIntegrityNotice, whenPersisted } from '../lib/storage.js';
 import { buildPartialExportPayload } from '../lib/export.js';
 import { buildCoachExport, renderCoachMarkdown } from '../lib/coachExport.js';
 import { shareTextAsFile } from '../lib/nativeShare.js';
 const SyncPanel = lazy(() => import('./SyncPanel.jsx'));
-import { storageHealth, requestPersistentStorage } from '../lib/storageQuota.js';
 import { cryptoAvailable, encryptBackup, decryptBackup, looksEncrypted } from '../lib/cryptoBackup.js';
 import { clearTelemetry, telemetrySummary, getEventHistory, mergeEventHistory, replaceEventHistory, recordEvent, getErrorEvents, clearErrorEvents } from '../lib/telemetry.js';
 import { mergeHealthSummary, pullHealthSummary } from '../lib/health.js';
 import { LOCATIONS, GOALS } from '../lib/data.js';
 import { setRestPreset } from '../lib/gymMode.js';
 import { EXERCISE_BY_ID } from '../lib/data.js';
-import { makeDemoStore } from '../lib/demoData.js';
-import { captureSnapshot } from '../lib/snapshots.js';
 import { buildSupportBundle } from '../lib/supportDiagnostics.js';
 import { buildSalvagePayload } from '../lib/salvageExport.js';
 import { normaliseHistoryEntry } from '../lib/store.js';
-import { clearClassifierSettings } from '../lib/feedbackClassifier.js';
-import { clearFeedbackRecords } from '../lib/feedbackStore.js';
+import { dataLifecycleService } from '../services/dataLifecycleService.js';
 import ToggleRow from './settings/ToggleRow.jsx';
 import AiCoachSettings from './settings/AiCoachSettings.jsx';
 import FeedbackSettings from './settings/FeedbackSettings.jsx';
@@ -31,7 +25,7 @@ import EvidenceSettings from './settings/EvidenceSettings.jsx';
 import { useTransientMessage } from '../hooks/useTransientMessage.js';
 const StorageDiagnostics = lazy(()=> import('./StorageDiagnostics.jsx'));
 
-export default function MoreView({ store, setStore, setTab, onboardingOpen, setOnboardingOpen }){
+export default function MoreView({ store, setStore, onboardingOpen, setOnboardingOpen, onLoadDemo }){
   const [importStrategy,setImportStrategy]=useState('merge');
   const { message:msg, setMessage:setMsg, flash:flashMsg } = useTransientMessage();
   const fileRef = useRef(null);
@@ -131,10 +125,8 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
 
   const resetAllData = async ()=>{
     if(!confirm('Clear all local data on this device? This cannot be undone unless you have an export.')) return;
-    await whenPersisted();
-    await clearAllStoredData();
-    clearStore(); clearTelemetry();
-    clearFeedbackRecords(); clearClassifierSettings();
+    await dataLifecycleService.clearDeviceData();
+    clearTelemetry();
     location.reload();
   };
   const exportCsv = ()=>{
@@ -266,10 +258,8 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   const deleteAccount = async ()=>{
     const preview = deletionPreview(store);
     if(!confirm(`Delete all Arise data on this device?\n\nHistory: ${preview.historyCount} sessions\nSchedule: ${preview.schedulePresent?'yes':'no'}\nOnboarding: ${preview.onboardingPresent?'yes':'no'}\nReadiness: ${preview.readinessCount} entries\n\nThis cannot be undone.`)) return;
-    await whenPersisted();
-    await clearAllStoredData();
-    clearStore(); clearTelemetry();
-    clearFeedbackRecords(); clearClassifierSettings();
+    await dataLifecycleService.clearDeviceData();
+    clearTelemetry();
     location.reload();
   };
 
@@ -277,19 +267,19 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
   const [noticeDismissed, setNoticeDismissed] = useState(false);
   useEffect(()=> {
     let live = true;
-    storageHealth().then((h)=> { if(live) setStorageInfo(h); });
+    dataLifecycleService.storageHealth().then((h)=> { if(live) setStorageInfo(h); });
     return ()=> { live = false; };
   }, []);
   const persistStorageNow = async ()=>{
-    const granted = await requestPersistentStorage();
-    setStorageInfo(await storageHealth());
+    const { granted, health } = await dataLifecycleService.requestPersistentStorage();
+    setStorageInfo(health);
     flashMsg(granted === null
       ? 'Persistent storage is not supported in this browser — regular exports are your safety net.'
       : granted
         ? 'Storage marked persistent — the browser will not evict your data under pressure.'
         : 'The browser declined persistent storage for now; keep exporting backups.', 5000);
   };
-  const integrity = !noticeDismissed ? getIntegrityNotice() : null;
+  const integrity = !noticeDismissed ? dataLifecycleService.integrityNotice() : null;
 
 
   // Support bundle: environment + shape summary only, never training data.
@@ -436,7 +426,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
             <p className="text-ink3">A broken copy was kept in quarantine and the readable parts were restored. Nothing was lost silently. Details: {integrity.errors.join(' ')}</p>
             <div className="flex flex-wrap gap-x-4 gap-y-1">
               <button onClick={exportSalvage} className="underline font-semibold">Export salvaged history</button>
-              <button onClick={()=> { clearIntegrityNotice(); setNoticeDismissed(true); }} className="underline font-semibold">Dismiss</button>
+              <button onClick={()=> { dataLifecycleService.dismissIntegrityNotice(); setNoticeDismissed(true); }} className="underline font-semibold">Dismiss</button>
             </div>
           </div>
         )}
@@ -615,10 +605,7 @@ export default function MoreView({ store, setStore, setTab, onboardingOpen, setO
               <p className="text-[11px] text-ink3">Loads a clearly labeled, fully populated sample (a month of training on a live schedule). Your current data — if any — is snapshotted first; exiting demo erases the sample and restores an empty start.</p>
               <button
                 onClick={async ()=> {
-                  try{ await captureSnapshot({ force: true, reason: 'pre-demo' }); }catch{}
-                  try{ const { clearAllStoredData } = await import('../lib/storage.js'); await clearAllStoredData(); }catch{}
-                  setStore(makeDemoStore());
-                  setTab('today');
+                  await onLoadDemo?.();
                 }}
                 className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs"
               >
