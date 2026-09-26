@@ -176,6 +176,20 @@ describe('cross-tab refresh coordinator', ()=>{
 });
 
 describe('cross-tab three-way persistence reconciliation', ()=>{
+  it('returns local unchanged when no remote snapshot exists', ()=>{
+    const local = { version:13, preferences:{ theme:'dark' }, history:[] };
+    assert.equal(reconcileStoreSnapshots({ version:12 }, local, null), local);
+  });
+
+  it('merges from an empty base without dropping independent nested fields', ()=>{
+    const local = { version:2, preferences:{ theme:'dark', soundCues:true }, history:[] };
+    const remote = { version:3, preferences:{ units:'lb' }, history:[] };
+    const merged = reconcileStoreSnapshots(null, local, remote);
+    assert.equal(merged.preferences.theme, 'dark');
+    assert.equal(merged.preferences.soundCues, true);
+    assert.equal(merged.preferences.units, 'lb');
+  });
+
   it('draft autosave preserves a preference changed by another tab', ()=>{
     const base = { version:13, preferences:{ theme:'light', soundCues:true }, activeWorkout:null, history:[] };
     const local = { ...base, activeWorkout:{ session:{ id:'s1' }, blocks:[] } };
@@ -209,5 +223,171 @@ describe('cross-tab three-way persistence reconciliation', ()=>{
     const remote = structuredClone(base);
     const merged = reconcileStoreSnapshots(base, local, remote);
     assert.deepEqual(merged.tombstones, []);
+  });
+
+  it('keeps a remote edit when local deletes a row that changed remotely', ()=>{
+    const baseRow = { id:'h1', dateISO:'2026-09-20', savedAt:'2026-09-20T10:00:00Z', note:'base' };
+    const base = { version:13, history:[baseRow] };
+    const local = { ...base, history:[] };
+    const remote = { ...base, history:[{ ...baseRow, savedAt:'2026-09-20T11:00:00Z', note:'remote edit' }] };
+    const merged = reconcileStoreSnapshots(base, local, remote);
+    assert.equal(merged.history.length, 1);
+    assert.equal(merged.history[0].note, 'remote edit');
+  });
+
+  it('keeps a local edit when remote deletes a row that changed locally', ()=>{
+    const baseRow = { id:'h1', dateISO:'2026-09-20', savedAt:'2026-09-20T10:00:00Z', note:'base' };
+    const base = { version:13, history:[baseRow] };
+    const local = { ...base, history:[{ ...baseRow, savedAt:'2026-09-20T11:00:00Z', note:'local edit' }] };
+    const remote = { ...base, history:[] };
+    const merged = reconcileStoreSnapshots(base, local, remote);
+    assert.equal(merged.history.length, 1);
+    assert.equal(merged.history[0].note, 'local edit');
+  });
+
+  it('lets an unchanged side yield to a changed side for the same row', ()=>{
+    const baseRow = { id:'h1', dateISO:'2026-09-20', savedAt:'2026-09-20T10:00:00Z', note:'base' };
+    const base = { version:13, history:[baseRow] };
+    const remoteEdit = { ...baseRow, savedAt:'2026-09-20T11:00:00Z', note:'remote' };
+    assert.equal(reconcileStoreSnapshots(base, structuredClone(base), { ...base, history:[remoteEdit] }).history[0].note, 'remote');
+    const localEdit = { ...baseRow, savedAt:'2026-09-20T11:00:00Z', note:'local' };
+    assert.equal(reconcileStoreSnapshots(base, { ...base, history:[localEdit] }, structuredClone(base)).history[0].note, 'local');
+  });
+
+  it('uses the newer timestamp when both tabs edit the same entity', ()=>{
+    const baseRow = { id:'h1', dateISO:'2026-09-20', savedAt:'2026-09-20T10:00:00Z', note:'base' };
+    const base = { version:13, history:[baseRow] };
+    const local = { ...base, history:[{ ...baseRow, savedAt:'2026-09-20T11:00:00Z', note:'local' }] };
+    const remote = { ...base, history:[{ ...baseRow, savedAt:'2026-09-20T12:00:00Z', note:'remote' }] };
+    assert.equal(reconcileStoreSnapshots(base, local, remote).history[0].note, 'remote');
+    assert.equal(reconcileStoreSnapshots(base, remote, local).history[0].note, 'remote');
+  });
+
+  it('keeps local deterministically when conflicting edits have equal or unusable timestamps', ()=>{
+    const baseRow = { id:'h1', dateISO:'2026-09-20', savedAt:'2026-09-20T10:00:00Z', note:'base' };
+    const base = { version:13, history:[baseRow] };
+    const localEqual = { ...base, history:[{ ...baseRow, savedAt:'2026-09-20T11:00:00Z', note:'local equal' }] };
+    const remoteEqual = { ...base, history:[{ ...baseRow, savedAt:'2026-09-20T11:00:00Z', note:'remote equal' }] };
+    assert.equal(reconcileStoreSnapshots(base, localEqual, remoteEqual).history[0].note, 'local equal');
+
+    const localInvalid = { ...base, history:[{ id:'h1', note:'local invalid' }] };
+    const remoteInvalid = { ...base, history:[{ id:'h1', note:'remote invalid' }] };
+    assert.equal(reconcileStoreSnapshots(base, localInvalid, remoteInvalid).history[0].note, 'local invalid');
+  });
+
+  it('honours one-sided unchanged deletions in either direction', ()=>{
+    const row = { id:'h1', dateISO:'2026-09-20', savedAt:'2026-09-20T10:00:00Z' };
+    const base = { version:13, history:[row] };
+    assert.deepEqual(reconcileStoreSnapshots(base, { ...base, history:[] }, structuredClone(base)).history, []);
+    assert.deepEqual(reconcileStoreSnapshots(base, structuredClone(base), { ...base, history:[] }).history, []);
+  });
+
+  it('uses updatedAt, at, and dateISO fallbacks when savedAt is absent', ()=>{
+    const base = { version:1, customTemplates:[], eventHistory:[], history:[] };
+    const localTemplate = { id:'t1', updatedAt:'2026-09-20T11:00:00Z', name:'local' };
+    const remoteTemplate = { id:'t1', updatedAt:'2026-09-20T12:00:00Z', name:'remote' };
+    const mergedTemplate = reconcileStoreSnapshots(base, { ...base, customTemplates:[localTemplate] }, { ...base, customTemplates:[remoteTemplate] });
+    assert.equal(mergedTemplate.customTemplates[0].name, 'remote');
+
+    const localEvent = { id:'e1', at:'2026-09-20T13:00:00Z', value:'local' };
+    const remoteEvent = { id:'e1', at:'2026-09-20T12:00:00Z', value:'remote' };
+    const mergedEvent = reconcileStoreSnapshots(base, { ...base, eventHistory:[localEvent] }, { ...base, eventHistory:[remoteEvent] });
+    assert.equal(mergedEvent.eventHistory[0].value, 'local');
+
+    const baseHistory = { version:1, history:[{ id:'h1', dateISO:'2026-09-18', value:'base' }] };
+    const localHistory = { ...baseHistory, history:[{ id:'h1', dateISO:'2026-09-19', value:'local' }] };
+    const remoteHistory = { ...baseHistory, history:[{ id:'h1', dateISO:'2026-09-20', value:'remote' }] };
+    assert.equal(reconcileStoreSnapshots(baseHistory, localHistory, remoteHistory).history[0].value, 'remote');
+  });
+
+  it('takes the highest schema version while preserving merged collections', ()=>{
+    const base = { version:9, history:[], eventHistory:[], evaluationLedger:[], customTemplates:[], tombstones:[], readinessLog:[], programHistory:[] };
+    const local = { ...base, version:11, eventHistory:[{ id:'local-event', at:'2026-09-20T10:00:00Z' }] };
+    const remote = { ...base, version:15, evaluationLedger:[{ id:'remote-ledger', at:'2026-09-20T10:00:00Z' }] };
+    const merged = reconcileStoreSnapshots(base, local, remote);
+    assert.equal(merged.version, 15);
+    assert.equal(merged.eventHistory[0].id, 'local-event');
+    assert.equal(merged.evaluationLedger[0].id, 'remote-ledger');
+
+    assert.equal(reconcileStoreSnapshots({ ...base, version:20 }, local, remote).version, 20);
+    assert.equal(reconcileStoreSnapshots(base, { ...local, version:21 }, remote).version, 21);
+  });
+
+  it('treats absent collections as empty and ignores rows without a stable identity', ()=>{
+    const remoteHistory = { id:'remote', dateISO:'2026-09-20', savedAt:'2026-09-20T10:00:00Z' };
+    const base = { version:1 };
+    const local = { version:1, history:[null, undefined] };
+    const remote = { version:1, history:[null, remoteHistory] };
+    const merged = reconcileStoreSnapshots(base, local, remote);
+    assert.deepEqual(merged.history, [remoteHistory]);
+    assert.deepEqual(merged.eventHistory, []);
+    assert.deepEqual(merged.evaluationLedger, []);
+    assert.deepEqual(merged.customTemplates, []);
+    assert.deepEqual(merged.tombstones, []);
+    assert.deepEqual(merged.readinessLog, []);
+    assert.deepEqual(merged.programHistory, []);
+  });
+
+  it('uses every composite identity field for readiness and programme history', ()=>{
+    const base = { version:1, readinessLog:[], programHistory:[] };
+    const local = {
+      ...base,
+      readinessLog:[
+        { dateISO:'2026-09-20', at:'2026-09-20T08:00:00Z', score:70 },
+        { dateISO:'2026-09-20', score:70 },
+      ],
+      programHistory:[
+        { programId:'p1', version:1, startDateISO:'2026-09-01' },
+        { programId:'p1', version:2, startDateISO:'2026-09-01' },
+      ],
+    };
+    const remote = {
+      ...base,
+      readinessLog:[
+        { dateISO:'2026-09-20', at:'2026-09-20T09:00:00Z', score:70 },
+        { dateISO:'2026-09-21', score:70 },
+      ],
+      programHistory:[
+        { programId:'p1', version:1, startDateISO:'2026-09-02' },
+        { programId:'p2', version:1, startDateISO:'2026-09-01' },
+      ],
+    };
+    const merged = reconcileStoreSnapshots(base, local, remote);
+    assert.equal(merged.readinessLog.length, 4);
+    assert.equal(merged.programHistory.length, 4);
+  });
+
+  it('merges every entity collection by its documented stable identity', ()=>{
+    const base = { version:13, history:[], eventHistory:[], evaluationLedger:[], customTemplates:[], tombstones:[], readinessLog:[], programHistory:[] };
+    const local = {
+      ...base,
+      eventHistory:[{ id:'e-local', at:'2026-09-20T10:00:00Z' }],
+      customTemplates:[{ id:'t-local', updatedAt:'2026-09-20T10:00:00Z' }],
+      readinessLog:[{ dateISO:'2026-09-20', score:70 }],
+      programHistory:[{ programId:'p1', version:1, startDateISO:'2026-09-01' }],
+    };
+    const remote = {
+      ...base,
+      evaluationLedger:[{ id:'l-remote', at:'2026-09-20T10:00:00Z' }],
+      tombstones:[{ id:'sessions:h1', deletedAt:'2026-09-20T10:00:00Z' }],
+      readinessLog:[{ dateISO:'2026-09-20', score:80 }],
+      programHistory:[{ programId:'p2', version:1, startDateISO:'2026-09-02' }],
+    };
+    const merged = reconcileStoreSnapshots(base, local, remote);
+    assert.deepEqual(merged.eventHistory.map(row=>row.id), ['e-local']);
+    assert.deepEqual(merged.evaluationLedger.map(row=>row.id), ['l-remote']);
+    assert.deepEqual(merged.customTemplates.map(row=>row.id), ['t-local']);
+    assert.deepEqual(merged.tombstones.map(row=>row.id), ['sessions:h1']);
+    assert.equal(merged.readinessLog.length, 2);
+    assert.equal(merged.programHistory.length, 2);
+  });
+
+  it('merges nested objects field-by-field but lets local win irreducible scalar conflicts', ()=>{
+    const base = { version:1, preferences:{ accessibility:{ largeText:false, highContrast:false }, experience:'standard' }, history:[] };
+    const local = { ...base, preferences:{ accessibility:{ largeText:true, highContrast:false }, experience:'expert' } };
+    const remote = { ...base, preferences:{ accessibility:{ largeText:false, highContrast:true }, experience:'simple' } };
+    const merged = reconcileStoreSnapshots(base, local, remote);
+    assert.deepEqual(merged.preferences.accessibility, { largeText:true, highContrast:true });
+    assert.equal(merged.preferences.experience, 'expert');
   });
 });

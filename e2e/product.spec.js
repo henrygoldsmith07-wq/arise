@@ -57,6 +57,12 @@ test.describe('Demo mode', () => {
     await expect(banner).toBeVisible();
     await expect(banner.getByText(/sample data/i)).toBeVisible();
 
+    // Demo mode is a real local state, not an in-memory preview. A hard reload
+    // must keep the sample store alive until the user explicitly starts fresh.
+    await page.reload();
+    await expect(page.getByRole('region', { name: 'Demo mode banner' })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('dialog', { name: 'Onboarding' })).toBeHidden();
+
     // …onboarding stays closed, and the populated app is live: Today shows a
     // scheduled session and Progress shows real derived numbers.
     await expect(page.getByRole('dialog', { name: 'Onboarding' })).toBeHidden();

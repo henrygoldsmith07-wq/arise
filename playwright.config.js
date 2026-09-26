@@ -4,6 +4,7 @@ import { defineConfig, devices } from '@playwright/test';
 // it runs via `npm run e2e:pwa` (playwright.pwa.config.js, vite preview).
 export default defineConfig({
   testDir: './e2e',
+  snapshotPathTemplate: '{testDir}/visual-baselines/{arg}{ext}',
   testMatch: '**/*.spec.js',
   testIgnore: '**/pwa.spec.js',
   fullyParallel: true,
@@ -11,6 +12,12 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: [['list'], ['html', { open: 'never' }]],
+  expect: {
+    toHaveScreenshot: {
+      threshold: 0.35,
+      maxDiffPixelRatio: 0.08,
+    },
+  },
   use: {
     baseURL: 'http://127.0.0.1:5187',
     trace: 'on-first-retry',
