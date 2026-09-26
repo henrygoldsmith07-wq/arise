@@ -75,6 +75,21 @@ describe('makeWebdavAdapter', () => {
     responder = () => res(500);
     await assert.rejects(adapter.push('x'), /500/);
   });
+
+  it('detaches the external abort listener when a request settles', async () => {
+    let added = null;
+    let removed = null;
+    const signal = {
+      reason:null,
+      addEventListener:(type, fn)=> { if(type === 'abort') added = fn; },
+      removeEventListener:(type, fn)=> { if(type === 'abort') removed = fn; },
+    };
+    const adapter = makeWebdavAdapter({ ...cfg, signal });
+    responder = () => res(404);
+    await adapter.pull();
+    assert.equal(typeof added, 'function');
+    assert.equal(removed, added);
+  });
 });
 
 describe('webdavCheck', () => {

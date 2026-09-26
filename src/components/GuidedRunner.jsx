@@ -23,8 +23,8 @@ import { restStartCue, restTickCue, restCompleteCue } from '../lib/audioCues.js'
 import { speak, cancelSpeech, voiceSupported } from '../lib/voiceCoach.js';
 import { haptic } from '../lib/haptics.js';
 import { announce, useDialogA11y } from '../lib/a11y.js';
-import { createWakeLock } from '../lib/wakeLock.js';
 import { restPresetFor } from '../lib/gymMode.js';
+import { useWorkoutClock, useWorkoutDraftPersistence, useWorkoutWakeLock } from '../hooks/useWorkoutRuntime.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
 import { RestDock, WeightInput } from './GymModePanel.jsx';
 import { asUnit, fmtWeight } from '../lib/units.ts';
@@ -50,15 +50,13 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   const [restEndsAt,setRestEndsAt]=useState(()=> draft?.restEndsAt || null);
   const [restLabel,setRestLabel]=useState(()=> draft?.restLabel || '');
   const [restExerciseId,setRestExerciseId]=useState(()=> draft?.restExerciseId || null);
-  const [clock,setClock]=useState(()=> Date.now());
+  const [clock,setClock]=useWorkoutClock(true);
   const [celebrate,setCelebrate]=useState(false);
   const [soundOn,setSoundOn]=useState(soundCues);
   const [voiceOn,setVoiceOn]=useState(voiceCoach);
   const [announcement,setAnnouncement]=useState('');
   const restTickRef=useRef(null);
   const spokenStepRef=useRef(null);
-  const wakeLockRef=useRef(null);
-  const draftRef=useRef(null);
   const { rootRef, closeRef, trapTab } = useDialogA11y();
   // Randomised field study: the SAME frozen arm assignment the standard
   // runner enforces (shared studyArmFor + treatmentRecommendation), so
@@ -97,21 +95,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   }, [onCancel]);
 
 
-  // Session timer ticks every second while running; rest countdown ticks
-  // faster for a smooth expiry check. Wall-clock based, so refresh/sleep safe.
-  useEffect(()=>{
-    const id=setInterval(()=> setClock(Date.now()), 500);
-    return ()=> clearInterval(id);
-  },[]);
-
-  // Gym Mode: keep the screen awake for the whole guided session (opt-in).
-  useEffect(()=>{
-    if(!wakeLock) return undefined;
-    const lock = createWakeLock();
-    wakeLockRef.current = lock;
-    lock.acquire();
-    return ()=> { wakeLockRef.current = null; lock.release(); };
-  }, [wakeLock]);
+  useWorkoutWakeLock(wakeLock);
 
   const restLeft = restEndsAt ? Math.max(0, Math.ceil((restEndsAt-clock)/1000)) : null;
 
@@ -179,9 +163,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   // Leaving the runner (save/cancel/unmount) must stop any queued speech.
   useEffect(()=> ()=> cancelSpeech(), []);
 
-  // Persist every meaningful interaction via the shared draft contract.
-  useEffect(()=>{
-    const nextDraft = {
+  const draftSnapshot = useMemo(()=> ({
       version: 1,
       runner: 'guided',
       session,
@@ -195,19 +177,8 @@ export default function GuidedRunner({ session, history = [], availableEquipment
       // Which exercises' prospective evidence was already recorded — a resume
       // after crash/reload re-seeds shownRecommendationRef from this.
       recordedExercises: [...shownRecommendationRef.current],
-      updatedAt: new Date().toISOString(),
-    };
-    draftRef.current = nextDraft;
-    onDraftChange?.(nextDraft);
-  }, [blocks, note, noteTags, restEndsAt, restLabel, restExerciseId, session, onDraftChange]);
-
-  useEffect(()=>{
-    const persistOnPageHide=()=>{
-      if(draftRef.current) onDraftChange?.({ ...draftRef.current, updatedAt: new Date().toISOString() });
-    };
-    window.addEventListener('pagehide', persistOnPageHide);
-    return ()=> window.removeEventListener('pagehide', persistOnPageHide);
-  }, [onDraftChange]);
+  }), [blocks, note, noteTags, restEndsAt, restLabel, restExerciseId, session]);
+  const { persistNow: persistDraftNow } = useWorkoutDraftPersistence(draftSnapshot, onDraftChange);
 
   const step = useMemo(()=> nextGuidedStep(blocks), [blocks]);
   const progress = useMemo(()=> guidedProgress(blocks), [blocks]);
@@ -271,7 +242,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
       }catch{}
       // Carry the "already shown" markers into the draft so a resume after
       // reload or crash never records the same exercise twice.
-      if(draftRef.current) onDraftChange?.({ ...draftRef.current, recordedExercises: [...shownRecommendationRef.current], updatedAt: new Date().toISOString() });
+      persistDraftNow({ recordedExercises:[...shownRecommendationRef.current] });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[activeBlockIndex, session]);

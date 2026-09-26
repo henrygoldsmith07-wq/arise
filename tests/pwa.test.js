@@ -3,8 +3,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { classifyPlatform, isStandalone } from '../src/lib/install.js';
-import { tabForShortcut, consumeShortcut } from '../src/lib/pwa.js';
+import { classifyPlatform, createInstallManager, isStandalone } from '../src/lib/install.js';
+import { tabForShortcut, consumeShortcut, watchStandaloneBodyClass } from '../src/lib/pwa.js';
 import { patternForEvent, hapticsEnabled, HAPTIC_PATTERNS, resetHapticsForTests, setHapticsSource } from '../src/lib/haptics.js';
 import { shareTextAsFile, copyToClipboard } from '../src/lib/nativeShare.js';
 
@@ -38,6 +38,42 @@ describe('platform classification (pure)', () => {
 describe('standalone detection', () => {
   it('false without window (node test env)', () => {
     assert.equal(isStandalone(), false);
+  });
+
+  it('display-mode watcher removes the exact media-query listener on cleanup', () => {
+    let added = null;
+    let removed = null;
+    const mq = {
+      matches:false,
+      addEventListener:(type, fn)=> { if(type === 'change') added = fn; },
+      removeEventListener:(type, fn)=> { if(type === 'change') removed = fn; },
+    };
+    globalThis.window = { matchMedia:()=> mq, navigator:{ standalone:false } };
+    globalThis.document = { body:{ classList:{ toggle:()=>{} } } };
+    const cleanup = watchStandaloneBodyClass();
+    assert.equal(typeof added, 'function');
+    cleanup();
+    assert.equal(removed, added);
+    delete globalThis.window;
+    delete globalThis.document;
+  });
+});
+
+describe('install manager lifecycle', () => {
+  it('destroy removes the exact global handler references', () => {
+    const added = new Map();
+    const removed = new Map();
+    globalThis.window = {
+      addEventListener:(type, fn)=> added.set(type, fn),
+      removeEventListener:(type, fn)=> removed.set(type, fn),
+    };
+    const manager = createInstallManager();
+    assert.equal(typeof added.get('beforeinstallprompt'), 'function');
+    assert.equal(typeof added.get('appinstalled'), 'function');
+    manager.destroy();
+    assert.equal(removed.get('beforeinstallprompt'), added.get('beforeinstallprompt'));
+    assert.equal(removed.get('appinstalled'), added.get('appinstalled'));
+    delete globalThis.window;
   });
 });
 

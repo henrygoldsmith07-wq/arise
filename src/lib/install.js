@@ -51,16 +51,20 @@ export function createInstallManager(){
   const listeners = [];
   const emit = () => { for(const fn of listeners) fn(available()); };
   const available = () => deferred != null;
+  const onBeforeInstallPrompt = (e) => {
+    e.preventDefault();
+    deferred = e;
+    emit();
+  };
+  const onInstalled = () => { deferred = null; emit(); };
 
   if(typeof window !== 'undefined'){
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();          // keep Chrome from showing its own mini-infobar
-      deferred = e;
-      emit();
-    });
+    // This manager is normally module/page-lifetime (InstallCard owns one
+    // singleton), but it still exposes destroy() for tests/alternate owners.
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
     // The event can arrive before listeners attach in slow hydration paths —
     // also expose it if it already fired.
-    window.addEventListener('appinstalled', () => { deferred = null; emit(); });
+    window.addEventListener('appinstalled', onInstalled);
   }
 
   return {
@@ -74,6 +78,14 @@ export function createInstallManager(){
       const { outcome } = await deferred.userChoice;
       deferred = null;
       return outcome === 'accepted' ? 'accepted' : 'dismissed';
+    },
+    destroy(){
+      listeners.length = 0;
+      deferred = null;
+      if(typeof window !== 'undefined'){
+        window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+        window.removeEventListener('appinstalled', onInstalled);
+      }
     },
   };
 }

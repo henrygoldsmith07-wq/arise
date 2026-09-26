@@ -24,6 +24,7 @@ import { idbTransaction } from './idb-tx.js';
 import { enforceIntegrity, quarantineBrokenStore } from './integrity.js';
 import { captureSnapshot } from './snapshots.js';
 import { normalizeHistoryForWrite, makeTombstone } from './domain.js';
+import { reconcileStoreSnapshots } from './storeReconcile.js';
 
 const LS_KEY = 'arise.store.v1';
 const POINTER_KEY = 'arise.store.v1.pointer';
@@ -33,6 +34,15 @@ const READINESS_ID = 'log';
 
 let cache = null;          // hydrated monolithic store
 let hydratePromise = null;
+const commitListeners = new Set();
+export function subscribeStoreCommits(listener){
+  if(typeof listener !== 'function') return ()=>{};
+  commitListeners.add(listener);
+  return ()=> commitListeners.delete(listener);
+}
+function notifyStoreCommitted(reason){
+  for(const listener of [...commitListeners]){ try{ listener(reason); }catch{} }
+}
 
 function lsRead(){
   try{ const raw = localStorage.getItem(LS_KEY); return raw ? JSON.parse(raw) : null; }catch{ return null; }
@@ -97,8 +107,15 @@ function historyOf(store){
   return store.history || [];
 }
 
-export async function persistStore(store){
-  const d = decompose(store);
+export async function persistStore(store, { baseStore = null } = {}){
+  let committedStore = store;
+  if(baseStore){
+    try{
+      const canonical = await loadStoreFromIdb();
+      committedStore = reconcileStoreSnapshots(baseStore, store, canonical);
+    }catch{}
+  }
+  const d = decompose(committedStore);
   // One transaction across every touched store: a save is all-or-nothing.
   // The previous clear-then-put-per-store storm could leave stores from
   // different points in time after a mid-save crash, and recomposition then
@@ -134,8 +151,9 @@ export async function persistStore(store){
     if(legacy && !legacy.__ariseIdb){
       try{ localStorage.setItem('arise.store.v1.pre-idb-backup', JSON.stringify(legacy)); }catch{}
     }
-    lsWrite({ __ariseIdb: true, version: store.version || 6, preferences: store.preferences || {} });
+    lsWrite({ __ariseIdb: true, version: committedStore.version || 6, preferences: committedStore.preferences || {} });
   }catch{}
+  return committedStore;
 }
 
 export async function loadStoreFromIdb(){
@@ -180,6 +198,15 @@ export async function loadStoreFromIdb(){
     tombstones: tombstones || [],
     evaluationLedger: [...ledgerMap.values()],
   };
+}
+
+// True canonical refresh for another-tab invalidation. Unlike loadStore(),
+// this bypasses the hydrated process cache and replaces it with a fresh IDB
+// recomposition without writing anything back.
+export async function refreshCachedStoreFromIdb(){
+  const fresh = await loadStoreFromIdb();
+  cache = fresh || undefined;
+  return fresh || null;
 }
 
 // One-time import from the legacy localStorage payload.
@@ -303,8 +330,16 @@ export function whenPersisted(){
   return Promise.all([...pendingWrites]).then(()=>{});
 }
 export function setCachedStore(store){
+  const baseStore = cache;
   cache = store;
-  void enqueueWrite(()=> persistStore(store));
+  void enqueueWrite(async()=> {
+    const committed = await persistStore(store, { baseStore });
+    // Do not replace a newer local snapshot that was submitted while this
+    // queued write was awaiting IDB. The next queued write will reconcile from
+    // the committed canonical state using its own base snapshot.
+    if(cache === store) cache = committed;
+    notifyStoreCommitted('store-write');
+  });
 }
 
 // Shrink the data-loss window: a save is async and a user can close the tab
@@ -312,6 +347,7 @@ export function setCachedStore(store){
 // being unloaded — the transaction makes each flush all-or-nothing.
 if(typeof window !== 'undefined' && typeof window.addEventListener === 'function'){
   const flush = ()=> { void whenPersisted(); };
+  const flushWhenHidden = ()=> { if(document.visibilityState === 'hidden') flush(); };
   window.addEventListener('pagehide', flush);
-  window.addEventListener('visibilitychange', ()=> { if(document.visibilityState === 'hidden') flush(); });
+  window.addEventListener('visibilitychange', flushWhenHidden);
 }

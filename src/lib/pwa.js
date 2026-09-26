@@ -12,18 +12,23 @@ import { isStandalone } from './install.js';
 
 export function ensureStandaloneBodyClass(){
   if(typeof document === 'undefined') return false;
-  const apply = () => {
-    const standalone = isStandalone();
-    document.body.classList.toggle('standalone', standalone);
-    return standalone;
-  };
-  apply();
-  // Display mode can change (installed mid-session); keep watching.
+  const standalone = isStandalone();
+  document.body.classList.toggle('standalone', standalone);
+  return standalone;
+}
+
+// React/components need an explicit cleanup path when display mode changes.
+export function watchStandaloneBodyClass(){
+  ensureStandaloneBodyClass();
+  let mq = null;
+  const apply = ()=> ensureStandaloneBodyClass();
   try{
-    const mq = window.matchMedia?.('(display-mode: standalone)');
+    mq = window.matchMedia?.('(display-mode: standalone)') || null;
     mq?.addEventListener?.('change', apply);
   }catch{}
-  return isStandalone();
+  return ()=> {
+    try{ mq?.removeEventListener?.('change', apply); }catch{}
+  };
 }
 
 /** Pure: which tab does a shortcut query demand? */

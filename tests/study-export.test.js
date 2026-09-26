@@ -238,6 +238,9 @@ describe('§3 abandonment warning uses the terminal denominator', ()=>{
 describe('§4/§5 guidance and privacy wording stay honest', ()=>{
   const guide = readFileSync(root('docs', 'PARTICIPANT_GUIDE.md'), 'utf8');
   const more = readFileSync(root('src', 'components', 'MoreView.jsx'), 'utf8');
+  const evidence = readFileSync(root('src', 'components', 'settings', 'EvidenceSettings.jsx'), 'utf8');
+  const evidenceService = readFileSync(root('src', 'services', 'evidenceService.js'), 'utf8');
+  const studySurface = `${more}\n${evidence}\n${evidenceService}`;
 
   it('documents the exact eligibility gates', ()=>{
     assert.match(guide, /Local measurement consent is on/);
@@ -246,12 +249,12 @@ describe('§4/§5 guidance and privacy wording stay honest', ()=>{
   });
 
   it('never describes the backup as the study export', ()=>{
-    assert.match(more, /Export study data/, 'the UI exposes the dedicated action');
-    assert.match(more, /arise-study-/, 'the UI downloads the documented filename');
+    assert.match(studySurface, /Export study data/, 'the UI exposes the dedicated action');
+    assert.match(studySurface, /arise-study-/, 'the study workflow downloads the documented filename');
     assert.match(guide, /Export study data/);
     assert.match(guide, /is a different file/, 'guide distinguishes backup from study export');
     assert.doesNotMatch(guide, /Backup & portability → Export.*study contribution/);
-    assert.doesNotMatch(more, /backup[^]*?IS your study contribution/i);
+    assert.doesNotMatch(studySurface, /backup[^]*?IS your study contribution/i);
   });
 
   it('withdrawal section: assignments stop, history preserved, shared files need operator-side deletion', ()=>{
@@ -261,7 +264,7 @@ describe('§4/§5 guidance and privacy wording stay honest', ()=>{
   });
 
   it('no local-deletion claim reaches copies already shared', ()=>{
-    for(const [name, text] of [['PARTICIPANT_GUIDE.md', guide], ['MoreView.jsx', more]]){
+    for(const [name, text] of [['PARTICIPANT_GUIDE.md', guide], ['EvidenceSettings.jsx', evidence]]){
       assert.doesNotMatch(text, /removes it everywhere/, name);
       assert.match(text, /outside the app|cannot reach/, name + ' states the shared-copy limit');
     }
@@ -540,7 +543,7 @@ describe('§ export minimisation — only disclosed, study-required data leaves'
 
   it('disclosure contract: every exported category is stated in participant-facing study copy', ()=>{
     const guide = readFileSync(root('docs', 'PARTICIPANT_GUIDE.md'), 'utf8');
-    const more = readFileSync(root('src', 'components', 'MoreView.jsx'), 'utf8');
+    const evidence = readFileSync(root('src', 'components', 'settings', 'EvidenceSettings.jsx'), 'utf8');
     // The five exported categories, each present in both surfaces:
     const categories = [
       [/Workout structure and performance/i, 'workout structure + performance'],
@@ -552,10 +555,10 @@ describe('§ export minimisation — only disclosed, study-required data leaves'
     ];
     for(const [re, label] of categories){
       assert.match(guide, re, `PARTICIPANT_GUIDE.md must disclose: ${label}`);
-      assert.match(more, re, `study card must disclose: ${label}`);
+      assert.match(evidence, re, `study card must disclose: ${label}`);
     }
     // The never-included list in both surfaces, incl. the readiness honesty fix:
-    for(const [name, text] of [['PARTICIPANT_GUIDE.md', guide], ['MoreView.jsx', more]]){
+    for(const [name, text] of [['PARTICIPANT_GUIDE.md', guide], ['EvidenceSettings.jsx', evidence]]){
       assert.match(text, /free-text notes|free text/i, name);
       assert.match(text, /health-platform/i, name + ' discloses health-platform data is not exported');
       assert.match(text, /crash diagnostics|crash/i, name);

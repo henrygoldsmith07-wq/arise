@@ -109,27 +109,59 @@ test.describe('active workout resilience', () => {
 });
 
 test.describe('cross-tab safety', () => {
-  test('a second tab refreshing its store cannot clobber an active draft', async ({ page, context }) => {
+  test('idle tab reflects preference changes without reload', async ({ page, context }) => {
     await completeOnboarding(page);
-    const runner = await openRunner(page);
-    const repInputs = runner.getByPlaceholder('8');
-    if (await repInputs.first().isVisible()) await repInputs.first().fill('9');
-    const doneButtons = runner.getByRole('button', { name: 'Done' });
-    if (await doneButtons.count()) await doneButtons.first().click();
-
-    // Second tab: same origin, boots its own view, then writes its own store copy.
     const page2 = await context.newPage();
     await page2.goto('/');
-    await expect(page2.getByRole('dialog', { name: 'Onboarding' })).toBeHidden({ timeout: 10_000 }).catch(() => {});
-    await page2.evaluate(() => {
-      const raw = localStorage.getItem('arise.store.v1');
-      if (raw) localStorage.setItem('arise.store.v1', raw); // touch the key → storage event
-    });
-    // The draft must still be offered in tab 1 (the storage listener skips
-    // mid-session refreshes precisely so a foreign write can't clobber it).
-    await page.bringToFront();
-    await page.reload();
-    await expect(page.getByText('Resume your workout?')).toBeVisible({ timeout: 10_000 });
+    await expect(page2.getByRole('dialog', { name: 'Onboarding' })).toBeHidden({ timeout: 10_000 });
+    await page.getByRole('button', { name:'More', exact:true }).click();
+    await page.locator('#sec-appearance').getByRole('button', { name:'Light', exact:true }).click();
+    await expect(page.locator('html')).not.toHaveClass(/dark/);
+    await expect(page2.locator('html')).not.toHaveClass(/dark/, { timeout:10_000 });
+    await page.locator('#sec-appearance').getByRole('button', { name:'Dark', exact:true }).click();
+    await expect(page2.locator('html')).toHaveClass(/dark/, { timeout:10_000 });
+    await page2.close();
+  });
+
+  test('workout completion reaches an idle Progress tab without reload', async ({ page, context }) => {
+    await completeOnboarding(page);
+    const page2 = await context.newPage();
+    await page2.goto('/');
+    await expect(page2.getByRole('dialog', { name:'Onboarding' })).toBeHidden({ timeout:10_000 });
+    await page2.getByRole('button', { name:'Progress', exact:true }).click();
+    await expect(page2.getByText(/No sessions yet/i)).toBeVisible({ timeout:10_000 });
+
+    const runner = await openRunner(page);
+    const doneButtons = runner.getByRole('button', { name:'Done' });
+    if(await doneButtons.count()) await doneButtons.first().click();
+    const saveBtn = runner.getByRole('button', { name:'Save session' });
+    await expect(saveBtn).toBeEnabled({ timeout:5000 });
+    await saveBtn.click();
+
+    await expect(page2.getByText(/Showing 1 of 1 sessions/i)).toBeVisible({ timeout:15_000 });
+    await page2.close();
+  });
+
+  test('active workout is protected and deferred refresh applies after cancel', async ({ page, context }) => {
+    await completeOnboarding(page);
+    const page2 = await context.newPage();
+    await page2.goto('/');
+    await expect(page2.getByRole('dialog', { name:'Onboarding' })).toBeHidden({ timeout:10_000 });
+
+    await page.getByRole('button', { name:'More', exact:true }).click();
+    await page.locator('#sec-appearance').getByRole('button', { name:'Light', exact:true }).click();
+    await expect(page2.locator('html')).not.toHaveClass(/dark/, { timeout:10_000 });
+
+    const runner = await openRunner(page2);
+    await page.getByRole('button', { name:'More', exact:true }).click();
+    await page.locator('#sec-appearance').getByRole('button', { name:'Dark', exact:true }).click();
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await page2.waitForTimeout(1200);
+    await expect(page2.locator('html')).not.toHaveClass(/dark/);
+
+    await runner.getByRole('button', { name:'Close session' }).click();
+    await expect(runner).toBeHidden({ timeout:8000 });
+    await expect(page2.locator('html')).toHaveClass(/dark/, { timeout:15_000 });
     await page2.close();
   });
 });

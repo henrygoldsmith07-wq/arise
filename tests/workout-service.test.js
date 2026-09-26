@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { completeWorkout } from '../src/services/workoutService.js';
+import { cancellationPlan, completeWorkout, completeWorkoutWorkflow } from '../src/services/workoutService.js';
 
 function payload(overrides = {}){
   return {
@@ -37,5 +37,28 @@ describe('workout application service', ()=>{
     assert.equal(JSON.stringify(store), snapshot);
     assert.equal(result.store.history.length, 1);
     assert.equal(result.store.history[0].blocks[0].sets[0].reps, '9');
+  });
+
+  it('builds save telemetry and toast after the workflow completes', ()=>{
+    const store = { history:[], readinessLog:[], onboarding:{ equipment:['dumbbells'] }, preferences:{}, activeSchedule:null, activeWorkout:{ session:{ id:'session-1' } } };
+    const result = completeWorkoutWorkflow({ store, payload:payload(), saveStartedAt:100, performanceNow:()=> 137 });
+    assert.equal(result.toast.title, 'Upper A saved');
+    assert.match(result.toast.detail, /1 set/);
+    assert.deepEqual(result.events[0], ['session:complete', { sessionId:'session-1', blocks:1 }]);
+    assert.deepEqual(result.events[1], ['session:save', { sessionId:'session-1', blocks:1, durationMs:37 }]);
+  });
+
+  it('cancellation planning protects completed work and owns abandon metrics', ()=>{
+    const store = {
+      activeWorkout:{ startedAt:'2026-09-26T10:00:00.000Z', blocks:[{ sets:[{ completed:true },{ completed:false }] }] },
+      history:[],
+    };
+    const now = Date.parse('2026-09-26T10:05:00.000Z');
+    const result = cancellationPlan({ store, activeSession:{ id:'session-1' }, now });
+    assert.equal(result.requiresConfirmation, true);
+    assert.equal(result.completedSets, 1);
+    assert.equal(result.totalSets, 2);
+    assert.equal(result.nextStore.activeWorkout, null);
+    assert.deepEqual(result.event, { type:'session:abandon', payload:{ sessionId:'session-1', totalSets:2, completedSets:1, elapsedMs:300000 } });
   });
 });

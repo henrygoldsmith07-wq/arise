@@ -41,18 +41,17 @@ function warmLazyViews(){
   });
 }
 import { loadStore, saveStore } from './lib/store.js';
+import { refreshCachedStoreFromIdb, subscribeStoreCommits, whenPersisted } from './lib/storage.js';
 import { recommendExercises } from './lib/data.js';
 import { recordEvent, recordErrorEvent } from './lib/telemetry.js';
-import { ensureStandaloneBodyClass, consumeShortcut } from './lib/pwa.js';
+import { watchStandaloneBodyClass, consumeShortcut } from './lib/pwa.js';
 import { setHapticsSource } from './lib/haptics.js';
 import OfflineBanner from './components/OfflineBanner.jsx';
 import DemoBanner from './components/DemoBanner.jsx';
 import { captureSnapshot } from './lib/snapshots.js';
 const InstallCard = lazy(() => import('./components/InstallCard.jsx'));
-import { pushToPulse } from './lib/pulse.js';
-import { attachOutcome } from './lib/longitudinal.js';
 import { setRestPreset } from './lib/gymMode.js';
-import { completeWorkout } from './services/workoutService.js';
+import { cancellationPlan, completeWorkoutWorkflow, recordWorkoutEvents, runPostSaveIntegrations } from './services/workoutService.js';
 
 // Suspense fallback for lazy tabs: same chrome height as a view header so
 // the tab bar doesn't jump when the chunk resolves.
@@ -83,6 +82,16 @@ export default function App(){
   const quotaPromptedRef=useRef(null);
   const [toast,setToast]=useState(null);
   const applyReloadRef=useRef(false);
+  const storeRef=useRef(store);
+  const activeSessionRef=useRef(activeSession);
+  // Protection is per-tab ownership, not merely "the canonical store contains
+  // an activeWorkout". An idle peer may observe another tab's draft and still
+  // must continue accepting later invalidations from that owner.
+  const localDraftProtectedRef=useRef(Boolean(store.activeWorkout));
+  const externalSnapshotRef=useRef(null);
+  const crossTabRefreshRef=useRef(null);
+  storeRef.current = store;
+  activeSessionRef.current = activeSession;
 
   // ── Demo mode ─────────────────────────────────────────────────────────
   // "Try it with sample data" — a fully populated app (month of training,
@@ -118,6 +127,10 @@ export default function App(){
   isDemoRef.current = Boolean(store.demo);
   useEffect(()=>{
     if(isDemoRef.current) return;
+    if(externalSnapshotRef.current === store){
+      externalSnapshotRef.current = null;
+      return;
+    }
     if(!saveStore(store)) setPersistFailed(true);
   },[store]);
 
@@ -181,34 +194,81 @@ export default function App(){
   // PWA lifecycle: listen for SW update
   useEffect(()=>{
     if(!('serviceWorker' in navigator)) return;
+    let live = true;
+    let registration = null;
+    let installing = null;
     const onControllerChange = ()=>{
       // Only reload when WE activated a waiting worker (applyUpdate). The very
       // first claim after install would otherwise loop-reload first-time visits.
       if(window.__ariseSwActivating) window.location.reload();
     };
+    const onInstallingStateChange = ()=>{
+      if(live && installing?.state === 'installed' && navigator.serviceWorker.controller) setUpdateReady(true);
+    };
+    const onUpdateFound = ()=>{
+      if(installing) installing.removeEventListener?.('statechange', onInstallingStateChange);
+      installing = registration?.installing || null;
+      installing?.addEventListener?.('statechange', onInstallingStateChange);
+    };
     navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
     // Check for waiting SW on load
     navigator.serviceWorker.getRegistration().then(r=>{
+      if(!live) return;
+      registration = r || null;
       if(r?.waiting) setUpdateReady(true);
-      if(r) r.addEventListener('updatefound', ()=>{
-        const nw = r.installing;
-        if(nw) nw.addEventListener('statechange', ()=>{ if(nw.state==='installed' && navigator.serviceWorker.controller) setUpdateReady(true); });
-      });
+      registration?.addEventListener?.('updatefound', onUpdateFound);
     });
-    return ()=> navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+    return ()=> {
+      live = false;
+      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+      registration?.removeEventListener?.('updatefound', onUpdateFound);
+      installing?.removeEventListener?.('statechange', onInstallingStateChange);
+    };
   },[]);
 
-  // Keep state fresh when another tab writes the store. Skipped mid-session so
-  // a foreign write can't clobber the runner draft.
+  // IndexedDB is canonical after hydration. Other tabs publish only a small
+  // invalidation message after their durable commit; this tab then performs a
+  // real IDB re-read rather than consulting its process-local cache. Active
+  // drafts are protected and the refresh is deferred until the workout ends.
   useEffect(()=>{
-    if(!('storage' in window)) return;
-    const onStorage = (e)=>{
-      if(e.key !== 'arise.store.v1' || activeSession) return;
-      setStoreState(loadStore());
+    let disposed = false;
+    let cleanup = ()=>{};
+    void import('./lib/crossTabStore.js').then(({ createStoreInvalidationBus, createStoreRefreshCoordinator })=>{
+      if(disposed) return;
+      const bus = createStoreInvalidationBus();
+      const stopPublishing = subscribeStoreCommits((reason)=> bus.publish(reason));
+      const coordinator = createStoreRefreshCoordinator({
+        subscribe: (handler)=> bus.subscribe(handler),
+        isProtected: ()=> Boolean(activeSessionRef.current || localDraftProtectedRef.current),
+        readCanonical: async()=> {
+          await whenPersisted();
+          await refreshCachedStoreFromIdb();
+          return loadStore();
+        },
+        applyCanonical: (next)=> {
+          localDraftProtectedRef.current = false;
+          externalSnapshotRef.current = next;
+          setStoreState(next);
+          setRecoveryOpen(Boolean(next?.activeWorkout));
+        },
+      });
+      crossTabRefreshRef.current = coordinator;
+      cleanup = ()=> {
+        stopPublishing();
+        crossTabRefreshRef.current = null;
+        coordinator.close();
+        bus.close();
+      };
+    }).catch(()=>{});
+    return ()=> {
+      disposed = true;
+      cleanup();
     };
-    window.addEventListener('storage', onStorage);
-    return ()=> window.removeEventListener('storage', onStorage);
-  },[activeSession]);
+  },[]);
+
+  useEffect(()=>{
+    if(!activeSession && !store.activeWorkout) void crossTabRefreshRef.current?.flushDeferred();
+  },[activeSession, store.activeWorkout]);
 
   // Transient confirmation. Saving a session also switches tabs, so without
   // this the jump to Progress is the only signal that anything was recorded.
@@ -225,9 +285,13 @@ export default function App(){
     const onError = (e)=>{
       try { recordErrorEvent(e.error || e.reason || e, 'window'); } catch {}
     };
+    const onUnhandledRejection = (e)=> onError(e.reason || e);
     window.addEventListener('error', onError);
-    window.addEventListener('unhandledrejection', (e)=> onError(e.reason||e));
-    return ()=> { window.removeEventListener('error', onError); window.removeEventListener('unhandledrejection', onError); };
+    window.addEventListener('unhandledrejection', onUnhandledRejection);
+    return ()=> {
+      window.removeEventListener('error', onError);
+      window.removeEventListener('unhandledrejection', onUnhandledRejection);
+    };
   },[]);
 
   const recs = useMemo(()=>{
@@ -246,6 +310,7 @@ export default function App(){
       return;
     }
     setActiveSession(session);
+    localDraftProtectedRef.current = true;
     setRecoveryOpen(false);
     try { recordEvent('session:start', { sessionId: session.id, title: session.title }); } catch {}
   };
@@ -259,6 +324,7 @@ export default function App(){
   const handleDraftChange = useCallback((draft)=>{
     // Pure updater — the [store] effect below owns persistence. Writing
     // localStorage inside an updater double-fires under StrictMode.
+    localDraftProtectedRef.current = true;
     setStoreState(prev=> ({ ...prev, activeWorkout: draft }));
   },[]);
 
@@ -273,77 +339,28 @@ export default function App(){
     // payload build + store write only (auto-sync below is fire-and-forget and
     // deliberately excluded). Consent-gated like every other measurement.
     const saveStartedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : null;
-    const completed = completeWorkout({ store, payload });
-    const { store: next, historyBefore, history: hist, adaptation, weeklyReview, summary } = completed;
-    // Longitudinal evaluation: resolve open recommendation records against this
-    // real outcome. Uses the pre-save history as "before" context; consent-gated
-    // and stored separately from training history.
-    try{
-      attachOutcome({
-        sessionId: payload.id,
-        dateISO: payload.dateISO,
-        blocks: payload.blocks,
-        historyBefore,
-        sessionMeta: payload,
-        preferences: next.preferences?.telemetryEnabled === true ? { telemetryEnabled: true } : null,
-      });
-    }catch{}
+    const completed = completeWorkoutWorkflow({
+      store,
+      payload,
+      saveStartedAt,
+      performanceNow:saveStartedAt != null && typeof performance !== 'undefined' && performance.now ? ()=> performance.now() : null,
+    });
+    const { store:next, history:hist, events, toast:saveToast } = completed;
     setStore(next);
-    // Auto-sync: when enabled and configured, converge with the remote in the
-    // background after every saved session. Fire-and-forget — failures surface
-    // in the sync status screen, never as workout-blocking errors. Loaded via
-    // dynamic import so the whole sync stack stays out of the boot chunk.
-    void import('./lib/autoSync.js')
-      .then(({ autoSyncAfterSave }) => autoSyncAfterSave({ store: next, setStore }))
-      .catch(() => {});
+    runPostSaveIntegrations({ store:next, payload, history:hist, setStore });
+    localDraftProtectedRef.current = false;
     setActiveSession(null);
     setRecoveryOpen(false);
     setTab('progress');
-    setToast({
-      title: `${payload.title} saved`,
-      detail: [
-        `${summary.savedSets} set${summary.savedSets===1?'':'s'}`,
-        null,
-        `${payload.durationMinutes} min`,
-      ].filter(Boolean).join(' · '),
-      note: adaptation?.changed ? 'Your next sessions were adjusted from this result.' : null,
-    });
-    try { recordEvent('session:complete', { sessionId: payload.id, blocks: payload.blocks.length }); } catch {}
-    if(saveStartedAt != null){
-      try{ recordEvent('session:save', { sessionId: payload.id, blocks: payload.blocks.length, durationMs: Math.max(0, Math.round(performance.now() - saveStartedAt)) }); }catch{}
-    }
-    if(adaptation?.changed){
-      try { recordEvent('programme:adapt', { sessionId: payload.id, changes: adaptation.changes, decision: adaptation.decision }); } catch {}
-    }
-    if(weeklyReview?.changed){
-      try { recordEvent('programme:weekly-review', { basisWeek: weeklyReview.entry.basisKey, changes: weeklyReview.changes }); } catch {}
-    }
-    // Pulse push if enabled and adapter present (adapter injected via window.__PULSE_ADAPTER__ for now)
-    try {
-      const adapter = typeof window !== 'undefined' ? window.__PULSE_ADAPTER__ : null;
-      if(next.preferences?.pulseEnabled && adapter){
-        Promise.resolve(pushToPulse(payload, hist, adapter)).then(result=>{
-          const ok=result?.ok ?? Object.values(result||{}).every(value=> value?.ok !== false);
-          recordEvent('pulse:sync', { sessionId:payload.id, ok, result }, { essential:false });
-        }).catch(error=> recordEvent('pulse:sync', { sessionId:payload.id, ok:false, error:String(error?.message||error) }, { essential:false }));
-      }
-    } catch {}
+    setToast(saveToast);
+    recordWorkoutEvents(events);
   };
   const handleCancelSession = ()=>{
-    const draft=store.activeWorkout;
-    if(activeSession && draft){
-      const completedSets=draft.blocks?.reduce((n,b)=> n+(b.sets||[]).filter(s=> s.completed).length,0) || 0;
-      // The draft is crash-insurance for logged sets — discarding it needs a
-      // deliberate confirmation once real work is on the line.
-      if(completedSets>0 && !window.confirm(`Discard this workout? ${completedSets} completed set${completedSets===1?'':'s'} will be lost.`)) return;
-    }
-    if(activeSession) try {
-      const totalSets=draft?.blocks?.reduce((n,b)=> n+(b.sets||[]).length,0) || 0;
-      const completedSets=draft?.blocks?.reduce((n,b)=> n+(b.sets||[]).filter(s=> s.completed).length,0) || 0;
-      const startedAt=draft?.startedAt ? Date.parse(draft.startedAt) : null;
-      recordEvent('session:abandon', { sessionId: activeSession.id, totalSets, completedSets, elapsedMs:startedAt ? Math.max(0,Date.now()-startedAt) : null });
-    } catch {}
-    setStore({ ...store, activeWorkout: null });
+    const plan = cancellationPlan({ store, activeSession });
+    if(plan.requiresConfirmation && !window.confirm(`Discard this workout? ${plan.completedSets} completed set${plan.completedSets===1?'':'s'} will be lost.`)) return;
+    if(plan.event) try{ recordEvent(plan.event.type, plan.event.payload); }catch{}
+    setStore(plan.nextStore);
+    localDraftProtectedRef.current = false;
     setActiveSession(null);
     setRecoveryOpen(false);
   };
@@ -356,12 +373,14 @@ export default function App(){
       return;
     }
     setActiveSession(draft.session);
+    localDraftProtectedRef.current = true;
     setRecoveryOpen(false);
     try { recordEvent('session:resume', { sessionId: draft.session.id }); } catch {}
   };
 
   const discardDraft = ()=>{
     setStore({ ...store, activeWorkout: null });
+    localDraftProtectedRef.current = false;
     setRecoveryOpen(false);
   };
 
@@ -400,7 +419,7 @@ export default function App(){
   // Haptics read the live preference; the module holds the platform check.
   setHapticsSource(() => store.preferences?.haptics !== false);
 
-  useEffect(() => { ensureStandaloneBodyClass(); }, []);
+  useEffect(() => watchStandaloneBodyClass(), []);
   useEffect(() => { consumeShortcut(setTab); }, []);
 
   // A deferred update applies automatically the moment the workout ends

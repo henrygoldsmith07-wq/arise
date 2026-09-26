@@ -76,7 +76,9 @@ export default function ProgressView({ store }){
     const min = Math.min(...ys, ...intervalValues) - 1, max = Math.max(...ys, ...intervalValues) + 1;
     const xAt = i=> pad + (i / Math.max(1, n - 1)) * (W - 2 * pad);
     const yAt = v=> pad + (1 - (v - min) / Math.max(0.001, max - min)) * (H - 2 * pad);
-    const line = pts.map((p,i)=> `${i ? 'L' : 'M'}${xAt(i).toFixed(1)},${yAt(p.observed).toFixed(1)}`).join(' ');
+    const observedLine = pts.map((p,i)=> `${i ? 'L' : 'M'}${xAt(i).toFixed(1)},${yAt(p.observed).toFixed(1)}`).join(' ');
+    const fittedLine = pts.map((p,i)=> `${i ? 'L' : 'M'}${xAt(i).toFixed(1)},${yAt(p.fitted).toFixed(1)}`).join(' ');
+    const observedPoints = pts.map((p,i)=> ({ cx:xAt(i), cy:yAt(p.observed) }));
     const band = regression.intervalAvailable
       ? [
           ...pts.map((p,i)=> `${i ? 'L' : 'M'}${xAt(i).toFixed(1)},${yAt(p.confidenceHigh).toFixed(1)}`),
@@ -90,7 +92,7 @@ export default function ProgressView({ store }){
     const r1 = Math.round(ys[0] * 10) / 10, rN = Math.round(ys[n - 1] * 10) / 10;
     const direction = rN - r1 > 0.5 ? 'upward' : rN - r1 < -0.5 ? 'downward' : 'roughly flat';
     return {
-      line, band, n,
+      observedLine, fittedLine, observedPoints, band, n,
       intervalAvailable: regression.intervalAvailable,
       // Text alternative for the chart: a one-line read plus a real data
       // table (rendered sr-only) so screen readers get the numbers the SVG
@@ -411,8 +413,17 @@ export default function ProgressView({ store }){
               <figure className="rounded-xl border border-line bg-surface2 px-3 py-2">
                 <svg viewBox="0 0 320 84" className="w-full h-20" role="img" aria-hidden="true" focusable="false">
                   {trendBand.band && <path d={trendBand.band} fill="currentColor" className="text-ink3/20" />}
-                  <path d={trendBand.line} fill="none" stroke="currentColor" strokeWidth="2" className="text-ink" strokeLinejoin="round" strokeLinecap="round" />
+                  <path d={trendBand.observedLine} fill="none" stroke="currentColor" strokeWidth="1" className="text-ink3/60" strokeLinejoin="round" strokeLinecap="round" />
+                  <path d={trendBand.fittedLine} fill="none" stroke="currentColor" strokeWidth="2.5" className="text-ink" strokeLinejoin="round" strokeLinecap="round" />
+                  {trendBand.observedPoints.map((point,index)=> (
+                    <circle key={index} cx={point.cx} cy={point.cy} r="2.4" fill="currentColor" className="text-ink2" />
+                  ))}
                 </svg>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-ink3" aria-hidden="true">
+                  <span className="inline-flex items-center gap-1"><span className="inline-block w-1.5 h-1.5 rounded-full bg-ink2" />observed e1RM</span>
+                  <span className="inline-flex items-center gap-1"><span className="inline-block w-5 border-t-2 border-ink" />fitted trend</span>
+                  {trendBand.intervalAvailable && <span className="inline-flex items-center gap-1"><span className="inline-block w-5 h-2 bg-ink3/20" />95% confidence interval</span>}
+                </div>
                 <span className="sr-only">{trendBand.summary}</span>
                 <table className="sr-only">
                   <caption>Estimated 1RM per session</caption>
@@ -424,7 +435,7 @@ export default function ProgressView({ store }){
                   </tbody>
                 </table>
                 <figcaption className="text-[10px] text-ink3 mt-1">
-                  e1RM per session (last {trendBand.n}){trendBand.intervalAvailable ? '; shading = 95% confidence interval for the fitted trend.' : '. More sessions are needed for an uncertainty interval.'}
+                  Points are observed session e1RM estimates; the solid line is the fitted linear trend{trendBand.intervalAvailable ? '; shading is the 95% confidence interval around that fitted trend.' : '. More sessions are needed for a confidence interval.'}
                 </figcaption>
               </figure>
             )}

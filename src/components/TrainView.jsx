@@ -1,14 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useDialogA11y } from '../lib/a11y.js';
-import { PROGRAMS, PROGRAM_BY_ID, PROGRAM_TEMPLATES, programHistory as programVersionHistory, availablePrograms, EXERCISE_BY_ID, EXERCISES, plannedVsCompleted, GOALS, LEVELS, scheduleProgram } from '../lib/data.js';
-import { markSoftDeleted, unDelete, makeTombstone } from '../lib/domain.js';
-import { encodeShareCode, decodeShareCode } from '../lib/shareCodes.js';
-import { startProgram } from '../lib/schedule.js';
-import { adaptScheduleForEquipment, programAdherence, recordProgramStart, userProgramHistory } from '../lib/programming.js';
-import { generateProgramme } from '../lib/programmeGenerator.js';
+import { PROGRAMS, PROGRAM_BY_ID, PROGRAM_TEMPLATES, programHistory as programVersionHistory, availablePrograms, EXERCISE_BY_ID, EXERCISES, plannedVsCompleted, GOALS, LEVELS } from '../lib/data.js';
+import { encodeShareCode } from '../lib/shareCodes.js';
+import { adaptScheduleForEquipment, programAdherence, userProgramHistory } from '../lib/programming.js';
 import { trainRecommendation } from '../lib/trainRecommendation.js';
-import { buildEditorTemplate, moveItem, duplicateEditorTemplate, editorSubstitutionPreview } from '../lib/templateEditor.js';
-import { localDateISO } from '../lib/dateOnly.js';
+import { moveItem, editorSubstitutionPreview } from '../lib/templateEditor.js';
+import { applyEquipmentAdaptation, duplicateCustomTemplate, fallbackProgrammeId, generateProgrammeFromProfile, installSharedTemplate, restoreCustomTemplate, saveCustomTemplate, softDeleteCustomTemplate, startProgramme } from '../services/programmeService.js';
 
 const EMPTY_DAY = { title: '', exercises: [{ exerciseId: '', sets: 3, reps: '8–12', restSec: 90 }] };
 
@@ -61,31 +58,15 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
   const [templatesOpen, setTemplatesOpen] = useState(false);
 
   const startRecommendation = ()=>{
-    if(!store.onboarding) return;
-    const generated = generateProgramme({
-      ...store.onboarding,
-      availableEquipment: store.onboarding.equipment || [],
-      history: store.history || [],
-      customTemplates: store.customTemplates || [],
-      startDateISO: localDateISO(),
-    });
-    const next = { ...store, activeSchedule: generated, programHistory: recordProgramStart(store.programHistory || [], { programId: generated.programId, version: generated.programVersion || 1, startDateISO: generated.startDateISO }) };
-    setProgramId(generated.programId);
-    setStore(next);
+    const result = generateProgrammeFromProfile(store);
+    if(!result.programId) return;
+    setProgramId(result.programId);
+    setStore(result.store);
   };
 
   const start = ()=>{
-    const custom = customTemplates.find(t => t.id === programId);
-    const startDateISO = localDateISO();
-    const next = custom
-      ? { ...store, activeSchedule: scheduleProgram({ programId, startDateISO, program: custom.program }) }
-      : startProgram(store, programId);
-    const prog = custom ? custom.program : PROGRAM_BY_ID[programId];
-    if(!prog) return;
-    const entry = { programId, version: prog.version||1, startDateISO: next.activeSchedule.startDateISO, endDateISO: null };
-    const adapted = adaptScheduleForEquipment(next.activeSchedule, availableEquipment, store.history || []);
-    const hist = recordProgramStart(store.programHistory || [], entry);
-    setStore({ ...next, activeSchedule: adapted.schedule, programHistory: hist });
+    const result = startProgramme({ store, programId, availableEquipment });
+    if(result.started) setStore(result.store);
   };
 
   // ── Custom template builder helpers ──────────────────────────────────
@@ -119,50 +100,34 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
   const moveExercise = (di, ei, dir)=> setForm(f => ({ ...f, days: f.days.map((d,i)=> i!==di ? d : { ...d, exercises: moveItem(d.exercises, ei, ei + dir) }) }));
 
   const saveBuilder = ()=>{
-    if(!form.name.trim() || form.days.some(d => !d.exercises.some(e => e.exerciseId))){
-      alert('Give the template a name and at least one exercise per day.');
-      return;
-    }
-    const tpl = buildEditorTemplate(form, editingId ? customTemplates.find(t => t.id === editingId) : null);
-    const nextList = editingId
-      ? customTemplates.map(t => t.id === editingId ? tpl : t)
-      : [...customTemplates, tpl];
-    setStore({ ...store, customTemplates: nextList });
-    setBuilderOpen(false);
-    setProgramId(tpl.id);
+    try{
+      const result = saveCustomTemplate({ store, form, editingId });
+      setStore(result.store);
+      setBuilderOpen(false);
+      setProgramId(result.template.id);
+    }catch(err){ alert(String(err?.message || err)); }
   };
   // Deletion is soft: the row stays recoverable (undo below), analytics and
   // the UI filter on deletedAt, and a tombstone records the deletion so a
   // future sync can propagate it instead of resurrecting the template.
   const deleteCustom = (id)=>{
-    const target = (store.customTemplates || []).find(t => t.id === id);
-    if(!target) return;
+    if(!(store.customTemplates || []).some(t=> t.id === id)) return;
     if(!confirm('Delete this template? Schedules already started from it are not affected. You can undo right after.')) return;
-    const deleted = markSoftDeleted(target);
-    const tombstone = makeTombstone('templates', id, { deviceId: undefined });
-    setStore({
-      ...store,
-      customTemplates: (store.customTemplates || []).map(t => t.id === id ? deleted : t),
-      tombstones: [...(store.tombstones || []).filter(t => t.refId !== id), tombstone],
-    });
-    if(programId === id) setProgramId(PROGRAMS[0].id);
+    setStore(softDeleteCustomTemplate(store, id));
+    if(programId === id) setProgramId(fallbackProgrammeId());
   };
   // Duplicate: a fresh version-1 copy under a new id (save-as). The original
   // keeps its own history; the copy is owned going forward by the editor.
   const duplicateTemplate = (tpl)=>{
-    const copy = duplicateEditorTemplate(tpl);
-    if(!copy) return;
-    setStore({ ...store, customTemplates: [...(store.customTemplates || []), copy] });
-    setProgramId(copy.id);
-    setShareMsg(`Duplicated “${copy.name}” — edit it or start it now.`);
+    const result = duplicateCustomTemplate(store, tpl);
+    if(!result.copy) return;
+    setStore(result.store);
+    setProgramId(result.copy.id);
+    setShareMsg(`Duplicated “${result.copy.name}” — edit it or start it now.`);
     setTimeout(()=> setShareMsg(null), 5000);
   };
   const undoDelete = (id)=>{
-    setStore({
-      ...store,
-      customTemplates: (store.customTemplates || []).map(t => t.id === id ? unDelete(t) : t),
-      tombstones: (store.tombstones || []).filter(t => t.refId !== id),
-    });
+    setStore(restoreCustomTemplate(store, id));
   };
 
   // Program sharing: a custom template becomes a copy-paste code (URI-safe,
@@ -182,36 +147,24 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
   };
   const installShared = ()=>{
     try{
-      const template = decodeShareCode(importCode);
-      if((store.customTemplates || []).some(t => t.name === template.name && !t.deletedAt)){
-        setShareMsg(`A template named “${template.name}” already exists — rename it first to install this one.`);
-        setTimeout(()=> setShareMsg(null), 5000);
-        return;
-      }
-      setStore({ ...store, customTemplates: [...(store.customTemplates || []), template] });
-      setProgramId(template.id);
+      const result = installSharedTemplate(store, importCode);
+      setStore(result.store);
+      setProgramId(result.template.id);
       setImportCode(''); setImportOpen(false);
-      setShareMsg(`Installed “${template.name}” — it is selected now.`);
+      setShareMsg(`Installed “${result.template.name}” — it is selected now.`);
     }catch(e){ setShareMsg(e.message || 'That code could not be read.'); }
     setTimeout(()=> setShareMsg(null), 5000);
   };
 
   const applyEquipmentChanges = ()=>{
-    if(adaptation?.changed) setStore({ ...store, activeSchedule: adaptation.schedule });
+    if(adaptation?.changed) setStore(applyEquipmentAdaptation(store, adaptation));
   };
 
   const generateFromProfile = ()=>{
-    if(!store.onboarding) return;
-    const generated = generateProgramme({
-      ...store.onboarding,
-      availableEquipment: store.onboarding.equipment || [],
-      history: store.history || [],
-      customTemplates: store.customTemplates || [],
-      startDateISO: localDateISO(),
-    });
-    const next = { ...store, activeSchedule: generated, programHistory: recordProgramStart(store.programHistory || [], { programId: generated.programId, version: generated.programVersion || 1, startDateISO: generated.startDateISO }) };
-    setProgramId(generated.programId);
-    setStore(next);
+    const result = generateProgrammeFromProfile(store);
+    if(!result.programId) return;
+    setProgramId(result.programId);
+    setStore(result.store);
   };
 
   return (

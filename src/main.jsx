@@ -28,5 +28,7 @@ hydrateStorage().finally(()=>{
 });
 
 if('serviceWorker' in navigator && import.meta.env.PROD){
-  window.addEventListener('load', ()=> navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(()=>{}));
+  const registerServiceWorker = ()=> navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(()=>{});
+  if(document.readyState === 'complete') void registerServiceWorker();
+  else window.addEventListener('load', registerServiceWorker, { once:true });
 }

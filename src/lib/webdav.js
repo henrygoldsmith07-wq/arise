@@ -31,6 +31,7 @@ async function davFetch(url, options, externalSignal){
     return await fetch(url, { ...options, signal: ctrl.signal });
   }finally{
     clearTimeout(timer);
+    externalSignal?.removeEventListener?.('abort', relay);
   }
 }
 

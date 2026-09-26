@@ -56,10 +56,20 @@ export async function buildSupportBundle({ store, appVersion = null } = {}){
     if(reg?.active){
       swVersion = await new Promise((resolve) => {
         const channel = new MessageChannel();
-        channel.port1.onmessage = (e) => resolve(e.data?.version || null);
-        const timer = setTimeout(() => resolve(null), 1500);
-        reg.active.postMessage({ type: 'GET_VERSION' }, [channel.port2]);
-        setTimeout(() => { clearTimeout(timer); resolve(swVersion); }, 1600);
+        let settled = false;
+        let timer = null;
+        const finish = (value)=>{
+          if(settled) return;
+          settled = true;
+          if(timer) clearTimeout(timer);
+          channel.port1.onmessage = null;
+          try{ channel.port1.close?.(); channel.port2.close?.(); }catch{}
+          resolve(value);
+        };
+        channel.port1.onmessage = (e) => finish(e.data?.version || null);
+        timer = setTimeout(() => finish(null), 1500);
+        try{ reg.active.postMessage({ type: 'GET_VERSION' }, [channel.port2]); }
+        catch{ finish(null); }
       });
     }
   } catch { /* SW not registered — fine */ }

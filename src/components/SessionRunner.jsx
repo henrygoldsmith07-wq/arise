@@ -13,8 +13,8 @@ import { recordRecommendation, markRecommendationOverride } from '../lib/longitu
 import { quickJumps, applyQuickJump, skipTo, restPresetFor, visiblePrescriptionIndexes } from '../lib/gymMode.js';
 import { SESSION_QUALITY_OPTIONS, sessionQualityLabel } from '../lib/gymMode.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
-import { createWakeLock } from '../lib/wakeLock.js';
 import { announce, useDialogA11y } from '../lib/a11y.js';
+import { useWorkoutClock, useWorkoutDraftPersistence, useWorkoutWakeLock } from '../hooks/useWorkoutRuntime.js';
 import { restStartCue, restCompleteCue } from '../lib/audioCues.js';
 import { speak, cancelSpeech } from '../lib/voiceCoach.js';
 import { LoadNumpad, RestDock, WeightInput, swipeRowHandlers } from './GymModePanel.jsx';
@@ -149,7 +149,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   const [restEndsAt,setRestEndsAt]=useState(()=> draft?.restEndsAt || null);
   const [restLabel,setRestLabel]=useState(()=> draft?.restLabel || '');
   const [restExerciseId,setRestExerciseId]=useState(()=> draft?.restExerciseId || null);
-  const [clock,setClock]=useState(()=> Date.now());
+  const [clock,setClock]=useWorkoutClock(true);
   const [swapOpen,setSwapOpen]=useState(null);
   // RIR suggestion (never a silent observation): { bi, si, value, exerciseId }
   // set when a set completes with a measured RIR and the next row has none.
@@ -217,9 +217,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   };
   const [focusIdx,setFocusIdx]=useState(0);
   const [keypadOpen,setKeypadOpen]=useState(null);
-  const wakeLockRef=useRef(null);
   const announcedRestRef=useRef(null);
-  const draftRef=useRef(null);
   const { rootRef, closeRef, trapTab } = useDialogA11y();
   const keepEditingRef=useRef(null);
   const startedAtRef=useRef(draft?.startedAt || new Date().toISOString());
@@ -289,23 +287,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     if(discardConfirmOpen) keepEditingRef.current?.focus();
   },[discardConfirmOpen]);
 
-  // Derive remaining time from a wall-clock expiry rather than decrementing a
-  // counter. That keeps the timer correct after a refresh, sleep or tab switch.
-  useEffect(()=>{
-    if(!restEndsAt) return;
-    const id=setInterval(()=> setClock(Date.now()), 500);
-    return ()=> clearInterval(id);
-  }, [restEndsAt]);
-
-  // Gym Mode: keep the screen awake for the whole session. Opt-in preference,
-  // always released on unmount; the handle re-acquires across tab switches.
-  useEffect(()=>{
-    if(appPrefs?.wakeLock !== true) return undefined;
-    const lock = createWakeLock();
-    wakeLockRef.current = lock;
-    lock.acquire();
-    return ()=> { wakeLockRef.current = null; lock.release(); };
-  }, [appPrefs?.wakeLock]);
+  useWorkoutWakeLock(appPrefs?.wakeLock === true);
 
   const restLeft = restEndsAt ? Math.max(0, Math.ceil((restEndsAt-clock)/1000)) : null;
   useEffect(()=>{
@@ -318,10 +300,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     }
   }, [restEndsAt, clock, appPrefs?.soundCues]);
 
-  // Persist every meaningful interaction. localStorage is synchronous, so the
-  // latest set is available even if the page crashes before React unmounts.
-  useEffect(()=>{
-    const nextDraft = {
+  const draftSnapshot = useMemo(()=> ({
       version: 1,
       session,
       blocks,
@@ -334,19 +313,8 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       startedAt:startedAtRef.current,
       lastSetAt:lastSetAtRef.current,
       quality: qualityRating || undefined,
-      updatedAt: new Date().toISOString(),
-    };
-    draftRef.current = nextDraft;
-    onDraftChange?.(nextDraft);
-  }, [blocks, note, noteTags, gymMode, restEndsAt, restLabel, restExerciseId, qualityRating, session, onDraftChange]);
-
-  useEffect(()=>{
-    const persistOnPageHide=()=>{
-      if(draftRef.current) onDraftChange?.({ ...draftRef.current, updatedAt: new Date().toISOString() });
-    };
-    window.addEventListener('pagehide', persistOnPageHide);
-    return ()=> window.removeEventListener('pagehide', persistOnPageHide);
-  }, [onDraftChange]);
+  }), [blocks, note, noteTags, gymMode, restEndsAt, restLabel, restExerciseId, qualityRating, session]);
+  useWorkoutDraftPersistence(draftSnapshot, onDraftChange);
 
   // The comparative study runs once per history — it feeds the evidence
   // gates that decide whether any progression-model capability may apply.
