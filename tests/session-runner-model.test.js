@@ -5,7 +5,9 @@ import {
   addUserSetToBlock,
   applyAllRecommendations,
   applyRecommendationToBlock,
+  buildRunnerSwapTransition,
   buildSessionHistoryPayload,
+  captureVisiblePrescriptions,
   carryForwardPlan,
   duplicateUnilateralSetInBlock,
   isManualLoadOverride,
@@ -131,6 +133,127 @@ describe('SessionRunner model — recommendations', ()=>{
     assert.equal(result.blocks[0].sets[0].weightKg, '25');
     assert.equal(result.blocks[1].sets[0].weightKg, '40');
     assert.equal(result.blocks[2].sets[0].reps, '12');
+  });
+});
+
+describe('SessionRunner model — prescription lifecycle', ()=>{
+  it('freezes only visible prescriptions and is idempotent after first capture', ()=>{
+    let seq = 0;
+    const makeId = ()=> `set-${++seq}`;
+    const session = {
+      id:'session-rx',
+      dateISO:'2026-09-26',
+      programId:'p1',
+      blocks:[
+        { exerciseId:'bench-press-dumbbell', reps:'8-10', sets:2 },
+        { exerciseId:'lat-pulldown', reps:'8-12', sets:2 },
+      ],
+    };
+    const blocks = [
+      block({ exerciseId:'bench-press-dumbbell', planIndex:0, sets:[set(), set()] }),
+      block({ exerciseId:'lat-pulldown', planIndex:1, sets:[set(), set()] }),
+    ];
+    const recommendations = new Map([
+      ['bench-press-dumbbell', { reps:9, load:22.5, reason:'test recommendation', priorsVersion:1 }],
+      ['lat-pulldown', { reps:10, load:40, reason:'later', priorsVersion:1 }],
+    ]);
+
+    const captured = captureVisiblePrescriptions({
+      blocks,
+      visibleIndexes:[0],
+      session,
+      recommendations,
+      policy:'standard',
+      shownAt:'2026-09-26T10:00:00.000Z',
+      makeId,
+    });
+    assert.ok(captured[0].prescription);
+    assert.equal(captured[1].prescription, undefined);
+    assert.equal(captured[0].prescription.prescribedLoadKg, 22.5);
+    assert.equal(captured[0].sets[0].origin, 'prescribed');
+    assert.equal(captured[0].sets[0].setId, 'set-1');
+
+    const rerun = captureVisiblePrescriptions({
+      blocks:captured,
+      visibleIndexes:[0],
+      session,
+      recommendations:new Map([['bench-press-dumbbell', { reps:15, load:99, reason:'must not restamp' }]]),
+      policy:'aggressive',
+      shownAt:'2026-09-26T11:00:00.000Z',
+      makeId,
+    });
+    assert.equal(rerun, captured);
+    assert.equal(rerun[0].prescription.prescribedLoadKg, 22.5);
+    assert.equal(rerun[0].prescription.firstShownAt, '2026-09-26T10:00:00.000Z');
+  });
+
+  it('plans an untouched swap as one replacement block with a resume target', ()=>{
+    const session = {
+      id:'session-swap',
+      dateISO:'2026-09-26',
+      programId:'p1',
+      blocks:[{ exerciseId:'bench-press-dumbbell', reps:'8-10', sets:2 }],
+    };
+    let seq = 0;
+    const transition = buildRunnerSwapTransition({
+      blocks:[block({ exerciseId:'bench-press-dumbbell', planIndex:0, sets:[set({ reps:'', weightKg:'', rpe:'' }), set({ reps:'', weightKg:'', rpe:'' })] })],
+      index:0,
+      option:{ id:'push-up', reason:'equipment' },
+      session,
+      history:[],
+      dateISO:session.dateISO,
+      policy:'standard',
+      nowISO:'2026-09-26T10:15:00.000Z',
+      makeId:()=> `swap-${++seq}`,
+    });
+
+    assert.equal(transition.changed, true);
+    assert.equal(transition.blocks.length, 1);
+    assert.equal(transition.blocks[0].exerciseId, 'push-up');
+    assert.equal(transition.blocks[0].substitutionFrom, 'bench-press-dumbbell');
+    assert.equal(transition.blocks[0].substitutedAt, '2026-09-26T10:15:00.000Z');
+    assert.equal(transition.replacementIndex, 0);
+  });
+
+  it('keeps performed work on the original block during a partial swap', ()=>{
+    const session = {
+      id:'session-partial-swap',
+      dateISO:'2026-09-26',
+      programId:'p1',
+      blocks:[{ exerciseId:'bench-press-dumbbell', reps:'8-10', sets:2 }],
+    };
+    const firstCapture = captureVisiblePrescriptions({
+      blocks:[block({
+        exerciseId:'bench-press-dumbbell',
+        planIndex:0,
+        sets:[set({ completed:true }), set({ reps:'', weightKg:'', rpe:'', completed:false })],
+      })],
+      visibleIndexes:[0],
+      session,
+      recommendations:new Map(),
+      policy:'standard',
+      shownAt:'2026-09-26T10:00:00.000Z',
+      makeId:(()=>{ let i=0; return ()=> `rx-${++i}`; })(),
+    });
+
+    const transition = buildRunnerSwapTransition({
+      blocks:firstCapture,
+      index:0,
+      option:{ id:'push-up', reason:'equipment' },
+      session,
+      history:[],
+      dateISO:session.dateISO,
+      policy:'standard',
+      nowISO:'2026-09-26T10:20:00.000Z',
+      makeId:(()=>{ let i=0; return ()=> `swap-${++i}`; })(),
+    });
+
+    assert.equal(transition.blocks.length, 2);
+    assert.equal(transition.blocks[0].exerciseId, 'bench-press-dumbbell');
+    assert.equal(transition.blocks[0].sets.length, 1);
+    assert.equal(transition.blocks[0].sets[0].completed, true);
+    assert.equal(transition.blocks[1].exerciseId, 'push-up');
+    assert.equal(transition.replacementIndex, 1);
   });
 });
 

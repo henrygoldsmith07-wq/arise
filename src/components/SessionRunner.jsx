@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState, Fragment, lazy, Suspense } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { lastExerciseSets } from '../lib/store.js';
-import { buildPrescriptionSnapshot, attachPrescription, applySwapToBlocks, attributePrescribedSets, isSetPerformed } from '../lib/progression.js';
+import { isSetPerformed } from '../lib/progression.js';
 import { POLICY_ORDER } from '../lib/progressionPolicies.js';
 import { formatPlateStack } from '../lib/plates.js';
 import { substitutionOptions } from '../lib/substitutions.js';
 import { recordEvent, trackFieldFocus, fieldCommitted } from '../lib/telemetry.js';
 import { markRecommendationOverride } from '../lib/longitudinal.js';
-import { buildRunnerRecommendationMeta, recordProspectiveRecommendation, runnerRecommendationForBlock, runnerStudy } from '../lib/runnerRecommendations.js';
+import { buildRunnerRecommendationMeta, recordProspectiveRecommendation, runnerStudy } from '../lib/runnerRecommendations.js';
 import { quickJumps, applyQuickJump, skipTo, restPresetFor, visiblePrescriptionIndexes } from '../lib/gymMode.js';
 import { SESSION_QUALITY_OPTIONS, sessionQualityLabel } from '../lib/gymMode.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
@@ -31,7 +31,9 @@ import {
   addUserSetToBlock,
   applyAllRecommendations as applyAllRunnerRecommendations,
   applyRecommendationToBlock,
+  buildRunnerSwapTransition,
   buildSessionHistoryPayload,
+  captureVisiblePrescriptions,
   carryForwardPlan,
   clearTargetParts,
   duplicateUnilateralSetInBlock,
@@ -312,30 +314,16 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   // Only an explicit supersede (a swap) changes it.
   const visibleBlockIndexes = visiblePrescriptionIndexes({ gymMode, focusIdx, blockCount: blocks.length });
   useEffect(()=>{
-    const visible = new Set(visibleBlockIndexes);
-    setBlocks(prev=>{
-      let changed = false;
-      const shownAt = new Date().toISOString();
-      const next = prev.map((b, index)=>{
-        if(b.prescription || !visible.has(index)) return b;
-        const plan = Number.isInteger(b.planIndex) ? b.planIndex : index;
-        const planned = session.blocks?.[plan] || {};
-        const snapshot = buildPrescriptionSnapshot({
-          session,
-          block: { ...planned, exerciseId: b.exerciseId, sets: b.sets },
-          blockIndex: plan,
-          recommendation: blockMeta.recs.get(b.exerciseId) || null,
-          shownAt,
-          policy: appPolicy,
-        });
-        if(!snapshot) return b;
-        changed = true;
-        // Bind each planned slot to this revision with a stable id, then attach
-        // the immutable snapshot. Done once (guarded by b.prescription above).
-        return attachPrescription(attributePrescribedSets(b, snapshot.prescriptionId, makeSetId), snapshot);
-      });
-      return changed ? next : prev;
-    });
+    const shownAt = new Date().toISOString();
+    setBlocks(prev=> captureVisiblePrescriptions({
+      blocks:prev,
+      visibleIndexes:visibleBlockIndexes,
+      session,
+      recommendations:blockMeta.recs,
+      policy:appPolicy,
+      shownAt,
+      makeId:makeSetId,
+    }));
   },[visibleBlockIndexes.join(','), blockMeta, session, appPolicy]);
 
   // Safety: aftercare after a painful exposure and technique/ROM cues read
@@ -576,37 +564,22 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     // unique per human tap; the match also requires the new exercise id.
     const swapNowISO = new Date().toISOString();
     setBlocks(prev=>{
-      const target = prev[bi];
-      if(!target || !option?.id || option.id === target.exerciseId){ swapResumeRef.current = null; return prev; }
-      const plan = Number.isInteger(target.planIndex) ? target.planIndex : bi;
-      const { recommendation } = runnerRecommendationForBlock({
-        block:{ exerciseId:option.id, reps:target.reps || session.blocks?.[plan]?.reps },
+      const transition = buildRunnerSwapTransition({
+        blocks:prev,
+        index:bi,
+        option,
+        session,
         history,
         dateISO:session.dateISO,
         plateConfig,
         study,
         studyEnrollment,
         policy:appPolicy,
+        nowISO:swapNowISO,
+        makeId:makeSetId,
       });
-      // applySwapToBlocks splits a partially-completed block so done work keeps
-      // its original exercise + prescription, or replaces it in place if nothing
-      // has been performed yet. Either way the swap stays a single tap.
-      const next = applySwapToBlocks({
-        blocks: prev,
-        index: bi,
-        option,
-        session,
-        recommendation: recommendation || null,
-        priorSets: lastExerciseSets(history, option.id)?.sets || [],
-        planIndex: plan,
-        policy: appPolicy,
-        nowISO: swapNowISO,
-        newSet:newRunnerSet,
-        makeId: makeSetId,
-      });
-      const replacementIdx = next.findIndex(b=> b && b.exerciseId === option.id && b.substitutedAt === swapNowISO);
-      swapResumeRef.current = replacementIdx !== -1 ? replacementIdx : null;
-      return next;
+      swapResumeRef.current = transition.replacementIndex;
+      return transition.blocks;
     });
     setSwapOpen(null);
     setRirSuggest(null); // swapped exercise, fresh rows — stale suggestions must not linger
