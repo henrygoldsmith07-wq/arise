@@ -7,6 +7,7 @@ import { reviewCompletedWeek, applyWeeklyReview } from '../lib/mesocycle.js';
 import { attachOutcome } from '../lib/longitudinal.js';
 import { recordEvent } from '../lib/telemetry.js';
 import { pushToPulse } from '../lib/pulse.js';
+export { cancellationPlan } from './workoutCancellationService.js';
 
 export function completeWorkout({ store, payload }){
   const current = store || {};
@@ -87,29 +88,6 @@ export function completeWorkoutWorkflow({ store, payload, saveStartedAt = null, 
       detail:[`${summary.savedSets} set${summary.savedSets===1?'':'s'}`, `${payload.durationMinutes} min`].join(' · '),
       note:adaptation?.changed ? 'Your next sessions were adjusted from this result.' : null,
     },
-  };
-}
-
-export function cancellationPlan({ store, activeSession, now = Date.now() }){
-  const draft = store?.activeWorkout || null;
-  const sets = (draft?.blocks || []).flatMap(block=> block?.sets || []);
-  const completedSets = sets.filter(set=> set?.completed).length;
-  const totalSets = sets.length;
-  const startedAt = draft?.startedAt ? Date.parse(draft.startedAt) : null;
-  return {
-    completedSets,
-    totalSets,
-    requiresConfirmation:Boolean(activeSession && completedSets > 0),
-    nextStore:{ ...(store || {}), activeWorkout:null },
-    event:activeSession ? {
-      type:'session:abandon',
-      payload:{
-        sessionId:activeSession.id,
-        totalSets,
-        completedSets,
-        elapsedMs:Number.isFinite(startedAt) ? Math.max(0, now - startedAt) : null,
-      },
-    } : null,
   };
 }
 

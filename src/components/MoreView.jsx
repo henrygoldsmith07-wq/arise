@@ -1,11 +1,10 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
-import { buildExportPayload, downloadJson, parseImportFile, mergeStores, portableCsv, deletionPreview, downloadBackup, parseBackupFile } from '../lib/export.js';
+import { downloadJson, parseImportFile, mergeStores, portableCsv, deletionPreview, parseBackupFile } from '../lib/export.js';
 import { buildImportPreview } from '../lib/exportPolicy.js';
 import { buildPartialExportPayload } from '../lib/export.js';
 import { buildCoachExport, renderCoachMarkdown } from '../lib/coachExport.js';
 import { shareTextAsFile } from '../lib/nativeShare.js';
 const SyncPanel = lazy(() => import('./SyncPanel.jsx'));
-import { cryptoAvailable, encryptBackup, decryptBackup, looksEncrypted } from '../lib/cryptoBackup.js';
 import { clearTelemetry, telemetrySummary, getEventHistory, mergeEventHistory, replaceEventHistory, recordEvent, getErrorEvents, clearErrorEvents } from '../lib/telemetry.js';
 import { mergeHealthSummary, pullHealthSummary } from '../lib/health.js';
 import { LOCATIONS, GOALS } from '../lib/data.js';
@@ -15,6 +14,8 @@ import { buildSupportBundle } from '../lib/supportDiagnostics.js';
 import { buildSalvagePayload } from '../lib/salvageExport.js';
 import { normaliseHistoryEntry } from '../lib/store.js';
 import { dataLifecycleService } from '../services/dataLifecycleService.js';
+import { backupReminderDue, dismissBackupReminder as persistBackupReminderDismissal, readBackupState } from '../lib/backupState.js';
+import { decryptEncryptedFullBackup, downloadEncryptedFullBackup, downloadFullBackup, encryptedBackupSupported } from '../services/backupService.js';
 import ToggleRow from './settings/ToggleRow.jsx';
 import AiCoachSettings from './settings/AiCoachSettings.jsx';
 import FeedbackSettings from './settings/FeedbackSettings.jsx';
@@ -76,32 +77,22 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
 
   const healthAdapter = typeof window !== 'undefined' ? window.__ARISE_HEALTH_ADAPTER__ : null;
 
-  const markExported = ()=>{ try{ localStorage.setItem('arise.lastExportAt', new Date().toISOString()); }catch{} };
-
-  const exportNow = ()=>{
-    markExported();
-    const payload = buildExportPayload(store);
-    const date = new Date().toISOString().slice(0,10);
-    // Compressed when the browser supports it; plain JSON otherwise — both
-    // shapes import identically (parseBackupFile unwraps the envelope).
-    downloadBackup(payload, `arise-backup-${date}.arise`);
-    flashMsg('Export downloaded — keep it somewhere safe.', 3000);
+  const exportNow = async ()=>{
+    try{
+      await downloadFullBackup(store);
+      flashMsg('Backup downloaded — keep it somewhere safe.', 3000);
+    }catch(err){
+      flashMsg(`Backup failed: ${String(err?.message || err)}`, 5000);
+    }
   };
 
   const exportEncrypted = async ()=>{
-    markExported();
-    if(!cryptoAvailable()){ flashMsg('Encrypted backups need a newer browser — plain export still works.', 4000); return; }
+    if(!encryptedBackupSupported()){ flashMsg('Encrypted backups need a newer browser — plain export still works.', 4000); return; }
     const pass = prompt('Choose a passphrase for this backup.\n\nIf you lose it, the backup cannot be recovered — there is no reset.', '');
     if(pass == null) return;
     if(pass.length < 8){ flashMsg('Use at least 8 characters — a short passphrase makes the backup guessable.', 4000); return; }
     try{
-      const payload = buildExportPayload(store);
-      const bytes = await encryptBackup(payload, pass);
-      const blob = new Blob([bytes], { type: 'application/octet-stream' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `arise-backup-${new Date().toISOString().slice(0,10)}.arisebak`; a.click();
-      setTimeout(()=> URL.revokeObjectURL(url), 2000);
+      await downloadEncryptedFullBackup(store, pass);
       flashMsg('Encrypted backup downloaded — the file is useless without your passphrase.', 5000);
     }catch(err){ flashMsg(String(err.message || err), 5000); }
   };
@@ -111,10 +102,9 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
     if(!file) return;
     try{
       const bytes = new Uint8Array(await file.arrayBuffer());
-      if(!looksEncrypted(bytes)) throw new Error('Not an Arise encrypted backup file.');
       const pass = prompt(`Passphrase for ${file.name}:`, '');
       if(pass == null){ e.target.value = ''; return; }
-      const payload = await decryptBackup(bytes, pass);
+      const payload = await decryptEncryptedFullBackup(bytes, pass);
       e.target.value = '';
       await queueImportPreview(payload);
     }catch(err){
@@ -130,7 +120,6 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
     location.reload();
   };
   const exportCsv = ()=>{
-    markExported();
     const csv = portableCsv(store.history||[]);
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -176,14 +165,18 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
   };
 
   // Backup reminder: a gentle weekly nudge, dismissed until next week.
-  const lastExportAt = (()=>{ try{ return localStorage.getItem('arise.lastExportAt'); }catch{ return null; } })();
-  const [backupReminderDismissed, setBackupReminderDismissed] = useState(()=>{ try{ return localStorage.getItem('arise.backupReminderDismissedAt'); }catch{ return null; } });
-  const WEEK_MS = 7 * 86400000;
-  const newestSessionISO = (store.history||[]).length ? (store.history||[])[(store.history||[]).length-1].dateISO : null;
-  const referenceAt = lastExportAt || (newestSessionISO ? Date.parse(newestSessionISO) : null);
-  const backupReminderDue = referenceAt != null && (Date.now() - (lastExportAt ? Date.parse(lastExportAt) : referenceAt)) > WEEK_MS
-    && (!backupReminderDismissed || (Date.now() - Date.parse(backupReminderDismissed)) > WEEK_MS);
-  const dismissBackupReminder = ()=>{ const at = new Date().toISOString(); try{ localStorage.setItem('arise.backupReminderDismissedAt', at); }catch{} setBackupReminderDismissed(at); };
+  const storedBackupState = readBackupState();
+  const [backupReminderDismissed, setBackupReminderDismissed] = useState(()=> storedBackupState.dismissedAt);
+  const backupDue = backupReminderDue({
+    history:store.history || [],
+    lastBackupAt:storedBackupState.lastBackupAt,
+    dismissedAt:backupReminderDismissed,
+  });
+  const dismissBackupReminder = ()=>{
+    const at = new Date().toISOString();
+    persistBackupReminderDismissal({ atISO:at });
+    setBackupReminderDismissed(at);
+  };
 
   // Import is a two-step, reviewable flow: the file is parsed and previewed
   // (counts, conflicts, denied fields, origin metadata) and NOTHING is applied
@@ -410,10 +403,10 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
 
       <section id="sec-backup" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
         <h3 className="text-sm font-bold">Backup & portability</h3>
-        {backupReminderDue && (
+        {backupDue && (
           <div role="status" className="rounded-xl border border-review/40 bg-reviewsoft px-3 py-2 text-xs space-y-1">
             <p className="font-bold">Time for a backup</p>
-            <p className="text-ink3">It&apos;s been over a week since your last export. A local file is the only copy of your training history.</p>
+            <p className="text-ink3">It&apos;s been over a week since your last full backup. A recoverable local file is your safety copy.</p>
             <div className="flex gap-2">
               <button onClick={exportNow} className="btn btn-primary min-h-8 rounded-lg px-2.5 text-[11px]">Export now</button>
               <button onClick={dismissBackupReminder} className="underline font-semibold">Remind me next week</button>

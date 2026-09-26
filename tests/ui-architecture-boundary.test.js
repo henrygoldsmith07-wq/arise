@@ -14,6 +14,9 @@ const FORBIDDEN = [
   '../lib/snapshots.js',
   '../lib/migrationLog.js',
   '../repositories/',
+  'localStorage',
+  'sessionStorage',
+  'arise.lastExportAt',
 ];
 
 function sourceFiles(dir){
