@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, Fragment, lazy, Suspense } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { lastExerciseSets } from '../lib/store.js';
-import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, applySwapToBlocks, attributePrescribedSets, userAddedSet, removeSetAt, isSetPerformed } from '../lib/progression.js';
+import { buildPrescriptionSnapshot, attachPrescription, applySwapToBlocks, attributePrescribedSets, isSetPerformed } from '../lib/progression.js';
 import { POLICY_ORDER } from '../lib/progressionPolicies.js';
 import { runComparativeStudy } from '../lib/study.js';
 import { studyArmFor } from '../lib/studyEnrollment.js';
@@ -27,103 +27,32 @@ import { tracePhase, traceStart, traceEnd } from '../lib/perfTrace.js';
 import { haptic } from '../lib/haptics.js';
 import { painAftercareFor, techniquePromptFor, maxEffortWarning } from '../lib/safety.js';
 import { createVoiceInput, parseSetPhrase } from '../lib/voiceInput.js';
-import { asUnit, fmtWeight, weightInputToKg, weightInputValue } from '../lib/units.ts';
+import { asUnit, fmtWeight, weightInputToKg } from '../lib/units.ts';
 import { NOTE_PROMPTS } from '../lib/sessionNotes.js';
-
-function parseNum(v){ const n=Number(v); return Number.isFinite(n)? n : 0; }
-// Sets are persisted as RPE (engine + history schema), but logged as RIR:
-// "2 RIR" ↔ rpe 8. Blank stays blank.
-function rirFromRpe(rpe){ const t=String(rpe ?? '').trim(); if(t==='') return ''; const n=Number(t); if(!Number.isFinite(n)) return ''; return String(Math.max(0, Math.min(10, Math.round((10-n)*2)/2))); }
-function rpeFromRir(rir){ const t=String(rir ?? '').trim(); if(t==='') return ''; const n=Number(t); if(!Number.isFinite(n)) return ''; return String(Math.max(0, Math.min(10, Math.round((10-n)*2)/2))); }
-// Step a suggested RIR value by whole points, clamped to the 0–10 scale.
-// Pure — the suggestion bar adjusts without ever reading entered values.
-function stepRir(rir, delta){ const n=Number(rir); if(!Number.isFinite(n)) return rir; return String(Math.max(0, Math.min(10, Math.round((n+delta)*2)/2))); }
-function fmtRest(s){ const m=Math.floor(s/60); const r=s%60; return m? `${m}:${String(r).padStart(2,'0')}` : `${r}s`; }
-function firstInt(reps){ const m=String(reps).match(/\d+/); return m? m[0] : ''; }
-
-function newSet(reps, unilateral, previous = null){
-  return {
-    reps: previous?.reps != null ? String(previous.reps) : firstInt(reps),
-    weightKg: previous?.weightKg != null ? String(previous.weightKg) : '',
-    rpe: '',
-    side: unilateral ? (previous?.side || 'L') : '',
-    rom: previous?.rom || '',
-    assistedKg: previous?.assistedKg || '',
-    tempo: '',
-    completed: false,
-  };
-}
-
-function normaliseBlock(block, history, draftBlock, planIndex = 0){
-  const source = draftBlock || block;
-  const unilateral = !!source.unilateral || !!EXERCISE_BY_ID[source.exerciseId]?.unilateral;
-  const previous = draftBlock ? null : lastExerciseSets(history, source.exerciseId);
-  const count = Math.max(1, Number(source.sets) || source.sets?.length || 1);
-  const sets = Array.isArray(source.sets)
-    ? source.sets.map(s=> ({ ...newSet(source.reps, unilateral), ...s, completed: !!s.completed }))
-    : Array.from({ length: count }, (_, i)=> newSet(source.reps, unilateral, previous?.sets?.[i] || previous?.sets?.[previous.sets.length-1]));
-  return freezePrescriptionBlock({
-    exerciseId: source.exerciseId,
-    reps: source.reps || '',
-    sets,
-    restSec: Number(source.restSec) || 0,
-    unilateral,
-    warmups: source.warmups || [],
-    loadHint: source.loadHint || '',
-    why: source.why || '',
-    substitutionFrom: source.substitutionFrom || '',
-    substitutionReason: source.substitutionReason || '',
-    // Which scheduled row this block came from. A partial swap inserts a block,
-    // so later blocks shift array position — planIndex keeps the first-visible
-    // capture pointed at the right prescription of record regardless.
-    planIndex: Number.isInteger(source.planIndex) ? source.planIndex : planIndex,
-    governedSlots: Array.isArray(source.governedSlots) ? source.governedSlots : null,
-    removedSlots: Array.isArray(source.removedSlots) ? source.removedSlots : null,
-    prescriptionOverridden: source.prescriptionOverridden === true,
-    prescription: source.prescription || null,
-    prescriptionHistory: Array.isArray(source.prescriptionHistory) ? source.prescriptionHistory : null,
-  });
-}
-
-// The ONE clear target shown big on the block: load × reps for this session.
-function clearTargetParts(rec, block, unit = 'kg'){
-  const reps = rec?.reps != null && String(rec.reps).trim() !== '' ? rec.reps : (firstInt(block.reps) || null);
-  if(rec?.assistKg != null) return { text: `${reps ?? '—'} reps @ ${fmtWeight(rec.assistKg, unit)} assist` };
-  let load = null;
-  if(rec?.load != null && Number(rec.load) > 0) load = fmtWeight(rec.load, unit);
-  else if(block.loadHint && /\d/.test(String(block.loadHint))) load = block.loadHint;
-  const text = [load, reps ? `× ${reps}` : null].filter(Boolean).join(' ');
-  return { text: text || 'working set' };
-}
-
-// Previous performance, summarised: "22 kg × 10, 9, 8" + total reps for the goal.
-function previousSummary(prev, unit = 'kg'){
-  if(!prev?.sets?.length) return null;
-  const firstW = prev.sets.find(s => s.weightKg != null && String(s.weightKg).trim() !== '')?.weightKg || null;
-  const detail = prev.sets.map(s=> `${s.reps}${s.side?` ${s.side}`:''}${s.assistedKg?` (-${weightInputValue(s.assistedKg, unit)} ${unit})`:''}`).join(', ');
-  const totalReps = prev.sets.reduce((n, s)=> n + parseNum(s.reps), 0);
-  const bestKg = prev.sets.reduce((n, s)=> Math.max(n, parseNum(s.weightKg)), 0);
-  const maxReps = prev.sets.reduce((n, s)=> Math.max(n, parseNum(s.reps)), 0);
-  return { summary: firstW ? `${fmtWeight(firstW, unit)} × ${detail}` : detail, totalReps, bestKg, maxReps, dateISO: prev.dateISO };
-}
-
-// What changed vs last time — the arrow chip above the engine's explanation.
-function transitionChip(rec, prevSummary, unit = 'kg'){
-  if(!rec || !prevSummary) return null;
-  const recLoad = Number(rec.load) > 0 ? Number(rec.load) : null;
-  const recReps = rec.reps != null && String(rec.reps).trim() !== '' ? parseNum(rec.reps) : null;
-  if(recLoad != null && prevSummary.bestKg > 0){
-    if(recLoad > prevSummary.bestKg) return `↑ ${fmtWeight(prevSummary.bestKg, unit)} → ${fmtWeight(recLoad, unit)}`;
-    if(recLoad < prevSummary.bestKg) return `↓ ${fmtWeight(prevSummary.bestKg, unit)} → ${fmtWeight(recLoad, unit)}`;
-    return `holds ${fmtWeight(recLoad, unit)}`;
-  }
-  if(recReps != null && prevSummary.maxReps > 0){
-    if(recReps > prevSummary.maxReps) return `↑ ${prevSummary.maxReps} → ${recReps} reps`;
-    if(recReps < prevSummary.maxReps) return `↓ ${prevSummary.maxReps} → ${recReps} reps`;
-    return `holds ${recReps} reps`;
-  }
-  return null;
-}
+import {
+  addUserSetToBlock,
+  applyAllRecommendations as applyAllRunnerRecommendations,
+  applyRecommendationToBlock,
+  buildSessionHistoryPayload,
+  carryForwardPlan,
+  clearTargetParts,
+  duplicateUnilateralSetInBlock,
+  formatRest,
+  hasUnfinishedSet,
+  isManualLoadOverride,
+  newRunnerSet,
+  nextActionableBlockIndex,
+  normaliseRunnerBlock,
+  parseRunnerNumber,
+  patchRunnerSet,
+  previousPerformanceSummary,
+  removeRunnerSet,
+  rirFromRpe,
+  rpeFromRir,
+  sessionSaveState,
+  stepRir,
+  transitionChip,
+} from '../lib/sessionRunnerModel.js';
 
 // The randomised-treatment resolver lives in lib/treatment.js so Guided mode
 // enforces the identical assignment from the identical code path.
@@ -131,17 +60,9 @@ function getRecommendation(block, history, asOfDateISO, plateConfig = null, stud
   return treatmentRecommendation({ block, history, asOfDateISO, plateConfig, study, assignedArm, policy });
 }
 
-function hasUnfinishedSet(blocks, bi, si){
-  for(let i=bi;i<blocks.length;i++){
-    const start = i===bi ? si+1 : 0;
-    if(blocks[i].sets.slice(start).some(s=> !s.completed)) return true;
-  }
-  return false;
-}
-
 export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, appPrefs = null, gymPrefs = null, onSetRestPreset = null, studyEnrollment = null, participantId = null, onDraftChange, onSave, onCancel }){
   const unit = asUnit(appPrefs?.units);
-  const [blocks,setBlocks]=useState(()=> session.blocks.map((b,i)=> normaliseBlock(b, history, draft?.blocks?.[i], i)));
+  const [blocks,setBlocks]=useState(()=> session.blocks.map((b,i)=> normaliseRunnerBlock(b, history, draft?.blocks?.[i], i)));
   // Transient confirmation for the one-tap "apply all" fast-log path.
   const [applyAllNote,setApplyAllNote]=useState(null);
   const [note,setNote]=useState(()=> draft?.note || '');
@@ -331,10 +252,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     setClock(Date.now());
     // Announce once, politely — the ticking countdown itself must not flood
     // screen readers (a11y baseline: live regions announce without flooding).
-    setRestAnnouncement(`Rest started for ${label}: ${fmtRest(sec)}.`);
+    setRestAnnouncement(`Rest started for ${label}: ${formatRest(sec)}.`);
     if(appPrefs?.soundCues !== false) restStartCue();
     haptic('setComplete');
-    if(appPrefs?.voiceCoach === true) speak(`Rest ${fmtRest(sec)} for ${label}.`, Number(appPrefs?.voiceRate) || 1);
+    if(appPrefs?.voiceCoach === true) speak(`Rest ${formatRest(sec)} for ${label}.`, Number(appPrefs?.voiceRate) || 1);
   };
 
   // ── Preferences. Two sources, two jobs: ──
@@ -466,12 +387,12 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     let total=0;
     for(const b of blocks) for(const s of b.sets){
       if(!s.completed) continue;
-      total += parseNum(s.reps) * Math.max(0, parseNum(s.weightKg) - parseNum(s.assistedKg));
+      total += parseRunnerNumber(s.reps) * Math.max(0, parseRunnerNumber(s.weightKg) - parseRunnerNumber(s.assistedKg));
     }
     return Math.round(total);
   },[blocks]);
-  const totalSets = blocks.reduce((n,b)=> n+b.sets.length, 0);
-  const completedSets = blocks.reduce((n,b)=> n+b.sets.filter(s=> s.completed).length, 0);
+  const saveState = useMemo(()=> sessionSaveState(blocks), [blocks]);
+  const { totalSets, completedSets, pendingSets, canSave, blocker:saveBlocker } = saveState;
   // Live pace vs the pre-session plan: estimated minutes left and finish time
   // from actual logging speed. Display-only — never telemetered.
   const pace = useMemo(()=>{
@@ -511,9 +432,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       // prescription overridden so it is excluded from grading + personalising.
       if(patch.weightKg !== undefined){
         const shown = blockMeta.recs.get(exerciseId);
-        const shownLoad = shown?.load != null && Number(shown.load) > 0 ? Number(shown.load) : null;
-        const nextW = Number(String(patch.weightKg).match(/[\d.]+/)?.[0] ?? patch.weightKg) || 0;
-        if(shownLoad != null && Math.abs(nextW - shownLoad) > Math.max(0.5, shownLoad * 0.02)){
+        if(isManualLoadOverride(patch.weightKg, shown)){
           overrideRef.current.add(exerciseId);
           // Policy versioning: the ledger must know this transition was
           // USER-decided, not engine-decided, so studies can separate the two.
@@ -522,11 +441,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       }
     }
     const flagged = overrideRef.current.has(exerciseId);
-    setBlocks(prev=> prev.map((b,i)=> i!==bi? b : {
-      ...b,
-      ...(flagged ? { prescriptionOverridden: true } : {}),
-      sets: b.sets.map((s,j)=> j!==si? s : { ...s, ...patch }),
-    }));
+    setBlocks(prev=> patchRunnerSet(prev, bi, si, patch, { prescriptionOverridden:flagged }));
   };
   // Value-free field commits: one event per committed edit (blur-and-changed),
   // never keystrokes, never entered values — session/exercise/set ids and
@@ -581,18 +496,11 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       // effort into progression, grading and coaching. Instead the next row
       // gets a one-tap suggestion bar (Same / − / +); only an explicit
       // confirm or a typed edit writes rpe. Done alone never confirms.
-      const nextIdx = block.sets.findIndex((s,j)=> j>si && !s.completed && (String(s.reps).trim()==='' || String(s.weightKg).trim()===''));
-      if(nextIdx !== -1){
-        const carry = {};
-        if(String(block.sets[nextIdx].reps).trim()==='') carry.reps = set.reps;
-        if(String(block.sets[nextIdx].weightKg).trim()==='') carry.weightKg = set.weightKg;
-        if(Object.keys(carry).length) updateSet(bi,nextIdx,carry,{ userEdit: false });
-      }
-      const nextRpeEmpty = nextIdx !== -1 && rirFromRpe(block.sets[nextIdx].rpe).trim()==='' && !block.sets[nextIdx].completed;
-      const suggested = nextRpeEmpty && String(set.rpe ?? '').trim()!=='';
+      const { nextIndex:nextIdx, carry, rirSuggestion } = carryForwardPlan(block, si);
+      if(nextIdx !== -1 && Object.keys(carry).length) updateSet(bi,nextIdx,carry,{ userEdit: false });
+      const suggested = rirSuggestion != null;
       if(suggested){
-        const suggestion = rirFromRpe(set.rpe);
-        setRirSuggest({ bi, si: nextIdx, value: suggestion, exerciseId: block.exerciseId });
+        setRirSuggest({ bi, si: nextIdx, value: rirSuggestion, exerciseId: block.exerciseId });
         try{ recordEvent('rir-suggestion-shown', { sessionId:session.id, exerciseId:block.exerciseId, setIndex:nextIdx, mode: gymMode ? 'gym' : 'standard' }); }catch{}
       }
       // One-thumb flow: the field you edit between sets is the NEXT set's
@@ -633,21 +541,18 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   };
   const addSet = (bi)=>{
     try{ recordEvent('add-set', { sessionId:session.id, exerciseId:blocks[bi]?.exerciseId, mode: gymMode ? 'gym' : 'standard' }); }catch{}
-    setBlocks(prev=> prev.map((b,i)=> i!==bi? b : { ...b, sets: [...b.sets, userAddedSet(newSet('', b.unilateral, b.sets[b.sets.length-1]), makeSetId)] }));
+    setBlocks(prev=> prev.map((b,i)=> i!==bi ? b : addUserSetToBlock(b, makeSetId)));
   };
   // One-thumb adjustment for the set being logged: reps move in whole reps,
   // clamped at zero. The stepper carries the tap; the input stays typable.
   const adjustReps = (bi, si, delta)=>{
-    const current = parseNum(blocks[bi]?.sets?.[si]?.reps);
+    const current = parseRunnerNumber(blocks[bi]?.sets?.[si]?.reps);
     updateSet(bi, si, { reps: String(Math.max(0, current + delta)) });
   };
   const duplicateUnilateral = (bi)=>{
     try{ recordEvent('add-set', { sessionId:session.id, exerciseId:blocks[bi]?.exerciseId, mode: gymMode ? 'gym' : 'standard' }); }catch{}
-    setBlocks(prev=> prev.map((b,i)=>{
-    if(i!==bi || !b.unilateral) return b;
-    const last=b.sets[b.sets.length-1]; if(!last) return b;
-    return { ...b, sets: [...b.sets, userAddedSet({ ...last, side:last.side==='L'?'R':'L', completed:false, failed:false, skipped:false }, makeSetId)] };
-  }));};
+    setBlocks(prev=> prev.map((b,i)=> i!==bi ? b : duplicateUnilateralSetInBlock(b, makeSetId)));
+  };
   const removeSet = (bi,si)=>{
     const set = blocks[bi]?.sets?.[si];
     if(!set) return;
@@ -656,7 +561,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     // sanitizer would strip anyway).
     try{ recordEvent('remove-set', { sessionId:session.id, exerciseId:blocks[bi].exerciseId, setIndex:si, kind: set.origin==='user-added' ? 'user-added' : 'prescribed', mode: gymMode ? 'gym' : 'standard' }); }catch{}
     setRirSuggest(null); // row indexes shift — never point a suggestion at the wrong row
-    setBlocks(prev=> prev.map((b,i)=> i!==bi? b : removeSetAt(b, si).block));
+    setBlocks(prev=> prev.map((b,i)=> i!==bi ? b : removeRunnerSet(b, si)));
   };
   // Gym Mode: mark a set failed (attempted, didn't get the reps). Persisted as
   // `failed: true`, which the store already normalises.
@@ -670,13 +575,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   // Focus mode navigation: next block with an unfinished set, wrapping once.
   // Returns false when everything is done — the runner then shows all blocks.
   const focusModeNext = ()=>{
-    setFocusIdx(idx=>{
-      for(let step=1; step<=blocks.length; step++){
-        const j = (idx + step) % blocks.length;
-        if(blocks[j]?.sets.some(s=> !s.completed && !s.failed)) return j;
-      }
-      return idx;
-    });
+    setFocusIdx(idx=> nextActionableBlockIndex(blocks, idx));
   };
   // Reset to the first actionable block whenever focus mode turns on or the
   // focused block finishes (last set completed/failed).
@@ -713,7 +612,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
         planIndex: plan,
         policy: appPolicy,
         nowISO: swapNowISO,
-        newSet,
+        newSet:newRunnerSet,
         makeId: makeSetId,
       });
       const replacementIdx = next.findIndex(b=> b && b.exerciseId === option.id && b.substitutedAt === swapNowISO);
@@ -756,15 +655,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   const applyRecommendation=(bi,recommendation)=>{
     const block=blocks[bi];
     if(!block || !recommendation) return;
-    setBlocks(prev=> prev.map((b,i)=> i!==bi ? b : {
-      ...b,
-      sets:b.sets.map(s=> s.completed ? s : {
-        ...s,
-        reps: recommendation.reps != null ? String(recommendation.reps) : s.reps,
-        weightKg: recommendation.load != null && recommendation.load > 0 ? String(recommendation.load) : s.weightKg,
-        assistedKg: recommendation.assistKg != null ? String(recommendation.assistKg) : s.assistedKg,
-      }),
-    }));
+    setBlocks(prev=> prev.map((b,i)=> i!==bi ? b : applyRecommendationToBlock(b, recommendation)));
     dismissedRecommendationRef.current.add(bi);
     recordEvent('recommendation:accepted', { sessionId:session.id, exerciseId:block.exerciseId, via:'single' });
   };
@@ -777,118 +668,36 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   // or manually edited keep their values; blocks with no recommendation
   // (bodyweight baselines, insufficient evidence) are left untouched.
   const applyAllRecommendations=()=>{
-    let applied=0;
-    setBlocks(prev=> prev.map((b,i)=>{
-      if(b.sets.some(s=> s.completed || s.failed || String(s.reps).trim()!=='')) return b;
-      const recommendation=blockMeta.recs.get(b.exerciseId);
-      if(!recommendation) return b;
-      const hasTarget = recommendation.load != null && recommendation.load > 0;
-      const hasReps = recommendation.reps != null && String(recommendation.reps).trim() !== '';
-      if(!hasTarget && !hasReps) return b;
-      applied++;
-      dismissedRecommendationRef.current.add(i);
-      recordEvent('apply-all', { sessionId:session.id, exerciseId:b.exerciseId });
-      return {
-        ...b,
-        sets:b.sets.map(s=> ({
-          ...s,
-          reps: hasReps ? String(recommendation.reps) : s.reps,
-          weightKg: hasTarget ? String(recommendation.load) : s.weightKg,
-          assistedKg: recommendation.assistKg != null ? String(recommendation.assistKg) : s.assistedKg,
-        })),
-      };
-    }));
-    if(applied>0){
+    const result = applyAllRunnerRecommendations(blocks, blockMeta.recs);
+    if(result.applied.length > 0){
+      for(const item of result.applied){
+        dismissedRecommendationRef.current.add(item.index);
+        recordEvent('apply-all', { sessionId:session.id, exerciseId:item.exerciseId });
+      }
+      setBlocks(result.blocks);
+      const applied = result.applied.length;
       setApplyAllNote(`Applied to ${applied} exercise${applied===1?'':'s'} — targets are a starting point, adjust freely.`);
       window.setTimeout(()=> setApplyAllNote(null), 6000);
     }
   };
 
   const toggleNoteTag=(id)=> setNoteTags(prev=> prev.includes(id) ? prev.filter(x=>x!==id) : [...prev,id]);
-  const canSave = blocks.length>0 && blocks.every(b=> b.sets.length>0 && b.sets.every(s=> String(s.reps).trim()!=='')) && completedSets > 0;
-  const pendingSets = totalSets-completedSets;
-  // Name the real blocker: reps missing, sets not marked done, or no sets at
-  // all — the old copy always blamed "Done".
-  const saveBlocker = (()=>{
-    if(canSave) return null;
-    const missingReps = blocks.reduce((n,b)=> n + b.sets.filter(s=> String(s.reps).trim()==='').length, 0);
-    if(missingReps) return `Enter reps for ${missingReps} remaining set${missingReps===1?'':'s'}.`;
-    if(pendingSets) return `Tap Done for ${pendingSets} set${pendingSets===1?'':'s'} you completed — Save logs unfinished sets as skipped.`;
-    return 'Add at least one set to each exercise.';
-  })();
 
   const save = ()=>{
     if(!canSave) return;
     tracePhase('session-runner:save', ()=> {}, 'begin');
-    const labels=noteTags.map(id=> NOTE_PROMPTS.find(t=> t.id===id)?.label).filter(Boolean);
-    const finalNote=[labels.join(', '), note.trim()].filter(Boolean).join(' · ');
     const nowISO = new Date().toISOString();
     const startedAt = startedAtRef.current;
-    const durationMinutes = Math.max(1, Math.round((Date.parse(nowISO) - Date.parse(startedAt)) / 60000));
-    const painDiscomfort = noteTags.includes('pain-discomfort');
-    const substitutions = blocks.filter(b=> b.substitutionFrom).map(b=> ({ from: b.substitutionFrom, to: b.exerciseId, reason: b.substitutionReason }));
-    const exerciseOrder = blocks.map(b=> b.exerciseId);
-    const payload = {
-      id: session.id,
-      dateISO: session.dateISO,
-      programId: session.programId,
-      programVersion: session.programVersion || null,
-      templateVersion: session.templateVersion || null,
-      week: session.week,
-      day: session.day,
-      title: session.title,
-      mode: session.mode || 'standard',
-      targetMinutes: session.targetMinutes || null,
-      originalDurationMin: session.originalDurationMin || null,
-      rescheduledFrom: session.rescheduledFrom || null,
-      durationMinutes,
+    const payload = buildSessionHistoryPayload({
+      session,
+      blocks,
+      availableEquipment,
+      note,
+      noteTags,
+      quality:qualityRating,
       startedAt,
-      finishedAt: nowISO,
-      savedAt: nowISO,
-      equipmentSnapshot: [...(availableEquipment || [])],
-      substitutions: substitutions.length ? substitutions : undefined,
-      exerciseOrder,
-      painDiscomfort,
-      blocks: blocks.map((b, index)=> {
-        // Copy the snapshot frozen when this block's target was shown. The save
-        // never re-runs the engine to restamp historical truth.
-        return {
-          exerciseId: b.exerciseId,
-          exerciseOrder: index,
-          ...(b.substitutionFrom ? { substitutionFrom: b.substitutionFrom, substitutionReason: b.substitutionReason } : {}),
-          ...(Array.isArray(b.governedSlots) && b.governedSlots.length ? { governedSlots: b.governedSlots } : {}),
-          ...(Array.isArray(b.removedSlots) && b.removedSlots.length ? { removedSlots: b.removedSlots } : {}),
-          ...(b.prescriptionOverridden ? { prescriptionOverridden: true } : {}),
-          ...carryPrescription(b),
-          equipment: EXERCISE_BY_ID[b.exerciseId]?.equipment || null,
-          sets: b.sets.map(s=>{
-            const completed = !!s.completed;
-            const skipped = !completed && String(s.reps).trim() !== '';
-            const failed = !!s.failed;
-            const out={ reps:String(s.reps).trim(), weightKg:String(s.weightKg).trim(), rpe:String(s.rpe).trim(), completed, skipped, failed };
-            // Stable identity travels with the set so history never depends on
-            // the current array position (plannedSlot, not the index).
-            if(s.setId) out.setId = s.setId;
-            if(s.origin) out.origin = s.origin;
-            if(Number.isInteger(s.plannedSlot)) out.plannedSlot = s.plannedSlot;
-            else if(s.origin === 'user-added') out.plannedSlot = null;
-            if(s.governingPrescriptionId) out.governingPrescriptionId = s.governingPrescriptionId;
-            else if(s.origin === 'user-added') out.governingPrescriptionId = null;
-            if(painDiscomfort) out.pain = true;
-            if(b.unilateral && s.side) out.side=s.side;
-            if(s.rom && String(s.rom).trim()) out.rom=String(s.rom).trim();
-            if(s.assistedKg && String(s.assistedKg).trim()) out.assistedKg=String(s.assistedKg).trim();
-            if(s.tempo && String(s.tempo).trim()) out.tempo=String(s.tempo).trim();
-            return out;
-          }),
-        };
-      }),
-      skippedSetsCount: blocks.reduce((n,b)=> n + b.sets.filter(s=> !s.completed).length, 0),
-      note: finalNote || undefined,
-      noteTags: noteTags.length ? noteTags : undefined,
-      sessionDuration: durationMinutes,
-      quality: qualityRating || undefined,
-    };
+      nowISO,
+    });
     traceEnd('session-runner:save', 'payload built');
     onSave(payload);
   };
@@ -987,7 +796,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           const supportsAssisted=ex?.supportsAssisted;
           const recommendation=blockMeta.recs.get(b.exerciseId) || null;
           const clearTarget = clearTargetParts(recommendation, b, unit);
-          const prevSummary = prev ? previousSummary(prev, unit) : null;
+          const prevSummary = prev ? previousPerformanceSummary(prev, unit) : null;
           const goalText = prevSummary && prevSummary.totalReps > 0 ? `beat ${prevSummary.totalReps} total reps` : 'set your baseline';
           const changeChip = transitionChip(recommendation, prevSummary, unit);
           // Swap sheet honours the user's liked/disliked movements, and never
@@ -1049,7 +858,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     <div className="mt-1 space-y-0.5 text-[11px] text-ink3">
                       {ex?.cues?.[0] && <p>Cue: {ex.cues[0]}</p>}
                       {b.warmups?.length ? <p>Warm-ups: {b.warmups.map(w=> `${w.reps}×${w.weightKg||'bw'}${w.note?` (${w.note})`:''}`).join(' • ')}</p> : null}
-                      {b.restSec ? <p>Rest {fmtRest(b.restSec)} · load hint: {b.loadHint || '—'}</p> : null}
+                    {b.restSec ? <p>Rest {formatRest(b.restSec)} · load hint: {b.loadHint || '—'}</p> : null}
                       {b.why && <p className="italic">Prescribed: {b.why}</p>}
                       {recommendation?.plateLoad && <p>Plate check · {recommendation.plateLoad.exact ? `${fmtWeight(recommendation.plateLoad.loadKg, unit)} exact` : `${fmtWeight(recommendation.plateLoad.targetKg, unit)} → ${fmtWeight(recommendation.plateLoad.loadKg, unit)} ${recommendation.plateLoad.direction}`} · per side: {formatPlateStack(recommendation.plateLoad.platesPerSide)}</p>}
                       {b.substitutionReason && <p className="italic">Swap rationale: {b.substitutionReason}</p>}
