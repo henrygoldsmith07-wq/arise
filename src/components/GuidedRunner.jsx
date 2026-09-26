@@ -14,11 +14,8 @@ import {
   applyGuidedTreatment,
 } from '../lib/guidedMode.js';
 import { recordEvent, trackFieldFocus, fieldCommitted } from '../lib/telemetry.js';
-import { recordRecommendation } from '../lib/longitudinal.js';
-import { runComparativeStudy } from '../lib/study.js';
-import { studyArmFor } from '../lib/studyEnrollment.js';
 import { POLICY_ORDER } from '../lib/progressionPolicies.js';
-import { treatmentRecommendation } from '../lib/treatment.js';
+import { buildRunnerRecommendationMeta, recordProspectiveRecommendation, runnerStudy } from '../lib/runnerRecommendations.js';
 import { restStartCue, restTickCue, restCompleteCue } from '../lib/audioCues.js';
 import { speak, cancelSpeech, voiceSupported } from '../lib/voiceCoach.js';
 import { haptic } from '../lib/haptics.js';
@@ -64,9 +61,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   // Exercises never randomised resolve to null: normal product behaviour,
   // excluded from the study — never a silent default to Arise.
   const appPolicy = POLICY_ORDER.includes(appPrefs?.progressionPolicy) ? appPrefs.progressionPolicy : 'standard';
-  const study = useMemo(()=>{
-    try{ return runComparativeStudy(history); }catch{ return null; }
-  },[history]);
+  const study = useMemo(()=> runnerStudy(history), [history]);
   // Shown/exercised once per exercise across remounts: the set survives a
   // dev double-effect and is re-seeded from the draft, so a crash-recovery
   // resume never records a second prospective row for the same exercise.
@@ -196,16 +191,15 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   // Per-exercise arm + treatment, computed once per change exactly like the
   // standard runner's blockMeta — the shown prescription, the frozen snapshot
   // and the recorded evidence all read from this single source.
-  const guidedMeta = useMemo(()=>{
-    const arms = new Map(), recs = new Map();
-    for(const b of blocks){
-      if(arms.has(b.exerciseId)) continue;
-      const arm = studyArmFor(studyEnrollment, b.exerciseId);
-      arms.set(b.exerciseId, arm);
-      recs.set(b.exerciseId, treatmentRecommendation({ block: b, history, asOfDateISO: session.dateISO, plateConfig, study, assignedArm: arm, policy: appPolicy }));
-    }
-    return { arms, recs };
-  },[blocks, history, session.dateISO, plateConfig, study, studyEnrollment, appPolicy]);
+  const guidedMeta = useMemo(()=> buildRunnerRecommendationMeta({
+    blocks,
+    history,
+    dateISO:session.dateISO,
+    plateConfig,
+    study,
+    studyEnrollment,
+    policy:appPolicy,
+  }),[blocks, history, session.dateISO, plateConfig, study, studyEnrollment, appPolicy]);
 
   // The guided runner shows one step at a time, so freeze a block's
   // prescription (and record its prospective evidence) the moment it becomes
@@ -227,17 +221,14 @@ export default function GuidedRunner({ session, history = [], availableEquipment
       shownRecommendationRef.current.add(block.exerciseId);
       try{ recordEvent('recommendation:shown', { sessionId: session.id, exerciseId: block.exerciseId, assignedArm: arm ?? null, mode: 'guided' }); }catch{}
       try{
-        recordRecommendation({
-          exerciseId: block.exerciseId,
+        recordProspectiveRecommendation({
+          block,
           recommendation: rec,
+          arm,
           history,
-          dueDateISO: session.dateISO,
-          programId: session.programId || null,
-          programVersion: session.programVersion ?? null,
-          targetReps: block.reps || undefined,
-          assignedArm: arm ?? null,
+          session,
           participantId,
-          preferences: measurementConsent === true ? { telemetryEnabled: true } : null,
+          measurementConsent,
         });
       }catch{}
       // Carry the "already shown" markers into the draft so a resume after

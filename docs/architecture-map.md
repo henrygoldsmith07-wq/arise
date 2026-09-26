@@ -48,16 +48,20 @@ src/core/*                Cross-cutting: config, flags, errors, DI container
 | DI & adapter overrides | `src/core/container.js` (ADR 0004) |
 | Data access & store invariants | `src/repositories/index.js` (ADR 0002) |
 | Repository-backed orchestration verbs | `src/services/index.js` |
-| Workout save/cancel/adaptation/integration workflow | `src/services/workoutService.js` |
+| Workout save/adaptation/integration workflow | `src/services/workoutService.js` (lazy after workout entry) |
+| Lightweight workout cancellation planning | `src/services/workoutCancellationService.js` |
 | Programme generation/scheduling/template mutation | `src/services/programmeService.js` |
 | Settings object transitions | `src/services/settingsService.js` |
 | Device-data lifecycle / storage health | `src/services/dataLifecycleService.js` |
 | Storage diagnostics / maintenance | `src/services/storageDiagnosticsService.js` |
+| Full-backup download lifecycle | `src/services/backupService.js` + `src/lib/backupState.js` |
 | Cloud-coach routing/explanation lifecycle | `src/services/coachService.js` |
 | Feedback classification/review/share lifecycle | `src/services/feedbackService.js` |
 | Evidence snapshot/study/export workflow | `src/services/evidenceService.js` |
 | Shared runner clock/wake-lock/draft lifecycle | `src/hooks/useWorkoutRuntime.js` |
 | Standard runner deterministic set/recommendation/save transitions | `src/lib/sessionRunnerModel.js` |
+| Shared Standard/Guided treatment + prospective evidence contract | `src/lib/runnerRecommendations.js` |
+| Quota warning/snapshot orchestration | `src/lib/quotaGuard.js` |
 | Cross-tab invalidation/reconciliation | `src/lib/crossTabStore.js` |
 | Export contract & import policy | `src/lib/exportPolicy.js` (ADR 0003) |
 | Domain model & tombstones | `src/lib/domain.js` |
@@ -95,11 +99,14 @@ routing, feedback handling and evidence/study actions now leave React through
 application services. Device-data deletion, integrity notices, browser storage
 health and persisted-state diagnostics now also cross explicit lifecycle service
 boundaries; feature components no longer import the canonical storage/IDB
-modules directly. `MoreView` remains the composition/search container while
+modules or browser storage directly. Full-backup success/reminder state is
+owned by the backup lifecycle, so partial/CSV exports cannot masquerade as a
+recoverable backup. `MoreView` remains the composition/search container while
 AI, feedback, appearance/accessibility, guided settings, policy and evidence
 sections own their local interaction state. Standard and Guided runners remain
 separate presentations but share runtime ownership for clocks, wake lock and
-crash-draft persistence. `SessionRunner.jsx` keeps UI/event orchestration while
+crash-draft persistence, plus one treatment/prospective-evidence resolver so
+the prescription displayed in Standard and Guided modes cannot drift. `SessionRunner.jsx` keeps UI/event orchestration while
 its deterministic set editing, carry-forward, recommendation application,
 save eligibility and history-payload construction live in
 `sessionRunnerModel.js`, where those invariants are directly unit-tested.

@@ -11,9 +11,6 @@
 // Fail-soft by contract: every export returns usable defaults on any error,
 // because quota pressure is exactly when extra work can make things worse.
 
-import { storageHealth } from './storageQuota.js';
-import { captureSnapshot } from './snapshots.js';
-
 const LEVELS = ['ok', 'evictable', 'warning', 'critical'];
 
 /**
@@ -35,10 +32,45 @@ export function evaluateQuotaPrompt(health, lastPromptedLevel = null){
   }
 }
 
+/**
+ * End-to-end runtime quota check. Keeping health + policy + snapshot in this
+ * module prevents the UI from accidentally splitting dependent values across
+ * promise scopes, while dynamic imports keep quota work outside the boot path.
+ */
+export async function checkQuotaProtection({
+  lastPromptedLevel = null,
+  readHealth = null,
+  snapshotCritical = snapshotIfCritical,
+  isActive = ()=> true,
+} = {}){
+  const healthReader = readHealth || (await import('./storageQuota.js')).storageHealth;
+  const health = await healthReader();
+  // React StrictMode can clean up an effect while this browser estimate is in
+  // flight. Do not take a second critical snapshot for an abandoned check.
+  if(!isActive()) return {
+    health,
+    decision:{ shouldPrompt:false, level:health?.level || 'ok', reason:'cancelled' },
+    snapshotCaptured:false,
+  };
+  if(!health) return {
+    health:null,
+    decision:{ shouldPrompt:false, level:'ok', reason:null },
+    snapshotCaptured:false,
+  };
+  const decision = evaluateQuotaPrompt(health, lastPromptedLevel);
+  const snapshotCaptured = decision.shouldPrompt && decision.level === 'critical'
+    ? await snapshotCritical(health)
+    : false;
+  return { health, decision, snapshotCaptured };
+}
+
 /** Best-effort critical snapshot. Resolves true when one was captured. */
 export async function snapshotIfCritical(health){
   try {
     if(health?.level !== 'critical') return false;
+    // Snapshotting is only needed on the critical path. Keep it out of the
+    // normal quota-check chunk so the routine warning path stays lightweight.
+    const { captureSnapshot } = await import('./snapshots.js');
     await captureSnapshot({ force: true, reason: 'quota-critical' });
     return true;
   } catch {

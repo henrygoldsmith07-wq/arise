@@ -70,6 +70,26 @@ async function openRunner(page){
   return runner;
 }
 
+test.describe('storage quota protection', () => {
+  test('critical browser quota reaches the app warning path', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'storage', {
+        configurable: true,
+        value: {
+          estimate: async () => ({ usage: 96, quota: 100 }),
+          persisted: async () => true,
+          persist: async () => true,
+        },
+      });
+    });
+    await page.goto('/');
+    const alert = page.getByRole('alert').filter({ hasText:'Storage almost full' });
+    await expect(alert).toBeVisible({ timeout:10_000 });
+    await expect(alert).toContainText(/Export a backup now/);
+    await expect(alert).toContainText(/safety snapshot/);
+  });
+});
+
 test.describe('active workout resilience', () => {
   test('draft survives a hard reload mid-session and offers recovery', async ({ page }) => {
     await completeOnboarding(page);

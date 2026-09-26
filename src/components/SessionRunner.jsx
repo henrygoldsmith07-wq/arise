@@ -3,13 +3,11 @@ import { EXERCISE_BY_ID } from '../lib/data.js';
 import { lastExerciseSets } from '../lib/store.js';
 import { buildPrescriptionSnapshot, attachPrescription, applySwapToBlocks, attributePrescribedSets, isSetPerformed } from '../lib/progression.js';
 import { POLICY_ORDER } from '../lib/progressionPolicies.js';
-import { runComparativeStudy } from '../lib/study.js';
-import { studyArmFor } from '../lib/studyEnrollment.js';
-import { treatmentRecommendation } from '../lib/treatment.js';
 import { formatPlateStack } from '../lib/plates.js';
 import { substitutionOptions } from '../lib/substitutions.js';
 import { recordEvent, trackFieldFocus, fieldCommitted } from '../lib/telemetry.js';
-import { recordRecommendation, markRecommendationOverride } from '../lib/longitudinal.js';
+import { markRecommendationOverride } from '../lib/longitudinal.js';
+import { buildRunnerRecommendationMeta, recordProspectiveRecommendation, runnerRecommendationForBlock, runnerStudy } from '../lib/runnerRecommendations.js';
 import { quickJumps, applyQuickJump, skipTo, restPresetFor, visiblePrescriptionIndexes } from '../lib/gymMode.js';
 import { SESSION_QUALITY_OPTIONS, sessionQualityLabel } from '../lib/gymMode.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
@@ -53,12 +51,6 @@ import {
   stepRir,
   transitionChip,
 } from '../lib/sessionRunnerModel.js';
-
-// The randomised-treatment resolver lives in lib/treatment.js so Guided mode
-// enforces the identical assignment from the identical code path.
-function getRecommendation(block, history, asOfDateISO, plateConfig = null, study = null, assignedArm = null, policy = 'standard', explanationMode = 'standard'){
-  return treatmentRecommendation({ block, history, asOfDateISO, plateConfig, study, assignedArm, policy });
-}
 
 export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, appPrefs = null, gymPrefs = null, onSetRestPreset = null, studyEnrollment = null, participantId = null, onDraftChange, onSave, onCancel }){
   const unit = asUnit(appPrefs?.units);
@@ -239,9 +231,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
 
   // The comparative study runs once per history — it feeds the evidence
   // gates that decide whether any progression-model capability may apply.
-  const study = useMemo(()=>{
-    try{ return runComparativeStudy(history); }catch{ return null; }
-  }, [history]);
+  const study = useMemo(()=> runnerStudy(history), [history]);
 
   const startRest=(seconds,label,exerciseId=null)=>{
     const sec=Number(seconds)||0;
@@ -260,34 +250,28 @@ export default function SessionRunner({ session, history = [], availableEquipmen
 
   // ── Preferences. Two sources, two jobs: ──
   // appPrefs (store.preferences) owns session-wide behaviour: progression
-  // policy, explanation mode, auto-rest, sound cues, voice coach, wake lock.
+  // policy, auto-rest, sound cues, voice coach, wake lock.
   // preferences (the onboarding payload) owns programme taste: liked/disliked
   // movements for substitutions.
-  // NOTE: policy and explanation mode previously read `preferences` here —
-  // the onboarding object — so the More → Training settings never reached
-  // standard sessions. Fixed by reading appPrefs.
+  // NOTE: policy previously read `preferences` here — the onboarding object —
+  // so the More → Training settings never reached standard sessions.
   const appPolicy = POLICY_ORDER.includes(appPrefs?.progressionPolicy) ? appPrefs.progressionPolicy : 'standard';
-  const appExplanationMode = ['simple', 'standard', 'advanced'].includes(appPrefs?.explanationMode) ? appPrefs.explanationMode : 'standard';
   // Gym Mode preference: auto-rest on completion (default on) and audio set
   // cues honour their own switches; gymMode defaults to the persisted opt-in.
   const audioCueOn = appPrefs?.soundCues !== false;
 
   // Recommendations and previous-performance lookups scan the full history;
   // compute them once per change instead of once per block per keystroke.
-  const blockMeta = useMemo(()=>{
-    const recs=new Map(), prevs=new Map(), assigned=new Map();
-    for(const b of blocks){
-      if(recs.has(b.exerciseId)) continue;
-      // Randomised trial: the assigned arm decides which policy runs. An
-      // exercise that was never randomised (swapped-in, adapted-in, new) is
-      // EXCLUDED from the study — never silently labelled 'arise'.
-      const arm = studyArmFor(studyEnrollment, b.exerciseId);
-      assigned.set(b.exerciseId, arm);
-      recs.set(b.exerciseId, getRecommendation(b,history,session.dateISO,plateConfig,study,arm, appPolicy, appExplanationMode));
-      prevs.set(b.exerciseId, lastExerciseSets(history,b.exerciseId));
-    }
-    return { recs, prevs, assigned };
-  },[blocks,history,session.dateISO,plateConfig,studyEnrollment,appPolicy,appExplanationMode]);
+  const blockMeta = useMemo(()=> buildRunnerRecommendationMeta({
+    blocks,
+    history,
+    dateISO:session.dateISO,
+    plateConfig,
+    study,
+    studyEnrollment,
+    policy:appPolicy,
+    previousForExercise:(exerciseId)=> lastExerciseSets(history, exerciseId),
+  }),[blocks,history,session.dateISO,plateConfig,study,studyEnrollment,appPolicy]);
 
   // Prospective evaluation record: persist the EXACT recommendation the user is
   // shown — the same blockMeta.recs value rendered on screen, carrying its
@@ -304,17 +288,14 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       const arm = blockMeta.assigned.get(block.exerciseId);
       recordEvent('recommendation:shown', { sessionId:session.id, exerciseId:block.exerciseId, assignedArm:arm ?? null });
       try{
-        recordRecommendation({
-          exerciseId: block.exerciseId,
+        recordProspectiveRecommendation({
+          block,
           recommendation,
+          arm,
           history,
-          dueDateISO: session.dateISO,
-          programId: session.programId || null,
-          programVersion: session.programVersion ?? null,
-          targetReps: block.reps || undefined,
-          assignedArm: arm ?? null,
+          session,
           participantId,
-          preferences: measurementConsent === true ? { telemetryEnabled: true } : null,
+          measurementConsent,
         });
       }catch{}
     }
@@ -598,7 +579,15 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       const target = prev[bi];
       if(!target || !option?.id || option.id === target.exerciseId){ swapResumeRef.current = null; return prev; }
       const plan = Number.isInteger(target.planIndex) ? target.planIndex : bi;
-      const recommendation = getRecommendation({ exerciseId: option.id, reps: target.reps || session.blocks?.[plan]?.reps }, history, session.dateISO, plateConfig, study, studyArmFor(studyEnrollment, option.id), appPolicy, appExplanationMode);
+      const { recommendation } = runnerRecommendationForBlock({
+        block:{ exerciseId:option.id, reps:target.reps || session.blocks?.[plan]?.reps },
+        history,
+        dateISO:session.dateISO,
+        plateConfig,
+        study,
+        studyEnrollment,
+        policy:appPolicy,
+      });
       // applySwapToBlocks splits a partially-completed block so done work keeps
       // its original exercise + prescription, or replaces it in place if nothing
       // has been performed yet. Either way the swap stays a single tap.

@@ -31,11 +31,11 @@ function warmLazyViews(){
     ? (fn)=> window.requestIdleCallback(fn, { timeout: 4000 })
     : (fn)=> window.setTimeout(fn, 1200);
   idle(()=> {
-    // Warm every split chunk right after first paint so on anything but a
-    // cold offline start the code is local before the user taps its tab:
-    // splitting is for boot bytes, not for navigation jank. Failures are
-    // harmless — the real navigation retries through Suspense.
-    for(const load of [loadTrainView, loadExerciseBrowser, loadProgressView, loadMoreView, loadSessionRunner, loadGuidedRunner]) {
+    // Warm only the likely workout path after first paint. Progress, More and
+    // the exercise browser remain genuinely on-demand so a user who opens the
+    // app just to log a session does not immediately download/parse every tab.
+    // Failures are harmless — real navigation retries through Suspense.
+    for(const load of [loadTrainView, loadSessionRunner, loadGuidedRunner]) {
       load().catch(()=>{});
     }
   });
@@ -50,7 +50,7 @@ import OfflineBanner from './components/OfflineBanner.jsx';
 import DemoBanner from './components/DemoBanner.jsx';
 const InstallCard = lazy(() => import('./components/InstallCard.jsx'));
 import { setRestPreset } from './lib/gymMode.js';
-import { cancellationPlan, completeWorkoutWorkflow, recordWorkoutEvents, runPostSaveIntegrations } from './services/workoutService.js';
+import { cancellationPlan } from './services/workoutCancellationService.js';
 
 // Suspense fallback for lazy tabs: same chrome height as a view header so
 // the tab bar doesn't jump when the chunk resolves.
@@ -81,6 +81,7 @@ export default function App(){
   const quotaPromptedRef=useRef(null);
   const [toast,setToast]=useState(null);
   const applyReloadRef=useRef(false);
+  const saveInFlightRef=useRef(false);
   const storeRef=useRef(store);
   const activeSessionRef=useRef(activeSession);
   // Protection is per-tab ownership, not merely "the canonical store contains
@@ -165,17 +166,16 @@ export default function App(){
   // store grows (every persistence round). Cheap, async, fail-soft.
   useEffect(()=>{
     let live = true;
-    import('./lib/quotaGuard.js').then(({ evaluateQuotaPrompt, snapshotIfCritical }) =>
-      import('./lib/storageQuota.js').then(({ storageHealth }) => storageHealth())
-    ).then(health => {
-      if(!live || !health) return;
-      const decision = evaluateQuotaPrompt(health, quotaPromptedRef.current);
+    import('./lib/quotaGuard.js')
+    .then(({ checkQuotaProtection })=> checkQuotaProtection({
+      lastPromptedLevel:quotaPromptedRef.current,
+      isActive:()=> live,
+    }))
+    .then(({ decision, snapshotCaptured }) => {
+      if(!live || !decision) return;
       if(decision.shouldPrompt){
         quotaPromptedRef.current = decision.level;
-        setQuotaPrompt(decision);
-        if(decision.level === 'critical'){
-          import('./lib/quotaGuard.js').then(({ snapshotIfCritical }) => snapshotIfCritical(health)).catch(()=>{});
-        }
+        setQuotaPrompt({ ...decision, snapshotCaptured });
       }
     }).catch(()=>{});
     return ()=> { live = false; };
@@ -334,6 +334,9 @@ export default function App(){
       return;
     }
     setActiveSession(session);
+    // Completion/adaptation logic is deliberately outside the boot graph. Warm
+    // it once the user enters a workout so the eventual Save stays instant.
+    void import('./services/workoutService.js').catch(()=>{});
     localDraftProtectedRef.current = true;
     setRecoveryOpen(false);
     try { recordEvent('session:start', { sessionId: session.id, title: session.title }); } catch {}
@@ -358,26 +361,39 @@ export default function App(){
     setStoreState(prev=> ({ ...prev, gymPrefs: { ...(prev.gymPrefs||{}), restPresets: setRestPreset(prev.gymPrefs, exerciseId, seconds) } }));
   },[]);
 
-  const handleSaveSession = (payload)=>{
-    // Save-time measurement for the logging-friction stats: the synchronous
-    // payload build + store write only (auto-sync below is fire-and-forget and
-    // deliberately excluded). Consent-gated like every other measurement.
-    const saveStartedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : null;
-    const completed = completeWorkoutWorkflow({
-      store,
-      payload,
-      saveStartedAt,
-      performanceNow:saveStartedAt != null && typeof performance !== 'undefined' && performance.now ? ()=> performance.now() : null,
-    });
-    const { store:next, history:hist, events, toast:saveToast } = completed;
-    setStore(next);
-    runPostSaveIntegrations({ store:next, payload, history:hist, setStore });
-    localDraftProtectedRef.current = false;
-    setActiveSession(null);
-    setRecoveryOpen(false);
-    setTab('progress');
-    setToast(saveToast);
-    recordWorkoutEvents(events);
+  const handleSaveSession = async (payload)=>{
+    if(saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
+    // Save-time measurement covers the deterministic completion workflow. The
+    // chunk is pre-warmed at workout start; auto-sync remains fire-and-forget.
+    try{
+      const { completeWorkoutWorkflow, recordWorkoutEvents, runPostSaveIntegrations } = await import('./services/workoutService.js');
+      const saveStartedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : null;
+      const completed = completeWorkoutWorkflow({
+        store:storeRef.current,
+        payload,
+        saveStartedAt,
+        performanceNow:saveStartedAt != null && typeof performance !== 'undefined' && performance.now ? ()=> performance.now() : null,
+      });
+      const { store:next, history:hist, events, toast:saveToast } = completed;
+      setStore(next);
+      runPostSaveIntegrations({ store:next, payload, history:hist, setStore });
+      localDraftProtectedRef.current = false;
+      setActiveSession(null);
+      setRecoveryOpen(false);
+      setTab('progress');
+      setToast(saveToast);
+      recordWorkoutEvents(events);
+    }catch(err){
+      try{ recordErrorEvent(err, { where:'workout-save', sessionId:payload?.id }); }catch{}
+      setToast({
+        title:'Workout not saved',
+        detail:'Your in-progress workout is still on this device. Try Save again.',
+        note:String(err?.message || err || 'Save workflow could not load.'),
+      });
+    }finally{
+      saveInFlightRef.current = false;
+    }
   };
   const handleCancelSession = ()=>{
     const plan = cancellationPlan({ store, activeSession });
@@ -396,6 +412,7 @@ export default function App(){
       setRecoveryOpen(false);
       return;
     }
+    void import('./services/workoutService.js').catch(()=>{});
     setActiveSession(draft.session);
     localDraftProtectedRef.current = true;
     setRecoveryOpen(false);
@@ -469,7 +486,9 @@ export default function App(){
         <div className="mx-4 mt-2 rounded-xl border border-review/30 bg-reviewsoft px-3 py-2 flex flex-wrap items-center gap-2 text-xs" role="alert">
           <span className="font-bold text-review">{quotaPrompt.level === 'critical' ? 'Storage almost full' : 'Storage filling up'}</span>
           <span className="text-ink2 flex-1 min-w-40">{quotaPrompt.level === 'critical'
-            ? 'Writes may start failing. Export a backup now — a safety snapshot was taken automatically.'
+            ? quotaPrompt.snapshotCaptured
+              ? 'Writes may start failing. Export a backup now — a safety snapshot was taken automatically.'
+              : 'Writes may start failing. Export a backup now — the automatic safety snapshot could not be confirmed.'
             : 'Past 80% of this browser’s storage quota. An export now keeps you safe.'}</span>
           <button onClick={()=> setTab('more')} className="btn btn-primary min-h-8 rounded-xl px-3 text-xs">Back up now</button>
           <button onClick={()=> setQuotaPrompt(null)} className="btn btn-secondary min-h-8 rounded-xl px-2.5 text-xs" aria-label="Dismiss storage prompt">✕</button>
