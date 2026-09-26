@@ -57,6 +57,7 @@ src/core/*                Cross-cutting: config, flags, errors, DI container
 | Feedback classification/review/share lifecycle | `src/services/feedbackService.js` |
 | Evidence snapshot/study/export workflow | `src/services/evidenceService.js` |
 | Shared runner clock/wake-lock/draft lifecycle | `src/hooks/useWorkoutRuntime.js` |
+| Standard runner deterministic set/recommendation/save transitions | `src/lib/sessionRunnerModel.js` |
 | Cross-tab invalidation/reconciliation | `src/lib/crossTabStore.js` |
 | Export contract & import policy | `src/lib/exportPolicy.js` (ADR 0003) |
 | Domain model & tombstones | `src/lib/domain.js` |
@@ -98,7 +99,10 @@ modules directly. `MoreView` remains the composition/search container while
 AI, feedback, appearance/accessibility, guided settings, policy and evidence
 sections own their local interaction state. Standard and Guided runners remain
 separate presentations but share runtime ownership for clocks, wake lock and
-crash-draft persistence.
+crash-draft persistence. `SessionRunner.jsx` keeps UI/event orchestration while
+its deterministic set editing, carry-forward, recommendation application,
+save eligibility and history-payload construction live in
+`sessionRunnerModel.js`, where those invariants are directly unit-tested.
 
 Large components may still call pure recommendation/safety/selectors directly;
 future extraction should continue to target cohesive workflows (for example
