@@ -44,4 +44,10 @@ describe('archive integrity', () => {
     const audit = await auditStore();
     assert.equal(audit.findings.some((finding) => finding.type === 'orphaned-set'), false);
   });
+
+  it('reports impossible calendar dates as invalid-date findings', async () => {
+    await idbPut('sessions', { id:'bad-date', dateISO:'2026-02-31', blocks:[] });
+    const audit = await auditStore();
+    assert.equal(audit.findings.some((finding) => finding.type === 'invalid-date' && finding.ids.includes('bad-date')), true);
+  });
 });
