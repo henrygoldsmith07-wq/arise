@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { MUSCLES, LEVELS, EQUIPMENT, EXERCISE_TAGS, searchExercises, EXERCISE_BY_ID } from '../lib/data.js';
+import { MUSCLES, LEVELS, EQUIPMENT, EXERCISE_TAGS, searchExercises, EXERCISE_BY_ID, recommendExercises } from '../lib/data.js';
 import { hasExerciseImage, getExerciseMeta } from '../lib/exerciseImages.js';
 import { teachingFor } from '../lib/exerciseTeaching.js';
 import { ALTERNATIVE_KINDS, alternativesFor, classifyExercise, isDeprecated } from '../lib/exerciseTaxonomy.js';
@@ -39,7 +39,7 @@ function AlternativeGroups({ exercise }){
   );
 }
 
-export default function ExerciseBrowser({ availableEquipment }){
+export default function ExerciseBrowser({ availableEquipment, onboarding = null }){
   const [q,setQ]=useState('');
   const [muscle,setMuscle]=useState('');
   const [level,setLevel]=useState('');
@@ -54,6 +54,11 @@ export default function ExerciseBrowser({ availableEquipment }){
     q, muscle, level, tag: tags, equipment: equip || undefined,
     availableEquipment: onlyAvailable ? availableEquipment : null
   }).filter(e => !isDeprecated(e)), [q,muscle,level,tags,equip,onlyAvailable,availableEquipment]);
+  const recs = useMemo(()=> onboarding ? recommendExercises({
+    goal:onboarding.goal,
+    availableEquipment:onboarding.equipment,
+    limit:4,
+  }) : [], [onboarding]);
 
   return (
     <div className="px-4 py-5 space-y-4">
@@ -110,6 +115,17 @@ export default function ExerciseBrowser({ availableEquipment }){
       </div>
 
       <p className="text-xs text-ink3 px-1" role="status" aria-live="polite">{results.length} exercise{results.length===1?'':'s'} • sorted by relevance</p>
+
+      {!!recs.length && (
+        <div className="rounded-2xl border border-line bg-surface p-3">
+          <p className="text-xs font-bold">Recommended for you</p>
+          <p className="text-[11px] text-ink3 mt-1">Based on onboarding: goal <span className="font-semibold text-ink">{onboarding.goal}</span> • location <span className="font-semibold text-ink">{onboarding.location}</span> • kit {(onboarding.equipment||[]).join(', ')}</p>
+          <ul className="mt-2 grid gap-1.5">
+            {recs.map(r=> <li key={r.id} className="text-sm flex gap-2"><span className="font-semibold">{r.name}</span><span className="text-xs text-ink3 ml-auto">{r.muscle} • {r.equipment.join(', ')}</span></li>)}
+          </ul>
+          <p className="text-[11px] text-ink3 mt-2">Change kit or location in More → Edit onboarding to see this update.</p>
+        </div>
+      )}
 
       <ul className="space-y-2">
         {results.map(ex=> (

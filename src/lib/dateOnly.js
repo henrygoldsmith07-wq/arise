@@ -23,7 +23,15 @@ export function dateISOAtOffset(value, offsetMinutes){
 export function parseDateOnlyUTC(value){
   if(typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return NaN;
   const ms = Date.parse(`${value}T00:00:00Z`);
-  return Number.isFinite(ms) ? ms : NaN;
+  if(!Number.isFinite(ms)) return NaN;
+  // Date.parse normalises some impossible dates rather than rejecting them
+  // (for example 2026-02-31 -> 2026-03-03). Round-trip the calendar value so
+  // date-only domain fields can never silently move to another day.
+  return new Date(ms).toISOString().slice(0, 10) === value ? ms : NaN;
+}
+
+export function isDateOnly(value){
+  return Number.isFinite(parseDateOnlyUTC(value));
 }
 
 export function daysBetweenDateOnly(start, end){

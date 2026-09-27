@@ -10,6 +10,7 @@
 // can always answer "where did this row come from".
 
 import { z } from 'zod';
+import { isDateOnly } from './dateOnly.js';
 
 // ── Branded IDs ─────────────────────────────────────────────────────────────
 // Brands are compile-time only (zero runtime cost); the schemas below are the
@@ -23,7 +24,7 @@ export const recordIdSchema = z.string().min(1).brand('RecordId');
 
 // Date strings: ISO calendar dates and timestamps. Kept as branded strings —
 // new Date(...) round-trips would silently re-localise user data.
-const dateISOSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}/, 'Expected an ISO date (YYYY-MM-DD…)');
+const dateISOSchema = z.string().refine(isDateOnly, 'Expected a valid ISO calendar date (YYYY-MM-DD)');
 
 // ── Sets, blocks, sessions ──────────────────────────────────────────────────
 // Set fields are user-typed strings at the UI boundary ('' = not logged);
