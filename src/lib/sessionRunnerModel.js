@@ -17,6 +17,7 @@ import {
 import { runnerRecommendationForBlock } from './runnerRecommendations.js';
 import { NOTE_PROMPTS } from './sessionNotes.js';
 import { fmtWeight, weightInputValue } from './units.ts';
+import { localDateISO } from './dateOnly.js';
 
 export function parseRunnerNumber(value){
   const number = Number(value);
@@ -370,18 +371,22 @@ export function buildSessionHistoryPayload({
   quality = null,
   startedAt,
   nowISO,
+  performedDateISO = null,
 }){
   const labels = noteTags.map(id=> NOTE_PROMPTS.find(tag=> tag.id === id)?.label).filter(Boolean);
   const finalNote = [labels.join(', '), String(note).trim()].filter(Boolean).join(' · ');
   const durationMinutes = Math.max(1, Math.round((Date.parse(nowISO) - Date.parse(startedAt)) / 60000));
   const painDiscomfort = noteTags.includes('pain-discomfort');
+  const actualDateISO = performedDateISO || localDateISO(startedAt) || localDateISO(nowISO) || session.dateISO;
+  const scheduledDateISO = session.scheduledDateISO || session.dateISO || null;
   const substitutions = blocks
     .filter(block=> block.substitutionFrom)
     .map(block=> ({ from:block.substitutionFrom, to:block.exerciseId, reason:block.substitutionReason }));
 
   return {
     id:session.id,
-    dateISO:session.dateISO,
+    dateISO:actualDateISO,
+    ...(scheduledDateISO && scheduledDateISO !== actualDateISO ? { scheduledDateISO } : {}),
     programId:session.programId,
     programVersion:session.programVersion || null,
     templateVersion:session.templateVersion || null,
