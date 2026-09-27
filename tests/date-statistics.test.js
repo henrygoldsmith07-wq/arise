@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { dateISOAtOffset, localDateISO } from '../src/lib/dateOnly.js';
+import { dateISOAtOffset, daysBetweenDateOnly, localDateISO, parseDateOnlyUTC } from '../src/lib/dateOnly.js';
 import { linearRegressionIntervals } from '../src/lib/statistics.js';
 import { strengthSeries } from '../src/lib/analytics.js';
 
@@ -18,6 +18,19 @@ describe('date-only utilities', ()=>{
   it('handles negative UTC offsets across local midnight', ()=>{
     const instant = new Date('2026-09-26T01:30:00Z');
     assert.equal(dateISOAtOffset(instant, -240), '2026-09-25');
+  });
+
+  it('keeps date-only arithmetic stable across DST boundary dates', ()=>{
+    assert.equal(daysBetweenDateOnly('2026-03-28', '2026-03-29'), 1);
+    assert.equal(daysBetweenDateOnly('2026-03-29', '2026-03-30'), 1);
+    assert.equal(daysBetweenDateOnly('2026-10-24', '2026-10-25'), 1);
+    assert.equal(daysBetweenDateOnly('2026-10-25', '2026-10-26'), 1);
+    assert.equal(parseDateOnlyUTC('2026-03-29') % 86400000, 0);
+  });
+
+  it('rejects timestamps where a date-only domain value is required', ()=>{
+    assert.equal(Number.isNaN(parseDateOnlyUTC('2026-03-29T23:00:00+01:00')), true);
+    assert.equal(daysBetweenDateOnly('bad', '2026-03-30'), null);
   });
 });
 
