@@ -80,6 +80,75 @@ describe('indexeddb canonical storage', ()=>{
     assert.ok(reloaded.history.find(h => h.id === 'h3'));
   });
 
+  it('round-trips demo and gym preference state through the IndexedDB profile row', async ()=>{
+    await hydrateStorage();
+    const base = getCachedStore();
+    const next = {
+      ...base,
+      demo:true,
+      gymPrefs:{ focusDefault:true, restPresets:{ 'bench-press-dumbbell':90 } },
+    };
+    await setCachedStore(next);
+    await whenPersisted();
+    const recomposed = await loadStoreFromIdb();
+    assert.equal(recomposed.demo, true);
+    assert.equal(recomposed.gymPrefs.focusDefault, true);
+    assert.equal(recomposed.gymPrefs.restPresets['bench-press-dumbbell'], 90);
+
+    await setCachedStore(base, { evaluationLedgerMode:'replace' });
+    await whenPersisted();
+  });
+
+  it('keeps the durable merge base isolated from nested live-state mutation', async ()=>{
+    await hydrateStorage();
+    const original = getCachedStore();
+    const live = loadStore();
+    live.activeSchedule = live.activeSchedule || { sessions:[] };
+    live.activeSchedule.lastAdaptation = { dateISO:'2026-01-20', changes:[{ reason:'new local edit' }] };
+
+    let seenBase = null;
+    await setCachedStore(live, {
+      persist:async(store, { baseStore })=> {
+        seenBase = baseStore;
+        return store;
+      },
+    });
+    await whenPersisted();
+
+    assert.notEqual(seenBase, original);
+    assert.equal(seenBase?.activeSchedule?.lastAdaptation?.dateISO, original?.activeSchedule?.lastAdaptation?.dateISO);
+    assert.notEqual(seenBase?.activeSchedule?.lastAdaptation?.dateISO, '2026-01-20');
+
+    await setCachedStore(original, { persist:async(store)=> store, evaluationLedgerMode:'replace' });
+    await whenPersisted();
+  });
+
+  it('mirrors the latest preferences synchronously before the IndexedDB write resolves', async ()=>{
+    globalThis.localStorage = globalThis.localStorage || { _m:{}, getItem(k){ return k in this._m ? this._m[k] : null; }, setItem(k,v){ this._m[k]=String(v); }, removeItem(k){ delete this._m[k]; } };
+    await hydrateStorage();
+    const base = getCachedStore();
+    let release;
+    const gate = new Promise(resolve=> { release = resolve; });
+    const pending = setCachedStore({
+      ...base,
+      preferences:{ ...(base.preferences || {}), voiceCoach:true, soundCues:false, voiceRate:1.2 },
+    }, {
+      persist:async(store)=> { await gate; return store; },
+    });
+
+    const pointer = JSON.parse(globalThis.localStorage.getItem('arise.store.v1'));
+    assert.equal(pointer.__ariseIdb, true);
+    assert.equal(pointer.preferences.voiceCoach, true);
+    assert.equal(pointer.preferences.soundCues, false);
+    assert.equal(pointer.preferences.voiceRate, 1.2);
+
+    release();
+    await pending;
+    await whenPersisted();
+    await setCachedStore(base, { persist:async(store)=> store, evaluationLedgerMode:'replace' });
+    await whenPersisted();
+  });
+
   it('surfaces durable-write failures, rolls back the cache, and permits a retry', async ()=>{
     await hydrateStorage();
     const base = getCachedStore();
