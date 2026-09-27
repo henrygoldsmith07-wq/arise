@@ -7,7 +7,7 @@
 
 import { resolveArisePriors } from './priors.js';
 import { STUDY_VERSION } from './studyEnrollment.js';
-import { STUDY_DESIGN } from './study.js';
+import { STUDY_DESIGN } from './studyDesign.js';
 import { EVALUATION_SCHEMA_VERSION, round, wilsonInterval } from './longitudinalCore.js';
 import { isProspectiveRecord, isProspectiveRecommendation, allRecords, prospectiveRecommendations, trustedResolvedRecords, realisedSuccess, confidenceBandOf, recommendationTypeOf, shrinkRate, classifyRecommendationOutcome, participantOf, ANONYMOUS_LOCAL_PARTICIPANT } from './longitudinalCore.js';
 
