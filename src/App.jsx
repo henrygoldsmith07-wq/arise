@@ -41,7 +41,7 @@ function warmLazyViews(){
   });
 }
 import { loadStore, saveStore } from './lib/store.js';
-import { clearAllStoredData, refreshCachedStoreFromIdb, subscribeStoreCommits, whenPersisted } from './lib/storage.js';
+import { clearAllStoredData, hydrateStorage, refreshCachedStoreFromIdb, subscribeStoreCommits, whenPersisted } from './lib/storage.js';
 import { recommendExercises } from './lib/data.js';
 import { recordEvent, recordErrorEvent } from './lib/telemetry.js';
 import { watchStandaloneBodyClass, consumeShortcut } from './lib/pwa.js';
@@ -110,6 +110,10 @@ export default function App(){
       await captureSnapshot({ force: true, reason });
     }catch{}
     await clearAllStoredData({ preserveSnapshots:true });
+    // Clearing deliberately latches writes off so an in-flight pre-clear save
+    // cannot resurrect old data. Re-hydrate the now-empty canonical store
+    // before demo/fresh-state code writes anything new.
+    await hydrateStorage();
   }, []);
 
   const loadDemo = useCallback(async () => {

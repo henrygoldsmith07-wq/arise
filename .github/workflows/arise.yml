@@ -30,12 +30,12 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # bundle-diff builds origin/main in a worktree; a shallow clone
           # (fetch-depth 1) has no base to diff against.
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -91,7 +91,7 @@ jobs:
         run: node scripts/bundle-diff.cjs --check 10 | tee bundle-diff.md
       - name: Comment bundle diff on the PR
         if: github.event_name == 'pull_request'
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           header: bundle-diff
           path: bundle-diff.md
@@ -102,20 +102,23 @@ jobs:
         run: npx playwright test --reporter=list
       - name: Run Playwright E2E (PWA, production build)
         run: npm run e2e:pwa -- --reporter=list
-      # Visual regression: the resilience suite writes light/dark screenshots
-      # per tab. They upload on EVERY run (not just failure) so a reviewer can
-      # eyeball theme changes straight from the run artifacts.
+      # `visual-regression.spec.js` is part of the Playwright run above and
+      # compares six committed Chromium baselines with tolerant pixel thresholds.
+      # Existing resilience screenshots remain useful review artifacts; failed
+      # comparisons upload actual/diff PNGs for intentional re-baselining.
       - name: Upload visual regression screenshots
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: theme-screenshots
-          path: test-results/theme-*.png
+          name: visual-regression-artifacts
+          path: |
+            test-results/theme-*.png
+            test-results/visual-regression-*/**/*.png
           retention-days: 14
           if-no-files-found: ignore
       - name: Upload Playwright report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: playwright-report

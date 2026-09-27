@@ -47,27 +47,6 @@ accepted as documented behaviour in the appropriate doc.
    potentially unreliable rest-timer audio on locked-screen iOS.
    **Workaround:** keep the screen on (Gym mode's wake lock) where possible.
 
-7. **Stale merged branches linger on the remote.** Every pre-0.1.0 feature
-   branch (gym-mode, indexdb-storage, segmented-comparisons,
-   adaptive-mesocycle-review, weekly-review-card, custom-workout-templates,
-   exercise-library-tags, field-study-benchmark, and the rest of the
-   numbered PR series #17–#35) is MERGED into main — none carries unmerged
-   work, and none should be treated as an open proposal. They are listed
-   here as the documentation of record until a remote-side prune deletes
-   them; after that prune this entry moves to "accepted as documented
-   behaviour". **Experience:** none in the app. **Tracked:** repo hygiene
-   only, safe to close/prune at any time.
-
-8. **PRs #13–#16 were closed (not merged) on 2026-09-17.** #13 was
-   stale-completed (its content already on main); #14 (N-of-1 lab) and #16
-   (history-visualisation rework) were stale/out-of-scope against the current
-   roadmap; #15 (hosted Google-account sync) was REJECTED by the product
-   charter — Arise stays on-device with explicit exports and no account layer
-   (`docs/PRODUCT.md`). These closures are documented decisions, not
-   oversights; do not re-open the branches as "open proposals".
-   **Experience:** none in the app. **Tracked:** repo documentation of
-   record.
-
 ## Accepted as documented behaviour
 
 - Kg is the storage and engine unit; workout UI may display and accept lb, converting only at the UI boundary (`src/lib/units.ts`).
@@ -75,3 +54,9 @@ accepted as documented behaviour in the appropriate doc.
   views are retrospective, never causal.
 - Demo mode starts from a wiped slate and exits to a wiped slate; it never
   mixes with real data.
+- All Git-confirmed merged feature branches were pruned from the remote on
+  2026-09-27; remaining unmerged refs are not implicitly active proposals.
+- PRs #13–#16 were closed (not merged) on 2026-09-17: #13 was already
+  represented on `main`; #14 and #16 were stale/out of scope; #15 (hosted
+  Google-account sync) conflicts with Arise's local-first product charter and
+  remains intentionally rejected (`docs/PRODUCT.md`).

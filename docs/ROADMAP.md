@@ -39,14 +39,19 @@ the "today" columns are stale — the architecture gate is still accurate).
   and cleans up automatically; `SHOT_URL` remains available for intentional
   remote captures
 - CI/CD: format gate, bundle-diff reporting, license gate, release
-  automation
+  automation and release provenance checks
+- Visual regression baselines: six deterministic Chromium views now fail CI on
+  material pixel drift instead of only uploading screenshots for manual review
+- Nightly mutation testing for cross-tab reconciliation and shared
+  recommendation/evidence boundaries, with an 80% regression floor
+- Repository/release integrity: Node-24-compatible GitHub Actions, PR/status
+  protection for `main`, tag provenance back to a successful `main` CI run,
+  and release-time browser/PWA/bundle revalidation
 
 ## Next (planned)
 
 | Item | Why now | Gate |
 |---|---|---|
-| Mutation testing on the core engine | raise confidence in progression invariants | CI-time cost; run nightly, not per-PR |
-| Visual regression gate | screenshots already collected as artifacts | needs a baselining policy (device-dependent pixel noise) |
 | First cohort of consented field-study participants | onboarding, lifecycle and the operations tooling all ship; the study now needs people | participant recruitment + the analysis gates in `docs/EVIDENCE.md` |
 | Multi-peer sync registry | per-device registry over the single remote payload | sync already ships; this is the documented extension |
 
