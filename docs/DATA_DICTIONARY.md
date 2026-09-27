@@ -69,9 +69,7 @@ classify past sessions.
 
 ## Evaluation ledger (recommendations / outcomes / adaptations)
 
-- `recommendations`: the frozen pre-workout snapshot — basis (visible
-  session count, previous best, training-age phase, priors version,
-  policy version), the prescription, confidence/uncertainty/evidence.
+- `recommendations`: the frozen pre-workout snapshot — target session identity (`targetSessionId` for new records), scheduled due date, basis (visible session count, previous best, training-age phase, priors version, policy version), the prescription, confidence/uncertainty/evidence.
 - `outcomes`: what actually happened for the targeted session.
 - `adaptations`: programme-level changes with their basis and evidence.
 - All three live in stores that dashboards read and the engine never does.
