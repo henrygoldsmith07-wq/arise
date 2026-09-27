@@ -27,6 +27,17 @@ describe('store — soundCues, voiceCoach and voiceRate preference migrations (v
     const absurd = runMigrations({ version: 8, preferences: { voiceRate: 42 } });
     assert.equal(absurd.preferences.voiceRate, 1);
   });
+
+  it('carries legacy v4 and v5 stores through every later migration', () => {
+    for(const version of [4, 5]){
+      const migrated = runMigrations({ version, preferences:{}, history:[] });
+      assert.equal(migrated.version, STORE_SCHEMA_VERSION);
+      assert.equal(migrated.preferences.autoRest, true);
+      assert.equal(migrated.preferences.soundCues, true);
+      assert.equal(migrated.preferences.voiceCoach, false);
+      assert.equal(migrated.preferences.voiceRate, 1);
+    }
+  });
 });
 
 describe('store — lastExerciseSets / prsHitBySession (Life OS port)', () => {
