@@ -430,7 +430,7 @@ export function setCachedStore(store, { persist = persistStore, evaluationLedger
   // snapshots. Preserve newer cached rows across generic UI saves so a stale
   // component tree cannot erase a recommendation recorded moments earlier.
   const existingEvidence = cache?.evaluationLedger || (hydrated ? legacyEvaluationRows() : []);
-  const submittedStore = evaluationLedgerMode === 'replace'
+  const submittedStore = evaluationLedgerMode === 'replace' || evaluationLedgerMode === 'ledger-write'
     ? store
     : {
         ...store,
@@ -466,7 +466,9 @@ bindEvaluationLedgerAdapter({
   },
   replace(records){
     if(!cache) return false;
-    setCachedStore({ ...cache, evaluationLedger:[...(records || [])] }, { evaluationLedgerMode:'replace' });
+    // Exact local ledger snapshot (retention/override edits included), while
+    // persistence still reconciles unseen rows/outcomes from another tab.
+    setCachedStore({ ...cache, evaluationLedger:[...(records || [])] }, { evaluationLedgerMode:'ledger-write' });
     return true;
   },
   clear(){
