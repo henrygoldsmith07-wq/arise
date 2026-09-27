@@ -1,4 +1,4 @@
-import { getCachedStore, setCachedStore, isCleared, resetHydratedCache } from './storage.js';
+import { getCachedStore, setCachedStore, isCleared, isStorageHydrated, resetHydratedCache } from './storage.js';
 import { ensureStudyParticipantId, generateStudyParticipantId } from './studyIdentity.js';
 
 const KEY = 'arise.store.v1';
@@ -97,7 +97,7 @@ export function saveStore(s, persistenceOptions = null){
   if(isCleared()) return true;
   // Once hydrated, IndexedDB is canonical: cache + async persist. The legacy
   // localStorage copy is demoted to a pointer + paint-critical preferences.
-  if(getCachedStore()){
+  if(isStorageHydrated()){
     try{ setCachedStore(s, persistenceOptions || undefined); return true; }catch{ return false; }
   }
   try{ localStorage.setItem(KEY, JSON.stringify(s)); return true; }
