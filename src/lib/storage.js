@@ -46,7 +46,7 @@ function mergeEvaluationRows(current = [], incoming = []){
   for(const row of incoming || []){
     if(!row?.id) continue;
     const existing = byId.get(row.id);
-    if(!existing || (!existing.outcome && row.outcome) || (!!existing.outcome === !!row.outcome)) byId.set(row.id, row);
+    if(!existing || (!existing.outcome && row.outcome)) byId.set(row.id, row);
   }
   return [...byId.values()];
 }
@@ -112,14 +112,17 @@ function historyOf(store){
   return store.history || [];
 }
 
-export async function persistStore(store, { baseStore = null } = {}){
+export async function persistStore(store, { baseStore = null, evaluationLedgerMode = 'preserve' } = {}){
   let committedStore = store;
-  if(baseStore){
-    try{
-      const canonical = await loadStoreFromIdb();
+  try{
+    const canonical = await loadStoreFromIdb();
+    if(canonical){
       committedStore = reconcileStoreSnapshots(baseStore, store, canonical);
-    }catch{}
-  }
+      if(evaluationLedgerMode === 'replace'){
+        committedStore = { ...committedStore, evaluationLedger:[...(store.evaluationLedger || [])] };
+      }
+    }
+  }catch{}
   const d = decompose(committedStore);
   // One transaction across every touched store: a save is all-or-nothing.
   // The previous clear-then-put-per-store storm could leave stores from
@@ -437,7 +440,7 @@ export function setCachedStore(store, { persist = persistStore, evaluationLedger
     // write may have succeeded or failed since this write was submitted.
     const durableBase = lastDurableStore;
     try{
-      const committed = await persist(submittedStore, { baseStore: durableBase });
+      const committed = await persist(submittedStore, { baseStore: durableBase, evaluationLedgerMode });
       lastDurableStore = committed;
       if(cache === submittedStore) cache = committed;
       try{ localStorage.removeItem(LEGACY_EVALUATION_KEY); }catch{}
