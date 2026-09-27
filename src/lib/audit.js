@@ -10,10 +10,11 @@
 
 import { idbGetAll, idbGet } from './idb.js';
 import { idbTransaction } from './idb-tx.js';
+import { isDateOnly } from './dateOnly.js';
 
 export const IMPOSSIBLE = { maxWeightKg: 500, maxReps: 100, minWeightKg: -50 };
 
-const validDateISO = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v) && !Number.isNaN(Date.parse(v));
+const validDateISO = (v) => isDateOnly(v);
 
 // A value is only judged when the user actually entered one: '' / null mean
 // "not logged", which is normal, not impossible.
