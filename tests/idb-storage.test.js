@@ -102,6 +102,7 @@ describe('indexeddb canonical storage', ()=>{
   it('keeps the durable merge base isolated from nested live-state mutation', async ()=>{
     await hydrateStorage();
     const original = getCachedStore();
+    const durableAdaptationDate = original?.activeSchedule?.lastAdaptation?.dateISO ?? null;
     const live = loadStore();
     live.activeSchedule = live.activeSchedule || { sessions:[] };
     live.activeSchedule.lastAdaptation = { dateISO:'2026-01-20', changes:[{ reason:'new local edit' }] };
@@ -116,7 +117,7 @@ describe('indexeddb canonical storage', ()=>{
     await whenPersisted();
 
     assert.notEqual(seenBase, original);
-    assert.equal(seenBase?.activeSchedule?.lastAdaptation?.dateISO, original?.activeSchedule?.lastAdaptation?.dateISO);
+    assert.equal(seenBase?.activeSchedule?.lastAdaptation?.dateISO ?? null, durableAdaptationDate);
     assert.notEqual(seenBase?.activeSchedule?.lastAdaptation?.dateISO, '2026-01-20');
 
     await setCachedStore(original, { persist:async(store)=> store, evaluationLedgerMode:'replace' });
@@ -156,7 +157,7 @@ describe('indexeddb canonical storage', ()=>{
     const failed = setCachedStore(next, { persist:async()=> { throw new Error('simulated quota failure'); } });
     await assert.rejects(failed, /simulated quota failure/);
     await assert.rejects(whenPersisted(), /simulated quota failure/);
-    assert.equal(getCachedStore(), base, 'failed write restores the last durable cache snapshot');
+    assert.deepEqual(getCachedStore(), base, 'failed write restores the last durable cache snapshot');
 
     const retry = setCachedStore(next, { persist:async(store)=> store });
     await retry;
