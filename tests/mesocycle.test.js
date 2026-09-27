@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { reviewCompletedWeek, applyWeeklyReview, weekOf, weekPhaseFor } from '../src/lib/mesocycle.js';
+import { reviewCompletedWeek, applyWeeklyReview, programmeWeekDateISO, weekOf, weekPhaseFor } from '../src/lib/mesocycle.js';
 
 const TODAY = '2026-01-11'; // Sunday of week 1 — week 2 is next.
 
@@ -40,6 +40,13 @@ describe('weekOf', ()=>{
   it('returns Monday-start keys', ()=>{
     assert.equal(weekOf('2026-01-05'), '2026-01-05'); // Monday
     assert.equal(weekOf('2026-01-11'), '2026-01-05'); // Sunday same week
+  });
+});
+
+describe('programmeWeekDateISO', ()=>{
+  it('uses the scheduled date for programme accounting while leaving ordinary history on the performed date', ()=>{
+    assert.equal(programmeWeekDateISO({ dateISO:'2026-01-04', scheduledDateISO:'2026-01-05' }), '2026-01-05');
+    assert.equal(programmeWeekDateISO({ dateISO:'2026-01-08' }), '2026-01-08');
   });
 });
 
