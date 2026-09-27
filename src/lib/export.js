@@ -7,6 +7,7 @@ import { loadEvaluationLedger, mergeEvaluationLedgers } from './longitudinal.js'
 import { ensureStudyParticipantId } from './studyIdentity.js';
 import { buildEnvelope, applyFieldPolicy, EXPORT_VERSION } from './exportPolicy.js';
 import { withProvenance, ensureSourceTags, importLedgerProvenance } from './domain.js';
+import { isDateOnly } from './dateOnly.js';
 
 export { EXPORT_VERSION };
 
@@ -244,7 +245,7 @@ export function validateStoreData(data){
     if(!session.id) errors.push(`History item ${i+1} is missing an id.`);
     // dateISO is load-bearing: sorting, week bucketing and training age all key
     // off it, so an entry without a parseable date would poison analytics.
-    if(typeof session.dateISO !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(session.dateISO) || Number.isNaN(Date.parse(session.dateISO))) errors.push(`History item ${i+1} has an invalid or missing dateISO.`);
+    if(!isDateOnly(session.dateISO)) errors.push(`History item ${i+1} has an invalid or missing dateISO.`);
     if(session.blocks!=null && !Array.isArray(session.blocks)) errors.push(`History item ${i+1} blocks must be an array.`);
     for(const block of session.blocks||[]){
       if(!block?.exerciseId || !Array.isArray(block.sets)){ errors.push(`History item ${i+1} contains an invalid exercise block.`); continue; }
