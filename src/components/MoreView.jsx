@@ -237,7 +237,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
       const merged = mergeStores(store, imported, importStrategy);
       if(importStrategy==='replace') replaceEventHistory(imported.eventHistory || []);
       else if(imported.eventHistory?.length) mergeEventHistory(imported.eventHistory);
-      setStore({ ...merged, eventHistory:getEventHistory() });
+      setStore({ ...merged, eventHistory:getEventHistory() }, importStrategy === 'replace' ? { evaluationLedgerMode:'replace' } : null);
       flashMsg(importStrategy==='replace'
         ? 'Backup restored — replaced this device.'
         : `Backup merged — ${importPreview.counts.additions} new session${importPreview.counts.additions === 1 ? '' : 's'} added${importPreview.counts.updates ? `, ${importPreview.counts.updates} conflict${importPreview.counts.updates === 1 ? '' : 's'} kept your current copy` : ''}.`, 6000);
