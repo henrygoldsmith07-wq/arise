@@ -1,7 +1,5 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import AppShell from './components/AppShell.jsx';
-import TodayView from './components/TodayView.jsx';
-import Onboarding from './components/Onboarding.jsx';
 import LiveAnnouncer from './components/LiveAnnouncer.jsx';
 
 // Route-level code splitting: the boot path ships only the shell, Today view
@@ -9,6 +7,8 @@ import LiveAnnouncer from './components/LiveAnnouncer.jsx';
 // is ALSO warmed up after first paint (warmLazyViews below), so on anything
 // but a cold offline start the chunk is local before the user taps the tab:
 // splitting is for boot bytes, not for navigation jank.
+const loadTodayView = ()=> import('./components/TodayView.jsx');
+const loadOnboarding = ()=> import('./components/Onboarding.jsx');
 const loadTrainView = ()=> import('./components/TrainView.jsx');
 const loadExerciseBrowser = ()=> import('./components/ExerciseBrowser.jsx');
 const loadProgressView = ()=> import('./components/ProgressView.jsx');
@@ -16,6 +16,8 @@ const loadMoreView = ()=> import('./components/MoreView.jsx');
 const loadSessionRunner = ()=> import('./components/SessionRunner.jsx');
 const loadGuidedRunner = ()=> import('./components/GuidedRunner.jsx');
 
+const TodayView = lazy(loadTodayView);
+const Onboarding = lazy(loadOnboarding);
 const TrainView = lazy(loadTrainView);
 const ExerciseBrowser = lazy(loadExerciseBrowser);
 const ProgressView = lazy(loadProgressView);
@@ -42,7 +44,6 @@ function warmLazyViews(){
 }
 import { loadStore, saveStore } from './lib/store.js';
 import { clearAllStoredData, hydrateStorage, refreshCachedStoreFromIdb, subscribeStoreCommits, whenPersisted } from './lib/storage.js';
-import { recommendExercises } from './lib/data.js';
 import { recordEvent, recordErrorEvent } from './lib/telemetry.js';
 import { watchStandaloneBodyClass, consumeShortcut } from './lib/pwa.js';
 import { setHapticsSource } from './lib/haptics.js';
@@ -322,11 +323,6 @@ export default function App(){
     };
   },[]);
 
-  const recs = useMemo(()=>{
-    if(!store.onboarding) return [];
-    return recommendExercises({ goal: store.onboarding.goal, availableEquipment: store.onboarding.equipment, limit: 4 });
-  },[store.onboarding]);
-
   const handleCompleteOnboarding = (payload)=>{
     const next = { ...store, onboarding: payload };
     setStore(next);
@@ -535,14 +531,14 @@ export default function App(){
         </div>
       )}
       {tab==='today' && (
-        <TodayView
-          store={store}
-          setStore={setStore}
-          onStartSession={handleStartSession}
-          onOpenTrain={()=> setTab('train')}
-          onOpenProgress={()=> setTab('progress')}
-          plateConfig={store.onboarding?.plateConfig || null}
-        />
+        <Suspense fallback={<TabFallback label="Today" />}><TodayView
+            store={store}
+            setStore={setStore}
+            onStartSession={handleStartSession}
+            onOpenTrain={()=> setTab('train')}
+            onOpenProgress={()=> setTab('progress')}
+            plateConfig={store.onboarding?.plateConfig || null}
+          /></Suspense>
       )}
       {tab==='train' && (
         <Suspense fallback={<TabFallback label="Train" />}> <TrainView
@@ -553,22 +549,9 @@ export default function App(){
         /></Suspense>
       )}
       {tab==='exercises' && (
-        <>
-          <Suspense fallback={<TabFallback label="Exercises" />}><ExerciseBrowser availableEquipment={store.onboarding?.equipment || []} /></Suspense>
-          {!!recs.length && (
-            <div className="px-4 pb-4 -mt-2">
-              <div className="rounded-2xl border border-line bg-surface p-3">
-                <p className="text-xs font-bold">Recommended for you</p>
-                <p className="text-[11px] text-ink3 mt-1">Based on onboarding: goal <span className="font-semibold text-ink">{store.onboarding.goal}</span> • location <span className="font-semibold text-ink">{store.onboarding.location}</span> • kit {(store.onboarding.equipment||[]).join(', ')}</p>
-                <ul className="mt-2 grid gap-1.5">
-                  {recs.map(r=> <li key={r.id} className="text-sm flex gap-2"><span className="font-semibold">{r.name}</span><span className="text-xs text-ink3 ml-auto">{r.muscle} • {r.equipment.join(', ')}</span></li>)}
-                </ul>
-                <p className="text-[11px] text-ink3 mt-2">Change kit or location in More → Edit onboarding to see this update.</p>
-              </div>
-            </div>
-          )}
-        </>
+        <Suspense fallback={<TabFallback label="Exercises" />}><ExerciseBrowser availableEquipment={store.onboarding?.equipment || []} onboarding={store.onboarding} /></Suspense>
       )}
+
       {tab==='progress' && <Suspense fallback={<TabFallback label="Progress" />}><ProgressView store={store} /></Suspense>}
       {tab==='more' && <Suspense fallback={<TabFallback label="More" />}><MoreView store={store} setStore={setStore} onboardingOpen={onboardingOpen} setOnboardingOpen={setOnboardingOpen} onLoadDemo={loadDemo} /></Suspense>}
 
@@ -616,14 +599,16 @@ export default function App(){
         /></Suspense>
       )}
 
-      <Onboarding
-        open={onboardingOpen}
-        onClose={()=> setOnboardingOpen(false)}
-        onComplete={handleCompleteOnboarding}
-        initial={store.onboarding}
-        units={store.preferences?.units || 'kg'}
-        onLoadDemo={isDemo ? null : loadDemo}
-      />
+      {onboardingOpen && (
+        <Suspense fallback={null}><Onboarding
+          open={onboardingOpen}
+          onClose={()=> setOnboardingOpen(false)}
+          onComplete={handleCompleteOnboarding}
+          initial={store.onboarding}
+          units={store.preferences?.units || 'kg'}
+          onLoadDemo={isDemo ? null : loadDemo}
+        /></Suspense>
+      )}
 
       {!store.onboarding && !onboardingOpen && !isDemo && (
         <div className="fixed bottom-20 inset-x-4 z-10 rounded-2xl border border-review/30 bg-reviewsoft px-4 py-3 flex items-center gap-3">
