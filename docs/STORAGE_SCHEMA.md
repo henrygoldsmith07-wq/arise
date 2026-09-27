@@ -6,7 +6,7 @@ Field meanings are in `docs/DATA_DICTIONARY.md`.
 ## The layout
 
 **IndexedDB is the canonical store.** `localStorage` keeps only lightweight
-flags and the device id. One database, fourteen object stores:
+flags/device-local compatibility state; the live recommendation ledger is no longer a parallel `localStorage` database. One database, fourteen object stores:
 
 ```
 profile          onboarding profile + preferences (keyPath: id)
@@ -29,9 +29,8 @@ tombstones       deletion markers for merge/sync
 
 Every multi-store mutation runs in a single IndexedDB transaction — a save
 either lands completely or not at all. There is no code path that writes
-half a session. Persistence is debounced and awaited through a
-`whenPersisted()` handle; the UI's "saved" indicator reflects the real
-flush, not the intent.
+half a session. Persistence is serialized and awaited through a
+`whenPersisted()` handle; durability-critical UI waits for the real commit. Queued writes reconcile from the last successfully committed snapshot, never from a failed optimistic write.
 
 ## Boot: validation before trust
 
