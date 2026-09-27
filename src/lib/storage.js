@@ -255,6 +255,7 @@ export function resetHydratedCache(){
   cache = undefined;
   hydratePromise = null;
   integrityNotice = null;
+  persistenceError = null;
 }
 
 // Deletion across every canonical location. `cleared` makes queued (not yet
@@ -365,7 +366,7 @@ export function setCachedStore(store, { persist = persistStore } = {}){
 // the moment a set is logged. Flush pending writes when the page hides or is
 // being unloaded — the transaction makes each flush all-or-nothing.
 if(typeof window !== 'undefined' && typeof window.addEventListener === 'function'){
-  const flush = ()=> { void whenPersisted(); };
+  const flush = ()=> { void whenPersisted().catch(()=>{}); };
   const flushWhenHidden = ()=> { if(document.visibilityState === 'hidden') flush(); };
   window.addEventListener('pagehide', flush);
   window.addEventListener('visibilitychange', flushWhenHidden);
