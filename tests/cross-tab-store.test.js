@@ -300,6 +300,35 @@ describe('cross-tab three-way persistence reconciliation', ()=>{
     assert.equal(reconcileStoreSnapshots(baseHistory, localHistory, remoteHistory).history[0].value, 'remote');
   });
 
+  it('keeps evidence rows monotonic across tabs and prefers resolved outcomes', ()=>{
+    const open = {
+      id:'eval-1',
+      recordedAtISO:'2026-09-20T10:00:00Z',
+      exerciseId:'push-up',
+      recommendation:{ reps:10 },
+      outcome:null,
+    };
+    const resolved = {
+      ...open,
+      outcomeProvenance:{ capturedAt:'2026-09-20T12:00:00Z' },
+      outcome:{ sessionId:'s1', recordedAtISO:'2026-09-20T12:00:00Z', metTarget:true },
+    };
+    const base = { version:13, evaluationLedger:[open] };
+    const local = { ...base, evaluationLedger:[open] };
+    const remote = { ...base, evaluationLedger:[resolved, { id:'eval-remote', recordedAtISO:'2026-09-20T11:00:00Z', outcome:null }] };
+    const merged = reconcileStoreSnapshots(base, local, remote);
+    assert.equal(merged.evaluationLedger.find(row=> row.id === 'eval-1').outcome.sessionId, 's1');
+    assert.ok(merged.evaluationLedger.some(row=> row.id === 'eval-remote'));
+  });
+
+  it('merges entity collections even when there was no prior durable base', ()=>{
+    const local = { version:13, history:[{ id:'local', dateISO:'2026-09-20' }], evaluationLedger:[{ id:'eval-local', recordedAtISO:'2026-09-20T10:00:00Z' }] };
+    const remote = { version:13, history:[{ id:'remote', dateISO:'2026-09-21' }], evaluationLedger:[{ id:'eval-remote', recordedAtISO:'2026-09-21T10:00:00Z' }] };
+    const merged = reconcileStoreSnapshots(null, local, remote);
+    assert.deepEqual(new Set(merged.history.map(row=> row.id)), new Set(['local','remote']));
+    assert.deepEqual(new Set(merged.evaluationLedger.map(row=> row.id)), new Set(['eval-local','eval-remote']));
+  });
+
   it('takes the highest schema version while preserving merged collections', ()=>{
     const base = { version:9, history:[], eventHistory:[], evaluationLedger:[], customTemplates:[], tombstones:[], readinessLog:[], programHistory:[] };
     const local = { ...base, version:11, eventHistory:[{ id:'local-event', at:'2026-09-20T10:00:00Z' }] };
