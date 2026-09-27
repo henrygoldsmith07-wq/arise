@@ -408,10 +408,15 @@ export default function App(){
       persistenceStage = true;
       if(!saveStore(next)) throw new Error('Could not queue the completed workout for storage.');
       await whenPersisted();
-      durableSnapshotRef.current = next;
+      // The write may have three-way reconciled with another tab. Re-read the
+      // committed canonical snapshot so this writer does not keep rendering a
+      // pre-merge local object after reporting success.
+      await refreshCachedStoreFromIdb();
+      const committedStore = loadStore();
+      durableSnapshotRef.current = committedStore;
       setPersistFailed(false);
-      setStore(next);
-      runPostSaveIntegrations({ store:next, payload, history:hist, setStore });
+      setStore(committedStore);
+      runPostSaveIntegrations({ store:committedStore, payload, history:committedStore.history || hist, setStore });
       localDraftProtectedRef.current = false;
       setActiveSession(null);
       setRecoveryOpen(false);
@@ -439,6 +444,10 @@ export default function App(){
     }
     try{
       await whenPersisted();
+      await refreshCachedStoreFromIdb();
+      const committedStore = loadStore();
+      durableSnapshotRef.current = committedStore;
+      setStoreState(committedStore);
       setPersistFailed(false);
       setToast({ title:'Storage retry succeeded', detail:'Your latest app state is durable on this device.' });
     }catch(err){
