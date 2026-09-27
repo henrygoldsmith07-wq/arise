@@ -61,11 +61,15 @@ src/core/*                Cross-cutting: config, flags, errors, DI container
 | Shared runner clock/wake-lock/draft lifecycle | `src/hooks/useWorkoutRuntime.js` |
 | Standard runner set/recommendation/prescription/swap/save model | `src/lib/sessionRunnerModel.js` |
 | Shared Standard/Guided treatment + prospective evidence contract | `src/lib/runnerRecommendations.js` |
+| Training-age / break policy | `src/lib/progressionTrainingAge.js` |
+| Prescription snapshots / set identity / swap transitions | `src/lib/progressionPrescription.js` |
+| Canonical date-only comparison helpers | `src/lib/dateOnly.js` |
 | Quota warning/snapshot orchestration | `src/lib/quotaGuard.js` |
 | Cross-tab invalidation/reconciliation | `src/lib/crossTabStore.js` |
 | Export contract & import policy | `src/lib/exportPolicy.js` (ADR 0003) |
 | Domain model & tombstones | `src/lib/domain.js` |
 | Ledger recording / aggregation | `src/lib/longitudinal.js` / `evaluation.js` (ADR 0007) |
+| Pure worker evidence summary | `src/lib/evaluationSummary.js` + `analytics-worker.js` |
 
 ## IndexedDB and multi-tab state
 
@@ -111,6 +115,10 @@ its deterministic set editing, carry-forward, recommendation application,
 first-visible prescription capture, swap planning, save eligibility and
 history-payload construction live in
 `sessionRunnerModel.js`, where those invariants are directly unit-tested.
+The deterministic progression façade remains `progression.js`, but training-age
+policy and prescription/set-identity/swap mechanics now live in focused pure
+modules behind that compatibility surface. Date-only engine/study boundaries
+share UTC-midnight helpers so timezone/DST cannot change prior-only eligibility.
 
 Exercise illustrations use a generated compact runtime registry
 (`src/lib/exerciseImages.js`). The upstream workout-guide package is a declared
