@@ -175,7 +175,8 @@ export function createImportExportService({ repos, adapters }){
       const store = await repos.getCachedStore();
       const imported = parseImportFile(JSON.stringify(preview.envelope));
       const merged = mergeStores(store, imported, strategy);
-      await repos.setCachedStore(merged);
+      await repos.setCachedStore(merged, strategy === 'replace' ? { evaluationLedgerMode:'replace' } : undefined);
+      await repos.whenPersisted();
       return merged;
     },
   };
@@ -206,7 +207,8 @@ export function createSyncService({ repos, adapters, provider = null }){
       const store = await repos.getCachedStore();
       const merged = await syncDown(store, provider, strategy);
       if(merged !== store){
-        await repos.setCachedStore(merged);
+        await repos.setCachedStore(merged, strategy === 'replace' ? { evaluationLedgerMode:'replace' } : undefined);
+        await repos.whenPersisted();
       }
       return merged;
     },
