@@ -16,7 +16,14 @@ export default defineConfig({
     target: 'es2020',
     rollupOptions: {
       output: {
-        manualChunks: { vendor: ['react', 'react-dom'] },
+        // data.js is shared by most feature routes. Without an explicit chunk
+        // Rollup hoists it into index.js, making a rarely edited 200 kB source
+        // catalogue part of first paint. Keep it as a shared dependency while
+        // preserving React's existing vendor grouping/compression behavior.
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          catalogue: ['./src/lib/data.js'],
+        },
       },
     },
   },
