@@ -34,6 +34,14 @@ describe('export / import', ()=>{
     assert.throws(()=> parseImportFile(JSON.stringify({ app:'arise', data:{ version:1, history:[{ id:'broken', blocks:'bad' }] } })), /validation failed/);
   });
 
+  it('rejects impossible calendar dates in imported history', ()=>{
+    const invalid = { version:1, history:[{ id:'bad-date', dateISO:'2026-02-31', blocks:[] }] };
+    const result = validateStoreData(invalid);
+    assert.equal(result.ok, false);
+    assert.ok(result.errors.some(error=> error.includes('dateISO')));
+    assert.throws(()=> parseImportFile(JSON.stringify({ app:'arise', data:invalid })), /validation failed/);
+  });
+
   it('merges event history and optional health summary', ()=>{
     const current={ version:4, history:[], eventHistory:[{ id:'e1', type:'session:start', at:'2026-01-01T00:00:00Z' }], healthSummary:{ source:'phone', steps:1000 }, preferences:{} };
     const imported={ version:4, history:[], eventHistory:[{ id:'e2', type:'session:complete', at:'2026-01-02T00:00:00Z' }], healthSummary:{ source:'watch', steps:2000 }, preferences:{} };
