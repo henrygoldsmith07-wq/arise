@@ -195,7 +195,8 @@ describe('indexeddb canonical storage', ()=>{
     const committed = await second;
     await whenPersisted();
 
-    assert.equal(seenBase, durable, 'the failed optimistic snapshot must never become the next merge base');
+    assert.deepEqual(seenBase, durable, 'the failed optimistic snapshot must never become the next merge base');
+    assert.notEqual(seenBase, firstSnapshot);
     assert.equal(committed.preferences.theme, 'light');
     assert.equal(committed.onboarding.goal, 'strength');
 
