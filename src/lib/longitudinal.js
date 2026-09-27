@@ -31,13 +31,19 @@ import { getDeviceId } from './exportPolicy.js';
 import { evaluateLongitudinal, calibrateRecommendations, prospectiveFieldComparison } from './evaluation.js';
 import { trainingAgeInfo } from './progressionTrainingAge.js';
 import { summarizeEvaluationLedger } from './evaluationSummary.js';
+import {
+  readCanonicalEvaluationLedger,
+  replaceCanonicalEvaluationLedger,
+  clearCanonicalEvaluationLedger,
+} from './evaluationLedgerBridge.js';
 export { evaluateLongitudinal, calibrateRecommendations, clusteredBootstrapDifference, clusteredBootstrapWinRate } from './evaluation.js';
-export function markRecommendationOverride({ exerciseId, dueDateISO = null, storage = defaultStorage() } = {}){
+export function markRecommendationOverride({ exerciseId, dueDateISO = null, targetSessionId = null, storage = defaultStorage() } = {}){
   const ledger = loadEvaluationLedger(storage);
   let changed = false;
   const next = ledger.map(row=>{
     if(row.outcome) return row;
     if(exerciseId && row.exerciseId !== exerciseId) return row;
+    if(targetSessionId && row.targetSessionId !== targetSessionId) return row;
     if(dueDateISO && row.dueDateISO !== dueDateISO) return row;
     changed = true;
     return { ...row, userOverride: true, overriddenAtISO: new Date().toISOString() };
@@ -47,10 +53,47 @@ export function markRecommendationOverride({ exerciseId, dueDateISO = null, stor
 }
 
 
-// ── Storage (separate key; never the training store) ────────────────────
+// ── Storage ─────────────────────────────────────────────────────────────
+// The live ledger is canonical inside the hydrated IndexedDB-backed store.
+// Explicit storage arguments remain supported for deterministic unit tests and
+// offline analysis. Before hydration (including those tests), localStorage is
+// the compatibility fallback; once the bridge is bound, the legacy live key is
+// no longer a second source of truth.
+function browserStorage(){
+  try{ return typeof localStorage !== 'undefined' ? localStorage : null; }catch{ return null; }
+}
 
 function defaultStorage(){
-  try{ return typeof localStorage !== 'undefined' ? localStorage : null; }catch{ return null; }
+  const fallback = browserStorage();
+  return {
+    getItem(key){
+      if(key === EVALUATION_KEY){
+        const canonical = readCanonicalEvaluationLedger();
+        if(canonical !== null) return JSON.stringify({ schemaVersion:EVALUATION_SCHEMA_VERSION, records:canonical });
+      }
+      try{ return fallback?.getItem?.(key) ?? null; }catch{ return null; }
+    },
+    setItem(key, value){
+      if(key === EVALUATION_KEY){
+        try{
+          const parsed = JSON.parse(String(value));
+          const records = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.records) ? parsed.records : [];
+          if(replaceCanonicalEvaluationLedger(records)){
+            try{ fallback?.removeItem?.(EVALUATION_KEY); }catch{}
+            return;
+          }
+        }catch{}
+      }
+      try{ fallback?.setItem?.(key, value); }catch{}
+    },
+    removeItem(key){
+      if(key === EVALUATION_KEY && clearCanonicalEvaluationLedger()){
+        try{ fallback?.removeItem?.(EVALUATION_KEY); }catch{}
+        return;
+      }
+      try{ fallback?.removeItem?.(key); }catch{}
+    },
+  };
 }
 
 export function loadEvaluationLedger(storage = defaultStorage()){
@@ -141,7 +184,7 @@ function meetsPrescription(best, rx){
 // ledger can later score every arm against the same real outcome — the
 // "does adaptive programming actually decide better?" question, answered on
 // real training rather than replay.
-export function recordRecommendation({ exerciseId, recommendation, history = [], dueDateISO = null, preferences = null, config = null, nowISO = null, programId = null, programVersion = null, targetReps = null, assignedArm = null, participantId = null, storage = defaultStorage() } = {}){
+export function recordRecommendation({ exerciseId, recommendation, history = [], dueDateISO = null, targetSessionId = null, preferences = null, config = null, nowISO = null, programId = null, programVersion = null, targetReps = null, assignedArm = null, participantId = null, storage = defaultStorage() } = {}){
   if(!hasConsent(preferences)) return null;
   if(!exerciseId || !recommendation) return null;
   // Prior-only guarantee: nothing dated after the due session may inform the
@@ -164,6 +207,7 @@ export function recordRecommendation({ exerciseId, recommendation, history = [],
     schemaVersion: EVALUATION_SCHEMA_VERSION,
     recordedAtISO,
     dueDateISO,
+    targetSessionId: targetSessionId || null,
     exerciseId,
     movementPattern: movementPatternFor(exerciseId) || 'unknown',
     equipmentClass: equipmentClassFor(exerciseId),
@@ -299,8 +343,16 @@ export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore =
   const next = ledger.map(record=>{
     if(record.outcome) return record;
     if(!byExercise.has(record.exerciseId)) return record;
-    // A record is resolved by the first logged session at or after its due date.
-    if(record.dueDateISO && dateISO && String(dateISO) < String(record.dueDateISO)) return record;
+    // New records are bound to the exact scheduled session identity. This
+    // remains correct when that workout is performed early/late, and prevents
+    // an unrelated later workout containing the same exercise from consuming
+    // the recommendation. Legacy records without targetSessionId retain the
+    // historical date fallback.
+    if(record.targetSessionId){
+      if(!sessionId || record.targetSessionId !== sessionId) return record;
+    }else if(record.dueDateISO && dateISO && String(dateISO) < String(record.dueDateISO)){
+      return record;
+    }
     const { best } = byExercise.get(record.exerciseId);
     const rec = record.recommendation || {};
     const previous = record.basis?.previousBest || null;
