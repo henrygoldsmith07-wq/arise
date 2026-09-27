@@ -12,7 +12,7 @@ class ErrorBoundary extends React.Component {
       <div style={{minHeight:'100dvh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:12,padding:24,textAlign:'center',fontFamily:'Inter,system-ui,sans-serif'}}>
         <p style={{fontSize:32}}>🛠️</p>
         <h1 style={{fontSize:18,fontWeight:800}}>Something broke</h1>
-        <p style={{opacity:.6,fontSize:13,maxWidth:400}}>Reload fixes most things. Your progress is local and safe.</p>
+        <p style={{opacity:.6,fontSize:13,maxWidth:400}}>Reload fixes most things. Arise stores training data on this device and will re-check it when the app starts again.</p>
         <button onClick={()=>location.reload()} style={{marginTop:6,padding:'10px 18px',borderRadius:12,border:'none',background:'#131316',color:'white',fontWeight:700}}>Reload</button>
       </div>
     );
