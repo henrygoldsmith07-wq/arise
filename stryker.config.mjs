@@ -16,7 +16,7 @@ export default {
   reporters: ['clear-text', 'progress', 'html', 'json'],
   thresholds: {
     high: 85,
-    // Baseline 2026-09-27: 82.58% (218 killed / 46 survived, 0 uncovered).
+    // Expanded baseline 2026-09-27: 82.83% (415 killed / 86 survived, 0 uncovered).
     // Fail the nightly if the core invariant suite regresses below 80%.
     low: 80,
     break: 80,
