@@ -135,9 +135,10 @@
 // boot 192.9 → 110.1 kB after making Today/Onboarding true route boundaries,
 // moving exercise recommendations into the already-lazy Exercise Browser and
 // pinning the shared 200 kB source catalogue to its own 26.4 kB gzip chunk.
-// The extra route/chunk wrappers increase total gzip from 327.9 → 336.0 kB,
-// which is an intentional first-paint trade rather than new product code. Lock
-// the boot gain in aggressively and allow only narrow total headroom.
+// Linux CI measures total gzip at 342.3 kB after route/settings splitting; the
+// increase from 327.9 kB is duplicated chunk wrapper/shared-module overhead, not
+// new product logic. Lock the boot gain in aggressively and keep only narrow
+// total headroom above the authoritative CI measurement.
 //
 // The budgets are regression bounds with headroom, not aspirations: a change
 // that crosses one must either undo the bloat or consciously re-baseline here
@@ -155,7 +156,7 @@ if(!fs.existsSync(dist)){
 
 const BOOT_BUDGET_KB = 120;
 const CHUNK_BUDGET_KB = 34;
-const TOTAL_BUDGET_KB = 338;
+const TOTAL_BUDGET_KB = 345;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;
