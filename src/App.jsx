@@ -90,6 +90,10 @@ export default function App(){
   // must continue accepting later invalidations from that owner.
   const localDraftProtectedRef=useRef(Boolean(store.activeWorkout));
   const externalSnapshotRef=useRef(null);
+  // A snapshot persisted explicitly on a durability-critical path (workout
+  // completion/demo load) must not be written a second time by the generic
+  // React persistence effect after state catches up.
+  const durableSnapshotRef=useRef(null);
   const crossTabRefreshRef=useRef(null);
   storeRef.current = store;
   activeSessionRef.current = activeSession;
@@ -123,8 +127,11 @@ export default function App(){
       // Lazy: the seeded generator is demo-only and never belongs in the boot chunk.
       const { makeDemoStore } = await import('./lib/demoData.js');
       const demo = makeDemoStore();
+      if(!saveStore(demo)) throw new Error('Could not queue demo data for storage.');
+      await whenPersisted();
+      durableSnapshotRef.current = demo;
       setStoreState(demo);
-      saveStore(demo);
+      setPersistFailed(false);
       setOnboardingOpen(false);
       setConsentOpen(false);
       setTab('today');
@@ -161,7 +168,24 @@ export default function App(){
       externalSnapshotRef.current = null;
       return;
     }
-    if(!saveStore(store)) setPersistFailed(true);
+    if(durableSnapshotRef.current === store){
+      durableSnapshotRef.current = null;
+      setPersistFailed(false);
+      return;
+    }
+    if(!saveStore(store)){
+      setPersistFailed(true);
+      return;
+    }
+    let live = true;
+    void whenPersisted()
+      .then(()=> { if(live) setPersistFailed(false); })
+      .catch((err)=> {
+        if(!live) return;
+        setPersistFailed(true);
+        try{ recordErrorEvent(err, { where:'store-persist' }); }catch{}
+      });
+    return ()=> { live = false; };
   },[store]);
 
   // Warm the lazy route chunks once boot has settled (see warmLazyViews).
@@ -364,6 +388,7 @@ export default function App(){
   const handleSaveSession = async (payload)=>{
     if(saveInFlightRef.current) return;
     saveInFlightRef.current = true;
+    let persistenceStage = false;
     // Save-time measurement covers the deterministic completion workflow. The
     // chunk is pre-warmed at workout start; auto-sync remains fire-and-forget.
     try{
@@ -376,6 +401,15 @@ export default function App(){
         performanceNow:saveStartedAt != null && typeof performance !== 'undefined' && performance.now ? ()=> performance.now() : null,
       });
       const { store:next, history:hist, events, toast:saveToast } = completed;
+      // Workout completion is durability-critical: do not dismiss the runner,
+      // clear its recoverable draft, or announce success until IndexedDB has
+      // committed the completed snapshot. storage.js rolls its cache back if
+      // this write fails and no newer local snapshot superseded it.
+      persistenceStage = true;
+      if(!saveStore(next)) throw new Error('Could not queue the completed workout for storage.');
+      await whenPersisted();
+      durableSnapshotRef.current = next;
+      setPersistFailed(false);
       setStore(next);
       runPostSaveIntegrations({ store:next, payload, history:hist, setStore });
       localDraftProtectedRef.current = false;
@@ -385,8 +419,10 @@ export default function App(){
       setToast(saveToast);
       recordWorkoutEvents(events);
     }catch(err){
+      if(persistenceStage) setPersistFailed(true);
       try{ recordErrorEvent(err, { where:'workout-save', sessionId:payload?.id }); }catch{}
       setToast({
+        kind:'error',
         title:'Workout not saved',
         detail:'Your in-progress workout is still on this device. Try Save again.',
         note:String(err?.message || err || 'Save workflow could not load.'),
@@ -395,6 +431,22 @@ export default function App(){
       saveInFlightRef.current = false;
     }
   };
+  const retryPersistence = async()=>{
+    const snapshot = storeRef.current;
+    if(!saveStore(snapshot)){
+      setPersistFailed(true);
+      return;
+    }
+    try{
+      await whenPersisted();
+      setPersistFailed(false);
+      setToast({ title:'Storage retry succeeded', detail:'Your latest app state is durable on this device.' });
+    }catch(err){
+      setPersistFailed(true);
+      try{ recordErrorEvent(err, { where:'store-persist-retry' }); }catch{}
+    }
+  };
+
   const handleCancelSession = ()=>{
     const plan = cancellationPlan({ store, activeSession });
     if(plan.requiresConfirmation && !window.confirm(`Discard this workout? ${plan.completedSets} completed set${plan.completedSets===1?'':'s'} will be lost.`)) return;
@@ -457,8 +509,9 @@ export default function App(){
 
   // PWA shell: standalone body class (CSS hooks: status-bar padding), and
   // home-screen shortcut landing (?shortcut=start-workout / quick-log).
-  // Haptics read the live preference; the module holds the platform check.
-  setHapticsSource(() => store.preferences?.haptics !== false);
+  // Haptics read storeRef so the source is installed once rather than mutating
+  // module state during every React render.
+  useEffect(()=> { setHapticsSource(() => storeRef.current.preferences?.haptics !== false); }, []);
 
   useEffect(() => watchStandaloneBodyClass(), []);
   useEffect(() => { consumeShortcut(setTab); }, []);
@@ -480,6 +533,14 @@ export default function App(){
           <span className="font-bold text-review">Update available</span>
           <span className="text-ink2">{updateDeferred ? 'Update will apply after this workout — no rush.' : 'New version cached — reload to apply.'}</span>
           <button onClick={applyUpdate} className="ml-auto btn btn-primary min-h-8 rounded-xl px-3 text-xs">Update</button>
+        </div>
+      )}
+      {persistFailed && (
+        <div className="mx-4 mt-2 rounded-xl border border-review/40 bg-reviewsoft px-3 py-2 flex flex-wrap items-center gap-2 text-xs" role="alert">
+          <span className="font-bold text-review">Storage write failed</span>
+          <span className="text-ink2 flex-1 min-w-40">Keep this tab open. Your latest in-memory changes may not be durable yet.</span>
+          <button onClick={retryPersistence} className="btn btn-primary min-h-8 rounded-xl px-3 text-xs">Retry</button>
+          <button onClick={()=> setTab('more')} className="btn btn-secondary min-h-8 rounded-xl px-3 text-xs">Back up</button>
         </div>
       )}
       {quotaPrompt && (
@@ -520,10 +581,10 @@ export default function App(){
         </div>
       )}
       {toast && (
-        <div role="status" className="fixed bottom-20 inset-x-4 z-30 mx-auto max-w-md rounded-2xl border border-success/30 bg-successsoft px-4 py-3 flex items-start gap-3 fade-in">
-          <span aria-hidden className="text-base leading-none mt-0.5">✓</span>
+        <div role="status" className={`fixed bottom-20 inset-x-4 z-30 mx-auto max-w-md rounded-2xl border px-4 py-3 flex items-start gap-3 fade-in ${toast.kind === 'error' ? 'border-review/40 bg-reviewsoft' : 'border-success/30 bg-successsoft'}`}>
+          <span aria-hidden className="text-base leading-none mt-0.5">{toast.kind === 'error' ? '!' : '✓'}</span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-success truncate">{toast.title}</p>
+            <p className={`text-sm font-bold truncate ${toast.kind === 'error' ? 'text-review' : 'text-success'}`}>{toast.title}</p>
             <p className="text-xs text-ink2">{toast.detail}</p>
             {toast.note && <p className="text-[11px] text-ink3 mt-0.5">{toast.note}</p>}
           </div>
