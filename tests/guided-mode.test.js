@@ -148,6 +148,21 @@ describe('guidedMode — save payload', () => {
     assert.deepEqual(payload.equipmentSnapshot, ['dumbbells']);
   });
 
+  it('records the performed date when a future guided session is started early', () => {
+    const futureSession = { ...session, id:'guided-future', dateISO:'2026-09-29' };
+    const blocks = initGuidedBlocks(futureSession, []);
+    blocks[0].sets[0].completed = true;
+    const payload = buildGuidedPayload({
+      session:futureSession,
+      blocks,
+      startedAtISO:'2026-09-27T10:00:00.000Z',
+      nowISO:'2026-09-27T10:30:00.000Z',
+      performedDateISO:'2026-09-27',
+    });
+    assert.equal(payload.dateISO, '2026-09-27');
+    assert.equal(payload.scheduledDateISO, '2026-09-29');
+  });
+
   it('marks pain flag when the pain tag is selected', () => {
     const blocks = initGuidedBlocks(session, []);
     blocks[0].sets[0].completed = true;

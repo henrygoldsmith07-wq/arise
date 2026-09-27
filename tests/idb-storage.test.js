@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { hydrateStorage, loadStoreFromIdb, persistStore, whenPersisted } from '../src/lib/storage.js';
+import { getCachedStore, hydrateStorage, loadStoreFromIdb, persistStore, setCachedStore, whenPersisted } from '../src/lib/storage.js';
 import { idbGetAll } from '../src/lib/idb.js';
 import { loadStore, saveStore, STORE_SCHEMA_VERSION } from '../src/lib/store.js';
 
@@ -77,6 +77,26 @@ describe('indexeddb canonical storage', ()=>{
     const reloaded = loadStore();
     assert.equal(reloaded.history.length, 3);
     assert.ok(reloaded.history.find(h => h.id === 'h3'));
+  });
+
+  it('surfaces durable-write failures, rolls back the cache, and permits a retry', async ()=>{
+    await hydrateStorage();
+    const base = getCachedStore();
+    const next = { ...base, preferences:{ ...(base.preferences || {}), theme:'light' } };
+    const failed = setCachedStore(next, { persist:async()=> { throw new Error('simulated quota failure'); } });
+    await assert.rejects(failed, /simulated quota failure/);
+    await assert.rejects(whenPersisted(), /simulated quota failure/);
+    assert.equal(getCachedStore(), base, 'failed write restores the last durable cache snapshot');
+
+    const retry = setCachedStore(next, { persist:async(store)=> store });
+    await retry;
+    await whenPersisted();
+    assert.equal(getCachedStore().preferences.theme, 'light');
+
+    // Leave the shared in-memory backend in the durable baseline state for
+    // later tests in this process.
+    setCachedStore(base);
+    await whenPersisted();
   });
 
   it('without hydration, store.js keeps its legacy synchronous path', async ()=>{

@@ -1,9 +1,10 @@
 // services/index.js — domain services: the engine boundary React never crosses.
 //
 // Services own orchestration. They depend on repositories and adapters
-// (injected), call the pure engine modules in src/lib, and expose the verbs
-// the UI needs. Components never import storage, IDB, or the engine modules
-// directly (ADR 0001/0002). Every service here is framework-free and
+// (injected), call the pure engine modules in src/lib, and expose multi-step
+// verbs the UI needs. Feature components never import storage/IDB directly;
+// cheap pure selectors and formatters may be consumed from src/lib without a
+// service wrapper (ADR 0001/0002). Every service here is framework-free and
 // constructible in tests with fakes.
 
 import { createRepositories } from '../repositories/index.js';

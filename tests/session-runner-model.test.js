@@ -266,6 +266,18 @@ describe('SessionRunner model — save boundary', ()=>{
     assert.equal(sessionSaveState([ready]).canSave, true);
   });
 
+  it('records the performed date when a future scheduled session is started early', ()=>{
+    const payload = buildSessionHistoryPayload({
+      session:{ id:'future-session', dateISO:'2026-09-29', programId:'p1', title:'Upper B', blocks:[] },
+      blocks:[block({ sets:[set({ completed:true })] })],
+      startedAt:'2026-09-27T10:00:00.000Z',
+      nowISO:'2026-09-27T10:30:00.000Z',
+      performedDateISO:'2026-09-27',
+    });
+    assert.equal(payload.dateISO, '2026-09-27');
+    assert.equal(payload.scheduledDateISO, '2026-09-29');
+  });
+
   it('builds the immutable history payload with identity, notes and substitutions', ()=>{
     const startedAt = '2026-09-26T10:00:00.000Z';
     const nowISO = '2026-09-26T10:42:00.000Z';

@@ -43,7 +43,8 @@ provenance metadata:
 
 | Field | Meaning |
 |---|---|
-| `dateISO` | local training date (UTC-midnight normalised); the primary index |
+| `dateISO` | local date the workout was actually performed; the primary history index |
+| `scheduledDateISO?` | original scheduled date when it differs from `dateISO` (for example, starting an upcoming session early) |
 | `startedAt` / `finishedAt` / `savedAt` / `durationMinutes` | timing; `savedAt` is the merge tie-breaker |
 | `programId` / `templateVersion` / `week` / `day` | what prescribed this session |
 | `equipmentSnapshot[]` | kit at training time — old sessions stay interpretable after onboarding changes |
