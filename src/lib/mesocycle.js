@@ -96,7 +96,12 @@ export function reviewCompletedWeek({ schedule, history = [], readinessLog = [],
   }
   const volumeByWeekMap = new Map();
   for(const h of history || []){
-    const key = mondayKey(h.dateISO);
+    // Programme review is about the scheduled programme week. Actual training
+    // chronology continues to use dateISO elsewhere; when a session was run
+    // early/late, scheduledDateISO keeps its volume attached to the week whose
+    // prescription is being reviewed.
+    const key = mondayKey(h.scheduledDateISO || h.dateISO);
+    if(!key) continue;
     let vol = 0;
     for(const b of h.blocks || []) vol += (b.sets || []).length;
     volumeByWeekMap.set(key, (volumeByWeekMap.get(key) || 0) + vol);
