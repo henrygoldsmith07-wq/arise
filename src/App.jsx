@@ -94,6 +94,7 @@ export default function App(){
   // completion/demo load) must not be written a second time by the generic
   // React persistence effect after state catches up.
   const durableSnapshotRef=useRef(null);
+  const persistenceOptionsRef=useRef(null);
   const crossTabRefreshRef=useRef(null);
   storeRef.current = store;
   activeSessionRef.current = activeSession;
@@ -152,8 +153,13 @@ export default function App(){
   }, [prepareDestructiveTransition]);
 
   // State-setting wrapper kept for all call sites and child views. Persistence
-  // happens once, in the [store] effect below — never inside the setter.
-  const setStore = setStoreState;
+  // happens once, in the [store] effect below — never inside the setter. The
+  // optional second argument is reserved for explicit persistence semantics
+  // such as a full backup replacement of the evaluation ledger.
+  const setStore = useCallback((value, persistenceOptions = null)=>{
+    if(persistenceOptions) persistenceOptionsRef.current = persistenceOptions;
+    setStoreState(value);
+  }, []);
 
   // Single persistence point: state updates flow through setStoreState and this
   // effect writes once. (Saving inside updaters or wrappers double-wrote on
@@ -173,7 +179,9 @@ export default function App(){
       setPersistFailed(false);
       return;
     }
-    if(!saveStore(store)){
+    const persistenceOptions = persistenceOptionsRef.current;
+    persistenceOptionsRef.current = null;
+    if(!saveStore(store, persistenceOptions)){
       setPersistFailed(true);
       return;
     }
