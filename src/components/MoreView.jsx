@@ -17,12 +17,12 @@ import { dataLifecycleService } from '../services/dataLifecycleService.js';
 import { backupReminderDue, dismissBackupReminder as persistBackupReminderDismissal, readBackupState } from '../lib/backupState.js';
 import { decryptEncryptedFullBackup, downloadEncryptedFullBackup, downloadFullBackup, encryptedBackupSupported } from '../services/backupService.js';
 import ToggleRow from './settings/ToggleRow.jsx';
-import AiCoachSettings from './settings/AiCoachSettings.jsx';
-import FeedbackSettings from './settings/FeedbackSettings.jsx';
-import AppearanceAccessibilitySettings from './settings/AppearanceAccessibilitySettings.jsx';
-import GuidedSettings from './settings/GuidedSettings.jsx';
-import TrainingPolicySettings from './settings/TrainingPolicySettings.jsx';
-import EvidenceSettings from './settings/EvidenceSettings.jsx';
+const AiCoachSettings = lazy(()=> import('./settings/AiCoachSettings.jsx'));
+const FeedbackSettings = lazy(()=> import('./settings/FeedbackSettings.jsx'));
+const AppearanceAccessibilitySettings = lazy(()=> import('./settings/AppearanceAccessibilitySettings.jsx'));
+const GuidedSettings = lazy(()=> import('./settings/GuidedSettings.jsx'));
+const TrainingPolicySettings = lazy(()=> import('./settings/TrainingPolicySettings.jsx'));
+const EvidenceSettings = lazy(()=> import('./settings/EvidenceSettings.jsx'));
 import { useTransientMessage } from '../hooks/useTransientMessage.js';
 const StorageDiagnostics = lazy(()=> import('./StorageDiagnostics.jsx'));
 
@@ -556,9 +556,11 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
 
       <Suspense fallback={null}><StorageDiagnostics setMsg={setMsg} /></Suspense>
 
-      <AppearanceAccessibilitySettings store={store} setStore={setStore} />
-      <GuidedSettings store={store} setStore={setStore} />
-      <TrainingPolicySettings store={store} setStore={setStore} />
+      <Suspense fallback={null}>
+        <AppearanceAccessibilitySettings store={store} setStore={setStore} />
+        <GuidedSettings store={store} setStore={setStore} />
+        <TrainingPolicySettings store={store} setStore={setStore} />
+      </Suspense>
 
       <section id="sec-personalise" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
         <h3 className="text-sm font-bold">Personalise</h3>
@@ -696,10 +698,11 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
         </div>
       </section>
 
-      <AiCoachSettings store={store} />
-      <FeedbackSettings />
-
-      <EvidenceSettings store={store} setStore={setStore} />
+      <Suspense fallback={null}>
+        <AiCoachSettings store={store} />
+        <FeedbackSettings />
+        <EvidenceSettings store={store} setStore={setStore} />
+      </Suspense>
 
       <section id="sec-help" className="rounded-2xl border border-line bg-surface p-4 space-y-2">
         <h3 className="text-sm font-bold">Help & testing</h3>
