@@ -62,11 +62,6 @@ async function stableScreenshot(page, name){
 }
 
 test.describe('visual regression baselines', () => {
-  // Each case deliberately resets IndexedDB and the local-first store. Running
-  // those destructive fixture steps in parallel can make local baseline
-  // generation race even though CI currently uses one Playwright worker.
-  test.describe.configure({ mode:'serial' });
-
   test.beforeEach(async ({ page }, testInfo) => {
     test.skip(process.platform !== 'linux', 'CI/Linux is the visual-regression authority; desktop OS font rasterization differs');
     test.skip(testInfo.project.name !== 'chromium', 'single desktop baseline avoids device-specific raster noise');
