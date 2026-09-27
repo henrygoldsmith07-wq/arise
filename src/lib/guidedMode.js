@@ -7,6 +7,7 @@ import { EXERCISE_BY_ID } from './data.js';
 import { lastExerciseSets } from './store.js';
 import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, attributePrescribedSets } from './progression.js';
 import { NOTE_PROMPTS } from './sessionNotes.js';
+import { localDateISO } from './dateOnly.js';
 export { NOTE_PROMPTS } from './sessionNotes.js';
 
 function parseNum(v){ const n=Number(v); return Number.isFinite(n)? n : 0; }
@@ -175,18 +176,20 @@ export function formatElapsed(ms){
 }
 
 // Save payload — identical schema to SessionRunner's, with mode: 'guided'.
-export function buildGuidedPayload({ session, blocks, note = '', noteTags = [], startedAtISO, availableEquipment = [] }){
-  const nowISO = new Date().toISOString();
+export function buildGuidedPayload({ session, blocks, note = '', noteTags = [], startedAtISO, availableEquipment = [], nowISO = new Date().toISOString(), performedDateISO = null }){
   const started = Date.parse(startedAtISO);
   const durationMinutes = Number.isFinite(started) ? Math.max(1, Math.round((Date.parse(nowISO) - started) / 60000)) : 1;
   const painDiscomfort = noteTags.includes('pain-discomfort');
   const labels = noteTags.map(id=> NOTE_PROMPTS.find(prompt=> prompt.id === id)?.label).filter(Boolean);
   const finalNote = [labels.join(', '), note.trim()].filter(Boolean).join(' · ');
+  const actualDateISO = performedDateISO || localDateISO(startedAtISO) || localDateISO(nowISO) || session.dateISO;
+  const scheduledDateISO = session.scheduledDateISO || session.dateISO || null;
   const substitutions = blocks.filter(b=> b.substitutionFrom).map(b=> ({ from: b.substitutionFrom, to: b.exerciseId, reason: b.substitutionReason }));
   const exerciseOrder = blocks.map(b=> b.exerciseId);
   return {
     id: session.id,
-    dateISO: session.dateISO,
+    dateISO: actualDateISO,
+    ...(scheduledDateISO && scheduledDateISO !== actualDateISO ? { scheduledDateISO } : {}),
     programId: session.programId,
     programVersion: session.programVersion || null,
     templateVersion: session.templateVersion || null,
