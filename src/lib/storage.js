@@ -112,17 +112,19 @@ function historyOf(store){
   return store.history || [];
 }
 
-export async function persistStore(store, { baseStore = null, evaluationLedgerMode = 'preserve' } = {}){
+export async function persistStore(store, { baseStore = null, evaluationLedgerMode = 'preserve', reconcileWithoutBase = false } = {}){
   let committedStore = store;
-  try{
-    const canonical = await loadStoreFromIdb();
-    if(canonical){
-      committedStore = reconcileStoreSnapshots(baseStore, store, canonical);
-      if(evaluationLedgerMode === 'replace'){
-        committedStore = { ...committedStore, evaluationLedger:[...(store.evaluationLedger || [])] };
+  if(baseStore || reconcileWithoutBase){
+    try{
+      const canonical = await loadStoreFromIdb();
+      if(canonical){
+        committedStore = reconcileStoreSnapshots(baseStore, store, canonical);
+        if(evaluationLedgerMode === 'replace'){
+          committedStore = { ...committedStore, evaluationLedger:[...(store.evaluationLedger || [])] };
+        }
       }
-    }
-  }catch{}
+    }catch{}
+  }
   const d = decompose(committedStore);
   // One transaction across every touched store: a save is all-or-nothing.
   // The previous clear-then-put-per-store storm could leave stores from
@@ -440,7 +442,7 @@ export function setCachedStore(store, { persist = persistStore, evaluationLedger
     // write may have succeeded or failed since this write was submitted.
     const durableBase = lastDurableStore;
     try{
-      const committed = await persist(submittedStore, { baseStore: durableBase, evaluationLedgerMode });
+      const committed = await persist(submittedStore, { baseStore: durableBase, evaluationLedgerMode, reconcileWithoutBase:true });
       lastDurableStore = committed;
       if(cache === submittedStore) cache = committed;
       try{ localStorage.removeItem(LEGACY_EVALUATION_KEY); }catch{}
