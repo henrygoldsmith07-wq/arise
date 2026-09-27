@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { dateISOAtOffset, daysBetweenDateOnly, localDateISO, parseDateOnlyUTC } from '../src/lib/dateOnly.js';
+import { dateISOAtOffset, daysBetweenDateOnly, isDateOnly, localDateISO, parseDateOnlyUTC } from '../src/lib/dateOnly.js';
 import { linearRegressionIntervals } from '../src/lib/statistics.js';
 import { strengthSeries } from '../src/lib/analytics.js';
 
@@ -31,6 +31,16 @@ describe('date-only utilities', ()=>{
   it('rejects timestamps where a date-only domain value is required', ()=>{
     assert.equal(Number.isNaN(parseDateOnlyUTC('2026-03-29T23:00:00+01:00')), true);
     assert.equal(daysBetweenDateOnly('bad', '2026-03-30'), null);
+  });
+
+  it('rejects impossible calendar dates instead of accepting Date.parse normalisation', ()=>{
+    for(const value of ['2026-02-29', '2026-02-30', '2026-02-31', '2026-04-31', '2026-11-31']){
+      assert.equal(isDateOnly(value), false, value);
+      assert.equal(Number.isNaN(parseDateOnlyUTC(value)), true, value);
+    }
+    for(const value of ['2024-02-29', '2026-01-31', '2026-04-30', '2026-12-31']){
+      assert.equal(isDateOnly(value), true, value);
+    }
   });
 });
 
