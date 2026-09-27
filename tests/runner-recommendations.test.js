@@ -88,6 +88,7 @@ describe('shared runner recommendation lifecycle', ()=>{
       recommendation,
       history:[],
       dueDateISO:'2026-09-26',
+      targetSessionId:'s1',
       programId:'p1',
       programVersion:4,
       targetReps:'8-12',
@@ -142,6 +143,7 @@ describe('shared runner recommendation lifecycle', ()=>{
     assert.ok(recorded);
     assert.equal(recorded.exerciseId, block.exerciseId);
     assert.equal(recorded.dueDateISO, session.dateISO);
+    assert.equal(recorded.targetSessionId, session.id);
     assert.equal(recorded.programId, session.programId);
     assert.equal(recorded.assignedArm, null);
   });

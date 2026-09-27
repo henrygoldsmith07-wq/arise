@@ -39,6 +39,9 @@ function mondayKey(dateISO){
   return monday.toISOString().slice(0, 10);
 }
 export function weekOf(dateISO){ return mondayKey(dateISO); }
+export function programmeWeekDateISO(session){
+  return session?.scheduledDateISO || session?.dateISO || null;
+}
 function addDaysISO(dateISO, days){
   const d = new Date(`${dateISO}T00:00:00Z`);
   if(Number.isNaN(d.getTime())) return null;
@@ -96,7 +99,12 @@ export function reviewCompletedWeek({ schedule, history = [], readinessLog = [],
   }
   const volumeByWeekMap = new Map();
   for(const h of history || []){
-    const key = mondayKey(h.dateISO);
+    // Programme review is about the scheduled programme week. Actual training
+    // chronology continues to use dateISO elsewhere; when a session was run
+    // early/late, scheduledDateISO keeps its volume attached to the week whose
+    // prescription is being reviewed.
+    const key = mondayKey(programmeWeekDateISO(h));
+    if(!key) continue;
     let vol = 0;
     for(const b of h.blocks || []) vol += (b.sets || []).length;
     volumeByWeekMap.set(key, (volumeByWeekMap.get(key) || 0) + vol);

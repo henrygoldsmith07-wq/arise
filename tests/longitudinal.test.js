@@ -153,6 +153,50 @@ describe('longitudinal validation — prospective recording and outcomes', ()=>{
     assert.equal(outcome.previousE1rm, 38.5); // 27.5 × (1 + 12/30)
   });
 
+  it('resolves the exact target session even when that scheduled workout is performed early', ()=>{
+    const storage = memoryStorage();
+    recordRecommendation({
+      exerciseId:'push-up',
+      recommendation:{ reps:11, reason:'Bodyweight: add a rep' },
+      history:[],
+      dueDateISO:'2026-01-10',
+      targetSessionId:'scheduled-s1',
+      preferences:CONSENT,
+      storage,
+    });
+    const resolved = attachOutcome({
+      sessionId:'scheduled-s1',
+      dateISO:'2026-01-08',
+      blocks:[{ exerciseId:'push-up', sets:[{ reps:'11' }] }],
+      preferences:CONSENT,
+      storage,
+    });
+    assert.equal(resolved.length, 1);
+    assert.equal(resolved[0].outcome.sessionId, 'scheduled-s1');
+  });
+
+  it('does not let an unrelated later session consume a session-bound recommendation', ()=>{
+    const storage = memoryStorage();
+    recordRecommendation({
+      exerciseId:'push-up',
+      recommendation:{ reps:11, reason:'Bodyweight: add a rep' },
+      history:[],
+      dueDateISO:'2026-01-10',
+      targetSessionId:'scheduled-s1',
+      preferences:CONSENT,
+      storage,
+    });
+    const wrong = attachOutcome({
+      sessionId:'different-session',
+      dateISO:'2026-01-12',
+      blocks:[{ exerciseId:'push-up', sets:[{ reps:'20' }] }],
+      preferences:CONSENT,
+      storage,
+    });
+    assert.equal(wrong.length, 0);
+    assert.equal(loadEvaluationLedger(storage)[0].outcome, null);
+  });
+
   it('does not resolve a record from a session earlier than its due date', ()=>{
     const storage = memoryStorage();
     recordRecommendation({

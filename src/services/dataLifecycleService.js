@@ -20,7 +20,10 @@ export function createDataLifecycleService({
 } = {}){
   return {
     async clearDeviceData(){
-      await awaitPersistence();
+      // Drain the queue before deletion, but an already-failed save must not
+      // prevent the user from deleting device data. clearAll owns the verified
+      // destructive boundary and will throw if the wipe itself cannot finish.
+      try{ await awaitPersistence(); }catch{}
       await clearAll();
     },
 

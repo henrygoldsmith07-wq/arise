@@ -79,6 +79,7 @@ export function prospectiveRecommendationRecord({
     recommendation,
     history,
     dueDateISO:session.dateISO,
+    targetSessionId:session.id || null,
     programId:session.programId || null,
     programVersion:session.programVersion ?? null,
     targetReps:block.reps || undefined,

@@ -115,9 +115,13 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
 
   const resetAllData = async ()=>{
     if(!confirm('Clear all local data on this device? This cannot be undone unless you have an export.')) return;
-    await dataLifecycleService.clearDeviceData();
-    clearTelemetry();
-    location.reload();
+    try{
+      await dataLifecycleService.clearDeviceData();
+      clearTelemetry();
+      location.reload();
+    }catch(err){
+      flashMsg(`Clear failed: ${String(err?.message || err)}. This tab was not reloaded so you can export a backup.`, 7000);
+    }
   };
   const exportCsv = ()=>{
     const csv = portableCsv(store.history||[]);
@@ -237,7 +241,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
       const merged = mergeStores(store, imported, importStrategy);
       if(importStrategy==='replace') replaceEventHistory(imported.eventHistory || []);
       else if(imported.eventHistory?.length) mergeEventHistory(imported.eventHistory);
-      setStore({ ...merged, eventHistory:getEventHistory() });
+      setStore({ ...merged, eventHistory:getEventHistory() }, importStrategy === 'replace' ? { evaluationLedgerMode:'replace' } : null);
       flashMsg(importStrategy==='replace'
         ? 'Backup restored — replaced this device.'
         : `Backup merged — ${importPreview.counts.additions} new session${importPreview.counts.additions === 1 ? '' : 's'} added${importPreview.counts.updates ? `, ${importPreview.counts.updates} conflict${importPreview.counts.updates === 1 ? '' : 's'} kept your current copy` : ''}.`, 6000);
@@ -251,9 +255,13 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
   const deleteAccount = async ()=>{
     const preview = deletionPreview(store);
     if(!confirm(`Delete all Arise data on this device?\n\nHistory: ${preview.historyCount} sessions\nSchedule: ${preview.schedulePresent?'yes':'no'}\nOnboarding: ${preview.onboardingPresent?'yes':'no'}\nReadiness: ${preview.readinessCount} entries\n\nThis cannot be undone.`)) return;
-    await dataLifecycleService.clearDeviceData();
-    clearTelemetry();
-    location.reload();
+    try{
+      await dataLifecycleService.clearDeviceData();
+      clearTelemetry();
+      location.reload();
+    }catch(err){
+      flashMsg(`Delete failed: ${String(err?.message || err)}. This tab was not reloaded so you can export a backup.`, 7000);
+    }
   };
 
   const [storageInfo, setStorageInfo] = useState(null);

@@ -25,6 +25,7 @@ import { enforceIntegrity, quarantineBrokenStore } from './integrity.js';
 import { normalizeHistoryForWrite, makeTombstone } from './domain.js';
 import { reconcileStoreSnapshots } from './storeReconcile.js';
 import { splitSets } from './storageRecords.js';
+import { bindEvaluationLedgerAdapter } from './evaluationLedgerBridge.js';
 
 const LS_KEY = 'arise.store.v1';
 const POINTER_KEY = 'arise.store.v1.pointer';
@@ -33,7 +34,51 @@ const PROGRAMME_ID = 'active';
 const READINESS_ID = 'log';
 
 let cache = null;          // hydrated monolithic store
+let lastDurableStore = null; // most recent snapshot known to have committed to IndexedDB
+let hydrated = false;
 let hydratePromise = null;
+const LEGACY_EVALUATION_KEY = 'arise.evaluation.v1';
+const LEGACY_EVALUATION_ARCHIVE_KEY = `${LEGACY_EVALUATION_KEY}.archive`;
+
+function mergeEvaluationRows(current = [], incoming = []){
+  const byId = new Map();
+  for(const row of current || []) if(row?.id) byId.set(row.id, row);
+  for(const row of incoming || []){
+    if(!row?.id) continue;
+    const existing = byId.get(row.id);
+    if(!existing || (!existing.outcome && row.outcome)) byId.set(row.id, row);
+  }
+  return [...byId.values()];
+}
+
+function legacyEvaluationRows(){
+  try{
+    const raw = localStorage.getItem(LEGACY_EVALUATION_KEY);
+    if(!raw) return [];
+    const parsed = JSON.parse(raw);
+    const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.records) ? parsed.records : [];
+    return rows.filter(row=> row && typeof row === 'object');
+  }catch{ return []; }
+}
+
+function cloneSnapshot(value){
+  if(value == null) return value;
+  try{ return typeof structuredClone === 'function' ? structuredClone(value) : JSON.parse(JSON.stringify(value)); }
+  catch{ return value; }
+}
+
+function mirrorPreferencePointer(store){
+  if(!store || !hydrated) return;
+  try{
+    const current = lsRead();
+    lsWrite({
+      __ariseIdb:true,
+      version:store.version || current?.version || 6,
+      preferences:{ ...(current?.preferences || {}), ...(store.preferences || {}) },
+    });
+  }catch{}
+}
+
 const commitListeners = new Set();
 export function subscribeStoreCommits(listener){
   if(typeof listener !== 'function') return ()=>{};
@@ -63,7 +108,7 @@ export function decompose(store){
     // activeWorkout rides on the profile row: the crashed-session draft must
     // survive restart or the recovery dialog can never be offered (it is the
     // whole point of the draft — losing it on a save defeats crash recovery).
-    profile: { id: PROFILE_ID, version: store.version || 6, onboarding: store.onboarding || null, preferences: store.preferences || {}, healthSummary: store.healthSummary || null, studyParticipantId: store.studyParticipantId || null, studyEnrollment: store.studyEnrollment || null, studyStatus: store.studyStatus || null, studyStatusChangedAtISO: store.studyStatusChangedAtISO || null, activeWorkout: store.activeWorkout ?? null },
+    profile: { id: PROFILE_ID, version: store.version || 6, onboarding: store.onboarding || null, preferences: store.preferences || {}, gymPrefs: store.gymPrefs || null, demo: store.demo === true, healthSummary: store.healthSummary || null, studyParticipantId: store.studyParticipantId || null, studyEnrollment: store.studyEnrollment || null, studyStatus: store.studyStatus || null, studyStatusChangedAtISO: store.studyStatusChangedAtISO || null, activeWorkout: store.activeWorkout ?? null },
     sessions: canonicalHistory,
     sets: splitSets(canonicalHistory),
     programme: { id: PROGRAMME_ID, activeSchedule: schedule, programHistory: store.programHistory || [] },
@@ -85,12 +130,17 @@ function historyOf(store){
   return store.history || [];
 }
 
-export async function persistStore(store, { baseStore = null } = {}){
+export async function persistStore(store, { baseStore = null, evaluationLedgerMode = 'preserve', reconcileWithoutBase = false } = {}){
   let committedStore = store;
-  if(baseStore){
+  if(baseStore || reconcileWithoutBase){
     try{
       const canonical = await loadStoreFromIdb();
-      committedStore = reconcileStoreSnapshots(baseStore, store, canonical);
+      if(canonical){
+        committedStore = reconcileStoreSnapshots(baseStore, store, canonical);
+        if(evaluationLedgerMode === 'replace'){
+          committedStore = { ...committedStore, evaluationLedger:[...(store.evaluationLedger || [])] };
+        }
+      }
     }catch{}
   }
   const d = decompose(committedStore);
@@ -129,7 +179,14 @@ export async function persistStore(store, { baseStore = null } = {}){
     if(legacy && !legacy.__ariseIdb){
       try{ localStorage.setItem('arise.store.v1.pre-idb-backup', JSON.stringify(legacy)); }catch{}
     }
-    lsWrite({ __ariseIdb: true, version: committedStore.version || 6, preferences: committedStore.preferences || {} });
+    const currentPointer = lsRead();
+    lsWrite({
+      __ariseIdb: true,
+      version: committedStore.version || 6,
+      preferences: currentPointer?.__ariseIdb
+        ? { ...(committedStore.preferences || {}), ...(currentPointer.preferences || {}) }
+        : (committedStore.preferences || {}),
+    });
   }catch{}
   return committedStore;
 }
@@ -161,6 +218,8 @@ export async function loadStoreFromIdb(){
     version: profile?.version || 6,
     onboarding: profile?.onboarding ?? null,
     preferences: profile?.preferences ?? {},
+    gymPrefs: profile?.gymPrefs ?? null,
+    demo: profile?.demo === true,
     healthSummary: profile?.healthSummary ?? null,
     studyParticipantId: profile?.studyParticipantId ?? null,
     studyEnrollment: profile?.studyEnrollment ?? null,
@@ -184,6 +243,7 @@ export async function loadStoreFromIdb(){
 export async function refreshCachedStoreFromIdb(){
   const fresh = await loadStoreFromIdb();
   cache = fresh || undefined;
+  lastDurableStore = fresh ? cloneSnapshot(fresh) : null;
   return fresh || null;
 }
 
@@ -214,6 +274,30 @@ export function hydrateStorage(){
       if(store) await persistStore(store);
     }
     if(store){
+      // The pointer is the synchronous preference mirror used to survive an
+      // immediate reload before the async IndexedDB transaction finishes.
+      // Treat it as the latest local preference intent, then fold it back into
+      // the canonical store.
+      try{
+        const pointer = lsRead();
+        if(pointer?.__ariseIdb && pointer.preferences && typeof pointer.preferences === 'object'){
+          const mergedPreferences = { ...(store.preferences || {}), ...pointer.preferences };
+          if(JSON.stringify(mergedPreferences) !== JSON.stringify(store.preferences || {})){
+            store = { ...store, preferences:mergedPreferences };
+            try{ await persistStore(store); }catch{}
+          }
+        }
+      }catch{}
+      // One-time evidence migration: older builds kept the live evaluation
+      // ledger in localStorage. Merge it into the IndexedDB-backed store, then
+      // remove the legacy live key only after the canonical write succeeds.
+      const legacyLedger = legacyEvaluationRows();
+      if(legacyLedger.length){
+        const mergedLedger = mergeEvaluationRows(store.evaluationLedger || [], legacyLedger);
+        store = { ...store, evaluationLedger: mergedLedger };
+        await persistStore(store);
+        try{ localStorage.removeItem(LEGACY_EVALUATION_KEY); }catch{}
+      }
       // Boot gate: the recomposed whole must satisfy the same strict schema
       // imported backups do. A failed check is quarantined (recoverable) and
       // repaired (defaults + per-row salvage) rather than handed to the app.
@@ -238,6 +322,8 @@ export function hydrateStorage(){
       }catch{}
     }
     cache = store || undefined;
+    lastDurableStore = store ? cloneSnapshot(store) : null;
+    hydrated = true;
     return cache || null;
   })();
   return hydratePromise;
@@ -253,6 +339,8 @@ export function clearIntegrityNotice(){ integrityNotice = null; }
 // cache and the one-time migration marker so the next boot starts clean.
 export function resetHydratedCache(){
   cache = undefined;
+  lastDurableStore = null;
+  hydrated = false;
   hydratePromise = null;
   integrityNotice = null;
   persistenceError = null;
@@ -266,14 +354,41 @@ export function resetHydratedCache(){
 // snapshot store so the explicitly captured pre-demo safety copy survives the
 // wipe; full deletion keeps the default and removes snapshots too.
 let cleared = false;
-export async function clearAllStoredData({ preserveSnapshots = false } = {}){
+export async function clearAllStoredData({
+  preserveSnapshots = false,
+  transaction = idbTransaction,
+  clearStore = idbClearStore,
+  readAll = idbGetAll,
+} = {}){
   cleared = true;
   resetHydratedCache();
   const storesToClear = preserveSnapshots ? STORES.filter((name)=> name !== 'snapshots') : [...STORES];
+  let transactionError = null;
   try{
-    await idbTransaction(storesToClear, (ops)=> { for(const s of storesToClear) ops.clearStore(s); });
-  }catch{
-    for(const s of storesToClear){ try{ await idbClearStore(s); }catch{} }
+    await transaction(storesToClear, (ops)=> { for(const s of storesToClear) ops.clearStore(s); });
+  }catch(err){
+    transactionError = err;
+    const failures = [];
+    for(const s of storesToClear){
+      try{ await clearStore(s); }catch(clearErr){ failures.push({ store:s, error:clearErr }); }
+    }
+    const remaining = [];
+    for(const s of storesToClear){
+      try{
+        const rows = await readAll(s);
+        if((rows || []).length) remaining.push(s);
+      }catch(readErr){
+        failures.push({ store:s, error:readErr });
+      }
+    }
+    if(failures.length || remaining.length){
+      const detail = [
+        transactionError ? `transaction: ${String(transactionError?.message || transactionError)}` : null,
+        failures.length ? `fallback failures: ${failures.map(item=> item.store).join(', ')}` : null,
+        remaining.length ? `not empty: ${remaining.join(', ')}` : null,
+      ].filter(Boolean).join('; ');
+      throw new Error(`Could not verify that all requested device data was cleared (${detail}).`);
+    }
   }
   // The legacy localStorage payload is a live import source at every boot
   // until the pointer marks the migration done — leaving it here would
@@ -282,6 +397,20 @@ export async function clearAllStoredData({ preserveSnapshots = false } = {}){
   try{ localStorage.removeItem('arise.store.v1.pre-idb-backup'); }catch{}
   try{ localStorage.removeItem('arise.store.v1.corrupt'); }catch{}
   try{ localStorage.removeItem(POINTER_KEY); }catch{}
+  // Legacy evaluation data predates IndexedDB-canonical evidence. It must be
+  // removed on deletion/demo reset or a later hydration could re-import it.
+  try{ localStorage.removeItem(LEGACY_EVALUATION_KEY); }catch{}
+  try{ localStorage.removeItem(LEGACY_EVALUATION_ARCHIVE_KEY); }catch{}
+  // Other device-local Arise records are part of "all data" too. Keeping them
+  // through a delete/demo transition would preserve measurements, pseudonymous
+  // identity or a persisted AI credential after the training store was wiped.
+  for(const key of [
+    'arise.telemetry.v2', 'arise.telemetry.v1', 'arise.errors.v1',
+    'arise.ai.settings.v1', 'arise.lastExportAt',
+    'arise.lastFullBackupAt.v1', 'arise.backupReminderDismissedAt',
+    'arise.deviceId',
+  ]){ try{ localStorage.removeItem(key); }catch{} }
+  try{ sessionStorage.removeItem('arise.ai.session-key.v1'); }catch{}
   try{ localStorage.removeItem('arise.feedback.v1'); }catch{}
   try{ localStorage.removeItem('arise.classifier.settings.v1'); }catch{}
   try{ localStorage.removeItem('arise.classifier.feedback.settings.v1'); }catch{}
@@ -295,6 +424,7 @@ export function isCleared(){ return cleared; }
 export function getCachedStore(){
   return cache ?? null;
 }
+export function isStorageHydrated(){ return hydrated; }
 
 // Writes are serialized (a clear-then-put storm from a fast save must never
 // interleave with the next save's) and tracked, so callers — and tests — can
@@ -335,32 +465,60 @@ export async function whenPersisted(){
   }while(observed !== writeQueue);
   if(persistenceError) throw persistenceError;
 }
-export function setCachedStore(store, { persist = persistStore } = {}){
-  const baseStore = cache;
-  cache = store;
+export function setCachedStore(store, { persist = persistStore, evaluationLedgerMode = 'preserve' } = {}){
+  const optimisticBase = cache;
+  // Evidence is owned by the canonical ledger path, not ordinary React state
+  // snapshots. Preserve newer cached rows across generic UI saves so a stale
+  // component tree cannot erase a recommendation recorded moments earlier.
+  const existingEvidence = cache?.evaluationLedger || (hydrated ? legacyEvaluationRows() : []);
+  const submittedStore = evaluationLedgerMode === 'replace' || evaluationLedgerMode === 'ledger-write'
+    ? store
+    : {
+        ...store,
+        evaluationLedger: mergeEvaluationRows(existingEvidence, store?.evaluationLedger || []),
+      };
+  cache = submittedStore;
+  mirrorPreferencePointer(submittedStore);
   const run = enqueueWrite(async()=> {
+    // Resolve the three-way merge base at EXECUTION time. A previously queued
+    // write may have succeeded or failed since this write was submitted.
+    const durableBase = lastDurableStore;
     try{
-      const committed = await persist(store, { baseStore });
-      // Do not replace a newer local snapshot that was submitted while this
-      // queued write was awaiting IDB. The next queued write will reconcile from
-      // the committed canonical state using its own base snapshot.
-      if(cache === store) cache = committed;
+      const committed = await persist(submittedStore, { baseStore: durableBase, evaluationLedgerMode, reconcileWithoutBase:true });
+      lastDurableStore = cloneSnapshot(committed);
+      if(cache === submittedStore) cache = committed;
+      try{ localStorage.removeItem(LEGACY_EVALUATION_KEY); }catch{}
       notifyStoreCommitted('store-write');
       return committed;
     }catch(err){
-      // If no newer local snapshot superseded this one, roll the synchronous
-      // cache back to the last known durable base. A failed workout save must
-      // never make an unsaved completed state look canonical in this tab.
-      if(cache === store) cache = baseStore;
+      // Roll back only when this failed snapshot is still the optimistic head.
+      // A newer local submission remains visible and will reconcile against
+      // lastDurableStore when its turn arrives.
+      if(cache === submittedStore) cache = lastDurableStore || optimisticBase;
       throw err;
     }
   });
-  // Most UI writes intentionally remain fire-and-forget. Attach a handler so
-  // those callers do not create unhandled rejections; explicit callers can
-  // still await the returned promise or whenPersisted() and observe failure.
   void run.catch(()=>{});
   return run;
 }
+
+bindEvaluationLedgerAdapter({
+  read(){
+    return cache ? [...(cache.evaluationLedger || [])] : null;
+  },
+  replace(records){
+    if(!cache) return false;
+    // Exact local ledger snapshot (retention/override edits included), while
+    // persistence still reconciles unseen rows/outcomes from another tab.
+    setCachedStore({ ...cache, evaluationLedger:[...(records || [])] }, { evaluationLedgerMode:'ledger-write' });
+    return true;
+  },
+  clear(){
+    if(!cache) return false;
+    setCachedStore({ ...cache, evaluationLedger:[] }, { evaluationLedgerMode:'replace' });
+    return true;
+  },
+});
 
 // Shrink the data-loss window: a save is async and a user can close the tab
 // the moment a set is logged. Flush pending writes when the page hides or is

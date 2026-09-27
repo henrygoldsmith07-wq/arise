@@ -94,6 +94,7 @@ export default function App(){
   // completion/demo load) must not be written a second time by the generic
   // React persistence effect after state catches up.
   const durableSnapshotRef=useRef(null);
+  const persistenceOptionsRef=useRef(null);
   const crossTabRefreshRef=useRef(null);
   storeRef.current = store;
   activeSessionRef.current = activeSession;
@@ -152,8 +153,13 @@ export default function App(){
   }, [prepareDestructiveTransition]);
 
   // State-setting wrapper kept for all call sites and child views. Persistence
-  // happens once, in the [store] effect below — never inside the setter.
-  const setStore = setStoreState;
+  // happens once, in the [store] effect below — never inside the setter. The
+  // optional second argument is reserved for explicit persistence semantics
+  // such as a full backup replacement of the evaluation ledger.
+  const setStore = useCallback((value, persistenceOptions = null)=>{
+    if(persistenceOptions) persistenceOptionsRef.current = persistenceOptions;
+    setStoreState(value);
+  }, []);
 
   // Single persistence point: state updates flow through setStoreState and this
   // effect writes once. (Saving inside updaters or wrappers double-wrote on
@@ -173,7 +179,9 @@ export default function App(){
       setPersistFailed(false);
       return;
     }
-    if(!saveStore(store)){
+    const persistenceOptions = persistenceOptionsRef.current;
+    persistenceOptionsRef.current = null;
+    if(!saveStore(store, persistenceOptions)){
       setPersistFailed(true);
       return;
     }
@@ -456,14 +464,25 @@ export default function App(){
     }
   };
 
-  const handleCancelSession = ()=>{
-    const plan = cancellationPlan({ store, activeSession });
+  const handleCancelSession = async()=>{
+    const plan = cancellationPlan({ store:storeRef.current, activeSession:activeSessionRef.current });
     if(plan.requiresConfirmation && !window.confirm(`Discard this workout? ${plan.completedSets} completed set${plan.completedSets===1?'':'s'} will be lost.`)) return;
     if(plan.event) try{ recordEvent(plan.event.type, plan.event.payload); }catch{}
-    setStore(plan.nextStore);
-    localDraftProtectedRef.current = false;
-    setActiveSession(null);
-    setRecoveryOpen(false);
+    try{
+      if(!saveStore(plan.nextStore)) throw new Error('Could not queue draft removal for storage.');
+      await whenPersisted();
+      await refreshCachedStoreFromIdb();
+      const committedStore = loadStore();
+      durableSnapshotRef.current = committedStore;
+      setStoreState(committedStore);
+      setPersistFailed(false);
+      localDraftProtectedRef.current = false;
+      setActiveSession(null);
+      setRecoveryOpen(false);
+    }catch(err){
+      setPersistFailed(true);
+      try{ recordErrorEvent(err, { where:'workout-cancel' }); }catch{}
+    }
   };
 
   const resumeDraft = ()=>{
@@ -480,10 +499,22 @@ export default function App(){
     try { recordEvent('session:resume', { sessionId: draft.session.id }); } catch {}
   };
 
-  const discardDraft = ()=>{
-    setStore({ ...store, activeWorkout: null });
-    localDraftProtectedRef.current = false;
-    setRecoveryOpen(false);
+  const discardDraft = async()=>{
+    const next = { ...storeRef.current, activeWorkout:null };
+    try{
+      if(!saveStore(next)) throw new Error('Could not queue draft removal for storage.');
+      await whenPersisted();
+      await refreshCachedStoreFromIdb();
+      const committedStore = loadStore();
+      durableSnapshotRef.current = committedStore;
+      setStoreState(committedStore);
+      setPersistFailed(false);
+      localDraftProtectedRef.current = false;
+      setRecoveryOpen(false);
+    }catch(err){
+      setPersistFailed(true);
+      try{ recordErrorEvent(err, { where:'draft-discard' }); }catch{}
+    }
   };
 
   const draftSets = store.activeWorkout?.blocks?.reduce((n,b)=> n+(b.sets||[]).length, 0) || 0;
