@@ -61,6 +61,24 @@ function legacyEvaluationRows(){
   }catch{ return []; }
 }
 
+function cloneSnapshot(value){
+  if(value == null) return value;
+  try{ return typeof structuredClone === 'function' ? structuredClone(value) : JSON.parse(JSON.stringify(value)); }
+  catch{ return value; }
+}
+
+function mirrorPreferencePointer(store){
+  if(!store || !hydrated) return;
+  try{
+    const current = lsRead();
+    lsWrite({
+      __ariseIdb:true,
+      version:store.version || current?.version || 6,
+      preferences:{ ...(current?.preferences || {}), ...(store.preferences || {}) },
+    });
+  }catch{}
+}
+
 const commitListeners = new Set();
 export function subscribeStoreCommits(listener){
   if(typeof listener !== 'function') return ()=>{};
@@ -90,7 +108,7 @@ export function decompose(store){
     // activeWorkout rides on the profile row: the crashed-session draft must
     // survive restart or the recovery dialog can never be offered (it is the
     // whole point of the draft — losing it on a save defeats crash recovery).
-    profile: { id: PROFILE_ID, version: store.version || 6, onboarding: store.onboarding || null, preferences: store.preferences || {}, healthSummary: store.healthSummary || null, studyParticipantId: store.studyParticipantId || null, studyEnrollment: store.studyEnrollment || null, studyStatus: store.studyStatus || null, studyStatusChangedAtISO: store.studyStatusChangedAtISO || null, activeWorkout: store.activeWorkout ?? null },
+    profile: { id: PROFILE_ID, version: store.version || 6, onboarding: store.onboarding || null, preferences: store.preferences || {}, gymPrefs: store.gymPrefs || null, demo: store.demo === true, healthSummary: store.healthSummary || null, studyParticipantId: store.studyParticipantId || null, studyEnrollment: store.studyEnrollment || null, studyStatus: store.studyStatus || null, studyStatusChangedAtISO: store.studyStatusChangedAtISO || null, activeWorkout: store.activeWorkout ?? null },
     sessions: canonicalHistory,
     sets: splitSets(canonicalHistory),
     programme: { id: PROGRAMME_ID, activeSchedule: schedule, programHistory: store.programHistory || [] },
@@ -161,7 +179,14 @@ export async function persistStore(store, { baseStore = null, evaluationLedgerMo
     if(legacy && !legacy.__ariseIdb){
       try{ localStorage.setItem('arise.store.v1.pre-idb-backup', JSON.stringify(legacy)); }catch{}
     }
-    lsWrite({ __ariseIdb: true, version: committedStore.version || 6, preferences: committedStore.preferences || {} });
+    const currentPointer = lsRead();
+    lsWrite({
+      __ariseIdb: true,
+      version: committedStore.version || 6,
+      preferences: currentPointer?.__ariseIdb
+        ? { ...(committedStore.preferences || {}), ...(currentPointer.preferences || {}) }
+        : (committedStore.preferences || {}),
+    });
   }catch{}
   return committedStore;
 }
@@ -193,6 +218,8 @@ export async function loadStoreFromIdb(){
     version: profile?.version || 6,
     onboarding: profile?.onboarding ?? null,
     preferences: profile?.preferences ?? {},
+    gymPrefs: profile?.gymPrefs ?? null,
+    demo: profile?.demo === true,
     healthSummary: profile?.healthSummary ?? null,
     studyParticipantId: profile?.studyParticipantId ?? null,
     studyEnrollment: profile?.studyEnrollment ?? null,
@@ -216,7 +243,7 @@ export async function loadStoreFromIdb(){
 export async function refreshCachedStoreFromIdb(){
   const fresh = await loadStoreFromIdb();
   cache = fresh || undefined;
-  lastDurableStore = fresh || null;
+  lastDurableStore = fresh ? cloneSnapshot(fresh) : null;
   return fresh || null;
 }
 
@@ -247,6 +274,20 @@ export function hydrateStorage(){
       if(store) await persistStore(store);
     }
     if(store){
+      // The pointer is the synchronous preference mirror used to survive an
+      // immediate reload before the async IndexedDB transaction finishes.
+      // Treat it as the latest local preference intent, then fold it back into
+      // the canonical store.
+      try{
+        const pointer = lsRead();
+        if(pointer?.__ariseIdb && pointer.preferences && typeof pointer.preferences === 'object'){
+          const mergedPreferences = { ...(store.preferences || {}), ...pointer.preferences };
+          if(JSON.stringify(mergedPreferences) !== JSON.stringify(store.preferences || {})){
+            store = { ...store, preferences:mergedPreferences };
+            try{ await persistStore(store); }catch{}
+          }
+        }
+      }catch{}
       // One-time evidence migration: older builds kept the live evaluation
       // ledger in localStorage. Merge it into the IndexedDB-backed store, then
       // remove the legacy live key only after the canonical write succeeds.
@@ -281,7 +322,7 @@ export function hydrateStorage(){
       }catch{}
     }
     cache = store || undefined;
-    lastDurableStore = store || null;
+    lastDurableStore = store ? cloneSnapshot(store) : null;
     hydrated = true;
     return cache || null;
   })();
@@ -437,13 +478,14 @@ export function setCachedStore(store, { persist = persistStore, evaluationLedger
         evaluationLedger: mergeEvaluationRows(existingEvidence, store?.evaluationLedger || []),
       };
   cache = submittedStore;
+  mirrorPreferencePointer(submittedStore);
   const run = enqueueWrite(async()=> {
     // Resolve the three-way merge base at EXECUTION time. A previously queued
     // write may have succeeded or failed since this write was submitted.
     const durableBase = lastDurableStore;
     try{
       const committed = await persist(submittedStore, { baseStore: durableBase, evaluationLedgerMode, reconcileWithoutBase:true });
-      lastDurableStore = committed;
+      lastDurableStore = cloneSnapshot(committed);
       if(cache === submittedStore) cache = committed;
       try{ localStorage.removeItem(LEGACY_EVALUATION_KEY); }catch{}
       notifyStoreCommitted('store-write');
