@@ -132,6 +132,13 @@
 // largest lazy chunk is now MoreView at 31.8 kB. Lock in that recovered
 // headroom rather than spending it immediately.
 //
+// boot 192.9 → 110.1 kB after making Today/Onboarding true route boundaries,
+// moving exercise recommendations into the already-lazy Exercise Browser and
+// pinning the shared 200 kB source catalogue to its own 26.4 kB gzip chunk.
+// The extra route/chunk wrappers increase total gzip from 327.9 → 336.0 kB,
+// which is an intentional first-paint trade rather than new product code. Lock
+// the boot gain in aggressively and allow only narrow total headroom.
+//
 // The budgets are regression bounds with headroom, not aspirations: a change
 // that crosses one must either undo the bloat or consciously re-baseline here
 // and say why in the PR.
@@ -146,9 +153,9 @@ if(!fs.existsSync(dist)){
   process.exit(2);
 }
 
-const BOOT_BUDGET_KB = 197;
+const BOOT_BUDGET_KB = 120;
 const CHUNK_BUDGET_KB = 34;
-const TOTAL_BUDGET_KB = 335;
+const TOTAL_BUDGET_KB = 338;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;
