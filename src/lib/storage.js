@@ -355,6 +355,16 @@ export async function clearAllStoredData({
   // removed on deletion/demo reset or a later hydration could re-import it.
   try{ localStorage.removeItem(LEGACY_EVALUATION_KEY); }catch{}
   try{ localStorage.removeItem(LEGACY_EVALUATION_ARCHIVE_KEY); }catch{}
+  // Other device-local Arise records are part of "all data" too. Keeping them
+  // through a delete/demo transition would preserve measurements, pseudonymous
+  // identity or a persisted AI credential after the training store was wiped.
+  for(const key of [
+    'arise.telemetry.v2', 'arise.telemetry.v1', 'arise.errors.v1',
+    'arise.ai.settings.v1', 'arise.lastExportAt',
+    'arise.lastFullBackupAt.v1', 'arise.backupReminderDismissedAt',
+    'arise.deviceId',
+  ]){ try{ localStorage.removeItem(key); }catch{} }
+  try{ sessionStorage.removeItem('arise.ai.session-key.v1'); }catch{}
   try{ localStorage.removeItem('arise.feedback.v1'); }catch{}
   try{ localStorage.removeItem('arise.classifier.settings.v1'); }catch{}
   try{ localStorage.removeItem('arise.classifier.feedback.settings.v1'); }catch{}
@@ -414,11 +424,12 @@ export function setCachedStore(store, { persist = persistStore, evaluationLedger
   // Evidence is owned by the canonical ledger path, not ordinary React state
   // snapshots. Preserve newer cached rows across generic UI saves so a stale
   // component tree cannot erase a recommendation recorded moments earlier.
+  const existingEvidence = cache?.evaluationLedger || (hydrated ? legacyEvaluationRows() : []);
   const submittedStore = evaluationLedgerMode === 'replace'
     ? store
     : {
         ...store,
-        evaluationLedger: mergeEvaluationRows(cache?.evaluationLedger || [], store?.evaluationLedger || []),
+        evaluationLedger: mergeEvaluationRows(existingEvidence, store?.evaluationLedger || []),
       };
   cache = submittedStore;
   const run = enqueueWrite(async()=> {
@@ -429,6 +440,7 @@ export function setCachedStore(store, { persist = persistStore, evaluationLedger
       const committed = await persist(submittedStore, { baseStore: durableBase });
       lastDurableStore = committed;
       if(cache === submittedStore) cache = committed;
+      try{ localStorage.removeItem(LEGACY_EVALUATION_KEY); }catch{}
       notifyStoreCommitted('store-write');
       return committed;
     }catch(err){
