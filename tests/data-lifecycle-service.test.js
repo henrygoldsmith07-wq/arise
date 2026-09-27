@@ -16,6 +16,17 @@ describe('data lifecycle service', ()=>{
     assert.deepEqual(calls, ['persisted', 'cleared']);
   });
 
+  it('still clears device data when the prior persistence queue already failed', async ()=>{
+    const calls = [];
+    const service = createDataLifecycleService({
+      awaitPersistence: async ()=> { calls.push('persist-failed'); throw new Error('quota'); },
+      clearAll: async ()=> { calls.push('cleared'); },
+    });
+
+    await service.clearDeviceData();
+    assert.deepEqual(calls, ['persist-failed', 'cleared']);
+  });
+
   it('owns integrity notice and persistent-storage browser operations', async ()=>{
     let notice = { errors:['bad row'] };
     const service = createDataLifecycleService({
