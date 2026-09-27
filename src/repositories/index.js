@@ -321,6 +321,7 @@ export function createRecommendationLedgerRepository(){
     async save(records){
       await requireStore();
       saveEvaluationLedger(records);
+      await whenPersisted();
       return true;
     },
 
@@ -328,6 +329,7 @@ export function createRecommendationLedgerRepository(){
       await requireStore();
       const merged = mergeEvaluationLedgers(loadEvaluationLedger(), incoming);
       saveEvaluationLedger(merged);
+      await whenPersisted();
       return merged;
     },
 
