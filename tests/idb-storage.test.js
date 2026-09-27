@@ -1,8 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { getCachedStore, hydrateStorage, loadStoreFromIdb, persistStore, setCachedStore, whenPersisted } from '../src/lib/storage.js';
+import { clearAllStoredData, getCachedStore, hydrateStorage, loadStoreFromIdb, persistStore, setCachedStore, whenPersisted } from '../src/lib/storage.js';
 import { idbGetAll } from '../src/lib/idb.js';
 import { loadStore, saveStore, STORE_SCHEMA_VERSION } from '../src/lib/store.js';
+import { loadEvaluationLedger, saveEvaluationLedger } from '../src/lib/longitudinal.js';
 
 function set(reps, kg){ return { reps:String(reps), weightKg:String(kg), rpe:'' }; }
 function fullStore(){
@@ -99,6 +100,71 @@ describe('indexeddb canonical storage', ()=>{
     await whenPersisted();
   });
 
+  it('bases a queued recovery write on the last durable snapshot after the previous write fails', async ()=>{
+    await hydrateStorage();
+    const durable = getCachedStore();
+    const firstSnapshot = { ...durable, preferences:{ ...(durable.preferences || {}), theme:'light' } };
+    let rejectFirst;
+    const firstGate = new Promise((_, reject)=> { rejectFirst = reject; });
+    const first = setCachedStore(firstSnapshot, { persist:async()=> firstGate });
+
+    const secondSnapshot = {
+      ...firstSnapshot,
+      onboarding:{ ...(firstSnapshot.onboarding || {}), goal:'strength' },
+    };
+    let seenBase = null;
+    const second = setCachedStore(secondSnapshot, {
+      persist:async(store, { baseStore })=> {
+        seenBase = baseStore;
+        return store;
+      },
+    });
+
+    rejectFirst(new Error('first write failed'));
+    await assert.rejects(first, /first write failed/);
+    const committed = await second;
+    await whenPersisted();
+
+    assert.equal(seenBase, durable, 'the failed optimistic snapshot must never become the next merge base');
+    assert.equal(committed.preferences.theme, 'light');
+    assert.equal(committed.onboarding.goal, 'strength');
+
+    await setCachedStore(durable, { persist:async(store)=> store, evaluationLedgerMode:'replace' });
+    await whenPersisted();
+  });
+
+  it('uses the hydrated IndexedDB-backed ledger as the default live evidence store', async ()=>{
+    await hydrateStorage();
+    const base = getCachedStore();
+    const row = { id:'canonical-evidence', exerciseId:'push-up', recommendation:{ reps:10 }, outcome:null };
+    saveEvaluationLedger([row]);
+    await whenPersisted();
+
+    assert.equal(loadEvaluationLedger()[0].id, 'canonical-evidence');
+    const recommendations = await idbGetAll('recommendations');
+    assert.ok(recommendations.some(record=> record.id === 'canonical-evidence'));
+
+    saveEvaluationLedger(base.evaluationLedger || []);
+    await whenPersisted();
+  });
+
+  it('preserves newer evidence during ordinary saves but permits an explicit replacement', async ()=>{
+    await hydrateStorage();
+    const base = getCachedStore();
+    const evidence = [...(base.evaluationLedger || []), { id:'sticky-evidence', exerciseId:'plank', recommendation:{ reps:30 }, outcome:null }];
+    await setCachedStore({ ...base, evaluationLedger:evidence }, { persist:async(store)=> store, evaluationLedgerMode:'replace' });
+
+    const staleUiSnapshot = { ...base, preferences:{ ...(base.preferences || {}), theme:'dark' } };
+    await setCachedStore(staleUiSnapshot, { persist:async(store)=> store });
+    assert.ok(getCachedStore().evaluationLedger.some(row=> row.id === 'sticky-evidence'));
+
+    await setCachedStore({ ...getCachedStore(), evaluationLedger:[] }, { persist:async(store)=> store, evaluationLedgerMode:'replace' });
+    assert.equal(getCachedStore().evaluationLedger.length, 0);
+
+    await setCachedStore(base, { persist:async(store)=> store, evaluationLedgerMode:'replace' });
+    await whenPersisted();
+  });
+
   it('without hydration, store.js keeps its legacy synchronous path', async ()=>{
     delete globalThis.localStorage;
     const s = loadStore(); // falls back to DEFAULT — no crash
@@ -107,5 +173,26 @@ describe('indexeddb canonical storage', ()=>{
     await whenPersisted();
     const recomposed = await loadStoreFromIdb();
     assert.ok(recomposed, 'the {version:6} shell persisted through the memory backend');
+  });
+
+  it('removes legacy live and archived evidence keys during a verified clear', async ()=>{
+    globalThis.localStorage = { _m:{}, getItem(k){ return k in this._m ? this._m[k] : null; }, setItem(k,v){ this._m[k]=String(v); }, removeItem(k){ delete this._m[k]; } };
+    globalThis.localStorage.setItem('arise.evaluation.v1', 'legacy');
+    globalThis.localStorage.setItem('arise.evaluation.v1.archive', 'legacy-archive');
+    await clearAllStoredData({ transaction:async()=>{} });
+    assert.equal(globalThis.localStorage.getItem('arise.evaluation.v1'), null);
+    assert.equal(globalThis.localStorage.getItem('arise.evaluation.v1.archive'), null);
+  });
+
+  it('rejects a destructive clear when fallback clearing cannot be verified', async ()=>{
+    await assert.rejects(
+      clearAllStoredData({
+        transaction:async()=> { throw new Error('transaction failed'); },
+        clearStore:async()=>{},
+        readAll:async(store)=> store === 'sessions' ? [{ id:'still-here' }] : [],
+      }),
+      /Could not verify.*not empty: sessions/,
+    );
+    delete globalThis.localStorage;
   });
 });
