@@ -8,9 +8,9 @@
 // Hard rules enforced here:
 //   1. Consent: nothing is recorded unless the user enabled local measurements
 //      (preferences.telemetryEnabled === true).
-//   2. Separation: the evaluation ledger lives under its own storage key and is
-//      NEVER fed into recommendNext or any training-history consumer. Training
-//      history (store.history) and evaluation history stay apart.
+//   2. Separation: the evaluation ledger is its own canonical IndexedDB-backed
+//      domain and is NEVER fed into recommendNext or any training-history
+//      consumer. Training history and evaluation history stay logically apart.
 //   3. No future leakage: a record snapshots the recommendation and the basis
 //      (visible session count, priors version) at record time. Analysis reads
 //      the stored recommendation; it never recomputes one from later data.
@@ -114,6 +114,7 @@ export function saveEvaluationLedger(records, storage = defaultStorage()){
 
 export function clearEvaluationLedger(storage = defaultStorage()){
   try{ storage?.removeItem?.(EVALUATION_KEY); }catch{}
+  try{ storage?.removeItem?.(`${EVALUATION_KEY}.archive`); }catch{}
 }
 
 // Union two ledgers by record id. A resolved record (outcome attached) beats
