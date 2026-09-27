@@ -22,6 +22,9 @@
 
 import { recommendNext, e1rm, trainingAgeInfo, strategyForExercise } from './progression.js';
 import { resolveArisePriors } from './priors.js';
+import { STUDY_DESIGN } from './studyDesign.js';
+export { STUDY_DESIGN } from './studyDesign.js';
+import { DAY_MS, daysBetweenDateOnly, parseDateOnlyUTC } from './dateOnly.js';
 import { EXERCISE_BY_ID, equipmentClassFor } from './data.js';
 
 export const STUDY_ARMS = ['arise', 'double-progression', 'linear-progression', 'fixed-rules', 'flat'];
@@ -151,17 +154,7 @@ export function computeArms({ exerciseId, history, targetReps = '8–12', asOfDa
 // Frozen before any efficacy look. Deterministic: same ids + seed → same
 // assignment, forever.
 
-export const STUDY_DESIGN = Object.freeze({
-  designVersion: 1,
-  unitOfAssignment: 'exercise',
-  arms: { arise: 'adaptive engine', 'double-progression': 'evidence-based simple baseline' },
-  secondaryArms: ['linear-progression'],
-  excludedFromPrimary: ['flat', 'fixed-rules'],
-  primaryEndpoint: 'appropriately achieved progression targets over repeated exposures (metTarget AND changePct > meaningful gain)',
-  secondaryEndpoints: ['targetAchievementRate','avoidable target misses','regression rate','stall rate','unnecessary conservatism','failed-set rate','adherence','programme continuation'],
-  analysis: 'intention-to-treat by assigned arm; participant-clustered bootstrap for uncertainty; minimum sample gates; subgroups prespecified only (readiness low/high, equipment class)',
-  contaminationNote: 'both arms train within the same participant; whole-body fatigue carryover is shared and cannot be removed — exercise-level balance mitigates movement-specific drift.',
-});
+
 
 function hashSeed(str){
   let h = 2166136261;
@@ -294,13 +287,12 @@ export const RETROSPECTIVE_SCOPE = {
 // older than the lookback window is stale. Never absolute distance.
 function readinessWithProvenance(readinessByTime, asOfDateISO){
   let best = null;
-  let end = NaN;
-  try{ end = Date.parse(`${asOfDateISO}T00:00:00Z`); }catch{ end = NaN; }
+  const end = parseDateOnlyUTC(asOfDateISO);
   if(!Number.isFinite(end)) return null;
   for(const [dateISO, score] of readinessByTime){
     if(!Number.isFinite(score)) continue;
-    const time = Date.parse(`${dateISO}T00:00:00Z`);
-    if(time > end || end - time > 3 * 86400000) continue;
+    const time = parseDateOnlyUTC(dateISO);
+    if(time > end || end - time > 3 * DAY_MS) continue;
     if(!best || time >= best.time){ best = { score, observedAt: dateISO, time }; }
   }
   return best;
@@ -345,7 +337,7 @@ export function runComparativeStudy(history, { config = null, targetRepsFor = nu
       // achieved reps decide which segment that outcome is scored in.
       const medianReps = [...exposures.slice(0, i).map(e => e.best.reps)].sort((a,b)=>a-b)[Math.floor(i / 2)];
       const repRange = medianReps <= 5 ? 'low(≤5)' : medianReps <= 8 ? 'mid(6–8)' : 'high(≥9)';
-      const gapDays = Math.round((Date.parse(`${exposures[i].session.dateISO}T00:00:00Z`) - Date.parse(`${exposures[i-1].session.dateISO}T00:00:00Z`)) / 86400000);
+      const gapDays = daysBetweenDateOnly(exposures[i - 1].session.dateISO, exposures[i].session.dateISO);
       const freqBucket = gapDays <= 2 ? '≤2d' : gapDays <= 3 ? '3d' : gapDays <= 6 ? '4–6d' : '≥7d';
       const rMeta = readinessAtOrBefore(exposures[i].session.dateISO);
       const rScore = rMeta ? rMeta.score : null;

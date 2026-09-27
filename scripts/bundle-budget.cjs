@@ -125,6 +125,13 @@
 // The generator dependency is declared and CI checks the committed registry is
 // reproducible. Measured total 364.9 kB; boot/largest-lazy are unchanged.
 //
+// analytics worker 47.2 → 10.5 kB after making its evaluation input explicit:
+// the main thread now passes the ledger (workers cannot read localStorage), and
+// the worker imports only pure evaluation aggregation instead of the full
+// recommendation-recording/study graph. Total measured 327.9 kB and the
+// largest lazy chunk is now MoreView at 31.8 kB. Lock in that recovered
+// headroom rather than spending it immediately.
+//
 // The budgets are regression bounds with headroom, not aspirations: a change
 // that crosses one must either undo the bloat or consciously re-baseline here
 // and say why in the PR.
@@ -140,8 +147,8 @@ if(!fs.existsSync(dist)){
 }
 
 const BOOT_BUDGET_KB = 197;
-const CHUNK_BUDGET_KB = 48;
-const TOTAL_BUDGET_KB = 367;
+const CHUNK_BUDGET_KB = 34;
+const TOTAL_BUDGET_KB = 335;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

@@ -20,7 +20,8 @@
 import { resolveArisePriors } from './priors.js';
 import { EXERCISE_BY_ID, equipmentClassFor } from './data.js';
 import { movementPatternFor } from './substitutions.js';
-import { computeArms, STUDY_DESIGN } from './study.js';
+import { computeArms } from './study.js';
+import { STUDY_DESIGN } from './studyDesign.js';
 import { STUDY_VERSION } from './studyEnrollment.js';
 import { EVALUATION_SCHEMA_VERSION, EVALUATION_KEY, round, parseReps, e1rm, bestSetOfBlock, hasConsent, classifyRecommendationOutcome } from './longitudinalCore.js';
 export { EVALUATION_SCHEMA_VERSION, wilsonInterval, EVALUATION_KEY, hasConsent } from './longitudinalCore.js';
@@ -28,6 +29,8 @@ export { RECOMMENDATION_OUTCOME_LABELS, isProspectiveRecord, confidenceBandOf, r
 import { withProvenance } from './domain.js';
 import { getDeviceId } from './exportPolicy.js';
 import { evaluateLongitudinal, calibrateRecommendations, prospectiveFieldComparison } from './evaluation.js';
+import { trainingAgeInfo } from './progressionTrainingAge.js';
+import { summarizeEvaluationLedger } from './evaluationSummary.js';
 export { evaluateLongitudinal, calibrateRecommendations, clusteredBootstrapDifference, clusteredBootstrapWinRate } from './evaluation.js';
 export function markRecommendationOverride({ exerciseId, dueDateISO = null, storage = defaultStorage() } = {}){
   const ledger = loadEvaluationLedger(storage);
@@ -90,20 +93,6 @@ export function mergeEvaluationLedgers(current = [], incoming = []){
 // re-exported here for existing import sites.
 export { equipmentClassFor };
 
-function trainingAgePhase(history, asOfDateISO, config){
-  // Local re-implementation to avoid importing progression.js (which would risk
-  // pulling evaluation data into training logic — separation rule #2).
-  const cfg = resolveArisePriors(config).progression.trainingAge;
-  const end = asOfDateISO ? Date.parse(`${asOfDateISO}T00:00:00`) : Date.now();
-  const dates = (history || []).map(h=> Date.parse(`${h?.dateISO || ''}T00:00:00`))
-    .filter(t=> Number.isFinite(t) && t <= end).sort((a, b)=> a - b);
-  if(!dates.length) return 'unknown';
-  const months = Math.max(0, (end - dates[0]) / (resolveArisePriors(config).progression.daysPerMonth * 86400000));
-  if(months < cfg.noviceMaxMonths) return 'novice';
-  if(months < cfg.intermediateMaxMonths) return 'intermediate';
-  return 'advanced';
-}
-
 // ── Recording (prospective) ─────────────────────────────────────────────
 
 
@@ -160,7 +149,7 @@ export function recordRecommendation({ exerciseId, recommendation, history = [],
   const visibleHistory = dueDateISO
     ? (history || []).filter(h=> String(h?.dateISO || '') <= String(dueDateISO))
     : (history || []);
-  const phase = trainingAgePhase(visibleHistory, dueDateISO, config);
+  const phase = trainingAgeInfo(visibleHistory, { asOfDateISO:dueDateISO, config }).phase;
   const previous = lastExposureBest(visibleHistory, exerciseId, dueDateISO);
   const priors = resolveArisePriors(config);
   let arms = null;
@@ -454,9 +443,8 @@ export function attachOutcome({ sessionId, dateISO, blocks = [], historyBefore =
 
 
 export function longitudinalSummary({ preferences = null, config = null, storage = defaultStorage() } = {}){
-  if(!hasConsent(preferences)) return { consented: false, evaluation: null, calibration: null, fieldComparison: null };
   const ledger = loadEvaluationLedger(storage);
-  return { consented: true, evaluation: evaluateLongitudinal(ledger, { config }), calibration: calibrateRecommendations(ledger, { config }), fieldComparison: prospectiveFieldComparison(ledger, { config }) };
+  return summarizeEvaluationLedger({ ledger, preferences, config });
 }
 
 // ── Substitution quality validation ─────────────────────────────────────

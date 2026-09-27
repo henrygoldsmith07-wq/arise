@@ -28,7 +28,7 @@ import { mergeStores } from './export.js';
 import { isValidAssignedStudyTransition, evaluateStudyReadiness, STUDY_GATES, PRIMARY_STUDY_ARMS } from './studyReadiness.js';
 import { prospectiveTransitionKey } from './evaluation.js';
 import { createHash } from 'node:crypto';
-import { localDateISO } from './dateOnly.js';
+import { daysBetweenDateOnly, localDateISO } from './dateOnly.js';
 
 const round = (v, d = 3)=> Number.isFinite(Number(v)) ? Math.round(Number(v) * 10 ** d) / 10 ** d : null;
 const pct = (part, whole)=> whole ? round(part / whole) : null;
@@ -55,10 +55,7 @@ function todayISO(nowISO = null){
 }
 
 function daysBetween(fromISO, toISO){
-  const a = Date.parse(`${fromISO}T00:00:00Z`);
-  const b = Date.parse(`${toISO}T00:00:00Z`);
-  if(!Number.isFinite(a) || !Number.isFinite(b)) return null;
-  return Math.round((b - a) / 86400000);
+  return daysBetweenDateOnly(fromISO, toISO);
 }
 
 // ── Ingestion: repeated exports → one participant, anomalies → warnings ──

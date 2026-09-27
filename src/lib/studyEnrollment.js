@@ -1,6 +1,6 @@
-// studyEnrollment.js — turns STUDY_DESIGN into the treatment users receive.
+// studyEnrollment.js — turns the frozen STUDY_DESIGN into the treatment users receive.
 //
-// Randomised trial, exercise-level assignment (see STUDY_DESIGN in study.js):
+// Randomised trial, exercise-level assignment (see studyDesign.js):
 //   - consented participants are enrolled under their pseudonymous
 //     studyParticipantId;
 //   - every scheduled exercise is assigned ARISE or DOUBLE-PROGRESSION with
@@ -13,7 +13,7 @@
 // The assigned arm's prescription is what the product displays and logs.
 // Everything else frozen in the ledger remains SHADOW analysis.
 
-import { STUDY_DESIGN } from './study.js';
+import { STUDY_DESIGN } from './studyDesign.js';
 import { resolveArisePriors } from './priors.js';
 
 export const STUDY_VERSION = 1;

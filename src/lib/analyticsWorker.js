@@ -13,7 +13,7 @@
 // (tests, old browsers) the same function runs inline — the caller's
 // contract is identical, only the timing differs (promise vs sync).
 
-import { longitudinalSummary } from './longitudinal.js';
+import { loadEvaluationLedger, longitudinalSummary } from './longitudinal.js';
 
 let worker = null;
 let seq = 0;
@@ -53,13 +53,15 @@ function getWorker(){
  * as "best available evaluation" without try/catch.
  */
 export async function longitudinalSummaryAsync({ preferences = null, config = null } = {}){
+  // Workers cannot read localStorage. Capture the ledger on the main thread.
+  const ledger = loadEvaluationLedger();
   const w = getWorker();
   if(w){
     const id = ++seq;
     try{
       const result = await new Promise((resolve, reject)=> {
         pending.set(id, { resolve, reject });
-        w.postMessage({ id, payload: { preferences, config } });
+        w.postMessage({ id, payload: { ledger, preferences, config } });
       });
       return result;
     }catch{

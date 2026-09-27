@@ -47,13 +47,18 @@ the "today" columns are stale — the architecture gate is still accurate).
 - Repository/release integrity: Node-24-compatible GitHub Actions, PR/status
   protection for `main`, tag provenance back to a successful `main` CI run,
   and release-time browser/PWA/bundle revalidation
+- Multi-peer WebDAV registry: bounded peer-device last-seen/write metadata is
+  recorded from the shared encrypted payload and shown in Sync status
+- Progression architecture: training-age policy and prescription/set-identity/
+  swap mechanics extracted behind the existing `progression.js` API
+- Evidence worker integrity: the main thread explicitly sends the evaluation
+  ledger into the worker; its pure bundle is ~10.5 kB gzip instead of ~47.2 kB
 
 ## Next (planned)
 
 | Item | Why now | Gate |
 |---|---|---|
 | First cohort of consented field-study participants | onboarding, lifecycle and the operations tooling all ship; the study now needs people | participant recruitment + the analysis gates in `docs/EVIDENCE.md` |
-| Multi-peer sync registry | per-device registry over the single remote payload | sync already ships; this is the documented extension |
 
 ## Public backlog (unclaimed, roughly ordered)
 

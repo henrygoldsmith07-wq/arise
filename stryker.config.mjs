@@ -2,10 +2,12 @@ export default {
   mutate: [
     'src/lib/storeReconcile.js',
     'src/lib/runnerRecommendations.js',
+    'src/lib/dateOnly.js',
+    'src/lib/progressionTrainingAge.js',
   ],
   testRunner: 'command',
   commandRunner: {
-    command: 'node --test tests/cross-tab-store.test.js tests/runner-recommendations.test.js',
+    command: 'node --test tests/cross-tab-store.test.js tests/runner-recommendations.test.js tests/date-statistics.test.js tests/progression-training-age.test.js tests/validation.test.js',
   },
   coverageAnalysis: 'off',
   concurrency: 2,
