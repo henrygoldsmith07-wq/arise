@@ -301,29 +301,64 @@ export function getCachedStore(){
 // flush on visibilitychange/beforeunload to shrink the data-loss window.
 let writeQueue = Promise.resolve();
 const pendingWrites = new Set();
+let persistenceError = null;
 function enqueueWrite(fn){
   if(cleared) return Promise.resolve();
-  const run = writeQueue.then(()=> { if(cleared) return undefined; return fn(); });
-  const tracked = run.catch(()=>{});
-  pendingWrites.add(tracked);
-  void tracked.finally(()=> pendingWrites.delete(tracked));
-  writeQueue = tracked;
+  const run = writeQueue.then(async()=> {
+    if(cleared) return undefined;
+    try{
+      const result = await fn();
+      persistenceError = null;
+      return result;
+    }catch(err){
+      persistenceError = err instanceof Error ? err : new Error(String(err || 'Storage write failed.'));
+      throw persistenceError;
+    }
+  });
+  // Keep the serialization chain alive after a failed write so a later retry
+  // can still commit. The original promise remains rejecting for callers that
+  // explicitly await durability.
+  writeQueue = run.catch(()=>{});
+  pendingWrites.add(run);
+  void run.finally(()=> pendingWrites.delete(run)).catch(()=>{});
   return run;
 }
-export function whenPersisted(){
-  return Promise.all([...pendingWrites]).then(()=>{});
+export async function whenPersisted(){
+  // A caller may enqueue another write while the current queue is draining.
+  // Follow the queue until it is stable, then surface the latest durable-write
+  // failure instead of converting it into a false success.
+  let observed;
+  do{
+    observed = writeQueue;
+    await observed;
+  }while(observed !== writeQueue);
+  if(persistenceError) throw persistenceError;
 }
-export function setCachedStore(store){
+export function setCachedStore(store, { persist = persistStore } = {}){
   const baseStore = cache;
   cache = store;
-  void enqueueWrite(async()=> {
-    const committed = await persistStore(store, { baseStore });
-    // Do not replace a newer local snapshot that was submitted while this
-    // queued write was awaiting IDB. The next queued write will reconcile from
-    // the committed canonical state using its own base snapshot.
-    if(cache === store) cache = committed;
-    notifyStoreCommitted('store-write');
+  const run = enqueueWrite(async()=> {
+    try{
+      const committed = await persist(store, { baseStore });
+      // Do not replace a newer local snapshot that was submitted while this
+      // queued write was awaiting IDB. The next queued write will reconcile from
+      // the committed canonical state using its own base snapshot.
+      if(cache === store) cache = committed;
+      notifyStoreCommitted('store-write');
+      return committed;
+    }catch(err){
+      // If no newer local snapshot superseded this one, roll the synchronous
+      // cache back to the last known durable base. A failed workout save must
+      // never make an unsaved completed state look canonical in this tab.
+      if(cache === store) cache = baseStore;
+      throw err;
+    }
   });
+  // Most UI writes intentionally remain fire-and-forget. Attach a handler so
+  // those callers do not create unhandled rejections; explicit callers can
+  // still await the returned promise or whenPersisted() and observe failure.
+  void run.catch(()=>{});
+  return run;
 }
 
 // Shrink the data-loss window: a save is async and a user can close the tab
