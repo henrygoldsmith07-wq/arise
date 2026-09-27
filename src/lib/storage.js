@@ -35,6 +35,7 @@ const READINESS_ID = 'log';
 
 let cache = null;          // hydrated monolithic store
 let lastDurableStore = null; // most recent snapshot known to have committed to IndexedDB
+let hydrated = false;
 let hydratePromise = null;
 const LEGACY_EVALUATION_KEY = 'arise.evaluation.v1';
 const LEGACY_EVALUATION_ARCHIVE_KEY = `${LEGACY_EVALUATION_KEY}.archive`;
@@ -276,6 +277,7 @@ export function hydrateStorage(){
     }
     cache = store || undefined;
     lastDurableStore = store || null;
+    hydrated = true;
     return cache || null;
   })();
   return hydratePromise;
@@ -292,6 +294,7 @@ export function clearIntegrityNotice(){ integrityNotice = null; }
 export function resetHydratedCache(){
   cache = undefined;
   lastDurableStore = null;
+  hydrated = false;
   hydratePromise = null;
   integrityNotice = null;
   persistenceError = null;
@@ -365,6 +368,7 @@ export function isCleared(){ return cleared; }
 export function getCachedStore(){
   return cache ?? null;
 }
+export function isStorageHydrated(){ return hydrated; }
 
 // Writes are serialized (a clear-then-put storm from a fast save must never
 // interleave with the next save's) and tracked, so callers — and tests — can
