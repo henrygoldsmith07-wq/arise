@@ -51,6 +51,8 @@ describe('domain schemas and branded IDs', ()=>{
 
   it('rejects sessions with unparseable dates or broken blocks', ()=>{
     assert.equal(sessionSchema.safeParse({ id:'x', dateISO:'not-a-date', blocks:[] }).success, false);
+    assert.equal(sessionSchema.safeParse({ id:'x', dateISO:'2026-02-31', blocks:[] }).success, false);
+    assert.equal(sessionSchema.safeParse({ id:'x', dateISO:'2026-01-05T12:00:00Z', blocks:[] }).success, false);
     assert.equal(sessionSchema.safeParse({ id:'x', dateISO:'2026-01-05', blocks:[{ sets:[] }] }).success, false);
   });
 
