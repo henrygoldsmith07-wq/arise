@@ -31,25 +31,24 @@ export async function syncDown(currentStore, adapter, strategy="merge"){
   return mergeStoresWithConflicts(currentStore, imported);
 }
 
-const studyActive = s => Boolean(s?.studyEnrollment) || ['enrolled','withdrawn'].includes(s?.studyStatus);
-const enrollmentSignature = e => e && JSON.stringify([
-  e.studyVersion||null,
-  Object.entries(e.assignments||{}).sort(([a],[b])=>a.localeCompare(b)).map(([id,v])=>[id,v?.arm||null]),
-]);
+const studyActive = s => Boolean(s?.studyEnrollment) || s?.studyStatus==='enrolled' || s?.studyStatus==='withdrawn';
+const armSignature = e => e && JSON.stringify(Object.entries(e.assignments||{})
+  .sort(([a],[b])=>a.localeCompare(b)).map(([id,v])=>[id,v?.arm||null]));
 
 function resolveStudySyncState(current, imported){
   const a=current?.studyParticipantId||null, b=imported?.studyParticipantId||null;
   const aa=studyActive(current), ba=studyActive(imported);
-  if(a && b && a!==b && aa && ba) throw new Error('Sync study-profile conflict: different active participants share this WebDAV path.');
+  if(a && b && a!==b && aa && ba) throw new Error('Sync study-profile conflict: different active participants.');
   const id=a===b ? a : aa ? a : ba ? b : [a,b].filter(Boolean).sort()[0]||null;
   const matches=[current,imported].filter(s=>!s?.studyParticipantId || s.studyParticipantId===id);
   const enrollments=matches.map(s=>s?.studyEnrollment).filter(Boolean);
-  if(enrollments[1] && enrollmentSignature(enrollments[0])!==enrollmentSignature(enrollments[1])){
-    throw new Error('Sync study-enrollment conflict: frozen assignments differ.');
+  if(enrollments[1] && armSignature(enrollments[0])!==armSignature(enrollments[1])){
+    throw new Error('Sync study-enrollment conflict: frozen arms differ.');
   }
-  const statuses=matches.filter(s=>s?.studyStatus);
-  const statusSource=statuses.length<2 ? statuses[0] : statuses.reduce((latest,s)=>
-    (Date.parse(s.studyStatusChangedAtISO||'')||0) >= (Date.parse(latest.studyStatusChangedAtISO||'')||0) ? s : latest);
+  const statusSource=matches.reduce((latest,s)=>{
+    if(!s?.studyStatus) return latest;
+    return !latest || String(s.studyStatusChangedAtISO||'')>=String(latest.studyStatusChangedAtISO||'') ? s : latest;
+  }, null);
   const studyStatus=statusSource?.studyStatus || (enrollments.length ? 'enrolled' : null);
   return {
     studyParticipantId:id,
