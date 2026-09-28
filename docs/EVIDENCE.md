@@ -54,8 +54,8 @@ the identical prior-only slice.
 ## Where the numbers live
 
 - Retrospective replay: `benchmark/study.js` (five arms, synthetic corpus).
-- Prospective ledger: on-device `arise.evaluation.v1` storage, exported in
-  backups, pooled in the field-study report under "Ledger arm:" rows.
+- Prospective ledger: canonical on-device IndexedDB recommendation/outcome stores, exported in
+  backups and pooled in the field-study report under "Ledger arm:" rows. Older `arise.evaluation.v1` localStorage data is migration-only.
 - Study protocol: frozen via `buildStudyProtocol()` and printed into every
   field report — policy version, arms, inclusion criteria, outcomes,
   statistics rules.
