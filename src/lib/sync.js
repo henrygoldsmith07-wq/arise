@@ -4,17 +4,12 @@
 // WebDAV ingestion is trusted Arise-to-Arise transport: it preserves recorded
 // evidence provenance while still stripping device-local consent/credentials.
 
-import { buildExportPayload, parseImportFile, mergeStores } from "./export.js";
+import { parseImportFile, mergeStores } from "./export.js";
 import { STORE_SCHEMA_VERSION, mergeCustomTemplates } from "./store.js";
 import { mergeEvaluationLedgers } from "./longitudinal.js";
 import { applyTombstones, isTombstone } from "./domain.js";
 
 
-export async function syncUp(store, adapter){
-  const payload = buildExportPayload(store);
-  await adapter.push(payload);
-  return payload;
-}
 
 export async function syncDown(currentStore, adapter, strategy="merge"){
   if(!adapter?.pull) return currentStore;
