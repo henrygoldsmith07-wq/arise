@@ -2,7 +2,8 @@
 // No cloud sync; the user owns the file.
 
 import { runMigrations, STORE_SCHEMA_VERSION, mergeCustomTemplates, normaliseHistory } from './store.js';
-import { mergeEvaluationLedgers } from './longitudinal.js';
+import { getEventHistory } from './telemetry.js';
+import { loadEvaluationLedger, mergeEvaluationLedgers } from './longitudinal.js';
 import { ensureStudyParticipantId } from './studyIdentity.js';
 import { buildEnvelope, applyFieldPolicy, EXPORT_VERSION } from './exportPolicy.js';
 import { withProvenance, ensureSourceTags, importLedgerProvenance } from './domain.js';
@@ -27,8 +28,9 @@ export function storeWithLiveCollections(store){
 }
 
 export function buildExportPayload(store, useStoreCollections = false){
-  const source=useStoreCollections ? store : storeWithLiveCollections(store);
-  const data={ ...source, version: source.version || STORE_SCHEMA_VERSION };
+  const eventHistory=useStoreCollections ? (store?.eventHistory||[]) : getEventHistory();
+  const evaluationLedger=useStoreCollections ? (store?.evaluationLedger||[]) : loadEvaluationLedger();
+  const data={ ...store, version:store.version || STORE_SCHEMA_VERSION, eventHistory, evaluationLedger };
   // Credential hygiene: never let device-local sync config ride along.
   if(data.preferences) data.preferences = stripDeviceLocalPrefs(data.preferences);
   // A full backup also contributes to the study: carry the exportedAt FACT
@@ -59,9 +61,8 @@ const PARTIAL_KEYS = {
 export function buildPartialExportPayload(store, kind){
   const keys = PARTIAL_KEYS[kind];
   if(!keys) throw new Error(`Unknown partial export kind: ${kind}`);
-  const source=kind==='events' ? storeWithLiveCollections(store) : store;
   const slice = {};
-  for(const key of keys) slice[key] = source?.[key] ?? null;
+  for(const key of keys) slice[key] = key==='eventHistory' ? getEventHistory() : store?.[key] ?? null;
   if(slice.preferences) slice.preferences = stripDeviceLocalPrefs(slice.preferences);
   return buildEnvelope({
     payload: slice,
