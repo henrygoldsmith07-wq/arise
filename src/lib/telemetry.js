@@ -2,7 +2,7 @@
 // Nothing leaves the device here; Pulse and health sharing have separate consent.
 
 import { STORE_SCHEMA_VERSION, KEY as STORE_KEY } from './store.js';
-import { readCanonicalLedger, replaceCanonicalLedger, clearCanonicalLedger } from './evaluationLedgerBridge.js';
+import { readCanonicalValue, readCanonicalLedger, replaceCanonicalLedger, clearCanonicalLedger } from './evaluationLedgerBridge.js';
 
 const KEY = 'arise.telemetry.v2';
 const LEGACY_KEY = 'arise.telemetry.v1';
@@ -49,13 +49,17 @@ function saveEvents(events){
   }catch{ return false; }
 }
 
-function hasConsent(essential=false){
-  if(essential) return true;
+function preferences(){
+  const canonical=readCanonicalValue('preferences');
+  if(canonical) return canonical;
   try{
     const raw=localStorage.getItem(STORE_KEY);
-    const store=raw ? JSON.parse(raw) : null;
-    return store?.preferences?.telemetryEnabled === true;
-  }catch{ return false; }
+    return raw ? JSON.parse(raw)?.preferences || {} : {};
+  }catch{ return {}; }
+}
+
+function hasConsent(essential=false){
+  return essential || preferences().telemetryEnabled === true;
 }
 
 // ── Granular consent ─────────────────────────────────────────────────────────
@@ -68,12 +72,8 @@ function hasConsent(essential=false){
 export const TELEMETRY_OPTIONS = ['errorDiagnostics', 'sessionTimings'];
 
 function granularOptions(){
-  try{
-    const raw=localStorage.getItem(STORE_KEY);
-    const store=raw ? JSON.parse(raw) : null;
-    const o=store?.preferences?.telemetryOptions || {};
-    return { errorDiagnostics: o.errorDiagnostics === true, sessionTimings: o.sessionTimings === true };
-  }catch{ return { errorDiagnostics: false, sessionTimings: false }; }
+  const o=preferences().telemetryOptions || {};
+  return { errorDiagnostics:o.errorDiagnostics===true, sessionTimings:o.sessionTimings===true };
 }
 
 export function hasTelemetryOption(option){
