@@ -8,6 +8,8 @@ import { ensureStudyParticipantId } from './studyIdentity.js';
 import { buildEnvelope, applyFieldPolicy, EXPORT_VERSION } from './exportPolicy.js';
 import { withProvenance, ensureSourceTags, importLedgerProvenance } from './domain.js';
 import { isDateOnly } from './dateOnly.js';
+import { readCanonicalEventHistory } from './eventLedgerBridge.js';
+import { readCanonicalEvaluationLedger } from './evaluationLedgerBridge.js';
 
 export { EXPORT_VERSION };
 
@@ -21,8 +23,14 @@ export function stripDeviceLocalPrefs(preferences){
 }
 
 export function storeWithLiveCollections(store){
-  const eventHistory = getEventHistory();
-  const evaluationLedger = loadEvaluationLedger();
+  const canonicalEvents = readCanonicalEventHistory();
+  const canonicalLedger = readCanonicalEvaluationLedger();
+  // Pure tools/tests may supply a complete store without hydrating storage;
+  // in that case the bridge returns null and the explicit collections remain
+  // authoritative. In the app, a hydrated bridge always wins over a lagging
+  // React snapshot, including the intentional empty-after-clear state.
+  const eventHistory = canonicalEvents !== null ? canonicalEvents : (store?.eventHistory || []);
+  const evaluationLedger = canonicalLedger !== null ? canonicalLedger : (store?.evaluationLedger || []);
   const currentEvents = store?.eventHistory || [];
   const currentLedger = store?.evaluationLedger || [];
   const sameEvents = currentEvents.length === eventHistory.length
