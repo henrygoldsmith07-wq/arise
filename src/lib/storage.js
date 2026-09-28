@@ -547,6 +547,10 @@ export function setCachedStore(store, { persist = persistStore, collectionMode =
   return run;
 }
 
+bindCanonicalLedger('preferences', {
+  read(){ return cache?.preferences || null; },
+});
+
 bindCanonicalLedger('evaluation', {
   read(){
     return cache ? [...(cache.evaluationLedger || [])] : null;
