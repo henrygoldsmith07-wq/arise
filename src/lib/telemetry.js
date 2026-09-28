@@ -6,7 +6,7 @@ import {
   readCanonicalEventHistory,
   replaceCanonicalEventHistory,
   clearCanonicalEventHistory,
-} from './eventLedgerBridge.js';
+} from './evaluationLedgerBridge.js';
 
 const KEY = 'arise.telemetry.v2';
 const LEGACY_KEY = 'arise.telemetry.v1';
