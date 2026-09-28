@@ -77,7 +77,6 @@ export function pushLog(logs, entry){
 /** Queue an item for later push (offline, or a failed cycle). Pure. */
 export function enqueueOffline(config, reason){
   const cfg = normalizeSyncConfig(config);
-  const localStore = storeWithLiveCollections(store || {});
   const queue = [...cfg.queue, { at: new Date().toISOString(), reason, attempts: 0, nextAttemptAt: null }].slice(-SYNC_QUEUE_LIMIT);
   return { ...cfg, queue };
 }
@@ -148,6 +147,7 @@ export async function drainQueue(config, pushOne){
  */
 export async function runSync({ store, config, adapter, encryption } = {}){
   const cfg = normalizeSyncConfig(config);
+  const localStore = storeWithLiveCollections(store || {});
   // encryption: undefined → follow the config toggle; null → explicitly off;
   // an object → custom seal implementation (tests/future providers).
   const seal = encryption === undefined
