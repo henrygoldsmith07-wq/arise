@@ -38,6 +38,7 @@ describe('indexeddb canonical storage', ()=>{
     globalThis.localStorage = { _m:{}, getItem(k){ return k in this._m ? this._m[k] : null; }, setItem(k,v){ this._m[k]=String(v); }, removeItem(k){ delete this._m[k]; } };
     try{
       globalThis.localStorage.setItem('arise.store.v1', JSON.stringify(fullStore()));
+      globalThis.localStorage.setItem('arise.telemetry.v2', JSON.stringify({ version:2, events:[{ id:'legacy-event', type:'session:start', at:'2026-01-04T10:00:00Z' }] }));
       await hydrateStorage();
       const sessions = await idbGetAll('sessions');
       assert.equal(sessions.length, 2);
@@ -53,6 +54,9 @@ describe('indexeddb canonical storage', ()=>{
       assert.equal(pointer.__ariseIdb, true);
       assert.equal(pointer.preferences.theme, 'dark');
       assert.ok(globalThis.localStorage.getItem('arise.store.v1.pre-idb-backup'));
+      const events = await idbGetAll('events');
+      assert.ok(events.some(row=> row.id === 'legacy-event'), 'legacy telemetry migrated into canonical events');
+      assert.equal(globalThis.localStorage.getItem('arise.telemetry.v2'), null, 'legacy live event key retired after migration');
     }finally{ delete globalThis.localStorage; }
   });
 
