@@ -32,7 +32,10 @@ export async function syncDown(currentStore, adapter, strategy="merge"){
 }
 
 const studyActive = s => Boolean(s?.studyEnrollment) || ['enrolled','withdrawn'].includes(s?.studyStatus);
-const enrollmentSignature = e => e && JSON.stringify([e.studyVersion||null,e.seed||null,e.assignments||{}]);
+const enrollmentSignature = e => e && JSON.stringify([
+  e.studyVersion||null,
+  Object.entries(e.assignments||{}).sort(([a],[b])=>a.localeCompare(b)).map(([id,v])=>[id,v?.arm||null]),
+]);
 
 function resolveStudySyncState(current, imported){
   const a=current?.studyParticipantId||null, b=imported?.studyParticipantId||null;
