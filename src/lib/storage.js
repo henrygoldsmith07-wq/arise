@@ -25,7 +25,7 @@ import { enforceIntegrity, quarantineBrokenStore } from './integrity.js';
 import { normalizeHistoryForWrite, makeTombstone } from './domain.js';
 import { reconcileStoreSnapshots } from './storeReconcile.js';
 import { splitSets } from './storageRecords.js';
-import { bindEvaluationLedgerAdapter, bindEventLedgerAdapter } from './evaluationLedgerBridge.js';
+import { bindCanonicalLedger } from './evaluationLedgerBridge.js';
 
 const LS_KEY = 'arise.store.v1';
 const POINTER_KEY = 'arise.store.v1.pointer';
@@ -546,7 +546,7 @@ export function setCachedStore(store, { persist = persistStore, evaluationLedger
   return run;
 }
 
-bindEvaluationLedgerAdapter({
+bindCanonicalLedger('evaluation', {
   read(){
     return cache ? [...(cache.evaluationLedger || [])] : null;
   },
@@ -564,7 +564,7 @@ bindEvaluationLedgerAdapter({
   },
 });
 
-bindEventLedgerAdapter({
+bindCanonicalLedger('events', {
   read(){
     return cache ? [...(cache.eventHistory || [])] : null;
   },
