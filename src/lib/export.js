@@ -28,13 +28,8 @@ export function storeWithLiveCollections(store){
 }
 
 export function buildExportPayload(store, useStoreCollections = false){
-  // Normal user exports read the live canonical ledgers so a React snapshot
-  // that predates the latest event/recommendation cannot omit data. Trusted
-  // sync passes a freshly merged store and explicitly asks us to serialize
-  // those merged collections instead, otherwise the local live ledger would
-  // overwrite remote rows immediately before the converged push.
-  const eventHistory = useStoreCollections ? [...(store?.eventHistory || [])] : getEventHistory();
-  const evaluationLedger = useStoreCollections ? [...(store?.evaluationLedger || [])] : loadEvaluationLedger();
+  const eventHistory = useStoreCollections ? (store?.eventHistory || []) : getEventHistory();
+  const evaluationLedger = useStoreCollections ? (store?.evaluationLedger || []) : loadEvaluationLedger();
   const data={ ...store, version: store.version || STORE_SCHEMA_VERSION, eventHistory, evaluationLedger };
   // Credential hygiene: never let device-local sync config ride along.
   if(data.preferences) data.preferences = stripDeviceLocalPrefs(data.preferences);
@@ -218,7 +213,7 @@ function sanitiseImportText(text){
   return stripDangerousKeys(parsed);
 }
 
-function parseStorePayload(text, trusted = false){
+export function parseImportFile(text, trusted = false){
   const parsed = sanitiseImportText(text);
   const data = parsed?.data ? parsed.data : parsed;
   if(!data || typeof data !== 'object') throw new Error('Import file is empty or malformed.');
@@ -244,8 +239,6 @@ function parseStorePayload(text, trusted = false){
   return safe;
 }
 
-export function parseImportFile(text){ return parseStorePayload(text); }
-export function parseTrustedSyncFile(text){ return parseStorePayload(text, true); }
 
 export function validateStoreData(data){
   const errors=[];
