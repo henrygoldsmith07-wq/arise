@@ -74,7 +74,7 @@ export default function SyncPanel({ store, setStore, setMsg }){
         const incoming = (merged.history || []).filter((h) => h?.id && !localIds.has(h.id)).length;
         setMsg(incoming
           ? `Sync complete — merged ${incoming} session${incoming === 1 ? '' : 's'} in from your other device(s); your history was kept, not replaced.`
-          : 'Sync complete — both devices now match. Merging is by session id; nothing is ever overwritten away.');
+          : 'Sync complete — portable training data is converged. Device-local consent and credentials stay local to each device.');
       }
       setTimeout(() => setMsg(null), 6000);
     }catch(err){
@@ -241,7 +241,7 @@ export default function SyncPanel({ store, setStore, setMsg }){
           )}
           <div aria-label="Devices on this sync">
             <p className="font-semibold">Devices</p>
-            <p className="text-[11px] text-ink3">This device: {ownDeviceId || 'this device'} — changes are merged by session id, never overwritten away.</p>
+            <p className="text-[11px] text-ink3">This device: {ownDeviceId || 'this device'} — portable training data merges by stable ids; device-local consent and credentials are never copied.</p>
             {Object.entries(sync.devices || {}).filter(([id]) => id !== ownDeviceId).slice(0, 5).map(([id, d]) => (
               <p key={id} className="text-[11px] text-ink3">Peer {id.slice(0, 10)} — last wrote {d?.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : 'unknown'}{d?.wroteAt ? ` (file dated ${new Date(d.wroteAt).toLocaleString()})` : ''}</p>
             ))}
