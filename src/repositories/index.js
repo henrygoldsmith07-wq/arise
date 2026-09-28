@@ -280,18 +280,22 @@ export function createEventRepository(){
 
     async record(type, payload, opts){
       await requireStore();
-      return telemetryRecordEvent(type, payload, opts);
+      const event = telemetryRecordEvent(type, payload, opts);
+      if(event) await whenPersisted();
+      return event;
     },
 
     async mergeMany(events){
       await requireStore();
       mergeEventHistory(events);
+      await whenPersisted();
       return true;
     },
 
     async replaceAll(events){
       await requireStore();
       replaceEventHistory(events);
+      await whenPersisted();
       return true;
     },
 
@@ -303,6 +307,7 @@ export function createEventRepository(){
     async clear(){
       await requireStore();
       clearTelemetry();
+      await whenPersisted();
       return true;
     },
   };
