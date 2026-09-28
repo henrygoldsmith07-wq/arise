@@ -14,7 +14,7 @@ const DEFAULT = {
   onboarding: null, // { goal, equipment:[], location, level, daysPerWeek, availableMinutes, preferredExerciseIds:[], dislikedExerciseIds:[], plateConfig? }
   activeSchedule: null, // { programId, startDateISO, sessions:[{id,dateISO,status,blocks,...}] }
   activeWorkout: null, // recoverable runner draft: { session, blocks, note, noteTags, restEndsAt, restLabel, updatedAt }
-  eventHistory: [], // imported/exported event snapshot; live telemetry remains append-only in its own local key
+  eventHistory: [], // canonical consent-gated product-event ledger; persisted in IndexedDB
   healthSummary: null, // optional user-approved health-platform summary
   history: [], // completed sessions: see normaliseHistoryEntry for full shape
   // theme null follows OS; telemetry null = prompt. `accessibility` drives the
