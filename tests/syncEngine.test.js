@@ -10,7 +10,7 @@ import {
   pushLog, enqueueOffline, drainQueue, backoffDelayMs,
   runSync, syncStatusLabel, SYNC_QUEUE_LIMIT, SYNC_LOG_LIMIT, MAX_BACKOFF_MS,
 } from '../src/lib/syncEngine.js';
-import { buildExportPayload, parseImportFile, parseTrustedSyncFile } from '../src/lib/export.js';
+import { buildExportPayload, parseImportFile } from '../src/lib/export.js';
 
 function fakeStore(overrides = {}){
   return {
@@ -169,7 +169,7 @@ describe('runSync cycle', () => {
     };
     const envelope = buildExportPayload(fakeStore({ evaluationLedger:[row] }), true);
     const consumer = parseImportFile(JSON.stringify(envelope));
-    const trusted = parseTrustedSyncFile(JSON.stringify(envelope));
+    const trusted = parseImportFile(JSON.stringify(envelope), true);
     assert.equal(consumer.evaluationLedger[0].provenance.origin, 'imported');
     assert.equal(consumer.evaluationLedger[0].outcomeProvenance.origin, 'imported');
     assert.equal(trusted.evaluationLedger[0].provenance.origin, 'live-engine');
