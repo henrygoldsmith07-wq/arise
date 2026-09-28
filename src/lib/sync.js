@@ -13,7 +13,7 @@ import { applyTombstones, isTombstone } from "./domain.js";
 
 export async function syncUp(store, adapter){
   const payload=buildExportPayload(store);
-  await adapter.push(payload);
+  if(adapter?.push) await adapter.push(payload);
   return payload;
 }
 
@@ -33,7 +33,7 @@ export async function syncDown(currentStore, adapter, strategy="merge"){
 
 const unionBy=(rows,key)=>[...new Map(rows.map(v=>[key(v),v])).values()];
 const studyActive = s => Boolean(s?.studyEnrollment) || s?.studyStatus==='enrolled' || s?.studyStatus==='withdrawn';
-const armSignature=e=>JSON.stringify(Object.keys(e?.assignments||{}).sort().map(id=>[id,e.assignments[id]?.arm]));
+const armSignature=e=>JSON.stringify([e?.studyVersion||null,e?.seed||null,...Object.keys(e?.assignments||{}).sort().map(id=>[id,e.assignments[id]?.arm])]);
 
 function resolveStudySyncState(current, imported){
   const a=current?.studyParticipantId||null, b=imported?.studyParticipantId||null;
