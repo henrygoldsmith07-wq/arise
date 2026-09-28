@@ -34,7 +34,7 @@ export function storeWithLiveCollections(store){
   };
 }
 
-export function buildExportPayload(store, { useStoreCollections = false } = {}){
+export function buildExportPayload(store, useStoreCollections = false){
   // Normal user exports read the live canonical ledgers so a React snapshot
   // that predates the latest event/recommendation cannot omit data. Trusted
   // sync passes a freshly merged store and explicitly asks us to serialize
