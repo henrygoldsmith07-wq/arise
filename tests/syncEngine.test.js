@@ -146,7 +146,7 @@ describe('runSync cycle', () => {
     const remoteEvent = { id:'ev-remote', type:'session:complete', at:'2026-01-01T10:00:00Z' };
     const local = fakeStore({ eventHistory:[localEvent] });
     const remote = fakeStore({ eventHistory:[remoteEvent] });
-    const remoteEnvelope = buildExportPayload(remote, { useStoreCollections:true });
+    const remoteEnvelope = buildExportPayload(remote, true);
     let pushed = null;
     const adapter = {
       pull: async () => JSON.stringify(remoteEnvelope),
@@ -167,7 +167,7 @@ describe('runSync cycle', () => {
       outcome:{ sessionId:'s-1', dateISO:'2026-01-01', metTarget:true },
       outcomeProvenance:{ origin:'live-engine', capturedAt:'2026-01-01T10:00:00Z', deviceId:'dev-a' },
     };
-    const envelope = buildExportPayload(fakeStore({ evaluationLedger:[row] }), { useStoreCollections:true });
+    const envelope = buildExportPayload(fakeStore({ evaluationLedger:[row] }), true);
     const consumer = parseImportFile(JSON.stringify(envelope));
     const trusted = parseTrustedSyncFile(JSON.stringify(envelope));
     assert.equal(consumer.evaluationLedger[0].provenance.origin, 'imported');
@@ -197,7 +197,7 @@ describe('runSync cycle', () => {
       studyStatus:'enrolled',
       studyStatusChangedAtISO:'2026-01-01T00:00:00Z',
     });
-    const remoteEnvelope = buildExportPayload(remote, { useStoreCollections:true });
+    const remoteEnvelope = buildExportPayload(remote, true);
     const adapter = { pull:async()=>JSON.stringify(remoteEnvelope), push:async()=>{} };
     const { merged, error } = await runSync({ store:local, config:defaultSyncConfig(), adapter, encryption:null });
     assert.equal(error, undefined);
@@ -218,7 +218,7 @@ describe('runSync cycle', () => {
       },
     });
     const local = fakeStore(enrolled('aaaaaaaaaaaaaaaa'));
-    const remoteEnvelope = buildExportPayload(fakeStore(enrolled('bbbbbbbbbbbbbbbb')), { useStoreCollections:true });
+    const remoteEnvelope = buildExportPayload(fakeStore(enrolled('bbbbbbbbbbbbbbbb')), true);
     let pushed = false;
     const adapter = { pull:async()=>JSON.stringify(remoteEnvelope), push:async()=>{ pushed = true; } };
     const { merged, error } = await runSync({ store:local, config:defaultSyncConfig(), adapter, encryption:null });
