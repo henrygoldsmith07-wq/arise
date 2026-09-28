@@ -37,12 +37,12 @@ const armSignature=e=>JSON.stringify(Object.keys(e?.assignments||{}).sort().map(
 function resolveStudySyncState(current, imported){
   const a=current?.studyParticipantId||null, b=imported?.studyParticipantId||null;
   const aa=studyActive(current), ba=studyActive(imported);
-  if(a && b && a!==b && aa && ba) throw new Error('study-profile conflict: active participants differ');
+  if(a && b && a!==b && aa && ba) throw new Error('Sync study-profile conflict: different active participants.');
   const id=a===b?a:aa?a:ba?b:a&&b?(a<b?a:b):a||b;
   const matches=[current,imported].filter(s=>!s?.studyParticipantId || s.studyParticipantId===id);
   const enrollments=matches.map(s=>s?.studyEnrollment).filter(Boolean);
   if(enrollments[1] && armSignature(enrollments[0])!==armSignature(enrollments[1])){
-    throw new Error('study-enrollment conflict: arms differ');
+    throw new Error('Sync study-enrollment conflict: frozen arms differ.');
   }
   const statusSource=matches.filter(s=>s?.studyStatus).sort((a,b)=>String(a.studyStatusChangedAtISO||'').localeCompare(String(b.studyStatusChangedAtISO||''))).at(-1);
   const studyStatus=statusSource?.studyStatus || (enrollments.length ? 'enrolled' : null);
