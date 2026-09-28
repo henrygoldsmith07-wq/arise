@@ -43,8 +43,8 @@ That button is your study contribution. Your regular backup (**Backup & portabil
 
 ### What the study export file contains
 
-- **Workout structure and performance** — exercises, sets, reps, load, RPE, completed/skipped/failed, structured pain flags, session mode and duration.
-- **Recommendation/outcome evidence** — the target that was shown, whether you met it, and any overrides.
+- **Workout structure and performance** — exercises, sets, reps, load, RPE, completed/skipped/failed, structured pain flags, session mode and duration. If you perform a scheduled workout early or late, the export keeps both the performed date and original scheduled date.
+- **Recommendation/outcome evidence** — the target that was shown, the exact scheduled session it targeted, whether you met it, and any overrides.
 - **Readiness check-ins, structured only** — date, score, sleep, soreness, motivation.
 - **Logging/timing measurements** — how long sets took to log.
 - **Programme adjustment metadata** — why the app substituted or adapted an exercise, written by the app itself (never by you).

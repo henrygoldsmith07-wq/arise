@@ -8,14 +8,15 @@ You are the study operator. Your job is to keep participants participating and t
 
 The architecture is frozen. No readiness logic, evidence predicates, randomisation, arms, progression, cohort gates, or causal-analysis changes during the pilot. Operational warnings are operational — they never trigger product changes by themselves. Only pilot-participant evidence (a real blocker, a real failure mode) or a correctness/privacy/data-loss bug reopens study code.
 
-> **Frozen 2026-09-19 — recruitment may begin.** The study/export
-> infrastructure is frozen at `STUDY_EXPORT_VERSION = 4`: the export boundary
-> is recursively closed and type-locked, numeric fields accept only finite
-> JavaScript numbers (the numeric-boundary invariant in `src/lib/studyExport.js`
-> — coercion can never decide what is safe to export), and the regression
-> suite pins key sets, privacy probes, raw-store equivalence and the numeric
-> truth tables in `tests/study-export.test.js`. No schema change is expected
-> during recruitment; any change reopens the freeze rule above.
+> **Frozen 2026-09-19; correctness revision 2026-09-28.** The study/export
+> infrastructure is frozen at `STUDY_EXPORT_VERSION = 5`. Version 5 is a
+> correctness-only schema repair: it carries the performed-vs-scheduled workout
+> date and exact target-session identity already used by the live engine; it
+> does not change randomisation, treatment, outcomes or analysis gates. The
+> export boundary remains recursively closed and type-locked, numeric fields
+> accept only finite JavaScript numbers, and `tests/study-export.test.js`
+> pins key sets, privacy probes, raw-store equivalence and numeric truth tables.
+> Any further schema change must still satisfy the freeze rule above.
 
 ## Participants get
 

@@ -2,6 +2,7 @@
 // Nothing leaves the device here; Pulse and health sharing have separate consent.
 
 import { STORE_SCHEMA_VERSION, KEY as STORE_KEY } from './store.js';
+import { readCanonicalLedger, replaceCanonicalLedger, clearCanonicalLedger } from './evaluationLedgerBridge.js';
 
 const KEY = 'arise.telemetry.v2';
 const LEGACY_KEY = 'arise.telemetry.v1';
@@ -23,15 +24,29 @@ function normaliseEvents(value){
   }));
 }
 
-function loadEvents(){
+function legacyEvents(){
   const current=normaliseEvents(readJson(KEY, { events: [] }));
   const legacy=normaliseEvents(readJson(LEGACY_KEY, { events: [] }));
   const seen=new Set();
   return [...legacy, ...current].filter(e=> { if(seen.has(e.id)) return false; seen.add(e.id); return true; }).slice(-EVENT_LIMIT);
 }
 
+function loadEvents(){
+  const canonical = readCanonicalLedger('events');
+  if(canonical !== null) return normaliseEvents(canonical).slice(-EVENT_LIMIT);
+  return legacyEvents();
+}
+
 function saveEvents(events){
-  try{ localStorage.setItem(KEY, JSON.stringify({ version: 2, events: events.slice(-EVENT_LIMIT) })); }catch{}
+  const rows = normaliseEvents(events).slice(-EVENT_LIMIT);
+  if(replaceCanonicalLedger('events', rows)){
+    try{ localStorage.removeItem(KEY); localStorage.removeItem(LEGACY_KEY); }catch{}
+    return true;
+  }
+  try{
+    localStorage.setItem(KEY, JSON.stringify({ version: 2, events: rows }));
+    return true;
+  }catch{ return false; }
 }
 
 function hasConsent(essential=false){
@@ -151,6 +166,7 @@ export function mergeEventHistory(events){
 }
 
 export function clearTelemetry(){
+  clearCanonicalLedger('events');
   try{ localStorage.removeItem(KEY); localStorage.removeItem(LEGACY_KEY); localStorage.removeItem(ERROR_KEY); }catch{}
 }
 

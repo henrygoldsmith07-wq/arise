@@ -1,17 +1,18 @@
 ﻿// sync.js — optional cross-device sync layer (offline-first preserved).
-// Default: localStorage only. When sync is enabled, this mirrors export/import over a sync provider.
-// Provider is a pluggable { pull, push } pair so tests stay pure.
-// Conflict resolution: per-session last-write-wins via savedAt; onboarding last-write-wins via exportedAt.
+// IndexedDB remains canonical locally; sync mirrors the portable store over a
+// user-owned provider. Provider is a pluggable { pull, push } pair so tests stay pure.
+// WebDAV ingestion is trusted Arise-to-Arise transport: it preserves recorded
+// evidence provenance while still stripping device-local consent/credentials.
 
 import { buildExportPayload, parseImportFile, mergeStores } from "./export.js";
 import { STORE_SCHEMA_VERSION, mergeCustomTemplates } from "./store.js";
 import { mergeEvaluationLedgers } from "./longitudinal.js";
 import { applyTombstones, isTombstone } from "./domain.js";
 
-export function makeSyncAdapter({ pull, push }){ return { pull, push }; }
+
 
 export async function syncUp(store, adapter){
-  const payload = buildExportPayload(store);
+  const payload=buildExportPayload(store);
   if(adapter?.push) await adapter.push(payload);
   return payload;
 }
@@ -25,9 +26,33 @@ export async function syncDown(currentStore, adapter, strategy="merge"){
   const text = typeof remoteRaw === "string" ? remoteRaw
     : remoteRaw instanceof Uint8Array ? new TextDecoder().decode(remoteRaw)
     : JSON.stringify(remoteRaw);
-  const imported = parseImportFile(text);
+  const imported = parseImportFile(text, true);
   if(strategy==='replace') return mergeStores(currentStore, imported, 'replace');
   return mergeStoresWithConflicts(currentStore, imported);
+}
+
+const unionBy=(rows,key)=>[...new Map(rows.map(v=>[key(v),v])).values()];
+const studyActive = s => Boolean(s?.studyEnrollment) || s?.studyStatus==='enrolled' || s?.studyStatus==='withdrawn';
+const armSignature=e=>JSON.stringify([e?.studyVersion||null,e?.seed||null,...Object.keys(e?.assignments||{}).sort().map(id=>[id,e.assignments[id]?.arm])]);
+
+function resolveStudySyncState(current, imported){
+  const a=current?.studyParticipantId||null, b=imported?.studyParticipantId||null;
+  const aa=studyActive(current), ba=studyActive(imported);
+  if(a && b && a!==b && aa && ba) throw new Error('Sync study-profile conflict.');
+  const id=a===b?a:aa?a:ba?b:a&&b?(a<b?a:b):a||b;
+  const matches=[current,imported].filter(s=>!s?.studyParticipantId || s.studyParticipantId===id);
+  const enrollments=matches.map(s=>s?.studyEnrollment).filter(Boolean);
+  if(enrollments[1] && armSignature(enrollments[0])!==armSignature(enrollments[1])){
+    throw new Error('Sync study-enrollment conflict.');
+  }
+  const statusSource=matches.filter(s=>s?.studyStatus).sort((a,b)=>String(a.studyStatusChangedAtISO||'').localeCompare(String(b.studyStatusChangedAtISO||''))).at(-1);
+  const studyStatus=statusSource?.studyStatus || (enrollments.length ? 'enrolled' : null);
+  return {
+    studyParticipantId:id,
+    studyEnrollment:studyStatus==='withdrawn' ? null : (enrollments[0]||null),
+    studyStatus,
+    studyStatusChangedAtISO:statusSource?.studyStatusChangedAtISO||null,
+  };
 }
 
 // Merge with per-session conflict resolution (savedAt) and onboarding recency
@@ -53,14 +78,9 @@ export function mergeStoresWithConflicts(current, imported){
   const activeSchedule = current.activeSchedule || imported.activeSchedule || null;
   // preferences: merge, current wins on explicit keys
   const preferences = { ...(imported.preferences||{}), ...(current.preferences||{}) };
-  const eventById = new Map();
-  for(const e of [...(current.eventHistory||[]), ...(imported.eventHistory||[])]) if(e?.id) eventById.set(e.id,e);
-  // readinessLog: merge by dateISO+at
-  const rByKey = new Map();
-  for(const r of [...(current.readinessLog||[]), ...(imported.readinessLog||[])]) {
-    const k = `${r.dateISO}|${r.at||r.score}`;
-    if(!rByKey.has(k)) rByKey.set(k, r);
-  }
+  const events=unionBy([...(current.eventHistory||[]), ...(imported.eventHistory||[])].filter(e=>e?.id), e=>e.id);
+  const readiness=unionBy([...(imported.readinessLog||[]), ...(current.readinessLog||[])], r=>`${r.dateISO}|${r.at||r.score}`);
+  const study = resolveStudySyncState(current, imported);
   return {
     version: Math.max(STORE_SCHEMA_VERSION, current.version||1, imported.version||1),
     ...current,
@@ -70,21 +90,14 @@ export function mergeStoresWithConflicts(current, imported){
     // Guarded comparator: an entry missing dateISO must not crash the sync.
     history: applyTombstones([...byId.values()].sort((a,b)=> String(a?.dateISO||'').localeCompare(String(b?.dateISO||''))), tombstones),
     preferences,
-    eventHistory: [...eventById.values()].sort((a,b)=> String(a.at||'').localeCompare(String(b.at||''))),
+    gymPrefs:{ ...imported.gymPrefs, ...current.gymPrefs, restPresets:{ ...imported.gymPrefs?.restPresets, ...current.gymPrefs?.restPresets } },
+    ...study,
+    eventHistory: events.sort((a,b)=> String(a.at||'').localeCompare(String(b.at||''))),
     healthSummary: current.healthSummary || imported.healthSummary || null,
-    readinessLog: [...rByKey.values()].sort((a,b)=> String(a?.dateISO||'').localeCompare(String(b?.dateISO||''))),
+    readinessLog: readiness.sort((a,b)=> String(a?.dateISO||'').localeCompare(String(b?.dateISO||''))),
     evaluationLedger: mergeEvaluationLedgers(current.evaluationLedger, imported.evaluationLedger),
     customTemplates: applyTombstones(mergeCustomTemplates(current.customTemplates, imported.customTemplates), tombstones),
-    programHistory: [...(current.programHistory||[]), ...(imported.programHistory||[])].filter((v,i,a)=> a.findIndex(x=> x.programId===v.programId && x.version===v.version)===i),
-    tombstones: [...(current.tombstones||[]), ...(imported.tombstones||[])].filter((v,i,a)=> a.findIndex(x=> x.id===v.id)===i),
+    programHistory: unionBy([...(imported.programHistory||[]), ...(current.programHistory||[])], v=>`${v.programId}|${v.version}`),
+    tombstones,
   };
-}
-
-// Account portability: export for moving to another device/account
-export function portableExport(store){
-  return buildExportPayload(store);
-}
-export function portableImport(text, currentStore, strategy='merge'){
-  const imported = parseImportFile(text);
-  return strategy==='replace' ? mergeStores(currentStore, imported, 'replace') : mergeStoresWithConflicts(currentStore, imported);
 }

@@ -280,7 +280,7 @@ describe('§ recursive closure — no nested passthrough, vocabularies locked', 
   function deeplyPrivateStore(){
     const store = baseStore();
     store.history.push({
-      id: 's-deep', dateISO: '2026-03-08', programId: 'p1', programVersion: 3, templateVersion: 2,
+      id: 's-deep', dateISO: '2026-03-08', scheduledDateISO: '2026-03-10', programId: 'p1', programVersion: 3, templateVersion: 2,
       week: 1, day: 1, title: 'PRIVATE TITLE', mode: 'guided', status: 'done',
       durationMinutes: 40, startedAt: '2026-03-08T09:00:00.000Z', finishedAt: '2026-03-08T09:40:00.000Z', savedAt: '2026-03-08T09:40:00.000Z',
       equipmentSnapshot: ['barbell'], exerciseOrder: ['bench-press-dumbbell'], painDiscomfort: false,
@@ -306,7 +306,7 @@ describe('§ recursive closure — no nested passthrough, vocabularies locked', 
       privateField: 'PRIVATE ENROLLMENT',
     };
     store.evaluationLedger = [{
-      id: 'r-deep', schemaVersion: 2, recordedAtISO: '2026-03-01T10:00:00.000Z', dueDateISO: '2026-03-08',
+      id: 'r-deep', schemaVersion: 2, recordedAtISO: '2026-03-01T10:00:00.000Z', dueDateISO: '2026-03-08', targetSessionId: 's-deep',
       exerciseId: 'bench-press-dumbbell', movementPattern: 'horizontal-push', equipmentClass: 'barbell',
       programId: 'p1', programVersion: 3,
       recommendation: { load: 40, reps: 8, reason: 'engine reason', strategy: 'progress', privateComment: 'PRIVATE REC' },
@@ -381,8 +381,10 @@ describe('§ recursive closure — no nested passthrough, vocabularies locked', 
       'movementPattern', 'outcome', 'outcomeProvenance', 'participantId',
       'policy', 'prescription', 'prescriptionCreatedAt', 'programId',
       'programVersion', 'provenance', 'recommendation', 'recordedAtISO',
-      'recommendedAction', 'schemaVersion', 'studyVersion', 'userOverride',
+      'recommendedAction', 'schemaVersion', 'studyVersion', 'targetSessionId', 'userOverride',
     ].sort());
+    assert.equal(row.targetSessionId, 's-deep');
+    assert.equal(data.history[0].scheduledDateISO, '2026-03-10');
     assert.deepEqual(Object.keys(row.recommendation).sort(), ['assistKg', 'load', 'reason', 'reps']);
     assert.deepEqual(Object.keys(row.audit).sort(), ['confidence', 'guard', 'policy', 'policyVersion']);
     assert.deepEqual(row.audit.confidence, 'high', 'audit.confidence reduced to its band string form in the ledger row');
@@ -460,7 +462,7 @@ describe('§ export minimisation — only disclosed, study-required data leaves'
   function richPrivateStore(){
     const store = baseStore();
     store.history.push({
-      id: 's-rich', dateISO: '2026-03-08', programId: 'p1', programVersion: 3, templateVersion: 2,
+      id: 's-rich', dateISO: '2026-03-08', scheduledDateISO: '2026-03-09', programId: 'p1', programVersion: 3, templateVersion: 2,
       week: 1, day: 1, title: 'PRIVATE TITLE heavy day', mode: 'guided', status: 'done',
       durationMinutes: 44, startedAt: '2026-03-08T09:00:00.000Z', finishedAt: '2026-03-08T09:44:00.000Z', savedAt: '2026-03-08T09:44:00.000Z',
       equipmentSnapshot: ['barbell'], exerciseOrder: ['bench-press-dumbbell'], painDiscomfort: true,
@@ -520,6 +522,7 @@ describe('§ export minimisation — only disclosed, study-required data leaves'
     const s = data.history[0];
     assert.equal(s.id, 's-rich');
     assert.equal(s.mode, 'guided');
+    assert.equal(s.scheduledDateISO, '2026-03-09');
     assert.equal(s.durationMinutes, 44);
     assert.deepEqual(s.noteTags, ['pain-discomfort'], 'structured tags travel; free text does not');
     assert.deepEqual(s.substitutions, [{ from: 'squat-rack-404', to: 'bench-press-dumbbell', reason: 'engine kept it' }]);
@@ -534,8 +537,9 @@ describe('§ export minimisation — only disclosed, study-required data leaves'
   });
 
   it('serialisers are direct allowlists: unknown keys dropped, known keys kept', ()=>{
-    const rows = buildStudyHistoryExport([{ id: 'h', dateISO: '2026-03-08', mode: 'guided', note: 'PRIVATE', blocks: [{ exerciseId: 'x', sets: [{ reps: '5', weightKg: '60', note2: 'PRIVATE2' }] }], futureField: 'F' }]);
-    assert.deepEqual(Object.keys(rows[0]).sort(), ['blocks', 'dateISO', 'id', 'mode']);
+    const rows = buildStudyHistoryExport([{ id: 'h', dateISO: '2026-03-08', scheduledDateISO: '2026-03-10', mode: 'guided', note: 'PRIVATE', blocks: [{ exerciseId: 'x', sets: [{ reps: '5', weightKg: '60', note2: 'PRIVATE2' }] }], futureField: 'F' }]);
+    assert.deepEqual(Object.keys(rows[0]).sort(), ['blocks', 'dateISO', 'id', 'mode', 'scheduledDateISO']);
+    assert.equal(rows[0].scheduledDateISO, '2026-03-10');
     assert.deepEqual(Object.keys(rows[0].blocks[0].sets[0]).sort(), ['reps', 'weightKg']);
     const r = buildStudyReadinessExport([{ dateISO: 'd', score: 1, sleep: 2, soreness: 3, motivation: 4, extra: 'PRIVATE' }]);
     assert.deepEqual(Object.keys(r[0]).sort(), ['dateISO', 'motivation', 'score', 'sleep', 'soreness']);
@@ -705,7 +709,7 @@ describe('§ malicious shapes fail closed — scalars type-locked', ()=>{
       assignments: { 'bench-press-dumbbell': { arm: 'arise', assignmentVersion: 1, assignedAtISO: '2026-03-01T00:00:00.000Z' } },
     };
     store.history.push({
-      id: 's-clean', dateISO: '2026-03-08', programId: 'p1', programVersion: 3, week: 1, day: 1,
+      id: 's-clean', dateISO: '2026-03-08', scheduledDateISO: '2026-03-09', programId: 'p1', programVersion: 3, week: 1, day: 1,
       status: 'done', mode: 'guided', quality: 'good', durationMinutes: 44, painDiscomfort: true,
       skippedSetsCount: 2, equipmentSnapshot: ['barbell'], noteTags: ['felt-strong', 'nope-not-real'],
       blocks: [{ exerciseId: 'bench-press-dumbbell', exerciseOrder: 0, governedSlots: [0, 2], equipment: 'barbell',
@@ -714,7 +718,7 @@ describe('§ malicious shapes fail closed — scalars type-locked', ()=>{
       substitutions: [{ from: 'squat-rack-404', to: 'bench-press-dumbbell', reason: 'engine kept it' }],
     });
     store.evaluationLedger = [{
-      id: 'r-clean', schemaVersion: 2, recordedAtISO: '2026-03-01T10:00:00.000Z', dueDateISO: '2026-03-08',
+      id: 'r-clean', schemaVersion: 2, recordedAtISO: '2026-03-01T10:00:00.000Z', dueDateISO: '2026-03-08', targetSessionId: 's-clean',
       exerciseId: 'bench-press-dumbbell', movementPattern: 'horizontal-push', equipmentClass: 'barbell',
       programId: 'p1', programVersion: 3,
       recommendation: { load: 42.5, reps: 8, reason: 'suite' },
@@ -752,6 +756,7 @@ describe('§ malicious shapes fail closed — scalars type-locked', ()=>{
     assert.deepEqual(s.substitutions, [{ from: 'squat-rack-404', to: 'bench-press-dumbbell', reason: 'engine kept it' }]);
     const row = data.evaluationLedger[0];
     assert.equal(row.assignedArm, 'arise');
+    assert.equal(row.targetSessionId, 's-clean');
     assert.equal(row.prescription.arm, 'arise');
     assert.equal(row.recommendedAction, 'reduce_assistance');
     assert.equal(row.audit.confidence, 'low-thin');

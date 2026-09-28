@@ -4,6 +4,7 @@ import { clearAllStoredData, getCachedStore, hydrateStorage, loadStoreFromIdb, p
 import { idbGetAll } from '../src/lib/idb.js';
 import { loadStore, saveStore, STORE_SCHEMA_VERSION } from '../src/lib/store.js';
 import { loadEvaluationLedger, saveEvaluationLedger } from '../src/lib/longitudinal.js';
+import { clearTelemetry, getEventHistory, recordEvent } from '../src/lib/telemetry.js';
 
 function set(reps, kg){ return { reps:String(reps), weightKg:String(kg), rpe:'' }; }
 function fullStore(){
@@ -37,6 +38,7 @@ describe('indexeddb canonical storage', ()=>{
     globalThis.localStorage = { _m:{}, getItem(k){ return k in this._m ? this._m[k] : null; }, setItem(k,v){ this._m[k]=String(v); }, removeItem(k){ delete this._m[k]; } };
     try{
       globalThis.localStorage.setItem('arise.store.v1', JSON.stringify(fullStore()));
+      globalThis.localStorage.setItem('arise.telemetry.v2', JSON.stringify({ version:2, events:[{ id:'legacy-event', type:'session:start', at:'2026-01-04T10:00:00Z' }] }));
       await hydrateStorage();
       const sessions = await idbGetAll('sessions');
       assert.equal(sessions.length, 2);
@@ -52,6 +54,9 @@ describe('indexeddb canonical storage', ()=>{
       assert.equal(pointer.__ariseIdb, true);
       assert.equal(pointer.preferences.theme, 'dark');
       assert.ok(globalThis.localStorage.getItem('arise.store.v1.pre-idb-backup'));
+      const events = await idbGetAll('events');
+      assert.ok(events.some(row=> row.id === 'legacy-event'), 'legacy telemetry migrated into canonical events');
+      assert.equal(globalThis.localStorage.getItem('arise.telemetry.v2'), null, 'legacy live event key retired after migration');
     }finally{ delete globalThis.localStorage; }
   });
 
@@ -63,7 +68,8 @@ describe('indexeddb canonical storage', ()=>{
     assert.equal(composed.evaluationLedger.length, 2); // open + resolved unioned by id
     assert.equal(composed.customTemplates[0].id, 'custom-x');
     assert.equal(composed.readinessLog.length, 1);
-    assert.equal(composed.eventHistory.length, 1);
+    assert.equal(composed.eventHistory.length, 2);
+    assert.deepEqual(new Set(composed.eventHistory.map(row=> row.id)), new Set(['e1','legacy-event']));
     assert.deepEqual(composed.onboarding, { goal:'muscle', equipment:['dumbbells'], location:'home' });
   });
 
@@ -95,7 +101,7 @@ describe('indexeddb canonical storage', ()=>{
     assert.equal(recomposed.gymPrefs.focusDefault, true);
     assert.equal(recomposed.gymPrefs.restPresets['bench-press-dumbbell'], 90);
 
-    await setCachedStore(base, { evaluationLedgerMode:'replace' });
+    await setCachedStore(base, { collectionMode:'replace' });
     await whenPersisted();
   });
 
@@ -120,7 +126,7 @@ describe('indexeddb canonical storage', ()=>{
     assert.equal(seenBase?.activeSchedule?.lastAdaptation?.dateISO ?? null, durableAdaptationDate);
     assert.notEqual(seenBase?.activeSchedule?.lastAdaptation?.dateISO, '2026-01-20');
 
-    await setCachedStore(original, { persist:async(store)=> store, evaluationLedgerMode:'replace' });
+    await setCachedStore(original, { persist:async(store)=> store, collectionMode:'replace' });
     await whenPersisted();
   });
 
@@ -146,7 +152,7 @@ describe('indexeddb canonical storage', ()=>{
     release();
     await pending;
     await whenPersisted();
-    await setCachedStore(base, { persist:async(store)=> store, evaluationLedgerMode:'replace' });
+    await setCachedStore(base, { persist:async(store)=> store, collectionMode:'replace' });
     await whenPersisted();
   });
 
@@ -200,7 +206,44 @@ describe('indexeddb canonical storage', ()=>{
     assert.equal(committed.preferences.theme, 'light');
     assert.equal(committed.onboarding.goal, 'strength');
 
-    await setCachedStore(durable, { persist:async(store)=> store, evaluationLedgerMode:'replace' });
+    await setCachedStore(durable, { persist:async(store)=> store, collectionMode:'replace' });
+    await whenPersisted();
+  });
+
+  it('uses the hydrated IndexedDB-backed store as the live event ledger', async ()=>{
+    await hydrateStorage();
+    const base = getCachedStore();
+    const event = recordEvent('session:start', { sessionId:'canonical-event' }, { essential:true });
+    assert.ok(event);
+    await whenPersisted();
+
+    assert.ok(getEventHistory().some(row=> row.id === event.id));
+    const events = await idbGetAll('events');
+    assert.ok(events.some(row=> row.id === event.id));
+
+    clearTelemetry();
+    await whenPersisted();
+    assert.deepEqual(getEventHistory(), []);
+    assert.deepEqual(await idbGetAll('events'), []);
+
+    await setCachedStore(base, { collectionMode:'replace' });
+    await whenPersisted();
+  });
+
+  it('preserves newer events during ordinary saves but permits an explicit replacement', async ()=>{
+    await hydrateStorage();
+    const base = getCachedStore();
+    const newer = [...(base.eventHistory || []), { id:'sticky-event', type:'session:start', at:'2026-01-20T10:00:00Z' }];
+    await setCachedStore({ ...base, eventHistory:newer }, { persist:async(store)=> store, collectionMode:'replace' });
+
+    const staleUiSnapshot = { ...base, preferences:{ ...(base.preferences || {}), theme:'light' } };
+    await setCachedStore(staleUiSnapshot, { persist:async(store)=> store });
+    assert.ok(getCachedStore().eventHistory.some(row=> row.id === 'sticky-event'));
+
+    await setCachedStore({ ...getCachedStore(), eventHistory:[] }, { persist:async(store)=> store, collectionMode:'replace' });
+    assert.deepEqual(getCachedStore().eventHistory, []);
+
+    await setCachedStore(base, { persist:async(store)=> store, collectionMode:'replace' });
     await whenPersisted();
   });
 
@@ -223,16 +266,16 @@ describe('indexeddb canonical storage', ()=>{
     await hydrateStorage();
     const base = getCachedStore();
     const evidence = [...(base.evaluationLedger || []), { id:'sticky-evidence', exerciseId:'plank', recommendation:{ reps:30 }, outcome:null }];
-    await setCachedStore({ ...base, evaluationLedger:evidence }, { persist:async(store)=> store, evaluationLedgerMode:'replace' });
+    await setCachedStore({ ...base, evaluationLedger:evidence }, { persist:async(store)=> store, collectionMode:'replace' });
 
     const staleUiSnapshot = { ...base, preferences:{ ...(base.preferences || {}), theme:'dark' } };
     await setCachedStore(staleUiSnapshot, { persist:async(store)=> store });
     assert.ok(getCachedStore().evaluationLedger.some(row=> row.id === 'sticky-evidence'));
 
-    await setCachedStore({ ...getCachedStore(), evaluationLedger:[] }, { persist:async(store)=> store, evaluationLedgerMode:'replace' });
+    await setCachedStore({ ...getCachedStore(), evaluationLedger:[] }, { persist:async(store)=> store, collectionMode:'replace' });
     assert.equal(getCachedStore().evaluationLedger.length, 0);
 
-    await setCachedStore(base, { persist:async(store)=> store, evaluationLedgerMode:'replace' });
+    await setCachedStore(base, { persist:async(store)=> store, collectionMode:'replace' });
     await whenPersisted();
   });
 

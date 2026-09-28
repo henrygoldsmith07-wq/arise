@@ -16,8 +16,8 @@
 //   - Failures never block the app: pushes go to a bounded offline queue and
 //     drain with exponential backoff.
 
-import { syncUp, syncDown } from './sync.js';
-import { buildExportPayload } from './export.js';
+import { syncDown } from './sync.js';
+import { buildExportPayload, storeWithLiveCollections } from './export.js';
 import { encryptBackup, decryptBackup } from './cryptoBackup.js';
 
 export const SYNC_QUEUE_LIMIT = 20;
@@ -147,6 +147,7 @@ export async function drainQueue(config, pushOne){
  */
 export async function runSync({ store, config, adapter, encryption } = {}){
   const cfg = normalizeSyncConfig(config);
+  const localStore = storeWithLiveCollections(store || {});
   // encryption: undefined → follow the config toggle; null → explicitly off;
   // an object → custom seal implementation (tests/future providers).
   const seal = encryption === undefined
@@ -180,10 +181,10 @@ export async function runSync({ store, config, adapter, encryption } = {}){
       if(!/404|not found/i.test(String(err?.message || err))) throw err;
     }
     const merged = remoteText
-      ? await syncDown(store, { pull: async () => remoteText }, 'merge')
-      : store;
+      ? await syncDown(localStore, { pull: async () => remoteText }, 'merge')
+      : localStore;
     // 2. Push the merged state so both devices converge on the same payload.
-    const payload = buildExportPayload(merged);
+    const payload = buildExportPayload(merged, true);
     let outgoing = JSON.stringify(payload);
     if(seal){
       if(!cfg.passphrase) throw new Error('Sync encryption is on but no passphrase is set.');
@@ -204,7 +205,7 @@ export async function runSync({ store, config, adapter, encryption } = {}){
   }catch(err){
     const message = String(err?.message || err);
     return {
-      merged: store,
+      merged: localStore,
       config: { ...cfg, lastError: message, logs: pushLog(logs0, { kind: 'sync-error', error: message }) },
       error: message,
     };

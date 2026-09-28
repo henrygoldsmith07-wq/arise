@@ -141,6 +141,118 @@ describe('runSync cycle', () => {
     assert.ok(config.lastPullAt);
   });
 
+  it('pushes the converged union of local and remote events', async () => {
+    const localEvent = { id:'ev-local', type:'session:start', at:'2026-01-01T09:00:00Z' };
+    const remoteEvent = { id:'ev-remote', type:'session:complete', at:'2026-01-01T10:00:00Z' };
+    const local = fakeStore({ eventHistory:[localEvent] });
+    const remote = fakeStore({ eventHistory:[remoteEvent] });
+    const remoteEnvelope = buildExportPayload(remote, true);
+    let pushed = null;
+    const adapter = {
+      pull: async () => JSON.stringify(remoteEnvelope),
+      push: async (text) => { pushed = JSON.parse(text); },
+    };
+    const { merged, error } = await runSync({ store:local, config:defaultSyncConfig(), adapter, encryption:null });
+    assert.equal(error, undefined);
+    assert.deepEqual(new Set(merged.eventHistory.map(e=>e.id)), new Set(['ev-local','ev-remote']));
+    assert.deepEqual(new Set(pushed.data.eventHistory.map(e=>e.id)), new Set(['ev-local','ev-remote']));
+  });
+
+  it('preserves live evidence provenance on trusted sync while ordinary import still downgrades it', async () => {
+    const row = {
+      id:'eval-live',
+      exerciseId:'bench-press',
+      recommendation:{ load:80, reps:5 },
+      provenance:{ origin:'live-engine', capturedAt:'2026-01-01T08:00:00Z', deviceId:'dev-a' },
+      outcome:{ sessionId:'s-1', dateISO:'2026-01-01', metTarget:true },
+      outcomeProvenance:{ origin:'live-engine', capturedAt:'2026-01-01T10:00:00Z', deviceId:'dev-a' },
+    };
+    const envelope = buildExportPayload(fakeStore({ evaluationLedger:[row] }), true);
+    const consumer = parseImportFile(JSON.stringify(envelope));
+    const trusted = parseImportFile(JSON.stringify(envelope), true);
+    assert.equal(consumer.evaluationLedger[0].provenance.origin, 'imported');
+    assert.equal(consumer.evaluationLedger[0].outcomeProvenance.origin, 'imported');
+    assert.equal(trusted.evaluationLedger[0].provenance.origin, 'live-engine');
+    assert.equal(trusted.evaluationLedger[0].outcomeProvenance.origin, 'live-engine');
+  });
+
+  it('adopts one enrolled study identity across trusted sync without copying device-local consent', async () => {
+    const enrollment = {
+      studyVersion:1,
+      participantId:'aaaaaaaaaaaaaaaa',
+      seed:'seed::aaaaaaaaaaaaaaaa::v1',
+      enrolledAtISO:'2026-01-01T00:00:00Z',
+      assignments:{ 'bench-press':{ arm:'arise', assignmentVersion:1, assignedAtISO:'2026-01-01T00:00:00Z' } },
+    };
+    const local = fakeStore({
+      studyParticipantId:'bbbbbbbbbbbbbbbb',
+      preferences:{ units:'kg', telemetryEnabled:false },
+      studyEnrollment:null,
+      studyStatus:null,
+    });
+    const remote = fakeStore({
+      studyParticipantId:'aaaaaaaaaaaaaaaa',
+      preferences:{ units:'kg', telemetryEnabled:true },
+      studyEnrollment:enrollment,
+      studyStatus:'enrolled',
+      studyStatusChangedAtISO:'2026-01-01T00:00:00Z',
+    });
+    const remoteEnvelope = buildExportPayload(remote, true);
+    const adapter = { pull:async()=>JSON.stringify(remoteEnvelope), push:async()=>{} };
+    const { merged, error } = await runSync({ store:local, config:defaultSyncConfig(), adapter, encryption:null });
+    assert.equal(error, undefined);
+    assert.equal(merged.studyParticipantId, 'aaaaaaaaaaaaaaaa');
+    assert.equal(merged.studyStatus, 'enrolled');
+    assert.equal(merged.studyEnrollment.assignments['bench-press'].arm, 'arise');
+    assert.equal(merged.preferences.telemetryEnabled, false, 'consent remains device-local');
+  });
+
+  it('refuses incompatible frozen enrollment metadata even when arm assignments match', async () => {
+    const enrollment = (seed, studyVersion)=> ({
+      studyVersion,
+      participantId:'aaaaaaaaaaaaaaaa',
+      seed,
+      enrolledAtISO:'2026-01-01T00:00:00Z',
+      assignments:{ 'bench-press':{ arm:'arise', assignmentVersion:1, assignedAtISO:'2026-01-01T00:00:00Z' } },
+    });
+    const local = fakeStore({
+      studyParticipantId:'aaaaaaaaaaaaaaaa',
+      studyStatus:'enrolled',
+      studyEnrollment:enrollment('seed-a', 1),
+    });
+    const remoteEnvelope = buildExportPayload(fakeStore({
+      studyParticipantId:'aaaaaaaaaaaaaaaa',
+      studyStatus:'enrolled',
+      studyEnrollment:enrollment('seed-b', 2),
+    }), true);
+    let pushed = false;
+    const adapter = { pull:async()=>JSON.stringify(remoteEnvelope), push:async()=>{ pushed = true; } };
+    const { merged, error } = await runSync({ store:local, config:defaultSyncConfig(), adapter, encryption:null });
+    assert.match(error, /study-enrollment conflict/i);
+    assert.equal(pushed, false);
+    assert.equal(merged.studyEnrollment.seed, 'seed-a');
+  });
+
+  it('refuses to merge two different active study participants onto one sync path', async () => {
+    const enrolled = (id)=> ({
+      studyParticipantId:id,
+      studyStatus:'enrolled',
+      studyStatusChangedAtISO:'2026-01-01T00:00:00Z',
+      studyEnrollment:{
+        studyVersion:1, participantId:id, seed:`seed::${id}::v1`, enrolledAtISO:'2026-01-01T00:00:00Z',
+        assignments:{ 'bench-press':{ arm:'arise', assignmentVersion:1, assignedAtISO:'2026-01-01T00:00:00Z' } },
+      },
+    });
+    const local = fakeStore(enrolled('aaaaaaaaaaaaaaaa'));
+    const remoteEnvelope = buildExportPayload(fakeStore(enrolled('bbbbbbbbbbbbbbbb')), true);
+    let pushed = false;
+    const adapter = { pull:async()=>JSON.stringify(remoteEnvelope), push:async()=>{ pushed = true; } };
+    const { merged, error } = await runSync({ store:local, config:defaultSyncConfig(), adapter, encryption:null });
+    assert.match(error, /study-profile conflict/i);
+    assert.equal(pushed, false);
+    assert.equal(merged.studyParticipantId, 'aaaaaaaaaaaaaaaa');
+  });
+
   it('treats a 404-style pull as a first sync, not an error', async () => {
     const adapter = { pull: async () => { throw new Error('HTTP 404 not found'); }, push: async () => {} };
     const { merged, error } = await runSync({ store: fakeStore(), config: defaultSyncConfig(), adapter, encryption: null });

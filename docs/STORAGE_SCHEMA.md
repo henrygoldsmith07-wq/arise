@@ -6,7 +6,7 @@ Field meanings are in `docs/DATA_DICTIONARY.md`.
 ## The layout
 
 **IndexedDB is the canonical store.** `localStorage` keeps only lightweight
-flags/device-local compatibility state; the live recommendation ledger is no longer a parallel `localStorage` database. One database, fourteen object stores:
+flags/device-local compatibility state; neither the live recommendation ledger nor the product-event ledger has a parallel live `localStorage` database. One database, fourteen object stores:
 
 ```
 profile          onboarding profile + preferences (keyPath: id)
@@ -16,7 +16,7 @@ programme        active schedule + program state
 adaptations      programme-level adaptation records
 recommendations  frozen pre-workout recommendation snapshots
 outcomes         realised results paired to recommendations
-events           consent-gated measurement events
+events           canonical consent-gated product measurement events
 readiness        readiness entries, indexed by dateISO
 templates        user templates
 quarantine       payloads that failed boot validation (never auto-deleted)

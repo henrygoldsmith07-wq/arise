@@ -23,8 +23,10 @@ backup file there.
 
 - **Pull** the remote file (a 404 just means "first sync").
 - **Merge** with deterministic semantics: per-session last-write-wins on
-  `savedAt`, resolved beats unresolved, deletions travel as tombstones so
-  they survive the round trip.
+  `savedAt`, recommendation outcomes stay monotonic, product events union by
+  stable id, and deletions travel as tombstones so they survive the round trip.
+  WebDAV is a trusted Arise-to-Arise transport: existing evidence provenance
+  is preserved rather than being downgraded like an arbitrary backup import.
 - **Push** the converged payload back.
 
 The status line shows: never synced / up to date / queued / error, plus a
@@ -45,16 +47,22 @@ device last touched what.
   by syncing — the only network peer is your own WebDAV host.
 - With encryption on, the host stores ciphertext only; it cannot read your
   training data.
-- Credentials and passphrase live in this device's preferences only —
-  stripped from exports, denied on imports, never logged.
+- Credentials, passphrase and consent choices stay device-local —
+  stripped/denied at the transport boundary and never logged. Portable Gym
+  Mode settings, training history, events and evidence do sync.
+- Study identity/enrollment follows the same participant across trusted sync,
+  but measurement consent does not. If two different active study participants
+  point at the same remote path, Arise refuses the merge instead of combining
+  their study records.
 
 ## Recovery and pitfalls
 
 - **Forgot the passphrase?** The remote file is unreadable without it — by
   design. Delete the remote file and push a fresh one to start over.
 - **Rotating the app password:** update it in More → Sync and test.
-- **Don't point two Arise profiles at the same remote path with different
-  passphrases** — the second push will fail rather than corrupt; resolve by
-  picking one passphrase and re-syncing.
+- **Don't point unrelated Arise profiles at the same remote path.** Different
+  encryption passphrases already fail to decrypt; different active study
+  participant identities are also refused explicitly rather than merged.
+  Use separate remote paths for separate people.
 - There is no multi-peer version history: the remote holds the latest
   converged payload. Keep periodic file exports for deep history.

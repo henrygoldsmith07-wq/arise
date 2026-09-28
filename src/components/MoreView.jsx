@@ -241,7 +241,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
       const merged = mergeStores(store, imported, importStrategy);
       if(importStrategy==='replace') replaceEventHistory(imported.eventHistory || []);
       else if(imported.eventHistory?.length) mergeEventHistory(imported.eventHistory);
-      setStore({ ...merged, eventHistory:getEventHistory() }, importStrategy === 'replace' ? { evaluationLedgerMode:'replace' } : null);
+      setStore({ ...merged, eventHistory:getEventHistory() }, importStrategy === 'replace' ? { collectionMode:'replace' } : null);
       flashMsg(importStrategy==='replace'
         ? 'Backup restored — replaced this device.'
         : `Backup merged — ${importPreview.counts.additions} new session${importPreview.counts.additions === 1 ? '' : 's'} added${importPreview.counts.updates ? `, ${importPreview.counts.updates} conflict${importPreview.counts.updates === 1 ? '' : 's'} kept your current copy` : ''}.`, 6000);
@@ -647,7 +647,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={()=> setShowTelemetry(v=>!v)} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">{showTelemetry?'Hide':'Show'} local telemetry</button>          <button onClick={()=> { clearTelemetry(); clearErrorEvents(); flashMsg('Local telemetry and crash logs cleared.', 2000); }} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Clear telemetry</button>
+          <button onClick={()=> setShowTelemetry(v=>!v)} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">{showTelemetry?'Hide':'Show'} local telemetry</button>          <button onClick={()=> { clearTelemetry(); clearErrorEvents(); setStore({ ...store, eventHistory:[] }, { collectionMode:'replace' }); flashMsg('Local telemetry and crash logs cleared.', 2000); }} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Clear telemetry</button>
           <button onClick={()=> setShowErrors(v=>!v)} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">{showErrors?'Hide':'Show'} crash logs</button>
           <button onClick={()=> { clearErrorEvents(); flashMsg('Crash logs cleared.', 2000); }} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Clear crash logs</button>
         </div>

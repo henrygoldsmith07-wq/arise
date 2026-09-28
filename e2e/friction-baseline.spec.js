@@ -100,9 +100,9 @@ async function startFocusCounters(page){
 const VALUE_KEYS = ['target', 'suggestedTarget', 'load', 'loadKg', 'reps', 'rir', 'weightKg', 'assistedKg', 'assistKg', 'value'];
 
 async function readProbe(page){
-  return page.evaluate((valueKeys) => {
-    const raw = localStorage.getItem('arise.telemetry.v2');
-    const events = raw ? (JSON.parse(raw).events || []) : [];
+  return page.evaluate(async (valueKeys) => {
+    const { getEventHistory } = await import('/src/lib/telemetry.js');
+    const events = getEventHistory();
     const counts = {};
     let saveMs = null;
     let valueLeak = null;
@@ -155,10 +155,9 @@ test('baseline probe — standard mode two-set flow', async ({ page }) => {
   expect(probe.focus.inputFocus).toBe(3);
   expect(probe.valueLeak).toBeNull();
   // A standard entry is recorded at runner mount (value-free ids only).
-  const standardModes = await page.evaluate(() => {
-    const raw = localStorage.getItem('arise.telemetry.v2');
-    const events = raw ? (JSON.parse(raw).events || []) : [];
-    return events.filter((e)=> e.type === 'mode:enter').map((e)=> e.mode);
+  const standardModes = await page.evaluate(async () => {
+    const { getEventHistory } = await import('/src/lib/telemetry.js');
+    return getEventHistory().filter((e)=> e.type === 'mode:enter').map((e)=> e.mode);
   });
   expect(standardModes).toContain('standard');
   console.log(formatReport(checkLive(DOC, 'standard-two-set', liveCounts(probe))));
@@ -199,9 +198,8 @@ test('baseline probe — gym mode two-set flow', async ({ page }) => {
   // attributes to the bucket where the work happened — gym resolves, while
   // standard stays null with no standard completion behind its entry.
   const gymStats = await page.evaluate(async () => {
-    const { loggingFrictionStats } = await import('/src/lib/telemetry.js');
-    const raw = localStorage.getItem('arise.telemetry.v2');
-    const events = raw ? (JSON.parse(raw).events || []) : [];
+    const { getEventHistory, loggingFrictionStats } = await import('/src/lib/telemetry.js');
+    const events = getEventHistory();
     const modes = events.filter((e)=> e.type === 'mode:enter').map((e)=> e.mode);
     const s = loggingFrictionStats(events);
     return { modes, gym: s.byMode.gym.startToFirstSetMs, standard: s.byMode.standard.startToFirstSetMs };
@@ -235,10 +233,9 @@ test('swap friction — open → select → logging resumed', async ({ page }) =
   void focusedLabel;
   const probe = await readProbe(page);
   const focusAfter = probe.focus;
-  const swapCommit = await page.evaluate(() => {
-    const raw = localStorage.getItem('arise.telemetry.v2');
-    const events = raw ? (JSON.parse(raw).events || []) : [];
-    return events.find((e) => e.type === 'swap-commit') || null;
+  const swapCommit = await page.evaluate(async () => {
+    const { getEventHistory } = await import('/src/lib/telemetry.js');
+    return getEventHistory().find((e) => e.type === 'swap-commit') || null;
   });
   console.log(`friction swap: ${JSON.stringify({ counts: probe.counts, focusDelta: { focusin: focusAfter.focusin - focusBefore.focusin, inputFocus: focusAfter.inputFocus - focusBefore.inputFocus }, commitElapsedMs: swapCommit?.elapsedMs ?? null })}`);
   // Guardrailed against the executable baseline (2 logged actions minimum by
@@ -369,9 +366,8 @@ test('baseline probe — guided mode two-step flow', async ({ page }) => {
   expect(probe.valueLeak).toBeNull();
   // Guided entry recorded at runner mount; guided timing resolves end to end.
   const guidedStats = await page.evaluate(async () => {
-    const { loggingFrictionStats } = await import('/src/lib/telemetry.js');
-    const raw = localStorage.getItem('arise.telemetry.v2');
-    const events = raw ? (JSON.parse(raw).events || []) : [];
+    const { getEventHistory, loggingFrictionStats } = await import('/src/lib/telemetry.js');
+    const events = getEventHistory();
     const modes = events.filter((e)=> e.type === 'mode:enter').map((e)=> e.mode);
     return { modes, guided: loggingFrictionStats(events).byMode.guided.startToFirstSetMs };
   });
