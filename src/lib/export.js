@@ -20,11 +20,14 @@ export function stripDeviceLocalPrefs(preferences){
   return rest;
 }
 
-export function buildExportPayload(store){
-  const eventHistory=getEventHistory();
-  // The evaluation ledger travels with the backup: a longitudinal study must
-  // survive reinstalls and move between devices like any other user data.
-  const evaluationLedger=loadEvaluationLedger();
+export function buildExportPayload(store, { useStoreCollections = false } = {}){
+  // Normal user exports read the live canonical ledgers so a React snapshot
+  // that predates the latest event/recommendation cannot omit data. Trusted
+  // sync passes a freshly merged store and explicitly asks us to serialize
+  // those merged collections instead, otherwise the local live ledger would
+  // overwrite remote rows immediately before the converged push.
+  const eventHistory = useStoreCollections ? [...(store?.eventHistory || [])] : getEventHistory();
+  const evaluationLedger = useStoreCollections ? [...(store?.evaluationLedger || [])] : loadEvaluationLedger();
   const data={ ...store, version: store.version || STORE_SCHEMA_VERSION, eventHistory, evaluationLedger };
   // Credential hygiene: never let device-local sync config ride along.
   if(data.preferences) data.preferences = stripDeviceLocalPrefs(data.preferences);
@@ -49,7 +52,7 @@ export function buildExportPayload(store){
 // 'events'   = the local event ledger (product measurements)
 const PARTIAL_KEYS = {
   history:  ['history'],
-  settings: ['onboarding', 'preferences'],
+  settings: ['onboarding', 'preferences', 'gymPrefs'],
   events:   ['eventHistory'],
 };
 
@@ -166,7 +169,7 @@ export async function parseBackupFile(textOrEnvelope){
 // Anything else in a hand-edited backup is dropped rather than persisted forever.
 // studyParticipantId is the pseudonymous study identity (studyIdentity.js) —
 // preserved so repeated exports fold into ONE field-study participant.
-const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','preferences','readinessLog','programHistory','evaluationLedger','customTemplates','studyParticipantId','studyEnrollment','studyStatus','studyStatusChangedAtISO','tombstones'];
+const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','preferences','gymPrefs','readinessLog','programHistory','evaluationLedger','customTemplates','studyParticipantId','studyEnrollment','studyStatus','studyStatusChangedAtISO','tombstones'];
 
 // ── Import hardening (malicious/hostile JSON) ───────────────────────────────
 // Imports are untrusted input. Beyond schema validation, three structural
@@ -208,7 +211,7 @@ function sanitiseImportText(text){
   return stripDangerousKeys(parsed);
 }
 
-export function parseImportFile(text){
+function parseStorePayload(text, { provenance = 'imported', historySource = 'import' } = {}){
   const parsed = sanitiseImportText(text);
   const data = parsed?.data ? parsed.data : parsed;
   if(!data || typeof data !== 'object') throw new Error('Import file is empty or malformed.');
@@ -221,14 +224,25 @@ export function parseImportFile(text){
   const clean = {};
   for(const key of STORE_KEYS) if(key in data) clean[key]=data[key];
   const migrated = runMigrations(typeof structuredClone==='function' ? structuredClone(clean) : JSON.parse(JSON.stringify(clean)));
-  // Dangerous-field policy runs AFTER migrations (which can rename keys) and
-  // BEFORE the payload is merged: consent, study identity and health data are
-  // device-local and never file-supplied. Imported sessions get honest
-  // provenance: source 'import', ledger origin 'imported'.
+  // Device-local consent and credentials are denied for BOTH backup imports
+  // and trusted sync. The distinction is provenance: arbitrary user-supplied
+  // files are downgraded to imported; the app's own WebDAV sync preserves the
+  // already-recorded provenance blocks so same-participant evidence remains
+  // auditable across the user's devices.
   const safe = applyFieldPolicy(migrated);
-  if(Array.isArray(safe.history)) safe.history = safe.history.map((s)=> ensureSourceTags(s, 'import'));
-  if(Array.isArray(safe.evaluationLedger)) safe.evaluationLedger = safe.evaluationLedger.map((r)=> importLedgerProvenance(r));
+  if(Array.isArray(safe.history)) safe.history = safe.history.map((s)=> ensureSourceTags(s, historySource));
+  if(provenance === 'imported' && Array.isArray(safe.evaluationLedger)){
+    safe.evaluationLedger = safe.evaluationLedger.map((r)=> importLedgerProvenance(r));
+  }
   return safe;
+}
+
+export function parseImportFile(text){
+  return parseStorePayload(text, { provenance:'imported', historySource:'import' });
+}
+
+export function parseTrustedSyncFile(text){
+  return parseStorePayload(text, { provenance:'preserve', historySource:'sync' });
 }
 
 export function validateStoreData(data){
@@ -272,6 +286,7 @@ export function validateStoreData(data){
   if(data.eventHistory!=null && !Array.isArray(data.eventHistory)) errors.push('Event history must be an array.');
   if(data.evaluationLedger!=null && !Array.isArray(data.evaluationLedger)) errors.push('Evaluation ledger must be an array.');
   if(data.healthSummary!=null && typeof data.healthSummary!=='object') errors.push('Health summary must be an object or null.');
+  if(data.gymPrefs!=null && (typeof data.gymPrefs!=='object' || Array.isArray(data.gymPrefs))) errors.push('Gym preferences must be an object or null.');
   // Collections mergeStores/readiness consumers iterate unconditionally — a
   // non-array here would crash import/boot rather than fail validation.
   if(data.readinessLog!=null && !Array.isArray(data.readinessLog)) errors.push('Readiness log must be an array.');
@@ -300,6 +315,14 @@ export function mergeStores(current, imported, strategy='merge'){
     eventHistory: [...eventById.values()].sort((a,b)=> String(a.at||'').localeCompare(String(b.at||''))),
     healthSummary: currentStore.healthSummary || importedStore.healthSummary || null,
     preferences: { ...(importedStore.preferences||{}), ...(currentStore.preferences||{}) },
+    gymPrefs: {
+      ...(importedStore.gymPrefs || {}),
+      ...(currentStore.gymPrefs || {}),
+      restPresets:{
+        ...(importedStore.gymPrefs?.restPresets || {}),
+        ...(currentStore.gymPrefs?.restPresets || {}),
+      },
+    },
     readinessLog: [...(currentStore.readinessLog||[]), ...(importedStore.readinessLog||[])].filter((v,i,a)=> a.findIndex(x=> x.dateISO===v.dateISO && x.at===v.at)===i),
     evaluationLedger: mergeEvaluationLedgers(currentStore.evaluationLedger, importedStore.evaluationLedger),
     customTemplates: mergeCustomTemplates(currentStore.customTemplates, importedStore.customTemplates),
