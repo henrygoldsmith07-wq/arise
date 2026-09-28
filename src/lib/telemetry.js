@@ -2,11 +2,7 @@
 // Nothing leaves the device here; Pulse and health sharing have separate consent.
 
 import { STORE_SCHEMA_VERSION, KEY as STORE_KEY } from './store.js';
-import {
-  readCanonicalEventHistory,
-  replaceCanonicalEventHistory,
-  clearCanonicalEventHistory,
-} from './evaluationLedgerBridge.js';
+import { readCanonicalLedger, replaceCanonicalLedger, clearCanonicalLedger } from './evaluationLedgerBridge.js';
 
 const KEY = 'arise.telemetry.v2';
 const LEGACY_KEY = 'arise.telemetry.v1';
@@ -36,14 +32,14 @@ function legacyEvents(){
 }
 
 function loadEvents(){
-  const canonical = readCanonicalEventHistory();
+  const canonical = readCanonicalLedger('events');
   if(canonical !== null) return normaliseEvents(canonical).slice(-EVENT_LIMIT);
   return legacyEvents();
 }
 
 function saveEvents(events){
   const rows = normaliseEvents(events).slice(-EVENT_LIMIT);
-  if(replaceCanonicalEventHistory(rows)){
+  if(replaceCanonicalLedger('events', rows)){
     try{ localStorage.removeItem(KEY); localStorage.removeItem(LEGACY_KEY); }catch{}
     return true;
   }
@@ -170,7 +166,7 @@ export function mergeEventHistory(events){
 }
 
 export function clearTelemetry(){
-  clearCanonicalEventHistory();
+  clearCanonicalLedger('events');
   try{ localStorage.removeItem(KEY); localStorage.removeItem(LEGACY_KEY); localStorage.removeItem(ERROR_KEY); }catch{}
 }
 
