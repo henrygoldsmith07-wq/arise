@@ -31,11 +31,7 @@ import { getDeviceId } from './exportPolicy.js';
 import { evaluateLongitudinal, calibrateRecommendations, prospectiveFieldComparison } from './evaluation.js';
 import { trainingAgeInfo } from './progressionTrainingAge.js';
 import { summarizeEvaluationLedger } from './evaluationSummary.js';
-import {
-  readCanonicalEvaluationLedger,
-  replaceCanonicalEvaluationLedger,
-  clearCanonicalEvaluationLedger,
-} from './evaluationLedgerBridge.js';
+import { readCanonicalLedger, replaceCanonicalLedger, clearCanonicalLedger } from './evaluationLedgerBridge.js';
 export { evaluateLongitudinal, calibrateRecommendations, clusteredBootstrapDifference, clusteredBootstrapWinRate } from './evaluation.js';
 export function markRecommendationOverride({ exerciseId, dueDateISO = null, targetSessionId = null, storage = defaultStorage() } = {}){
   const ledger = loadEvaluationLedger(storage);
@@ -68,7 +64,7 @@ function defaultStorage(){
   return {
     getItem(key){
       if(key === EVALUATION_KEY){
-        const canonical = readCanonicalEvaluationLedger();
+        const canonical = readCanonicalLedger('evaluation');
         if(canonical !== null) return JSON.stringify({ schemaVersion:EVALUATION_SCHEMA_VERSION, records:canonical });
       }
       try{ return fallback?.getItem?.(key) ?? null; }catch{ return null; }
@@ -78,7 +74,7 @@ function defaultStorage(){
         try{
           const parsed = JSON.parse(String(value));
           const records = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.records) ? parsed.records : [];
-          if(replaceCanonicalEvaluationLedger(records)){
+          if(replaceCanonicalLedger('evaluation', records)){
             try{ fallback?.removeItem?.(EVALUATION_KEY); }catch{}
             return;
           }
@@ -87,7 +83,7 @@ function defaultStorage(){
       try{ fallback?.setItem?.(key, value); }catch{}
     },
     removeItem(key){
-      if(key === EVALUATION_KEY && clearCanonicalEvaluationLedger()){
+      if(key === EVALUATION_KEY && clearCanonicalLedger('evaluation')){
         try{ fallback?.removeItem?.(EVALUATION_KEY); }catch{}
         return;
       }
