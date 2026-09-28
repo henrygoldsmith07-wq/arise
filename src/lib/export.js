@@ -22,16 +22,9 @@ export function stripDeviceLocalPrefs(preferences){
 }
 
 export function storeWithLiveCollections(store){
-  const events = readCanonicalLedger('events');
-  const ledger = readCanonicalLedger('evaluation');
-  // Null means no hydrated bridge (pure tools/tests), so explicit collections
-  // remain authoritative. A bound bridge — including an empty ledger — wins.
-  if(events === null && ledger === null) return store;
-  return {
-    ...store,
-    ...(events === null ? {} : { eventHistory:events }),
-    ...(ledger === null ? {} : { evaluationLedger:ledger }),
-  };
+  const events=readCanonicalLedger('events'), ledger=readCanonicalLedger('evaluation');
+  if(events===null && ledger===null) return store;
+  return { ...store, eventHistory:events??store.eventHistory, evaluationLedger:ledger??store.evaluationLedger };
 }
 
 export function buildExportPayload(store, useStoreCollections = false){
