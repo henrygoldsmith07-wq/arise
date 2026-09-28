@@ -101,7 +101,7 @@ describe('indexeddb canonical storage', ()=>{
     assert.equal(recomposed.gymPrefs.focusDefault, true);
     assert.equal(recomposed.gymPrefs.restPresets['bench-press-dumbbell'], 90);
 
-    await setCachedStore(base, { evaluationLedgerMode:'replace' });
+    await setCachedStore(base, { collectionMode:'replace' });
     await whenPersisted();
   });
 
@@ -126,7 +126,7 @@ describe('indexeddb canonical storage', ()=>{
     assert.equal(seenBase?.activeSchedule?.lastAdaptation?.dateISO ?? null, durableAdaptationDate);
     assert.notEqual(seenBase?.activeSchedule?.lastAdaptation?.dateISO, '2026-01-20');
 
-    await setCachedStore(original, { persist:async(store)=> store, evaluationLedgerMode:'replace' });
+    await setCachedStore(original, { persist:async(store)=> store, collectionMode:'replace' });
     await whenPersisted();
   });
 
@@ -152,7 +152,7 @@ describe('indexeddb canonical storage', ()=>{
     release();
     await pending;
     await whenPersisted();
-    await setCachedStore(base, { persist:async(store)=> store, evaluationLedgerMode:'replace' });
+    await setCachedStore(base, { persist:async(store)=> store, collectionMode:'replace' });
     await whenPersisted();
   });
 
@@ -206,7 +206,7 @@ describe('indexeddb canonical storage', ()=>{
     assert.equal(committed.preferences.theme, 'light');
     assert.equal(committed.onboarding.goal, 'strength');
 
-    await setCachedStore(durable, { persist:async(store)=> store, evaluationLedgerMode:'replace' });
+    await setCachedStore(durable, { persist:async(store)=> store, collectionMode:'replace' });
     await whenPersisted();
   });
 
@@ -226,7 +226,7 @@ describe('indexeddb canonical storage', ()=>{
     assert.deepEqual(getEventHistory(), []);
     assert.deepEqual(await idbGetAll('events'), []);
 
-    await setCachedStore(base, { eventHistoryMode:'replace', evaluationLedgerMode:'replace' });
+    await setCachedStore(base, { collectionMode:'replace' });
     await whenPersisted();
   });
 
@@ -234,16 +234,16 @@ describe('indexeddb canonical storage', ()=>{
     await hydrateStorage();
     const base = getCachedStore();
     const newer = [...(base.eventHistory || []), { id:'sticky-event', type:'session:start', at:'2026-01-20T10:00:00Z' }];
-    await setCachedStore({ ...base, eventHistory:newer }, { persist:async(store)=> store, eventHistoryMode:'replace' });
+    await setCachedStore({ ...base, eventHistory:newer }, { persist:async(store)=> store, collectionMode:'replace' });
 
     const staleUiSnapshot = { ...base, preferences:{ ...(base.preferences || {}), theme:'light' } };
     await setCachedStore(staleUiSnapshot, { persist:async(store)=> store });
     assert.ok(getCachedStore().eventHistory.some(row=> row.id === 'sticky-event'));
 
-    await setCachedStore({ ...getCachedStore(), eventHistory:[] }, { persist:async(store)=> store, eventHistoryMode:'replace' });
+    await setCachedStore({ ...getCachedStore(), eventHistory:[] }, { persist:async(store)=> store, collectionMode:'replace' });
     assert.deepEqual(getCachedStore().eventHistory, []);
 
-    await setCachedStore(base, { persist:async(store)=> store, eventHistoryMode:'replace', evaluationLedgerMode:'replace' });
+    await setCachedStore(base, { persist:async(store)=> store, collectionMode:'replace' });
     await whenPersisted();
   });
 
@@ -266,16 +266,16 @@ describe('indexeddb canonical storage', ()=>{
     await hydrateStorage();
     const base = getCachedStore();
     const evidence = [...(base.evaluationLedger || []), { id:'sticky-evidence', exerciseId:'plank', recommendation:{ reps:30 }, outcome:null }];
-    await setCachedStore({ ...base, evaluationLedger:evidence }, { persist:async(store)=> store, evaluationLedgerMode:'replace' });
+    await setCachedStore({ ...base, evaluationLedger:evidence }, { persist:async(store)=> store, collectionMode:'replace' });
 
     const staleUiSnapshot = { ...base, preferences:{ ...(base.preferences || {}), theme:'dark' } };
     await setCachedStore(staleUiSnapshot, { persist:async(store)=> store });
     assert.ok(getCachedStore().evaluationLedger.some(row=> row.id === 'sticky-evidence'));
 
-    await setCachedStore({ ...getCachedStore(), evaluationLedger:[] }, { persist:async(store)=> store, evaluationLedgerMode:'replace' });
+    await setCachedStore({ ...getCachedStore(), evaluationLedger:[] }, { persist:async(store)=> store, collectionMode:'replace' });
     assert.equal(getCachedStore().evaluationLedger.length, 0);
 
-    await setCachedStore(base, { persist:async(store)=> store, evaluationLedgerMode:'replace' });
+    await setCachedStore(base, { persist:async(store)=> store, collectionMode:'replace' });
     await whenPersisted();
   });
 
