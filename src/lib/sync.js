@@ -31,57 +31,37 @@ export async function syncDown(currentStore, adapter, strategy="merge"){
   return mergeStoresWithConflicts(currentStore, imported);
 }
 
-function studyLifecycleActive(store){
-  return Boolean(store?.studyEnrollment) || store?.studyStatus === 'enrolled' || store?.studyStatus === 'withdrawn';
-}
-
-function enrollmentSignature(enrollment){
-  if(!enrollment) return null;
-  const assignments = Object.fromEntries(
-    Object.entries(enrollment.assignments || {})
-      .sort(([a],[b])=> a.localeCompare(b))
-      .map(([id, value])=> [id, value?.arm || null]),
-  );
-  return JSON.stringify({
-    participantId:enrollment.participantId || null,
-    studyVersion:enrollment.studyVersion || null,
-    seed:enrollment.seed || null,
-    assignments,
-  });
-}
+const studyActive = store => Boolean(store?.studyEnrollment) || ['enrolled','withdrawn'].includes(store?.studyStatus);
+const enrollmentSignature = e => e ? JSON.stringify([
+  e.studyVersion || null,
+  e.seed || null,
+  Object.entries(e.assignments || {}).sort(([a],[b])=> a.localeCompare(b)).map(([id,v])=> [id,v?.arm || null]),
+]) : null;
 
 function resolveStudySyncState(current, imported){
-  const currentId = current?.studyParticipantId || null;
-  const importedId = imported?.studyParticipantId || null;
-  const currentActive = studyLifecycleActive(current);
-  const importedActive = studyLifecycleActive(imported);
-
-  if(currentId && importedId && currentId !== importedId && currentActive && importedActive){
+  const aId=current?.studyParticipantId||null, bId=imported?.studyParticipantId||null;
+  const aActive=studyActive(current), bActive=studyActive(imported);
+  if(aId && bId && aId!==bId && aActive && bActive){
     throw new Error('Sync study-profile conflict: these devices belong to different enrolled/withdrawn study participants. Use separate WebDAV paths or restore the intended profile before syncing.');
   }
-
-  let participantId = currentId || importedId || null;
-  if(currentId && importedId && currentId !== importedId){
-    if(currentActive) participantId = currentId;
-    else if(importedActive) participantId = importedId;
-    else participantId = [currentId, importedId].sort()[0];
-  }
-
-  const matches = [current, imported].filter(s=> !s?.studyParticipantId || !participantId || s.studyParticipantId === participantId);
-  const enrollments = matches.map(s=> s?.studyEnrollment).filter(Boolean);
-  if(enrollments.length > 1 && enrollmentSignature(enrollments[0]) !== enrollmentSignature(enrollments[1])){
+  const studyParticipantId = aId===bId ? aId
+    : aActive ? aId
+    : bActive ? bId
+    : [aId,bId].filter(Boolean).sort()[0] || null;
+  const matches=[current,imported].filter(s=> !s?.studyParticipantId || s.studyParticipantId===studyParticipantId);
+  const enrollments=matches.map(s=>s?.studyEnrollment).filter(Boolean);
+  if(enrollments.length>1 && enrollmentSignature(enrollments[0])!==enrollmentSignature(enrollments[1])){
     throw new Error('Sync study-enrollment conflict: the same participant has incompatible frozen arm assignments.');
   }
-
-  const statusCandidates = matches
-    .filter(s=> s?.studyStatus)
-    .sort((a,b)=> (Date.parse(a.studyStatusChangedAtISO || '') || 0) - (Date.parse(b.studyStatusChangedAtISO || '') || 0));
-  const statusSource = statusCandidates.at(-1) || null;
-  const studyStatus = statusSource?.studyStatus || (enrollments.length ? 'enrolled' : null);
-  const studyStatusChangedAtISO = statusSource?.studyStatusChangedAtISO || null;
-  const studyEnrollment = studyStatus === 'withdrawn' ? null : (enrollments[0] || null);
-
-  return { studyParticipantId:participantId, studyEnrollment, studyStatus, studyStatusChangedAtISO };
+  const statusSource=matches.filter(s=>s?.studyStatus).sort((a,b)=>
+    (Date.parse(a.studyStatusChangedAtISO||'')||0)-(Date.parse(b.studyStatusChangedAtISO||'')||0)).at(-1);
+  const studyStatus=statusSource?.studyStatus || (enrollments.length ? 'enrolled' : null);
+  return {
+    studyParticipantId,
+    studyEnrollment:studyStatus==='withdrawn' ? null : (enrollments[0]||null),
+    studyStatus,
+    studyStatusChangedAtISO:statusSource?.studyStatusChangedAtISO||null,
+  };
 }
 
 // Merge with per-session conflict resolution (savedAt) and onboarding recency
