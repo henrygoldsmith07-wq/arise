@@ -31,33 +31,25 @@ export async function syncDown(currentStore, adapter, strategy="merge"){
   return mergeStoresWithConflicts(currentStore, imported);
 }
 
-const studyActive = store => Boolean(store?.studyEnrollment) || ['enrolled','withdrawn'].includes(store?.studyStatus);
-const enrollmentSignature = e => e ? JSON.stringify([
-  e.studyVersion || null,
-  e.seed || null,
-  Object.entries(e.assignments || {}).sort(([a],[b])=> a.localeCompare(b)).map(([id,v])=> [id,v?.arm || null]),
-]) : null;
+const studyActive = s => Boolean(s?.studyEnrollment) || ['enrolled','withdrawn'].includes(s?.studyStatus);
+const enrollmentSignature = e => e && JSON.stringify([e.studyVersion||null,e.seed||null,e.assignments||{}]);
 
 function resolveStudySyncState(current, imported){
-  const aId=current?.studyParticipantId||null, bId=imported?.studyParticipantId||null;
-  const aActive=studyActive(current), bActive=studyActive(imported);
-  if(aId && bId && aId!==bId && aActive && bActive){
-    throw new Error('Sync study-profile conflict: these devices belong to different enrolled/withdrawn study participants. Use separate WebDAV paths or restore the intended profile before syncing.');
-  }
-  const studyParticipantId = aId===bId ? aId
-    : aActive ? aId
-    : bActive ? bId
-    : [aId,bId].filter(Boolean).sort()[0] || null;
-  const matches=[current,imported].filter(s=> !s?.studyParticipantId || s.studyParticipantId===studyParticipantId);
+  const a=current?.studyParticipantId||null, b=imported?.studyParticipantId||null;
+  const aa=studyActive(current), ba=studyActive(imported);
+  if(a && b && a!==b && aa && ba) throw new Error('Sync study-profile conflict: different active participants share this WebDAV path.');
+  const id=a===b ? a : aa ? a : ba ? b : [a,b].filter(Boolean).sort()[0]||null;
+  const matches=[current,imported].filter(s=>!s?.studyParticipantId || s.studyParticipantId===id);
   const enrollments=matches.map(s=>s?.studyEnrollment).filter(Boolean);
-  if(enrollments.length>1 && enrollmentSignature(enrollments[0])!==enrollmentSignature(enrollments[1])){
-    throw new Error('Sync study-enrollment conflict: the same participant has incompatible frozen arm assignments.');
+  if(enrollments[1] && enrollmentSignature(enrollments[0])!==enrollmentSignature(enrollments[1])){
+    throw new Error('Sync study-enrollment conflict: frozen assignments differ.');
   }
-  const statusSource=matches.filter(s=>s?.studyStatus).sort((a,b)=>
-    (Date.parse(a.studyStatusChangedAtISO||'')||0)-(Date.parse(b.studyStatusChangedAtISO||'')||0)).at(-1);
+  const statuses=matches.filter(s=>s?.studyStatus);
+  const statusSource=statuses.length<2 ? statuses[0] : statuses.reduce((latest,s)=>
+    (Date.parse(s.studyStatusChangedAtISO||'')||0) >= (Date.parse(latest.studyStatusChangedAtISO||'')||0) ? s : latest);
   const studyStatus=statusSource?.studyStatus || (enrollments.length ? 'enrolled' : null);
   return {
-    studyParticipantId,
+    studyParticipantId:id,
     studyEnrollment:studyStatus==='withdrawn' ? null : (enrollments[0]||null),
     studyStatus,
     studyStatusChangedAtISO:statusSource?.studyStatusChangedAtISO||null,
