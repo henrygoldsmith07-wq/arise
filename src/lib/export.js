@@ -20,6 +20,18 @@ export function stripDeviceLocalPrefs(preferences){
   return rest;
 }
 
+export function storeWithLiveCollections(store){
+  const eventHistory = getEventHistory();
+  const evaluationLedger = loadEvaluationLedger();
+  const currentEvents = store?.eventHistory || [];
+  const currentLedger = store?.evaluationLedger || [];
+  const sameEvents = currentEvents.length === eventHistory.length
+    && currentEvents.every((row, i)=> row?.id === eventHistory[i]?.id);
+  const sameLedger = currentLedger.length === evaluationLedger.length
+    && currentLedger.every((row, i)=> row?.id === evaluationLedger[i]?.id && Boolean(row?.outcome) === Boolean(evaluationLedger[i]?.outcome));
+  return sameEvents && sameLedger ? store : { ...store, eventHistory, evaluationLedger };
+}
+
 export function buildExportPayload(store, { useStoreCollections = false } = {}){
   // Normal user exports read the live canonical ledgers so a React snapshot
   // that predates the latest event/recommendation cannot omit data. Trusted
