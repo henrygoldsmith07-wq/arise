@@ -3,7 +3,7 @@
 // Provider is a pluggable { pull, push } pair so tests stay pure.
 // Conflict resolution: per-session last-write-wins via savedAt; onboarding last-write-wins via exportedAt.
 
-import { buildExportPayload, parseImportFile, mergeStores } from "./export.js";
+import { buildExportPayload, parseImportFile, parseTrustedSyncFile, mergeStores } from "./export.js";
 import { STORE_SCHEMA_VERSION, mergeCustomTemplates } from "./store.js";
 import { mergeEvaluationLedgers } from "./longitudinal.js";
 import { applyTombstones, isTombstone } from "./domain.js";
@@ -25,9 +25,62 @@ export async function syncDown(currentStore, adapter, strategy="merge"){
   const text = typeof remoteRaw === "string" ? remoteRaw
     : remoteRaw instanceof Uint8Array ? new TextDecoder().decode(remoteRaw)
     : JSON.stringify(remoteRaw);
-  const imported = parseImportFile(text);
+  const imported = parseTrustedSyncFile(text);
   if(strategy==='replace') return mergeStores(currentStore, imported, 'replace');
   return mergeStoresWithConflicts(currentStore, imported);
+}
+
+function studyLifecycleActive(store){
+  return Boolean(store?.studyEnrollment) || store?.studyStatus === 'enrolled' || store?.studyStatus === 'withdrawn';
+}
+
+function enrollmentSignature(enrollment){
+  if(!enrollment) return null;
+  const assignments = Object.fromEntries(
+    Object.entries(enrollment.assignments || {})
+      .sort(([a],[b])=> a.localeCompare(b))
+      .map(([id, value])=> [id, value?.arm || null]),
+  );
+  return JSON.stringify({
+    participantId:enrollment.participantId || null,
+    studyVersion:enrollment.studyVersion || null,
+    seed:enrollment.seed || null,
+    assignments,
+  });
+}
+
+function resolveStudySyncState(current, imported){
+  const currentId = current?.studyParticipantId || null;
+  const importedId = imported?.studyParticipantId || null;
+  const currentActive = studyLifecycleActive(current);
+  const importedActive = studyLifecycleActive(imported);
+
+  if(currentId && importedId && currentId !== importedId && currentActive && importedActive){
+    throw new Error('Sync study-profile conflict: these devices belong to different enrolled/withdrawn study participants. Use separate WebDAV paths or restore the intended profile before syncing.');
+  }
+
+  let participantId = currentId || importedId || null;
+  if(currentId && importedId && currentId !== importedId){
+    if(currentActive) participantId = currentId;
+    else if(importedActive) participantId = importedId;
+    else participantId = [currentId, importedId].sort()[0];
+  }
+
+  const matches = [current, imported].filter(s=> !s?.studyParticipantId || !participantId || s.studyParticipantId === participantId);
+  const enrollments = matches.map(s=> s?.studyEnrollment).filter(Boolean);
+  if(enrollments.length > 1 && enrollmentSignature(enrollments[0]) !== enrollmentSignature(enrollments[1])){
+    throw new Error('Sync study-enrollment conflict: the same participant has incompatible frozen arm assignments.');
+  }
+
+  const statusCandidates = matches
+    .filter(s=> s?.studyStatus)
+    .sort((a,b)=> (Date.parse(a.studyStatusChangedAtISO || '') || 0) - (Date.parse(b.studyStatusChangedAtISO || '') || 0));
+  const statusSource = statusCandidates.at(-1) || null;
+  const studyStatus = statusSource?.studyStatus || (enrollments.length ? 'enrolled' : null);
+  const studyStatusChangedAtISO = statusSource?.studyStatusChangedAtISO || null;
+  const studyEnrollment = studyStatus === 'withdrawn' ? null : (enrollments[0] || null);
+
+  return { studyParticipantId:participantId, studyEnrollment, studyStatus, studyStatusChangedAtISO };
 }
 
 // Merge with per-session conflict resolution (savedAt) and onboarding recency
@@ -61,6 +114,7 @@ export function mergeStoresWithConflicts(current, imported){
     const k = `${r.dateISO}|${r.at||r.score}`;
     if(!rByKey.has(k)) rByKey.set(k, r);
   }
+  const study = resolveStudySyncState(current, imported);
   return {
     version: Math.max(STORE_SCHEMA_VERSION, current.version||1, imported.version||1),
     ...current,
@@ -70,6 +124,15 @@ export function mergeStoresWithConflicts(current, imported){
     // Guarded comparator: an entry missing dateISO must not crash the sync.
     history: applyTombstones([...byId.values()].sort((a,b)=> String(a?.dateISO||'').localeCompare(String(b?.dateISO||''))), tombstones),
     preferences,
+    gymPrefs: {
+      ...(imported.gymPrefs || {}),
+      ...(current.gymPrefs || {}),
+      restPresets:{
+        ...(imported.gymPrefs?.restPresets || {}),
+        ...(current.gymPrefs?.restPresets || {}),
+      },
+    },
+    ...study,
     eventHistory: [...eventById.values()].sort((a,b)=> String(a.at||'').localeCompare(String(b.at||''))),
     healthSummary: current.healthSummary || imported.healthSummary || null,
     readinessLog: [...rByKey.values()].sort((a,b)=> String(a?.dateISO||'').localeCompare(String(b?.dateISO||''))),
