@@ -4,12 +4,18 @@
 // WebDAV ingestion is trusted Arise-to-Arise transport: it preserves recorded
 // evidence provenance while still stripping device-local consent/credentials.
 
-import { parseImportFile, mergeStores } from "./export.js";
+import { buildExportPayload, parseImportFile, mergeStores } from "./export.js";
 import { STORE_SCHEMA_VERSION, mergeCustomTemplates } from "./store.js";
 import { mergeEvaluationLedgers } from "./longitudinal.js";
 import { applyTombstones, isTombstone } from "./domain.js";
 
 
+
+export async function syncUp(store, adapter){
+  const payload=buildExportPayload(store);
+  await adapter.push(payload);
+  return payload;
+}
 
 export async function syncDown(currentStore, adapter, strategy="merge"){
   if(!adapter?.pull) return currentStore;
@@ -32,12 +38,12 @@ const armSignature=e=>JSON.stringify(Object.keys(e?.assignments||{}).sort().map(
 function resolveStudySyncState(current, imported){
   const a=current?.studyParticipantId||null, b=imported?.studyParticipantId||null;
   const aa=studyActive(current), ba=studyActive(imported);
-  if(a && b && a!==b && aa && ba) throw new Error('Sync study-profile conflict: different active participants.');
+  if(a && b && a!==b && aa && ba) throw new Error('Sync study-profile conflict.');
   const id=a===b?a:aa?a:ba?b:a&&b?(a<b?a:b):a||b;
   const matches=[current,imported].filter(s=>!s?.studyParticipantId || s.studyParticipantId===id);
   const enrollments=matches.map(s=>s?.studyEnrollment).filter(Boolean);
   if(enrollments[1] && armSignature(enrollments[0])!==armSignature(enrollments[1])){
-    throw new Error('Sync study-enrollment conflict: frozen arms differ.');
+    throw new Error('Sync study-enrollment conflict.');
   }
   const statusSource=matches.filter(s=>s?.studyStatus).sort((a,b)=>String(a.studyStatusChangedAtISO||'').localeCompare(String(b.studyStatusChangedAtISO||''))).at(-1);
   const studyStatus=statusSource?.studyStatus || (enrollments.length ? 'enrolled' : null);
