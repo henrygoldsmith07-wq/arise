@@ -82,7 +82,7 @@ classify past sessions.
 | `theme` | null (system) / light / dark |
 | `soundCues`, `voiceCoach`, `voiceRate` | rest audio + speech settings |
 | `haptics` | vibration patterns on/off |
-| `gymMode` | focus mode / rest / numpad preferences |
+| `gymPrefs` | portable Gym Mode settings such as focus-by-default and per-exercise rest presets |
 | `syncEnabled` + `sync` | sync toggle + WebDAV config — **device-local by policy: stripped from exports, denied on import** |
 | `telemetryEnabled`, `pulseEnabled`, `healthSummaryEnabled` | independent, revocable consents (null = never asked) |
 | `accessibility` | `largeText`, `highContrast`, `reduceMotion` |
