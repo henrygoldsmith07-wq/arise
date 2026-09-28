@@ -37,6 +37,7 @@ function fullStore(){
     version: STORE_SCHEMA_VERSION,
     onboarding: { goal: 'muscle', equipment: ['dumbbells'], location: 'home' },
     preferences: { units: 'kg', theme: 'dark', sync: { url: 'https://dav.example', user: 'me', appPassword: 'hunter2' } },
+    gymPrefs: { focusDefault:true, restPresets:{ 'bench-press-dumbbell':90 } },
     healthSummary: null,
     activeSchedule: { programId: 'p1', mesocycle: { weeks: 4, deloadWeek: null }, adaptationHistory: [], sessions: [] },
     programHistory: [{ programId: 'p1', version: 1, startDateISO: '2026-01-05' }],
@@ -121,13 +122,15 @@ describe('integration: export → import flows', () => {
     assert.equal(imported.preferences.sync, undefined, 'WebDAV credentials never travel');
     assert.equal(imported.preferences.telemetryEnabled, undefined, 'consent is device-local');
     assert.equal(imported.activeWorkout.session.id, 'wip-1', 'a crashed draft ports to the new device too');
+    assert.equal(imported.gymPrefs.focusDefault, true);
+    assert.equal(imported.gymPrefs.restPresets['bench-press-dumbbell'], 90);
   });
 
   it('every partial export kind carries only its slice, in the same envelope contract', () => {
     const store = fullStore();
     for (const [kind, present, absent] of [
       ['history', ['history'], ['onboarding', 'preferences', 'eventHistory']],
-      ['settings', ['onboarding', 'preferences'], ['history', 'eventHistory']],
+      ['settings', ['onboarding', 'preferences', 'gymPrefs'], ['history', 'eventHistory']],
       ['events', ['eventHistory'], ['history', 'preferences']],
     ]) {
       const raw = JSON.parse(JSON.stringify(buildPartialExportPayload(store, kind)));
