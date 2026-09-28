@@ -183,7 +183,7 @@ export async function runSync({ store, config, adapter, encryption } = {}){
       ? await syncDown(store, { pull: async () => remoteText }, 'merge')
       : store;
     // 2. Push the merged state so both devices converge on the same payload.
-    const payload = buildExportPayload(merged);
+    const payload = buildExportPayload(merged, { useStoreCollections:true });
     let outgoing = JSON.stringify(payload);
     if(seal){
       if(!cfg.passphrase) throw new Error('Sync encryption is on but no passphrase is set.');
