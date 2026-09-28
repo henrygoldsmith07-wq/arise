@@ -31,6 +31,7 @@ export async function syncDown(currentStore, adapter, strategy="merge"){
   return mergeStoresWithConflicts(currentStore, imported);
 }
 
+const unionBy=(rows,key)=>[...new Map(rows.map(v=>[key(v),v])).values()];
 const studyActive = s => Boolean(s?.studyEnrollment) || s?.studyStatus==='enrolled' || s?.studyStatus==='withdrawn';
 const armSignature = e => e && JSON.stringify(Object.entries(e.assignments||{})
   .sort(([a],[b])=>a.localeCompare(b)).map(([id,v])=>[id,v?.arm||null]));
@@ -81,14 +82,8 @@ export function mergeStoresWithConflicts(current, imported){
   const activeSchedule = current.activeSchedule || imported.activeSchedule || null;
   // preferences: merge, current wins on explicit keys
   const preferences = { ...(imported.preferences||{}), ...(current.preferences||{}) };
-  const eventById = new Map();
-  for(const e of [...(current.eventHistory||[]), ...(imported.eventHistory||[])]) if(e?.id) eventById.set(e.id,e);
-  // readinessLog: merge by dateISO+at
-  const rByKey = new Map();
-  for(const r of [...(current.readinessLog||[]), ...(imported.readinessLog||[])]) {
-    const k = `${r.dateISO}|${r.at||r.score}`;
-    if(!rByKey.has(k)) rByKey.set(k, r);
-  }
+  const events=unionBy([...(current.eventHistory||[]), ...(imported.eventHistory||[])].filter(e=>e?.id), e=>e.id);
+  const readiness=unionBy([...(imported.readinessLog||[]), ...(current.readinessLog||[])], r=>`${r.dateISO}|${r.at||r.score}`);
   const study = resolveStudySyncState(current, imported);
   return {
     version: Math.max(STORE_SCHEMA_VERSION, current.version||1, imported.version||1),
@@ -108,13 +103,13 @@ export function mergeStoresWithConflicts(current, imported){
       },
     },
     ...study,
-    eventHistory: [...eventById.values()].sort((a,b)=> String(a.at||'').localeCompare(String(b.at||''))),
+    eventHistory: events.sort((a,b)=> String(a.at||'').localeCompare(String(b.at||''))),
     healthSummary: current.healthSummary || imported.healthSummary || null,
-    readinessLog: [...rByKey.values()].sort((a,b)=> String(a?.dateISO||'').localeCompare(String(b?.dateISO||''))),
+    readinessLog: readiness.sort((a,b)=> String(a?.dateISO||'').localeCompare(String(b?.dateISO||''))),
     evaluationLedger: mergeEvaluationLedgers(current.evaluationLedger, imported.evaluationLedger),
     customTemplates: applyTombstones(mergeCustomTemplates(current.customTemplates, imported.customTemplates), tombstones),
-    programHistory: [...(current.programHistory||[]), ...(imported.programHistory||[])].filter((v,i,a)=> a.findIndex(x=> x.programId===v.programId && x.version===v.version)===i),
-    tombstones: [...(current.tombstones||[]), ...(imported.tombstones||[])].filter((v,i,a)=> a.findIndex(x=> x.id===v.id)===i),
+    programHistory: unionBy([...(imported.programHistory||[]), ...(current.programHistory||[])], v=>`${v.programId}|${v.version}`),
+    tombstones,
   };
 }
 
