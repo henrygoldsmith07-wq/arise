@@ -210,6 +210,22 @@ describe('indexeddb canonical storage', ()=>{
     await whenPersisted();
   });
 
+  it('uses canonical hydrated preferences for non-essential telemetry consent', async ()=>{
+    await hydrateStorage();
+    const base = getCachedStore();
+    const enabled = { ...base, preferences:{ ...(base.preferences || {}), telemetryEnabled:true } };
+    await setCachedStore(enabled);
+    await whenPersisted();
+
+    const event = recordEvent('complete-set', { sessionId:'consent-check', setId:'set-1' });
+    assert.ok(event, 'canonical telemetry consent should permit a normal product event');
+    assert.ok(getEventHistory().some(row=> row.id === event.id));
+    await whenPersisted();
+
+    await setCachedStore(base, { collectionMode:'replace' });
+    await whenPersisted();
+  });
+
   it('uses the hydrated IndexedDB-backed store as the live event ledger', async ()=>{
     await hydrateStorage();
     const base = getCachedStore();
