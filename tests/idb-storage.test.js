@@ -68,7 +68,8 @@ describe('indexeddb canonical storage', ()=>{
     assert.equal(composed.evaluationLedger.length, 2); // open + resolved unioned by id
     assert.equal(composed.customTemplates[0].id, 'custom-x');
     assert.equal(composed.readinessLog.length, 1);
-    assert.equal(composed.eventHistory.length, 1);
+    assert.equal(composed.eventHistory.length, 2);
+    assert.deepEqual(new Set(composed.eventHistory.map(row=> row.id)), new Set(['e1','legacy-event']));
     assert.deepEqual(composed.onboarding, { goal:'muscle', equipment:['dumbbells'], location:'home' });
   });
 
