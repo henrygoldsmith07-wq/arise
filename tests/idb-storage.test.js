@@ -4,6 +4,7 @@ import { clearAllStoredData, getCachedStore, hydrateStorage, loadStoreFromIdb, p
 import { idbGetAll } from '../src/lib/idb.js';
 import { loadStore, saveStore, STORE_SCHEMA_VERSION } from '../src/lib/store.js';
 import { loadEvaluationLedger, saveEvaluationLedger } from '../src/lib/longitudinal.js';
+import { clearTelemetry, getEventHistory, recordEvent } from '../src/lib/telemetry.js';
 
 function set(reps, kg){ return { reps:String(reps), weightKg:String(kg), rpe:'' }; }
 function fullStore(){
@@ -201,6 +202,43 @@ describe('indexeddb canonical storage', ()=>{
     assert.equal(committed.onboarding.goal, 'strength');
 
     await setCachedStore(durable, { persist:async(store)=> store, evaluationLedgerMode:'replace' });
+    await whenPersisted();
+  });
+
+  it('uses the hydrated IndexedDB-backed store as the live event ledger', async ()=>{
+    await hydrateStorage();
+    const base = getCachedStore();
+    const event = recordEvent('session:start', { sessionId:'canonical-event' }, { essential:true });
+    assert.ok(event);
+    await whenPersisted();
+
+    assert.ok(getEventHistory().some(row=> row.id === event.id));
+    const events = await idbGetAll('events');
+    assert.ok(events.some(row=> row.id === event.id));
+
+    clearTelemetry();
+    await whenPersisted();
+    assert.deepEqual(getEventHistory(), []);
+    assert.deepEqual(await idbGetAll('events'), []);
+
+    await setCachedStore(base, { eventHistoryMode:'replace', evaluationLedgerMode:'replace' });
+    await whenPersisted();
+  });
+
+  it('preserves newer events during ordinary saves but permits an explicit replacement', async ()=>{
+    await hydrateStorage();
+    const base = getCachedStore();
+    const newer = [...(base.eventHistory || []), { id:'sticky-event', type:'session:start', at:'2026-01-20T10:00:00Z' }];
+    await setCachedStore({ ...base, eventHistory:newer }, { persist:async(store)=> store, eventHistoryMode:'replace' });
+
+    const staleUiSnapshot = { ...base, preferences:{ ...(base.preferences || {}), theme:'light' } };
+    await setCachedStore(staleUiSnapshot, { persist:async(store)=> store });
+    assert.ok(getCachedStore().eventHistory.some(row=> row.id === 'sticky-event'));
+
+    await setCachedStore({ ...getCachedStore(), eventHistory:[] }, { persist:async(store)=> store, eventHistoryMode:'replace' });
+    assert.deepEqual(getCachedStore().eventHistory, []);
+
+    await setCachedStore(base, { persist:async(store)=> store, eventHistoryMode:'replace', evaluationLedgerMode:'replace' });
     await whenPersisted();
   });
 
