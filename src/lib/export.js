@@ -8,7 +8,7 @@ import { ensureStudyParticipantId } from './studyIdentity.js';
 import { buildEnvelope, applyFieldPolicy, EXPORT_VERSION } from './exportPolicy.js';
 import { withProvenance, ensureSourceTags, importLedgerProvenance } from './domain.js';
 import { isDateOnly } from './dateOnly.js';
-import { readCanonicalEventHistory, readCanonicalEvaluationLedger } from './evaluationLedgerBridge.js';
+import { readCanonicalLedger } from './evaluationLedgerBridge.js';
 
 export { EXPORT_VERSION };
 
@@ -22,8 +22,8 @@ export function stripDeviceLocalPrefs(preferences){
 }
 
 export function storeWithLiveCollections(store){
-  const events = readCanonicalEventHistory();
-  const ledger = readCanonicalEvaluationLedger();
+  const events = readCanonicalLedger('events');
+  const ledger = readCanonicalLedger('evaluation');
   // Null means no hydrated bridge (pure tools/tests), so explicit collections
   // remain authoritative. A bound bridge — including an empty ledger — wins.
   if(events === null && ledger === null) return store;
