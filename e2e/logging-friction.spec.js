@@ -59,9 +59,9 @@ async function startWorkout(page){
 }
 
 async function eventCounts(page){
-  return page.evaluate(() => {
-    const raw = localStorage.getItem('arise.telemetry.v2');
-    const events = raw ? (JSON.parse(raw).events || []) : [];
+  return page.evaluate(async () => {
+    const { getEventHistory } = await import('/src/lib/telemetry.js');
+    const events = getEventHistory();
     const counts = {};
     for(const e of events) counts[e.type] = (counts[e.type] || 0) + 1;
     return { total: events.length, counts };
@@ -252,12 +252,11 @@ test('undo then re-complete nets to one set under a stable identity', async ({ p
   expect(done.length).toBe(1);
   const stats = await page.evaluate(async () => {
     const { loadStore } = await import('/src/lib/store.js');
-    const { loggingFrictionStats } = await import('/src/lib/telemetry.js');
+    const { getEventHistory, loggingFrictionStats } = await import('/src/lib/telemetry.js');
     const store = loadStore();
     const last = store.history[store.history.length - 1];
     const savedId = (last.blocks?.[0]?.sets || []).find((s)=> s.completed)?.setId || null;
-    const raw = localStorage.getItem('arise.telemetry.v2');
-    const events = raw ? (JSON.parse(raw).events || []) : [];
+    const events = getEventHistory();
     const setEvents = events.filter((e)=> e.type === 'complete-set' || e.type === 'undo-set');
     return {
       savedId,
