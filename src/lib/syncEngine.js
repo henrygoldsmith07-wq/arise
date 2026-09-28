@@ -17,7 +17,7 @@
 //     drain with exponential backoff.
 
 import { syncUp, syncDown } from './sync.js';
-import { buildExportPayload } from './export.js';
+import { buildExportPayload, storeWithLiveCollections } from './export.js';
 import { encryptBackup, decryptBackup } from './cryptoBackup.js';
 
 export const SYNC_QUEUE_LIMIT = 20;
@@ -77,6 +77,7 @@ export function pushLog(logs, entry){
 /** Queue an item for later push (offline, or a failed cycle). Pure. */
 export function enqueueOffline(config, reason){
   const cfg = normalizeSyncConfig(config);
+  const localStore = storeWithLiveCollections(store || {});
   const queue = [...cfg.queue, { at: new Date().toISOString(), reason, attempts: 0, nextAttemptAt: null }].slice(-SYNC_QUEUE_LIMIT);
   return { ...cfg, queue };
 }
@@ -180,8 +181,8 @@ export async function runSync({ store, config, adapter, encryption } = {}){
       if(!/404|not found/i.test(String(err?.message || err))) throw err;
     }
     const merged = remoteText
-      ? await syncDown(store, { pull: async () => remoteText }, 'merge')
-      : store;
+      ? await syncDown(localStore, { pull: async () => remoteText }, 'merge')
+      : localStore;
     // 2. Push the merged state so both devices converge on the same payload.
     const payload = buildExportPayload(merged, { useStoreCollections:true });
     let outgoing = JSON.stringify(payload);
@@ -204,7 +205,7 @@ export async function runSync({ store, config, adapter, encryption } = {}){
   }catch(err){
     const message = String(err?.message || err);
     return {
-      merged: store,
+      merged: localStore,
       config: { ...cfg, lastError: message, logs: pushLog(logs0, { kind: 'sync-error', error: message }) },
       error: message,
     };
