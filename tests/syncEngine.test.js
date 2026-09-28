@@ -207,6 +207,32 @@ describe('runSync cycle', () => {
     assert.equal(merged.preferences.telemetryEnabled, false, 'consent remains device-local');
   });
 
+  it('refuses incompatible frozen enrollment metadata even when arm assignments match', async () => {
+    const enrollment = (seed, studyVersion)=> ({
+      studyVersion,
+      participantId:'aaaaaaaaaaaaaaaa',
+      seed,
+      enrolledAtISO:'2026-01-01T00:00:00Z',
+      assignments:{ 'bench-press':{ arm:'arise', assignmentVersion:1, assignedAtISO:'2026-01-01T00:00:00Z' } },
+    });
+    const local = fakeStore({
+      studyParticipantId:'aaaaaaaaaaaaaaaa',
+      studyStatus:'enrolled',
+      studyEnrollment:enrollment('seed-a', 1),
+    });
+    const remoteEnvelope = buildExportPayload(fakeStore({
+      studyParticipantId:'aaaaaaaaaaaaaaaa',
+      studyStatus:'enrolled',
+      studyEnrollment:enrollment('seed-b', 2),
+    }), true);
+    let pushed = false;
+    const adapter = { pull:async()=>JSON.stringify(remoteEnvelope), push:async()=>{ pushed = true; } };
+    const { merged, error } = await runSync({ store:local, config:defaultSyncConfig(), adapter, encryption:null });
+    assert.match(error, /study-enrollment conflict/i);
+    assert.equal(pushed, false);
+    assert.equal(merged.studyEnrollment.seed, 'seed-a');
+  });
+
   it('refuses to merge two different active study participants onto one sync path', async () => {
     const enrolled = (id)=> ({
       studyParticipantId:id,
