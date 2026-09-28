@@ -23,21 +23,16 @@ export function stripDeviceLocalPrefs(preferences){
 }
 
 export function storeWithLiveCollections(store){
-  const canonicalEvents = readCanonicalEventHistory();
-  const canonicalLedger = readCanonicalEvaluationLedger();
-  // Pure tools/tests may supply a complete store without hydrating storage;
-  // in that case the bridge returns null and the explicit collections remain
-  // authoritative. In the app, a hydrated bridge always wins over a lagging
-  // React snapshot, including the intentional empty-after-clear state.
-  const eventHistory = canonicalEvents !== null ? canonicalEvents : (store?.eventHistory || []);
-  const evaluationLedger = canonicalLedger !== null ? canonicalLedger : (store?.evaluationLedger || []);
-  const currentEvents = store?.eventHistory || [];
-  const currentLedger = store?.evaluationLedger || [];
-  const sameEvents = currentEvents.length === eventHistory.length
-    && currentEvents.every((row, i)=> row?.id === eventHistory[i]?.id);
-  const sameLedger = currentLedger.length === evaluationLedger.length
-    && currentLedger.every((row, i)=> row?.id === evaluationLedger[i]?.id && Boolean(row?.outcome) === Boolean(evaluationLedger[i]?.outcome));
-  return sameEvents && sameLedger ? store : { ...store, eventHistory, evaluationLedger };
+  const events = readCanonicalEventHistory();
+  const ledger = readCanonicalEvaluationLedger();
+  // Null means no hydrated bridge (pure tools/tests), so explicit collections
+  // remain authoritative. A bound bridge — including an empty ledger — wins.
+  if(events === null && ledger === null) return store;
+  return {
+    ...store,
+    ...(events === null ? {} : { eventHistory:events }),
+    ...(ledger === null ? {} : { evaluationLedger:ledger }),
+  };
 }
 
 export function buildExportPayload(store, { useStoreCollections = false } = {}){
