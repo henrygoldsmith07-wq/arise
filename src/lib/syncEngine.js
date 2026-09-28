@@ -16,7 +16,7 @@
 //   - Failures never block the app: pushes go to a bounded offline queue and
 //     drain with exponential backoff.
 
-import { syncUp, syncDown } from './sync.js';
+import { syncDown } from './sync.js';
 import { buildExportPayload, storeWithLiveCollections } from './export.js';
 import { encryptBackup, decryptBackup } from './cryptoBackup.js';
 
