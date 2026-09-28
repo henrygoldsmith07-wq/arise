@@ -67,18 +67,18 @@ export default function SyncPanel({ store, setStore, setMsg }){
       // refresh with the runtime config so status stays truthful.
       setStore({ ...storeArg, ...merged, preferences: { ...(merged.preferences || {}), sync: config } });
       if(error){
-        setMsg(`Sync failed: ${error} — nothing was overwritten; your local history is intact.`);
+        setMsg(`Sync failed: ${error}. Local history is unchanged.`);
       }else{
         // Say what the merge actually did: conflicts are resolved by session
         // id (newest edit wins) and NOTHING is ever deleted to make room.
         const incoming = (merged.history || []).filter((h) => h?.id && !localIds.has(h.id)).length;
         setMsg(incoming
-          ? `Sync complete — merged ${incoming} session${incoming === 1 ? '' : 's'} in from your other device(s); your history was kept, not replaced.`
+          ? `Sync complete — added ${incoming} session${incoming === 1 ? '' : 's'} from another device; local history was kept.`
           : 'Sync complete — portable data converged. Consent and credentials stay local.');
       }
       setTimeout(() => setMsg(null), 6000);
     }catch(err){
-      setMsg(`${String(err?.message || err)} — your local history is untouched.`);
+      setMsg(`${String(err?.message || err)}. Local history is unchanged.`);
       setTimeout(() => setMsg(null), 5000);
     }finally{
       setBusy(false);
@@ -246,7 +246,7 @@ export default function SyncPanel({ store, setStore, setMsg }){
               <p key={id} className="text-[11px] text-ink3">Peer {id.slice(0, 10)} — last wrote {d?.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : 'unknown'}{d?.wroteAt ? ` (file dated ${new Date(d.wroteAt).toLocaleString()})` : ''}</p>
             ))}
             {Object.keys(sync.devices || {}).length === 0 && (
-              <p className="text-[11px] text-ink3">No peer device has written to your storage yet. On your other device, set the same four values and sync once.</p>
+              <p className="text-[11px] text-ink3">No peer device yet. Set the same sync values on the other device and sync once.</p>
             )}
           </div>
           <p className="text-[11px] text-ink3">No network or the storage is unreachable? More → Backup &amp; portability exports an <span className="font-semibold">encrypted backup file</span> you can move by any means (share sheet, file app, drive); importing it on the other device merges — it never replaces history.</p>
