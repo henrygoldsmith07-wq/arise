@@ -1,7 +1,8 @@
 ﻿// sync.js — optional cross-device sync layer (offline-first preserved).
-// Default: localStorage only. When sync is enabled, this mirrors export/import over a sync provider.
-// Provider is a pluggable { pull, push } pair so tests stay pure.
-// Conflict resolution: per-session last-write-wins via savedAt; onboarding last-write-wins via exportedAt.
+// IndexedDB remains canonical locally; sync mirrors the portable store over a
+// user-owned provider. Provider is a pluggable { pull, push } pair so tests stay pure.
+// WebDAV ingestion is trusted Arise-to-Arise transport: it preserves recorded
+// evidence provenance while still stripping device-local consent/credentials.
 
 import { buildExportPayload, parseImportFile, parseTrustedSyncFile, mergeStores } from "./export.js";
 import { STORE_SCHEMA_VERSION, mergeCustomTemplates } from "./store.js";
