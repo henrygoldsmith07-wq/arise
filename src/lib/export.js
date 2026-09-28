@@ -225,7 +225,7 @@ function sanitiseImportText(text){
   return stripDangerousKeys(parsed);
 }
 
-function parseStorePayload(text, { provenance = 'imported', historySource = 'import' } = {}){
+function parseStorePayload(text, trusted = false){
   const parsed = sanitiseImportText(text);
   const data = parsed?.data ? parsed.data : parsed;
   if(!data || typeof data !== 'object') throw new Error('Import file is empty or malformed.');
@@ -244,20 +244,15 @@ function parseStorePayload(text, { provenance = 'imported', historySource = 'imp
   // already-recorded provenance blocks so same-participant evidence remains
   // auditable across the user's devices.
   const safe = applyFieldPolicy(migrated);
-  if(Array.isArray(safe.history)) safe.history = safe.history.map((s)=> ensureSourceTags(s, historySource));
-  if(provenance === 'imported' && Array.isArray(safe.evaluationLedger)){
+  if(Array.isArray(safe.history)) safe.history = safe.history.map((s)=> ensureSourceTags(s, trusted ? 'sync' : 'import'));
+  if(!trusted && Array.isArray(safe.evaluationLedger)){
     safe.evaluationLedger = safe.evaluationLedger.map((r)=> importLedgerProvenance(r));
   }
   return safe;
 }
 
-export function parseImportFile(text){
-  return parseStorePayload(text, { provenance:'imported', historySource:'import' });
-}
-
-export function parseTrustedSyncFile(text){
-  return parseStorePayload(text, { provenance:'preserve', historySource:'sync' });
-}
+export function parseImportFile(text){ return parseStorePayload(text); }
+export function parseTrustedSyncFile(text){ return parseStorePayload(text, true); }
 
 export function validateStoreData(data){
   const errors=[];
