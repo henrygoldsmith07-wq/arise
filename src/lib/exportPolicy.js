@@ -183,7 +183,7 @@ export const DENY_FIELDS = [
 // and healthSummary travel deliberately (study folding / device portability);
 // the device-local CONSENT toggles inside preferences are denied above.
 export const IMPORT_ALLOW_KEYS = [
-  'onboarding', 'activeSchedule', 'activeWorkout', 'history', 'preferences',
+  'onboarding', 'activeSchedule', 'activeWorkout', 'history', 'preferences', 'gymPrefs',
   'readinessLog', 'programHistory', 'evaluationLedger', 'customTemplates',
   'eventHistory', 'studyEnrollment', 'tombstones',
   'studyParticipantId', 'healthSummary',
