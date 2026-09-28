@@ -10,10 +10,10 @@ versioned; imports are previewed before anything is applied.
 ```json
 {
   "app": "arise",
-  "contract": "arise.contract.v4",
-  "contractMin": "arise.contract.v1",
-  "payloadVersion": 5,
-  "schemaVersion": 5,
+  "contract": "arise.export.v1",
+  "contractMin": 1,
+  "payloadVersion": 4,
+  "schemaVersion": 9,
   "exportedAt": "2026-09-05T08:00:00.000Z",
   "device": "dev_ab12cd-34ef56",
   "appVersion": "0.1.0",
@@ -35,7 +35,7 @@ the passphrase never leaves the device and is never stored in the backup.
 Losing it loses the backup's readability; that is stated at encryption time.
 
 **Partial exports.** History-only, settings-only, events-only — same
-envelope, subset payload, importable through the same preview flow.
+envelope, subset payload, importable through the same preview flow. Settings-only includes onboarding, ordinary preferences and Gym Mode focus/rest presets; device-local credentials and consent toggles remain excluded.
 
 **CSV.** A standardised spreadsheet schema for history; exported values are
 formula-injection-safe (leading `=`/`+`/`-`/`@` cell values are neutralised).
