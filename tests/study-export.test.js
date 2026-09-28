@@ -462,7 +462,7 @@ describe('§ export minimisation — only disclosed, study-required data leaves'
   function richPrivateStore(){
     const store = baseStore();
     store.history.push({
-      id: 's-rich', dateISO: '2026-03-08', programId: 'p1', programVersion: 3, templateVersion: 2,
+      id: 's-rich', dateISO: '2026-03-08', scheduledDateISO: '2026-03-09', programId: 'p1', programVersion: 3, templateVersion: 2,
       week: 1, day: 1, title: 'PRIVATE TITLE heavy day', mode: 'guided', status: 'done',
       durationMinutes: 44, startedAt: '2026-03-08T09:00:00.000Z', finishedAt: '2026-03-08T09:44:00.000Z', savedAt: '2026-03-08T09:44:00.000Z',
       equipmentSnapshot: ['barbell'], exerciseOrder: ['bench-press-dumbbell'], painDiscomfort: true,
