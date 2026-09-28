@@ -38,7 +38,7 @@ export { EXPORT_VERSION };
 // (pickFiniteNumber / pickFiniteInteger below) — never a coercion result.
 // Numeric-string acceptance would be a schema-meaning change (v5+), and no
 // exported numeric field is written as a string today.
-export const STUDY_EXPORT_VERSION = 4; // v4: scalars type-locked; audit/band confidence is a string; engine objects rebuilt; prescription uncertainty stays local
+export const STUDY_EXPORT_VERSION = 5; // v5: preserves performed-vs-scheduled workout date and exact target-session identity
 
 // Compact typed pickers for the serializers: null/unknown → null (never a
 // smuggled object/array or a coerced 0), a non-conforming value never travels.
@@ -176,6 +176,7 @@ function studyLedgerRow(row){
   return {
     id: pickStr(row.id), schemaVersion: pickFiniteInteger(row.schemaVersion),
     recordedAtISO: pickStr(row.recordedAtISO), dueDateISO: pickStr(row.dueDateISO),
+    targetSessionId: pickStr(row.targetSessionId),
     exerciseId: pickStr(row.exerciseId), movementPattern: pickStr(row.movementPattern), equipmentClass: pickStr(row.equipmentClass),
     programId: pickStr(row.programId), programVersion: pickFiniteInteger(row.programVersion),
     recommendation: studyRecPayload(row.recommendation), audit: studyAudit(row.audit),
@@ -307,7 +308,7 @@ export function buildStudyHistoryExport(history){
   for(const s of (Array.isArray(history) ? history : [])){
     if(!s || typeof s !== 'object') continue;
     out.push(typedFields(s, {
-      id: pickStr, dateISO: pickStr,
+      id: pickStr, dateISO: pickStr, scheduledDateISO: pickStr,
       programId: pickStr, programVersion: pickFiniteInteger, templateVersion: pickFiniteInteger,
       week: pickFiniteInteger, day: pickFiniteInteger, status: pickStr,
       durationMinutes: pickFiniteNumber, startedAt: pickStr, finishedAt: pickStr, savedAt: pickStr,
