@@ -26,6 +26,7 @@ import { normalizeHistoryForWrite, makeTombstone } from './domain.js';
 import { reconcileStoreSnapshots } from './storeReconcile.js';
 import { splitSets } from './storageRecords.js';
 import { bindEvaluationLedgerAdapter } from './evaluationLedgerBridge.js';
+import { bindEventLedgerAdapter } from './eventLedgerBridge.js';
 
 const LS_KEY = 'arise.store.v1';
 const POINTER_KEY = 'arise.store.v1.pointer';
@@ -39,6 +40,9 @@ let hydrated = false;
 let hydratePromise = null;
 const LEGACY_EVALUATION_KEY = 'arise.evaluation.v1';
 const LEGACY_EVALUATION_ARCHIVE_KEY = `${LEGACY_EVALUATION_KEY}.archive`;
+const LEGACY_EVENT_KEY = 'arise.telemetry.v2';
+const LEGACY_EVENT_OLD_KEY = 'arise.telemetry.v1';
+const EVENT_LIMIT = 2000;
 
 function mergeEvaluationRows(current = [], incoming = []){
   const byId = new Map();
@@ -58,6 +62,30 @@ function legacyEvaluationRows(){
     const parsed = JSON.parse(raw);
     const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.records) ? parsed.records : [];
     return rows.filter(row=> row && typeof row === 'object');
+  }catch{ return []; }
+}
+
+function mergeEventRows(current = [], incoming = []){
+  const byId = new Map();
+  for(const row of [...(current || []), ...(incoming || [])]){
+    if(!row || typeof row !== 'object' || !row.id) continue;
+    if(!byId.has(row.id)) byId.set(row.id, row);
+  }
+  return [...byId.values()]
+    .sort((a,b)=> String(a.at || '').localeCompare(String(b.at || '')))
+    .slice(-EVENT_LIMIT);
+}
+
+function legacyEventRows(){
+  try{
+    const parse = (key)=>{
+      const raw = localStorage.getItem(key);
+      if(!raw) return [];
+      const parsed = JSON.parse(raw);
+      const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.events) ? parsed.events : [];
+      return rows.filter(row=> row && typeof row === 'object' && typeof row.type === 'string');
+    };
+    return mergeEventRows(parse(LEGACY_EVENT_OLD_KEY), parse(LEGACY_EVENT_KEY));
   }catch{ return []; }
 }
 
@@ -130,7 +158,7 @@ function historyOf(store){
   return store.history || [];
 }
 
-export async function persistStore(store, { baseStore = null, evaluationLedgerMode = 'preserve', reconcileWithoutBase = false } = {}){
+export async function persistStore(store, { baseStore = null, evaluationLedgerMode = 'preserve', eventHistoryMode = 'preserve', reconcileWithoutBase = false } = {}){
   let committedStore = store;
   if(baseStore || reconcileWithoutBase){
     try{
@@ -139,6 +167,9 @@ export async function persistStore(store, { baseStore = null, evaluationLedgerMo
         committedStore = reconcileStoreSnapshots(baseStore, store, canonical);
         if(evaluationLedgerMode === 'replace'){
           committedStore = { ...committedStore, evaluationLedger:[...(store.evaluationLedger || [])] };
+        }
+        if(eventHistoryMode === 'replace'){
+          committedStore = { ...committedStore, eventHistory:[...(store.eventHistory || [])] };
         }
       }
     }catch{}
@@ -288,6 +319,15 @@ export function hydrateStorage(){
           }
         }
       }catch{}
+      // One-time telemetry migration: older builds kept the live event
+      // ledger in localStorage. Fold it into the canonical IndexedDB snapshot
+      // before any consumer reads measurements, then retire both legacy keys.
+      const legacyEvents = legacyEventRows();
+      if(legacyEvents.length){
+        store = { ...store, eventHistory:mergeEventRows(store.eventHistory || [], legacyEvents) };
+        await persistStore(store);
+        try{ localStorage.removeItem(LEGACY_EVENT_KEY); localStorage.removeItem(LEGACY_EVENT_OLD_KEY); }catch{}
+      }
       // One-time evidence migration: older builds kept the live evaluation
       // ledger in localStorage. Merge it into the IndexedDB-backed store, then
       // remove the legacy live key only after the canonical write succeeds.
@@ -465,18 +505,22 @@ export async function whenPersisted(){
   }while(observed !== writeQueue);
   if(persistenceError) throw persistenceError;
 }
-export function setCachedStore(store, { persist = persistStore, evaluationLedgerMode = 'preserve' } = {}){
+export function setCachedStore(store, { persist = persistStore, evaluationLedgerMode = 'preserve', eventHistoryMode = 'preserve' } = {}){
   const optimisticBase = cache;
   // Evidence is owned by the canonical ledger path, not ordinary React state
   // snapshots. Preserve newer cached rows across generic UI saves so a stale
   // component tree cannot erase a recommendation recorded moments earlier.
   const existingEvidence = cache?.evaluationLedger || (hydrated ? legacyEvaluationRows() : []);
-  const submittedStore = evaluationLedgerMode === 'replace' || evaluationLedgerMode === 'ledger-write'
-    ? store
-    : {
-        ...store,
-        evaluationLedger: mergeEvaluationRows(existingEvidence, store?.evaluationLedger || []),
-      };
+  const existingEvents = cache?.eventHistory || (hydrated ? legacyEventRows() : []);
+  const submittedStore = {
+    ...store,
+    ...(evaluationLedgerMode === 'replace' || evaluationLedgerMode === 'ledger-write'
+      ? {}
+      : { evaluationLedger: mergeEvaluationRows(existingEvidence, store?.evaluationLedger || []) }),
+    ...(eventHistoryMode === 'replace' || eventHistoryMode === 'ledger-write'
+      ? {}
+      : { eventHistory: mergeEventRows(existingEvents, store?.eventHistory || []) }),
+  };
   cache = submittedStore;
   mirrorPreferencePointer(submittedStore);
   const run = enqueueWrite(async()=> {
@@ -484,10 +528,11 @@ export function setCachedStore(store, { persist = persistStore, evaluationLedger
     // write may have succeeded or failed since this write was submitted.
     const durableBase = lastDurableStore;
     try{
-      const committed = await persist(submittedStore, { baseStore: durableBase, evaluationLedgerMode, reconcileWithoutBase:true });
+      const committed = await persist(submittedStore, { baseStore: durableBase, evaluationLedgerMode, eventHistoryMode, reconcileWithoutBase:true });
       lastDurableStore = cloneSnapshot(committed);
       if(cache === submittedStore) cache = committed;
       try{ localStorage.removeItem(LEGACY_EVALUATION_KEY); }catch{}
+      try{ localStorage.removeItem(LEGACY_EVENT_KEY); localStorage.removeItem(LEGACY_EVENT_OLD_KEY); }catch{}
       notifyStoreCommitted('store-write');
       return committed;
     }catch(err){
@@ -516,6 +561,24 @@ bindEvaluationLedgerAdapter({
   clear(){
     if(!cache) return false;
     setCachedStore({ ...cache, evaluationLedger:[] }, { evaluationLedgerMode:'replace' });
+    return true;
+  },
+});
+
+bindEventLedgerAdapter({
+  read(){
+    return cache ? [...(cache.eventHistory || [])] : null;
+  },
+  replace(events){
+    if(!cache) return false;
+    // A telemetry write owns the exact local event snapshot, while the durable
+    // reconcile still unions unseen events from another tab.
+    setCachedStore({ ...cache, eventHistory:[...(events || [])] }, { eventHistoryMode:'ledger-write' });
+    return true;
+  },
+  clear(){
+    if(!cache) return false;
+    setCachedStore({ ...cache, eventHistory:[] }, { eventHistoryMode:'replace' });
     return true;
   },
 });
