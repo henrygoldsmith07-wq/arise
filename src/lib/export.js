@@ -8,8 +8,7 @@ import { ensureStudyParticipantId } from './studyIdentity.js';
 import { buildEnvelope, applyFieldPolicy, EXPORT_VERSION } from './exportPolicy.js';
 import { withProvenance, ensureSourceTags, importLedgerProvenance } from './domain.js';
 import { isDateOnly } from './dateOnly.js';
-import { readCanonicalEventHistory } from './eventLedgerBridge.js';
-import { readCanonicalEvaluationLedger } from './evaluationLedgerBridge.js';
+import { readCanonicalEventHistory, readCanonicalEvaluationLedger } from './evaluationLedgerBridge.js';
 
 export { EXPORT_VERSION };
 
