@@ -32,23 +32,19 @@ export async function syncDown(currentStore, adapter, strategy="merge"){
 
 const unionBy=(rows,key)=>[...new Map(rows.map(v=>[key(v),v])).values()];
 const studyActive = s => Boolean(s?.studyEnrollment) || s?.studyStatus==='enrolled' || s?.studyStatus==='withdrawn';
-const armSignature = e => e && JSON.stringify(Object.entries(e.assignments||{})
-  .sort(([a],[b])=>a.localeCompare(b)).map(([id,v])=>[id,v?.arm||null]));
+const armSignature=e=>JSON.stringify(Object.keys(e?.assignments||{}).sort().map(id=>[id,e.assignments[id]?.arm]));
 
 function resolveStudySyncState(current, imported){
   const a=current?.studyParticipantId||null, b=imported?.studyParticipantId||null;
   const aa=studyActive(current), ba=studyActive(imported);
   if(a && b && a!==b && aa && ba) throw new Error('Sync study-profile conflict: different active participants.');
-  const id=a===b ? a : aa ? a : ba ? b : [a,b].filter(Boolean).sort()[0]||null;
+  const id=a===b?a:aa?a:ba?b:a&&b?(a<b?a:b):a||b;
   const matches=[current,imported].filter(s=>!s?.studyParticipantId || s.studyParticipantId===id);
   const enrollments=matches.map(s=>s?.studyEnrollment).filter(Boolean);
   if(enrollments[1] && armSignature(enrollments[0])!==armSignature(enrollments[1])){
     throw new Error('Sync study-enrollment conflict: frozen arms differ.');
   }
-  const statusSource=matches.reduce((latest,s)=>{
-    if(!s?.studyStatus) return latest;
-    return !latest || String(s.studyStatusChangedAtISO||'')>=String(latest.studyStatusChangedAtISO||'') ? s : latest;
-  }, null);
+  const statusSource=matches.filter(s=>s?.studyStatus).sort((a,b)=>String(a.studyStatusChangedAtISO||'').localeCompare(String(b.studyStatusChangedAtISO||''))).at(-1);
   const studyStatus=statusSource?.studyStatus || (enrollments.length ? 'enrolled' : null);
   return {
     studyParticipantId:id,
@@ -93,14 +89,7 @@ export function mergeStoresWithConflicts(current, imported){
     // Guarded comparator: an entry missing dateISO must not crash the sync.
     history: applyTombstones([...byId.values()].sort((a,b)=> String(a?.dateISO||'').localeCompare(String(b?.dateISO||''))), tombstones),
     preferences,
-    gymPrefs: {
-      ...(imported.gymPrefs || {}),
-      ...(current.gymPrefs || {}),
-      restPresets:{
-        ...(imported.gymPrefs?.restPresets || {}),
-        ...(current.gymPrefs?.restPresets || {}),
-      },
-    },
+    gymPrefs:{ ...imported.gymPrefs, ...current.gymPrefs, restPresets:{ ...imported.gymPrefs?.restPresets, ...current.gymPrefs?.restPresets } },
     ...study,
     eventHistory: events.sort((a,b)=> String(a.at||'').localeCompare(String(b.at||''))),
     healthSummary: current.healthSummary || imported.healthSummary || null,
