@@ -16,7 +16,7 @@ import { evaluateLongitudinal } from '../lib/longitudinal.js';
 import { recordRecommendation } from '../lib/longitudinal.js';
 import { buildExportPayload, parseImportFile, mergeStores, portableCsv } from '../lib/export.js';
 import { buildImportPreview } from '../lib/exportPolicy.js';
-import { syncDown, mergeStoresWithConflicts } from '../lib/sync.js';
+import { syncUp, syncDown, mergeStoresWithConflicts } from '../lib/sync.js';
 import { ensureFeature } from '../core/flags.js';
 import { ImportRejectedError, SyncError } from '../core/errors.js';
 import { CONFIG } from '../core/config.js';
@@ -196,8 +196,7 @@ export function createSyncService({ repos, adapters, provider = null }){
       ensureFeature({ preferences: (await repos.preferencesRepository.all()) }, 'syncEngine');
       if(!provider?.push) throw new SyncError('No sync provider configured.');
       const store = storeOverride || await repos.getCachedStore();
-      const payload = buildExportPayload(store);
-      await provider.push(payload);
+      const payload = await syncUp(store, provider);
       adapters?.log?.('sync:pushed', { at: payload.exportedAt });
       return payload;
     },
