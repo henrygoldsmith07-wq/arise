@@ -66,11 +66,11 @@ export default function StorageDiagnostics({ setMsg }){
             {findings.length > 0 && (
               <button disabled={busy} onClick={run(()=> storageDiagnosticsService.repair(findings), (r)=> `Repaired: ${r.deletedSessions} sessions and ${r.deletedSets} set rows removed, ${r.neutralisedSets} values corrected.`, { reload: true })} className="btn btn-primary min-h-10 rounded-xl px-4 disabled:opacity-50">Repair issues</button>
             )}
-            <button disabled={busy || !diag.archiveCandidates} onClick={run(()=> storageDiagnosticsService.archiveOld(365), (r)=> `Archived ${r.archived} session${r.archived === 1 ? '' : 's'} older than a year. They stay on this device and can be restored.`, { reload: true })} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Archive old sessions</button>
+            <button disabled={busy || !diag.archiveCandidates} onClick={run(()=> storageDiagnosticsService.archiveOld(365), (r)=> `Archived ${r.archived} session${r.archived === 1 ? '' : 's'} older than a year. Archived history stays in full backups and sync, and can be restored.`, { reload: true })} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Archive old sessions</button>
             <button disabled={busy || !diag.prunePreview.pruned} onClick={run(()=> storageDiagnosticsService.pruneEvents(), (r)=> `Pruned ${r.pruned} old event${r.pruned === 1 ? '' : 's'} (telemetry only — training data untouched).`, { reload: true })} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Prune old events</button>
-            <button disabled={busy} onClick={run(()=> storageDiagnosticsService.captureSnapshot({ force: true, reason: 'manual' }), 'Snapshot captured — a restorable copy of everything stored.')} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Snapshot now</button>
+            <button disabled={busy} onClick={run(()=> storageDiagnosticsService.captureSnapshot({ force: true, reason: 'manual' }), 'Snapshot captured (live + archived history). It is checked against the integrity gate before any rollback.')} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Snapshot now</button>
             {diag.snapshots.length > 0 && (
-              <button disabled={busy} onClick={()=> { if(confirm(`Roll back to the snapshot from ${new Date(diag.snapshots[0].at).toLocaleString()}?\n\nEverything stored since then is replaced. Exports are unaffected.`)) run(()=> storageDiagnosticsService.rollbackToSnapshot(diag.snapshots[0].id), 'Rolled back — reloading…', { reload: true })(); }} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Roll back to snapshot</button>
+              <button disabled={busy} onClick={()=> { if(confirm(`Roll back to the snapshot from ${new Date(diag.snapshots[0].at).toLocaleString()}?\n\nEverything stored since then (live + archived history, schedule, prefs) is replaced when the snapshot passes the integrity gate. A failed check changes nothing. Exports are unaffected.`)) run(()=> storageDiagnosticsService.rollbackToSnapshot(diag.snapshots[0].id), 'Rolled back — reloading…', { reload: true })(); }} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Roll back to snapshot</button>
             )}
             {diag.archived > 0 && (
               <button disabled={busy} onClick={run(()=> storageDiagnosticsService.restoreArchive(), (r)=> `Restored ${r} archived session${r === 1 ? '' : 's'} to live history.`, { reload: true })} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Restore archive</button>
@@ -78,7 +78,7 @@ export default function StorageDiagnostics({ setMsg }){
           </div>
           <p className="text-xs text-ink3">
             {diag.archiveCandidates > 0 && <>{diag.archiveCandidates} session{diag.archiveCandidates === 1 ? '' : 's'} older than a year could be archived. </>}
-            {diag.archived > 0 && <>{diag.archived} archived session{diag.archived === 1 ? '' : 's'} kept on this device — restore them any time. </>}
+            {diag.archived > 0 && <>{diag.archived} archived session{diag.archived === 1 ? '' : 's'} kept on this device and included in backups/sync — restore them any time. </>}
             Snapshots: {diag.snapshots.length ? `latest ${new Date(diag.snapshots[0].at).toLocaleString()}` : 'none yet — one is taken automatically at boot'}.
           </p>
           {!!diag.migrationLogs.length && (

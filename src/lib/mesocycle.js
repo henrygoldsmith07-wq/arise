@@ -341,6 +341,8 @@ export function applyWeeklyReview(schedule, review, { config = null } = {}){
     adaptationHistory: [...(schedule.adaptationHistory || []), entry].slice(-30),
     lastWeeklyReviewBasis: basisKey,
     lastWeeklyReview: entry,
+    rev: (Number(schedule.rev) >= 0 ? Number(schedule.rev) : 0) + 1,
+    updatedAt: new Date().toISOString(),
   };
   return { schedule: nextSchedule, changed: true, changes, entry };
 }

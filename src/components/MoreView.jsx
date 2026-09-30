@@ -42,7 +42,8 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
 
   const prefs = store.preferences || {};
   const setPreference = (patch)=> setStore({ ...store, preferences: { ...prefs, ...patch } });
-  const setGymPref = (patch)=> setStore({ ...store, gymPrefs: { ...(store.gymPrefs||{}), ...patch } });
+  // Gym Mode writes stamp updatedAt so portable sync merges by recency.
+  const setGymPref = (patch)=> setStore({ ...store, gymPrefs: { ...(store.gymPrefs||{}), ...patch, updatedAt: new Date().toISOString() } });
 
   // Settings search: More has grown to nine sections; this index turns a
   // query into a jump. Matching scrolls the section into view and flashes it,
@@ -399,7 +400,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
                 <li key={exerciseId} className="flex items-center gap-2 text-xs">
                   <span className="truncate">{exerciseName(exerciseId)}</span>
                   <span className="ml-auto font-bold tabular-nums shrink-0">{seconds < 60 ? `${seconds}s` : `${seconds / 60}m`}</span>
-                  <button onClick={()=> setGymPref({ restPresets: setRestPreset(store.gymPrefs, exerciseId, 0) })} aria-label={`Clear rest preset for ${exerciseName(exerciseId)}`} className="shrink-0 w-8 h-8 grid place-items-center rounded-full border border-line text-ink3">✕</button>
+                  <button onClick={()=> { const nextTs = { ...((store.gymPrefs?.restPresetUpdatedAt && typeof store.gymPrefs.restPresetUpdatedAt === 'object') ? store.gymPrefs.restPresetUpdatedAt : {}) }; delete nextTs[exerciseId]; setStore({ ...store, gymPrefs: { ...(store.gymPrefs||{}), restPresets: setRestPreset(store.gymPrefs, exerciseId, 0), restPresetUpdatedAt: nextTs, updatedAt: new Date().toISOString() } }); }} aria-label={`Clear rest preset for ${exerciseName(exerciseId)}`} className="shrink-0 w-8 h-8 grid place-items-center rounded-full border border-line text-ink3">✕</button>
                 </li>
               ))}
             </ul>
@@ -431,7 +432,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
             </div>
           </div>
         )}
-        <p className="text-xs text-ink3">Local-first — your history lives on this device. Export JSON (full, versioned), an encrypted backup, or CSV (history only) and restore/merge on another device. No account required.</p>
+        <p className="text-xs text-ink3">Local-first — your history lives on this device. Export JSON (full versioned backup: live + archived training history), an encrypted backup (same complete history, sealed), or CSV (live history only) and restore/merge on another device. No account required.</p>
         {store.demo && (
           <p className="text-xs text-ink2 bg-reviewsoft border border-review/30 rounded-xl px-3 py-2" role="note">
             <strong>Demo mode:</strong> export is disabled — this is sample data, not yours. Exit demo to start your real log.
@@ -504,7 +505,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
               {importPreview.meta.appVersion ? ` · Arise ${importPreview.meta.appVersion}` : ''}
               {importPreview.meta.contractRecognised ? '' : importPreview.meta.adapter ? ` · converted from an older format (${importPreview.meta.adapter})` : ' · older format, imported as-is'}</p>
             <div className="flex flex-wrap gap-x-4 gap-y-1">
-              <span>{importPreview.counts.sessions} session{importPreview.counts.sessions === 1 ? '' : 's'}</span>
+              <span>{importPreview.counts.sessions} live session{importPreview.counts.sessions === 1 ? '' : 's'}{importPreview.counts.archived ? ` + ${importPreview.counts.archived} archived` : ''}</span>
               <span>{importPreview.counts.sets} set{importPreview.counts.sets === 1 ? '' : 's'}</span>
               {importPreview.counts.events > 0 && <span>{importPreview.counts.events} event{importPreview.counts.events === 1 ? '' : 's'}</span>}
               {importPreview.counts.ledger > 0 && <span>{importPreview.counts.ledger} recommendation record{importPreview.counts.ledger === 1 ? '' : 's'}</span>}
@@ -539,7 +540,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
             </div>
           </div>
         )}
-        <p className="text-xs text-ink3">Cross-device sync is Merge with last-write-wins per session (via savedAt). Conflicts resolve without losing either device's work.</p>
+        <p className="text-xs text-ink3">Cross-device sync merges deterministically (newest session wins per id via savedAt; archived history travels too; deletions propagate via tombstones; active workout/schedule and Gym rest presets converge by recency). Either sync direction reaches the same result.</p>
         <Suspense fallback={<p className="text-xs text-ink3">Loading sync settings…</p>}>
           <SyncPanel store={store} setStore={setStore} setMsg={setMsg} />
         </Suspense>
@@ -547,10 +548,10 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
         <details className="text-xs">
           <summary className="font-semibold cursor-pointer">What’s in the backup?</summary>
           <div className="mt-2 rounded-xl border border-line bg-surface2 px-3 py-2">
-            <p className="font-semibold">This export would contain:</p>
+            <p className="font-semibold">This export would contain (live + archived history):</p>
             <p className="text-ink3 mt-0.5">
-              {(store.history||[]).length} session(s) ·
-              {(store.history||[]).reduce((n,h)=> n + (h.blocks||[]).reduce((m,b)=> m + (b.sets||[]).length, 0), 0)} set(s) ·
+              {(store.history||[]).length} live session(s){(store.archivedHistory||[]).length ? ` + ${(store.archivedHistory||[]).length} archived` : ''} ·
+              {[...(store.history||[]), ...(store.archivedHistory||[])].reduce((n,h)=> n + (h.blocks||[]).reduce((m,b)=> m + (b.sets||[]).length, 0), 0)} set(s) ·
               {(store.customTemplates||[]).length} template(s) ·
               {(store.readinessLog||[]).length} readiness entr{(store.readinessLog||[]).length === 1 ? 'y' : 'ies'} ·
               {getEventHistory().length} event(s)

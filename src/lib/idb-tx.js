@@ -43,6 +43,74 @@ export function transactionSourcesBound(){
   return pendingBinding.promise;
 }
 
+// Serialised queue for the memory fallback: sequential idbGetAll calls would
+// otherwise let a concurrent save commit between two reads (mixed snapshot).
+// Chaining every fallback transaction through one promise keeps multi-store
+// reads atomic relative to multi-store writes — the same guarantee a single
+// readonly IDB transaction gives in production.
+let fallbackQueue = Promise.resolve();
+function enqueueFallback(fn){
+  const run = fallbackQueue.then(()=> fn());
+  // A rejection must not poison the chain for later transactions.
+  fallbackQueue = run.catch(()=>{});
+  return run;
+}
+
+async function ensureBound(storeNames){
+  const names = [...new Set(storeNames)];
+  for(const name of names){
+    if(!SUPPORTED_STORES.has(name)) throw new Error(`Unknown object store: ${name}`);
+  }
+  // The fallback is only "final" once the shared open has settled; if the
+  // caller races that open, wait for it instead of throwing unbound.
+  if(typeof indexedDB === 'undefined' || !dbRef){
+    if(pendingBinding){ await transactionSourcesBound(); }
+    else if(!fallbackRef && typeof indexedDB !== 'undefined'){
+      // Racing the shared open (idb.js binds async at module load): wait for
+      // the real outcome instead of throwing "No storage backend bound".
+      try{ const { idbOpenPromise } = await import('./idb.js'); await idbOpenPromise; }catch{}
+    }
+  }
+  return names;
+}
+
+/**
+ * Read every named store inside ONE readonly transaction (single coherent
+ * point-in-time). Returns `{ storeName: rows[] }`. The memory fallback
+ * preserves equivalent semantics by serialising with concurrent writes.
+ */
+export async function idbReadTransaction(storeNames){
+  const names = await ensureBound(storeNames);
+  if(!dbRef){
+    const fb = fallbackRef;
+    if(!fb) throw new Error('No storage backend bound.');
+    return enqueueFallback(async ()=>{
+      const out = {};
+      for(const name of names) out[name] = await fb.getAll(name);
+      return out;
+    });
+  }
+  const db = dbRef;
+  return new Promise((resolve, reject)=>{
+    const out = {};
+    let settled = false;
+    const fail = (err)=> { if(!settled){ settled = true; reject(err); } };
+    let t;
+    try{ t = db.transaction(names, 'readonly'); }
+    catch(err){ fail(err); return; }
+    t.oncomplete = ()=> { if(!settled){ settled = true; resolve(out); } };
+    t.onerror = ()=> fail(t.error || new Error('Transaction failed.'));
+    t.onabort = ()=> fail(t.error || new Error('Transaction aborted.'));
+    for(const name of names){
+      try{
+        const req = t.objectStore(name).getAll();
+        req.onsuccess = ()=> { out[name] = req.result || []; };
+        req.onerror = ()=> { try{ t.abort(); }catch{} fail(req.error || new Error('Read failed.')); };
+      }catch(err){ try{ t.abort(); }catch{} fail(err); return; }
+    }
+  });
+}
+
 /**
  * Run `fn(ops)` inside ONE transaction across the given stores.
  *
@@ -57,46 +125,34 @@ export function transactionSourcesBound(){
  * committing it.
  */
 export async function idbTransaction(storeNames, fn){
-  const names = [...new Set(storeNames)];
-  for(const name of names){
-    if(!SUPPORTED_STORES.has(name)) throw new Error(`Unknown object store: ${name}`);
-  }
   // Memory fallback (node tests / old browsers). The shared backend mutates
   // synchronously, so a bare fn() would leak partial writes on a mid-batch
   // throw — real IndexedDB aborts the WHOLE transaction. Snapshot every
   // touched store first and roll back on any throw so the fallback matches
   // production abort semantics exactly.
-  //
-  // The fallback is only "final" once the shared open has settled; if the
-  // caller races that open, wait for it instead of throwing unbound.
-  if(typeof indexedDB === 'undefined' || !dbRef){
-    if(pendingBinding){ await transactionSourcesBound(); }
-    else if(!fallbackRef && typeof indexedDB !== 'undefined'){
-      // Racing the shared open (idb.js binds async at module load): wait for
-      // the real outcome instead of throwing "No storage backend bound".
-      try{ const { idbOpenPromise } = await import('./idb.js'); await idbOpenPromise; }catch{}
-    }
-  }
+  const names = await ensureBound(storeNames);
   if(!dbRef){
     const fb = fallbackRef;
     if(!fb) throw new Error('No storage backend bound.');
-    const snapshot = new Map();
-    for(const name of names) snapshot.set(name, await fb.getAll(name));
-    try{
-      const ops = {
-        put: (store, value, key)=> { fb.put(store, value, key); },
-        delete: (store, key)=> { fb.delete(store, key); },
-        clearStore: (store)=> { fb.clearStore(store); },
-      };
-      fn(ops);
-      return;
-    }catch(err){
-      for(const name of names){
-        fb.clearStore(name);
-        for(const row of snapshot.get(name) || []) fb.put(name, row, row?.id ?? undefined);
+    return enqueueFallback(async ()=>{
+      const snapshot = new Map();
+      for(const name of names) snapshot.set(name, await fb.getAll(name));
+      try{
+        const ops = {
+          put: (store, value, key)=> { fb.put(store, value, key); },
+          delete: (store, key)=> { fb.delete(store, key); },
+          clearStore: (store)=> { fb.clearStore(store); },
+        };
+        fn(ops);
+        return;
+      }catch(err){
+        for(const name of names){
+          fb.clearStore(name);
+          for(const row of snapshot.get(name) || []) fb.put(name, row, row?.id ?? undefined);
+        }
+        throw err;
       }
-      throw err;
-    }
+    });
   }
   const db = dbRef;
   await new Promise((resolve, reject)=>{

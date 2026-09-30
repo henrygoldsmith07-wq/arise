@@ -631,6 +631,8 @@ export function adaptActiveSchedule(schedule, history = [], { readinessLog = [],
     adaptationHistory,
     lastAdaptation: entry,
     lastAdaptationBasis: basisKey,
+    rev: (Number(schedule.rev) >= 0 ? Number(schedule.rev) : 0) + 1,
+    updatedAt: new Date().toISOString(),
   };
   return {
     schedule: nextSchedule,

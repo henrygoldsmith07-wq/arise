@@ -16,9 +16,13 @@ export function completeWorkout({ store, payload }){
 
   let activeSchedule = current.activeSchedule || null;
   if(activeSchedule){
+    // Marking a session done is a schedule write: bump explicit revision
+    // metadata so multi-device sync converges on recency, not content.
     activeSchedule = {
       ...activeSchedule,
       sessions: activeSchedule.sessions.map(session=> session.id === payload.id ? { ...session, status:'done' } : session),
+      rev: (Number(activeSchedule.rev) >= 0 ? Number(activeSchedule.rev) : 0) + 1,
+      updatedAt: new Date().toISOString(),
     };
   }
 

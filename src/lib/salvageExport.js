@@ -40,7 +40,10 @@ export function salvageHistory(rawHistory){
 
 /** Build the download payload. Returns null only when nothing survived. */
 export function buildSalvagePayload(store, { exportedAt = new Date().toISOString(), appVersion = null } = {}){
-  const { entries, dropped } = salvageHistory(store?.history);
+  // Salvage covers the complete portable history: live rows plus archived
+  // rows (same session shape, folded into `history` so the partial contract
+  // is unchanged and the file still imports).
+  const { entries, dropped } = salvageHistory([...(store?.history || []), ...(store?.archivedHistory || [])]);
   if(!entries.length) return null;
   return {
     app: 'arise',

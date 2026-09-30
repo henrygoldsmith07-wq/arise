@@ -140,6 +140,19 @@
 // new product logic. Lock the boot gain in aggressively and keep only narrow
 // total headroom above the authoritative CI measurement.
 //
+// total 345 → 349 kB with the backup/sync/rollback trustworthiness pass:
+// portable archived history (live + archived in every full backup, encrypted
+// backup and sync payload), single-transaction atomic snapshots, the canonical
+// recompose-then-gate rollback check, deterministic singleton merges (active
+// workout/schedule revision, per-exercise Gym rest presets, portable prefs),
+// newest-wins tombstone union with entity-aware application, tombstone-aware
+// archive/restore, and fail-closed study merges. No new product surface, no
+// dependency growth; boot (113.8 ≤ 120) and largest-lazy (26.4 ≤ 34) budgets
+// are UNCHANGED. Measured total 348.6. Conscious re-baseline for required
+// correctness infrastructure; revisit only by shipping less code, never more
+// budget.
+//
+
 // The budgets are regression bounds with headroom, not aspirations: a change
 // that crosses one must either undo the bloat or consciously re-baseline here
 // and say why in the PR.
@@ -156,7 +169,7 @@ if(!fs.existsSync(dist)){
 
 const BOOT_BUDGET_KB = 120;
 const CHUNK_BUDGET_KB = 34;
-const TOTAL_BUDGET_KB = 345;
+const TOTAL_BUDGET_KB = 349;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

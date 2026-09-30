@@ -43,6 +43,17 @@ export function repairStore(store){
   // Per-row salvage: normaliseHistory already drops unreadable entries.
   try{ fixed.history = normaliseHistory(fixed.history); }
   catch{ fixed.history = []; }
+  // Portable archive: same per-row salvage as live history; a non-array is
+  // structural damage (repaired, never silently dropped wholesale without a
+  // quarantine record from the caller).
+  if(!Array.isArray(fixed.archivedHistory)) fixed.archivedHistory = [];
+  else try{ fixed.archivedHistory = normaliseHistory(fixed.archivedHistory); }
+  catch{ fixed.archivedHistory = []; }
+  // Gym Mode prefs: null (never configured) or a plain object; anything else
+  // is structural damage.
+  if(fixed.gymPrefs !== null && fixed.gymPrefs !== undefined && (typeof fixed.gymPrefs !== 'object' || Array.isArray(fixed.gymPrefs))) fixed.gymPrefs = null;
+  if(fixed.gymPrefs && (fixed.gymPrefs.restPresets == null || typeof fixed.gymPrefs.restPresets !== 'object' || Array.isArray(fixed.gymPrefs.restPresets))) fixed.gymPrefs.restPresets = {};
+  if(!Array.isArray(fixed.tombstones)) fixed.tombstones = [];
   if(fixed.activeSchedule != null && (typeof fixed.activeSchedule !== 'object' || Array.isArray(fixed.activeSchedule))) fixed.activeSchedule = null;
   if(!Array.isArray(fixed.eventHistory)) fixed.eventHistory = [];
   if(!Array.isArray(fixed.evaluationLedger)) fixed.evaluationLedger = [];
@@ -53,6 +64,11 @@ export function repairStore(store){
   if(fixed.preferences == null || typeof fixed.preferences !== 'object' || Array.isArray(fixed.preferences)) fixed.preferences = {};
   if(fixed.onboarding != null && (typeof fixed.onboarding !== 'object' || Array.isArray(fixed.onboarding))) fixed.onboarding = null;
   if(fixed.activeWorkout != null && (typeof fixed.activeWorkout !== 'object' || Array.isArray(fixed.activeWorkout))) fixed.activeWorkout = null;
+  // Live/archived disjointness: an id in both is a restore — live wins.
+  try{
+    const liveIds = new Set((fixed.history || []).map((s) => s?.id).filter(Boolean));
+    fixed.archivedHistory = (fixed.archivedHistory || []).filter((s) => s?.id && !liveIds.has(s.id));
+  }catch{ /* keep repaired collections as-is */ }
   return fixed;
 }
 

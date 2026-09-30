@@ -17,6 +17,8 @@ const DEFAULT = {
   eventHistory: [], // canonical consent-gated product-event ledger; persisted in IndexedDB
   healthSummary: null, // optional user-approved health-platform summary
   history: [], // completed sessions: see normaliseHistoryEntry for full shape
+  archivedHistory: [], // sessions moved to the IndexedDB archive store: same shape as history, disjoint by id, fully portable (backup/sync/snapshot)
+  gymPrefs: null, // portable Gym Mode behaviour: { restPresets:{exerciseId:sec}, restPresetUpdatedAt:{exerciseId:ISO}, updatedAt?:ISO, focusDefault?:bool }
   // theme null follows OS; telemetry null = prompt. `accessibility` drives the
   // opt-in root classes le-studio.css already defines (large-text, high-contrast,
   // reduce-motion) — independent of the OS-level media queries.
@@ -51,6 +53,8 @@ export function loadStore(){
     let j = { ...cached };
     j = runMigrations(j);
     if(!j.history) j.history=[];
+    if(!Array.isArray(j.archivedHistory)) j.archivedHistory=[];
+    if(j.gymPrefs === undefined) j.gymPrefs = null;
     if(!j.readinessLog) j.readinessLog=[];
     if(!j.programHistory) j.programHistory=[];
     if(j.activeWorkout === undefined) j.activeWorkout = null;
@@ -322,6 +326,16 @@ export function runMigrations(raw){
   if(j.studyStatusChangedAtISO === undefined) j.studyStatusChangedAtISO=null;
   if(!Array.isArray(j.customTemplates)) j.customTemplates=[];
   j.history = normaliseHistory(j.history || []);
+  // Portable archive + Gym Mode prefs: same normalisation/disjointness as the
+  // canonical storage layer so old backups hydrate into the new shape.
+  if(!Array.isArray(j.archivedHistory)) j.archivedHistory = [];
+  else j.archivedHistory = normaliseHistory(j.archivedHistory);
+  if(j.gymPrefs !== null && j.gymPrefs !== undefined && (typeof j.gymPrefs !== 'object' || Array.isArray(j.gymPrefs))) j.gymPrefs = null;
+  if(j.gymPrefs && (j.gymPrefs.restPresets == null || typeof j.gymPrefs.restPresets !== 'object')) j.gymPrefs.restPresets = {};
+  {
+    const liveIds = new Set((j.history || []).map((s) => s?.id).filter(Boolean));
+    j.archivedHistory = (j.archivedHistory || []).filter((s) => s?.id && !liveIds.has(s.id));
+  }
   return j;
 }
 

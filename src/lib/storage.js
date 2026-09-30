@@ -22,7 +22,7 @@
 import { idbGet, idbGetAll, idbPut, idbDelete, idbClearStore, STORES } from './idb.js';
 import { idbTransaction } from './idb-tx.js';
 import { enforceIntegrity, quarantineBrokenStore } from './integrity.js';
-import { normalizeHistoryForWrite, makeTombstone } from './domain.js';
+import { normalizeHistoryForWrite, makeTombstone, rowTimestamp } from './domain.js';
 import { reconcileStoreSnapshots } from './storeReconcile.js';
 import { splitSets } from './storageRecords.js';
 import { bindCanonicalLedger } from './evaluationLedgerBridge.js';
@@ -124,20 +124,80 @@ function lsWrite(value){
 }
 
 
-export function decompose(store){
+const ARCHIVE_META_ID = 'archive:meta';
+
+function tombstoneCovers(tombstones, entity, row){
+  let best = null;
+  for(const t of tombstones || []){
+    if(!t || t.entity !== entity || t.refId !== row?.id) continue;
+    const deletedAt = Date.parse(t.deletedAt || '');
+    if(!Number.isFinite(deletedAt)) continue;
+    if(!best || deletedAt >= Date.parse(best.deletedAt)) best = t;
+  }
+  return best && Date.parse(best.deletedAt) >= rowTimestamp(row);
+}
+
+/**
+ * Reconcile the save's live/archived split against the archive rows already
+ * on disk (another tab may have archived or restored outside this save's
+ * base snapshot — archive maintenance bypasses the monolithic cache):
+ * - an incoming live row newer than its archived copy wins live (edit-after-
+ *   archive restores it); otherwise the archived copy wins (no resurrection);
+ * - incoming archived rows union with surviving on-disk rows (no silent loss);
+ * - on-disk rows covered by a newer incoming tombstone are dropped (a newer
+ *   deletion is never revived by a stale save);
+ * - no id ever ends up in both collections (live wins ties).
+ */
+export function reconcileArchiveState(liveHistory, archivedHistory, existingArchiveRows, tombstones){
+  const existing = (existingArchiveRows || []).filter((r) => r?.id && r.id !== ARCHIVE_META_ID);
+  const incomingArchivedById = new Map((archivedHistory || []).filter((s) => s?.id).map((s) => [s.id, s]));
+  const liveById = new Map((liveHistory || []).filter((s) => s?.id).map((s) => [s.id, s]));
+  const existingById = new Map(existing.map((s) => [s.id, s]));
+  const finalLive = [];
+  for(const s of liveById.values()){
+    const archived = existingById.get(s.id);
+    if(archived && !incomingArchivedById.has(s.id) && rowTimestamp(archived) >= rowTimestamp(s) && !tombstoneCovers(tombstones, 'sessions', archived)){
+      continue; // a newer-or-equal archived copy wins; the stale live row stays archived
+    }
+    finalLive.push(s);
+  }
+  const finalLiveIds = new Set(finalLive.map((s) => s.id));
+  const finalArchivedById = new Map();
+  for(const s of incomingArchivedById.values()){
+    if(!finalLiveIds.has(s.id)) finalArchivedById.set(s.id, s);
+  }
+  for(const s of existingById.values()){
+    if(finalLiveIds.has(s.id) || finalArchivedById.has(s.id)) continue;
+    if(tombstoneCovers(tombstones, 'sessions', s)) continue;
+    finalArchivedById.set(s.id, s);
+  }
+  const byDate = (a,b)=> String(a?.dateISO||'').localeCompare(String(b?.dateISO||''));
+  return { history: finalLive.sort(byDate), archivedHistory: [...finalArchivedById.values()].sort(byDate) };
+}
+
+export function decompose(store, { existingArchive = null } = {}){
   const schedule = store.activeSchedule || null;
   const ledger = store.evaluationLedger || [];
   // Write-time normalisation: every save passes its history through the
   // canonical schema (coercions, source tags, dropped-unreadable reporting).
+  // Archived history is the same session shape, normalised identically so
+  // backups, sync and snapshots treat both collections with one rule.
   const { history: canonicalHistory } = normalizeHistoryForWrite(historyOf(store), { source: 'manual' });
+  const { history: canonicalArchived } = normalizeHistoryForWrite(Array.isArray(store.archivedHistory) ? store.archivedHistory : [], { source: 'manual' });
   const tombstones = (store.tombstones || []).map((t) => ({ ...makeTombstone(t.entity, t.refId, { at: t.deletedAt, deviceId: t.deviceId }), id: t.id || makeTombstone(t.entity, t.refId, { at: t.deletedAt, deviceId: t.deviceId }).id }));
+  const portable = existingArchive
+    ? reconcileArchiveState(canonicalHistory, canonicalArchived, existingArchive, tombstones)
+    : (()=> {
+        const liveIds = new Set(canonicalHistory.map((s) => s?.id).filter(Boolean));
+        return { history: canonicalHistory, archivedHistory: canonicalArchived.filter((s) => s?.id && !liveIds.has(s.id)) };
+      })();
   return {
     // activeWorkout rides on the profile row: the crashed-session draft must
     // survive restart or the recovery dialog can never be offered (it is the
     // whole point of the draft — losing it on a save defeats crash recovery).
     profile: { id: PROFILE_ID, version: store.version || 6, onboarding: store.onboarding || null, preferences: store.preferences || {}, gymPrefs: store.gymPrefs || null, demo: store.demo === true, healthSummary: store.healthSummary || null, studyParticipantId: store.studyParticipantId || null, studyEnrollment: store.studyEnrollment || null, studyStatus: store.studyStatus || null, studyStatusChangedAtISO: store.studyStatusChangedAtISO || null, activeWorkout: store.activeWorkout ?? null },
-    sessions: canonicalHistory,
-    sets: splitSets(canonicalHistory),
+    sessions: portable.history,
+    sets: splitSets(portable.history),
     programme: { id: PROGRAMME_ID, activeSchedule: schedule, programHistory: store.programHistory || [] },
     adaptations: (schedule?.adaptationHistory || []).map(row => ({ ...row, id: row.basisKey || `${row.dateISO}` })),
     recommendations: ledger.filter(r => !r.outcome).map(r => ({ ...r, id: r.id })),
@@ -149,6 +209,7 @@ export function decompose(store){
     // tombstones carry the deletion to other devices at sync time.
     templates: store.customTemplates || [],
     tombstones,
+    archive: portable.archivedHistory,
   };
 }
 
@@ -174,14 +235,25 @@ export async function persistStore(store, { baseStore = null, collectionMode = '
       }
     }catch{}
   }
-  const d = decompose(committedStore);
+  // The archive store is maintained both here (portable archivedHistory) and
+  // by direct maintenance (archiveOldSessions/restoreArchive bypass the
+  // cache): read its current rows first so a stale save can neither resurrect
+  // restored sessions nor silently drop another tab's archived work. The
+  // maintenance meta row is device-local diagnostics and is preserved.
+  let existingArchive = null, archiveMeta = null;
+  try{
+    const rows = await idbGetAll('archive');
+    archiveMeta = (rows || []).find((r) => r?.id === ARCHIVE_META_ID) || null;
+    existingArchive = rows || [];
+  }catch{}
+  const d = decompose(committedStore, { existingArchive });
   // One transaction across every touched store: a save is all-or-nothing.
   // The previous clear-then-put-per-store storm could leave stores from
   // different points in time after a mid-save crash, and recomposition then
   // silently produced a half-saved world (history without its programme,
   // ledger rows split across two stores).
   await idbTransaction(
-    ['profile','sessions','sets','programme','adaptations','recommendations','outcomes','events','readiness','templates','tombstones'],
+    ['profile','sessions','sets','programme','adaptations','recommendations','outcomes','events','readiness','templates','tombstones','archive'],
     (ops)=> {
       ops.put('profile', d.profile);
       ops.clearStore('sessions');
@@ -202,6 +274,9 @@ export async function persistStore(store, { baseStore = null, collectionMode = '
       for(const t of d.templates) ops.put('templates', t);
       ops.clearStore('tombstones');
       for(const t of d.tombstones) ops.put('tombstones', t);
+      ops.clearStore('archive');
+      for(const s of d.archive) ops.put('archive', s);
+      if(archiveMeta) ops.put('archive', archiveMeta);
     },
   );
   // Demote localStorage to a pointer + paint-critical prefs.
@@ -223,7 +298,7 @@ export async function persistStore(store, { baseStore = null, collectionMode = '
 }
 
 export async function loadStoreFromIdb(){
-  const [profile, sessions, programme, adaptations, recs, outs, events, readiness, templates, tombstones] = await Promise.all([
+  const [profile, sessions, programme, adaptations, recs, outs, events, readiness, templates, tombstones, archiveRows] = await Promise.all([
     idbGet('profile', PROFILE_ID),
     idbGetAll('sessions'),
     idbGet('programme', PROGRAMME_ID),
@@ -234,8 +309,13 @@ export async function loadStoreFromIdb(){
     idbGet('readiness', READINESS_ID),
     idbGetAll('templates'),
     idbGetAll('tombstones'),
+    idbGetAll('archive'),
   ]);
-  if(!profile && !(sessions || []).length) return null;
+  const liveIds = new Set((sessions || []).map((s) => s?.id).filter(Boolean));
+  // Live/archived disjointness is structural: an id in both is a restore —
+  // live wins so an explicit restore can never be silently re-archived.
+  const archivedHistory = (archiveRows || []).filter((r) => r?.id && r.id !== ARCHIVE_META_ID && !liveIds.has(r.id));
+  if(!profile && !(sessions || []).length && !archivedHistory.length) return null;
   const schedule = programme?.activeSchedule || null;
   if(schedule){
     schedule.adaptationHistory = adaptations || [];
@@ -258,6 +338,7 @@ export async function loadStoreFromIdb(){
     studyStatusChangedAtISO: profile?.studyStatusChangedAtISO ?? null,
     activeWorkout: profile?.activeWorkout ?? null,
     history: sessions || [],
+    archivedHistory,
     activeSchedule: schedule,
     programHistory: programme?.programHistory || [],
     eventHistory: events || [],
