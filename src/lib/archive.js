@@ -10,6 +10,7 @@
 import { idbGetAll } from './idb.js';
 import { idbTransaction } from './idb-tx.js';
 import { splitSets } from './storageRecords.js';
+import { isValidTombstone, rowTimestamp } from './domain.js';
 
 export const ARCHIVE_META_ID = 'archive:meta';
 
@@ -19,15 +20,38 @@ function cutoffISO(days){
   return d.toISOString().slice(0, 10);
 }
 
+function tombstoneFor(tombstones, entity, refId){
+  let best = null;
+  for(const t of tombstones || []){
+    if(!isValidTombstone(t) || t.entity !== entity || t.refId !== refId) continue;
+    if(!best || Date.parse(t.deletedAt) >= Date.parse(best.deletedAt)) best = t;
+  }
+  return best;
+}
+
+/** True when a newer tombstone covers this row (deletion wins over the row). */
+export function isCoveredByTombstone(row, tombstones, entity){
+  const t = tombstoneFor(tombstones, entity, row?.id);
+  if(!t) return false;
+  return Date.parse(t.deletedAt) >= rowTimestamp(row);
+}
+
 /**
  * Move sessions strictly older than `olderThanDays` into the archive store.
+ * Sessions covered by a newer deletion tombstone are never archived (a
+ * delete → archive attempt keeps the deletion). Ids already archived stay
+ * archived (no duplicates).
  * @returns {{ archived: number, remaining: number }} counts, and meta is
  * persisted so the diagnostics screen can show what happened and when.
  */
 export async function archiveOldSessions(olderThanDays = 365, { dryRun = false } = {}){
   const cutoff = cutoffISO(olderThanDays);
-  const sessions = await idbGetAll('sessions');
-  const stale = (sessions || []).filter((s) => String(s?.dateISO || '') < cutoff);
+  const [sessions, archiveRows, tombstones] = await Promise.all([
+    idbGetAll('sessions'), idbGetAll('archive'), idbGetAll('tombstones'),
+  ]);
+  const archivedIds = new Set((archiveRows || []).map((r) => r?.id).filter(Boolean));
+  const stale = (sessions || []).filter((s) => s?.id && String(s?.dateISO || '') < cutoff
+    && !archivedIds.has(s.id) && !isCoveredByTombstone(s, tombstones, 'sessions'));
   if(!stale.length || dryRun){
     return { archived: 0, remaining: (sessions || []).length, dryRun, cutoff };
   }
@@ -43,22 +67,43 @@ export async function archiveOldSessions(olderThanDays = 365, { dryRun = false }
 /** True when old history exists but hasn't been archived yet (nudge-able). */
 export async function archiveCandidateCount(olderThanDays = 365){
   const cutoff = cutoffISO(olderThanDays);
-  const sessions = await idbGetAll('sessions');
-  return (sessions || []).filter((s) => String(s?.dateISO || '') < cutoff).length;
+  const [sessions, tombstones] = await Promise.all([idbGetAll('sessions'), idbGetAll('tombstones')]);
+  return (sessions || []).filter((s) => String(s?.dateISO || '') < cutoff && !isCoveredByTombstone(s, tombstones, 'sessions')).length;
 }
 
-/** Restore everything from the archive back into live history. */
+/**
+ * Restore everything from the archive back into live history. Rows covered
+ * by a newer tombstone stay deleted (an archive restored after a newer
+ * deletion respects the deletion). Per-id last-write-wins against live rows
+ * so an archived session updated on another device converges instead of
+ * clobbering newer live work; live wins timestamp ties.
+ */
 export async function restoreArchive(){
-  const rows = (await idbGetAll('archive')) || [];
-  const sessions = rows.filter((r) => r?.id && r.id !== ARCHIVE_META_ID);
+  const [rows, live, tombstones] = await Promise.all([
+    idbGetAll('archive'), idbGetAll('sessions'), idbGetAll('tombstones'),
+  ]);
+  const sessions = (rows || []).filter((r) => r?.id && r.id !== ARCHIVE_META_ID);
   if(!sessions.length) return 0;
-  const setRows = splitSets(sessions);
+  const liveById = new Map((live || []).map((s) => [s?.id, s]));
+  const restorable = [];
+  for(const s of sessions){
+    if(isCoveredByTombstone(s, tombstones, 'sessions')) continue;
+    const existing = liveById.get(s.id);
+    if(existing && rowTimestamp(existing) > rowTimestamp(s)) continue;
+    restorable.push(s);
+  }
+  // Tombstoned rows are dropped from the archive even when unrestorable so a
+  // newer deletion can never be revived by a later restore.
+  const tombstonedIds = sessions.filter((s) => isCoveredByTombstone(s, tombstones, 'sessions')).map((s) => s.id);
+  if(!restorable.length && !tombstonedIds.length) return 0;
+  const setRows = splitSets(restorable);
   await idbTransaction(['sessions', 'archive', 'sets'], (ops)=> {
-    for(const s of sessions) ops.put('sessions', s);
+    for(const s of restorable) ops.put('sessions', s);
     for(const row of setRows) ops.put('sets', row);
-    for(const s of sessions) ops.delete('archive', s.id);
+    for(const s of restorable) ops.delete('archive', s.id);
+    for(const id of tombstonedIds) ops.delete('archive', id);
   });
-  return sessions.length;
+  return restorable.length;
 }
 
 export async function archivedSessionCount(){

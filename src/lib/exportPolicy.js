@@ -183,7 +183,7 @@ export const DENY_FIELDS = [
 // and healthSummary travel deliberately (study folding / device portability);
 // the device-local CONSENT toggles inside preferences are denied above.
 export const IMPORT_ALLOW_KEYS = [
-  'onboarding', 'activeSchedule', 'activeWorkout', 'history', 'preferences', 'gymPrefs',
+  'onboarding', 'activeSchedule', 'activeWorkout', 'history', 'archivedHistory', 'preferences', 'gymPrefs',
   'readinessLog', 'programHistory', 'evaluationLedger', 'customTemplates',
   'eventHistory', 'studyEnrollment', 'tombstones',
   'studyParticipantId', 'healthSummary',
@@ -247,11 +247,13 @@ export function buildImportPreview(rawData, currentStore){
 
   const data = envelope.data;
   const history = Array.isArray(data?.history) ? data.history : [];
+  const archived = Array.isArray(data?.archivedHistory) ? data.archivedHistory : [];
+  const incomingAll = [...history, ...archived];
   const current = currentStore || {};
-  const currentById = new Map((current.history || []).map((h) => [h.id, h]));
+  const currentById = new Map([...(current.history || []), ...(current.archivedHistory || [])].map((h) => [h.id, h]));
   const conflicts = [];
   let additions = 0;
-  for(const s of history){
+  for(const s of incomingAll){
     const existing = currentById.get(s?.id);
     if(!existing) additions += 1;
     else if(JSON.stringify(s) !== JSON.stringify(existing)){
@@ -268,7 +270,8 @@ export function buildImportPreview(rawData, currentStore){
   }
   const counts = {
     sessions: history.length,
-    sets: history.reduce((n, s) => n + setCount(s), 0),
+    archived: archived.length,
+    sets: incomingAll.reduce((n, s) => n + setCount(s), 0),
     events: Array.isArray(data?.eventHistory) ? data.eventHistory.length : 0,
     ledger: Array.isArray(data?.evaluationLedger) ? data.evaluationLedger.length : 0,
     templates: Array.isArray(data?.customTemplates) ? data.customTemplates.length : 0,

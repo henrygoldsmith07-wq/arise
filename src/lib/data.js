@@ -862,7 +862,9 @@ export function scheduleProgram({ programId, startDateISO, program = null }) {
     nextWeekStart.setUTCDate(start.getUTCDate() + wk.week * 7);
     if (cursor < nextWeekStart) cursor = nextWeekStart;
   }
-  return { programId, startDateISO, sessions, programVersion: prog.version || 1 };
+  // Explicit revision metadata: sync converges on newest updatedAt, then
+  // highest rev — recency is never inferred from nested session content.
+  return { programId, startDateISO, sessions, programVersion: prog.version || 1, rev: 1, updatedAt: new Date().toISOString() };
 }
 
 // Planned vs completed comparison

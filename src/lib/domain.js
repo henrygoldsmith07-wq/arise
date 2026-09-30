@@ -204,17 +204,93 @@ export function isTombstone(record){
   return Boolean(record && typeof record === 'object' && record.refId && record.entity && record.deletedAt && !record.blocks);
 }
 
+/** A tombstone is usable only when its identity and timestamp are well-formed. */
+export function isValidTombstone(record){
+  if(!isTombstone(record)) return false;
+  if(typeof record.entity !== 'string' || !record.entity) return false;
+  if(typeof record.refId !== 'string' || !record.refId) return false;
+  return Number.isFinite(Date.parse(record.deletedAt));
+}
+
+/**
+ * Recursively key-sorted serialisation for deterministic tie-breaks. A
+ * shallow replacer array would drop nested keys (e.g. session ids), making
+ * equal-timestamp conflict resolution order-dependent (non-commutative).
+ */
+export function canonicalJson(value){
+  try{
+    const stable = (v)=>{
+      if(Array.isArray(v)) return v.map(stable);
+      if(v && typeof v === 'object'){
+        const out = {};
+        for(const k of Object.keys(v).sort()) out[k] = stable(v[k]);
+        return out;
+      }
+      return v;
+    };
+    return JSON.stringify(stable(value));
+  }catch{ return String(value); }
+}
+
+function tombstoneKey(entity, refId){
+  return `${entity}:${refId}`;
+}
+
+/**
+ * Canonical tombstone union: identity is `entity + refId`. For conflicting
+ * tombstones for the same entity, the newest valid `deletedAt` wins.
+ * Malformed tombstones are dropped. Deterministic: sorted by id.
+ */
+export function mergeTombstones(current = [], incoming = []){
+  const byId = new Map();
+  for(const t of [...(current || []), ...(incoming || [])]){
+    if(!isValidTombstone(t)) continue;
+    const key = tombstoneKey(t.entity, t.refId);
+    const id = typeof t.id === 'string' && t.id ? t.id : key;
+    const existing = byId.get(key);
+    if(!existing || Date.parse(t.deletedAt) >= Date.parse(existing.deletedAt)){
+      byId.set(key, { ...t, id });
+    }
+  }
+  return [...byId.values()].sort((a, b)=> String(a.id).localeCompare(String(b.id)));
+}
+
+/**
+ * Canonical row recency for conflict resolution (sessions, templates,
+ * tombstone-adjacent rows): first parseable timestamp wins, else 0.
+ * One definition shared by sync, storage, archive and export merges so
+ * equal-timestamp tie-breaks agree everywhere.
+ */
+export function rowTimestamp(row){
+  const candidates = [row?.savedAt, row?.updatedAtISO, row?.updatedAt, row?.finishedAt, row?.dateISO ? `${row.dateISO}T00:00:00Z` : null];
+  for(const c of candidates){
+    const t = Date.parse(c || '');
+    if(Number.isFinite(t)) return t;
+  }
+  return 0;
+}
+
 /**
  * Apply tombstones to a row set: drop rows the tombstones cover.
  * (Sync replays this after a pull so deletions propagate.)
+ * `entity` makes application entity-aware: a session and a template sharing
+ * the same refId must not affect each other. When `entity` is omitted the
+ * legacy refId-only behaviour applies.
  */
-export function applyTombstones(rows, tombstones){
-  const byRef = new Map((tombstones || []).filter(isTombstone).map((t) => [t.refId, t]));
+export function applyTombstones(rows, tombstones, entity = null){
+  const valid = (tombstones || []).filter(isValidTombstone).filter((t) => !entity || t.entity === entity);
+  const byRef = new Map();
+  for(const t of valid){
+    const existing = byRef.get(t.refId);
+    if(!existing || Date.parse(t.deletedAt) >= Date.parse(existing.deletedAt)) byRef.set(t.refId, t);
+  }
   return (rows || []).filter((row) => {
     if(!row?.id) return true;
     const t = byRef.get(row.id);
     if(!t) return true;
-    return Date.parse(row.savedAt || row.updatedAtISO || '1970-01-01') > Date.parse(t.deletedAt);
+    // An offline edit written after the deletion wins; a deletion newer than
+    // (or equal to) the row wins. Equal favours deletion (deterministic).
+    return rowTimestamp(row) > Date.parse(t.deletedAt);
   });
 }
 

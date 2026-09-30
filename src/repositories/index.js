@@ -108,13 +108,17 @@ export function createHistoryRepository({ adapters } = {}){
     /** Soft delete: recoverable locally, tombstoned for sync propagation. */
     async softDelete(sessionId, { by = 'user' } = {}){
       const store = requireStore();
-      const row = (store.history || []).find((s) => s.id === sessionId);
+      const row = (store.history || []).find((s) => s.id === sessionId)
+        || (store.archivedHistory || []).find((s) => s.id === sessionId);
       if(!row) throw new NotFoundError(`Session ${sessionId} not found.`);
       const tombstone = makeTombstone('sessions', sessionId);
       const next = {
         ...store,
         history: (store.history || []).map((s) => s.id === sessionId ? markSoftDeleted(s, { by }) : s),
-        tombstones: [...(store.tombstones || []).filter((t) => t.refId !== sessionId), tombstone],
+        // An archived deletion drops the archived row: the tombstone carries
+        // the deletion to every peer (archive → delete propagates safely).
+        archivedHistory: (store.archivedHistory || []).filter((s) => s.id !== sessionId),
+        tombstones: [...(store.tombstones || []).filter((t) => !(t.entity === 'sessions' && t.refId === sessionId)), tombstone],
       };
       setCachedStore(next);
       await whenPersisted();
@@ -128,7 +132,7 @@ export function createHistoryRepository({ adapters } = {}){
       const next = {
         ...store,
         history: (store.history || []).map((s) => s.id === sessionId ? unDelete(s) : s),
-        tombstones: (store.tombstones || []).filter((t) => t.refId !== sessionId),
+        tombstones: (store.tombstones || []).filter((t) => !(t.entity === 'sessions' && t.refId === sessionId)),
       };
       setCachedStore(next);
       await whenPersisted();
@@ -223,7 +227,7 @@ export function createTemplateRepository(){
       const next = {
         ...store,
         customTemplates: (store.customTemplates || []).map((t) => t.id === id ? markSoftDeleted(t) : t),
-        tombstones: [...(store.tombstones || []).filter((t) => t.refId !== id), tombstone],
+        tombstones: [...(store.tombstones || []).filter((t) => !(t.entity === 'templates' && t.refId === id)), tombstone],
       };
       setCachedStore(next);
       await whenPersisted();
@@ -235,7 +239,7 @@ export function createTemplateRepository(){
       const next = {
         ...store,
         customTemplates: (store.customTemplates || []).map((t) => t.id === id ? unDelete(t) : t),
-        tombstones: (store.tombstones || []).filter((t) => t.refId !== id),
+        tombstones: (store.tombstones || []).filter((t) => !(t.entity === 'templates' && t.refId === id)),
       };
       setCachedStore(next);
       await whenPersisted();

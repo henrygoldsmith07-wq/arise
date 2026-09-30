@@ -387,10 +387,19 @@ export default function App(){
     setStoreState(prev=> ({ ...prev, activeWorkout: draft }));
   },[]);
 
-  // Gym Mode preferences (rest presets, focus defaults) live beside the app
-  // preferences: session-behavioural, device-local, safe to merge forward.
+  // Gym Mode preferences (rest presets, focus defaults) are portable session
+  // behaviour with per-exercise recency metadata, merged deterministically
+  // (see sync.js mergeGymPrefs) — never receiving-device-wins.
   const handleSetRestPreset = useCallback((exerciseId, seconds)=>{
-    setStoreState(prev=> ({ ...prev, gymPrefs: { ...(prev.gymPrefs||{}), restPresets: setRestPreset(prev.gymPrefs, exerciseId, seconds) } }));
+    setStoreState(prev=>{
+      const now = new Date().toISOString();
+      const map = setRestPreset(prev.gymPrefs, exerciseId, seconds);
+      const prevTs = (prev.gymPrefs?.restPresetUpdatedAt && typeof prev.gymPrefs.restPresetUpdatedAt === 'object') ? prev.gymPrefs.restPresetUpdatedAt : {};
+      const nextTs = { ...prevTs };
+      if(seconds > 0) nextTs[exerciseId] = now;
+      else delete nextTs[exerciseId];
+      return { ...prev, gymPrefs: { ...(prev.gymPrefs||{}), restPresets: map, restPresetUpdatedAt: nextTs, updatedAt: now } };
+    });
   },[]);
 
   const handleSaveSession = async (payload)=>{

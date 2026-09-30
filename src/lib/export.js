@@ -6,7 +6,7 @@ import { getEventHistory } from './telemetry.js';
 import { loadEvaluationLedger, mergeEvaluationLedgers } from './longitudinal.js';
 import { ensureStudyParticipantId } from './studyIdentity.js';
 import { buildEnvelope, applyFieldPolicy, EXPORT_VERSION } from './exportPolicy.js';
-import { withProvenance, ensureSourceTags, importLedgerProvenance } from './domain.js';
+import { withProvenance, ensureSourceTags, importLedgerProvenance, mergeTombstones, applyTombstones, canonicalJson, rowTimestamp } from './domain.js';
 import { isDateOnly } from './dateOnly.js';
 import { readCanonicalLedger } from './evaluationLedgerBridge.js';
 
@@ -30,7 +30,12 @@ export function storeWithLiveCollections(store){
 export function buildExportPayload(store, useStoreCollections = false){
   const eventHistory=useStoreCollections ? (store?.eventHistory||[]) : getEventHistory();
   const evaluationLedger=useStoreCollections ? (store?.evaluationLedger||[]) : loadEvaluationLedger();
-  const data={ ...store, version:store.version || STORE_SCHEMA_VERSION, eventHistory, evaluationLedger };
+  // A portable full backup preserves ALL training history: live `history`
+  // PLUS `archivedHistory` (sessions moved to the IndexedDB archive store).
+  // Older in-memory stores predate the field — default to [] so every backup
+  // carries the complete collection explicitly.
+  const archivedHistory = Array.isArray(store?.archivedHistory) ? store.archivedHistory : [];
+  const data={ ...store, archivedHistory, version:store.version || STORE_SCHEMA_VERSION, eventHistory, evaluationLedger };
   // Credential hygiene: never let device-local sync config ride along.
   if(data.preferences) data.preferences = stripDeviceLocalPrefs(data.preferences);
   // A full backup also contributes to the study: carry the exportedAt FACT
@@ -168,7 +173,7 @@ export async function parseBackupFile(textOrEnvelope){
 // Anything else in a hand-edited backup is dropped rather than persisted forever.
 // studyParticipantId is the pseudonymous study identity (studyIdentity.js) —
 // preserved so repeated exports fold into ONE field-study participant.
-const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','preferences','gymPrefs','readinessLog','programHistory','evaluationLedger','customTemplates','studyParticipantId','studyEnrollment','studyStatus','studyStatusChangedAtISO','tombstones'];
+const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','archivedHistory','preferences','gymPrefs','readinessLog','programHistory','evaluationLedger','customTemplates','studyParticipantId','studyEnrollment','studyStatus','studyStatusChangedAtISO','tombstones'];
 
 // ── Import hardening (malicious/hostile JSON) ───────────────────────────────
 // Imports are untrusted input. Beyond schema validation, three structural
@@ -230,12 +235,44 @@ export function parseImportFile(text, trusted = false){
   // auditable across the user's devices.
   const safe = applyFieldPolicy(migrated);
   if(Array.isArray(safe.history)) safe.history = safe.history.map((s)=> ensureSourceTags(s, trusted ? 'sync' : 'import'));
+  if(Array.isArray(safe.archivedHistory)) safe.archivedHistory = safe.archivedHistory.map((s)=> ensureSourceTags(s, trusted ? 'sync' : 'import'));
   if(!trusted && Array.isArray(safe.evaluationLedger)){
     safe.evaluationLedger = safe.evaluationLedger.map((r)=> importLedgerProvenance(r));
   }
   return safe;
 }
 
+
+function validateHistoryRows(rows, label, errors){
+  for(const [i,session] of rows.entries()){
+    if(!session || typeof session!=='object') { errors.push(`${label} item ${i+1} is not an object.`); continue; }
+    if(!session.id) errors.push(`${label} item ${i+1} is missing an id.`);
+    // dateISO is load-bearing: sorting, week bucketing and training age all key
+    // off it, so an entry without a parseable date would poison analytics.
+    if(!isDateOnly(session.dateISO)) errors.push(`${label} item ${i+1} has an invalid or missing dateISO.`);
+    if(session.blocks!=null && !Array.isArray(session.blocks)) errors.push(`${label} item ${i+1} blocks must be an array.`);
+    for(const block of session.blocks||[]){
+      if(!block?.exerciseId || !Array.isArray(block.sets)){ errors.push(`${label} item ${i+1} contains an invalid exercise block.`); continue; }
+      for(const [si,set] of block.sets.entries()){
+        if(!set || typeof set!=='object') continue;
+        // Impossible values would corrupt e1RM, volume and progression priors.
+        // Numeric fields legitimately arrive as numeric strings (the app's own
+        // normalisation accepts both); '' means unset. Coerce, then bound-check
+        // — reject only true garbage, negatives and implausible magnitudes.
+        for(const [field,flabel] of [['weightKg','weight'],['reps','reps'],['rpe','RPE'],['assistedKg','assistance']]){
+          const raw = set[field];
+          if(raw == null || raw === '') continue;
+          const v = typeof raw === 'number' ? raw : Number(raw);
+          if(!Number.isFinite(v)){ errors.push(`${label} item ${i+1} set ${si+1} has a non-numeric ${flabel}.`); continue; }
+          if(v < 0){ errors.push(`${label} item ${i+1} set ${si+1} has negative ${flabel}.`); }
+          if(field==='reps' && v > 1000) errors.push(`${label} item ${i+1} set ${si+1} has implausible reps (>1000).`);
+          if((field==='weightKg'||field==='assistedKg') && v > 1000) errors.push(`${label} item ${i+1} set ${si+1} has implausible ${flabel} (>1000 kg).`);
+          if(field==='rpe' && (v < 1 || v > 10)) errors.push(`${label} item ${i+1} set ${si+1} has RPE outside 1-10.`);
+        }
+      }
+    }
+  }
+}
 
 export function validateStoreData(data){
   const errors=[];
@@ -245,34 +282,15 @@ export function validateStoreData(data){
   if(data.history!=null && !Array.isArray(data.history)) errors.push('History must be an array.');
   // Iterate only when actually an array — a string/object history must
   // produce a clean validation error, not a TypeError that escapes the gate.
-  const historyRows = Array.isArray(data.history) ? data.history : [];
-  for(const [i,session] of historyRows.entries()){
-    if(!session || typeof session!=='object') { errors.push(`History item ${i+1} is not an object.`); continue; }
-    if(!session.id) errors.push(`History item ${i+1} is missing an id.`);
-    // dateISO is load-bearing: sorting, week bucketing and training age all key
-    // off it, so an entry without a parseable date would poison analytics.
-    if(!isDateOnly(session.dateISO)) errors.push(`History item ${i+1} has an invalid or missing dateISO.`);
-    if(session.blocks!=null && !Array.isArray(session.blocks)) errors.push(`History item ${i+1} blocks must be an array.`);
-    for(const block of session.blocks||[]){
-      if(!block?.exerciseId || !Array.isArray(block.sets)){ errors.push(`History item ${i+1} contains an invalid exercise block.`); continue; }
-      for(const [si,set] of block.sets.entries()){
-        if(!set || typeof set!=='object') continue;
-        // Impossible values would corrupt e1RM, volume and progression priors.
-        // Numeric fields legitimately arrive as numeric strings (the app's own
-        // normalisation accepts both); '' means unset. Coerce, then bound-check
-        // — reject only true garbage, negatives and implausible magnitudes.
-        for(const [field,label] of [['weightKg','weight'],['reps','reps'],['rpe','RPE'],['assistedKg','assistance']]){
-          const raw = set[field];
-          if(raw == null || raw === '') continue;
-          const v = typeof raw === 'number' ? raw : Number(raw);
-          if(!Number.isFinite(v)){ errors.push(`History item ${i+1} set ${si+1} has a non-numeric ${label}.`); continue; }
-          if(v < 0){ errors.push(`History item ${i+1} set ${si+1} has negative ${label}.`); }
-          if(field==='reps' && v > 1000) errors.push(`History item ${i+1} set ${si+1} has implausible reps (>1000).`);
-          if((field==='weightKg'||field==='assistedKg') && v > 1000) errors.push(`History item ${i+1} set ${si+1} has implausible ${label} (>1000 kg).`);
-          if(field==='rpe' && (v < 1 || v > 10)) errors.push(`History item ${i+1} set ${si+1} has RPE outside 1-10.`);
-        }
-      }
-    }
+  validateHistoryRows(Array.isArray(data.history) ? data.history : [], 'History', errors);
+  if(data.archivedHistory!=null && !Array.isArray(data.archivedHistory)) errors.push('Archived history must be an array.');
+  else validateHistoryRows(Array.isArray(data.archivedHistory) ? data.archivedHistory : [], 'Archived history', errors);
+  if(data.tombstones!=null && !Array.isArray(data.tombstones)) errors.push('Tombstones must be an array.');
+  // Live/archived disjointness is structural: one id in both collections is
+  // a restorable-state violation, never a silent double-count.
+  if(Array.isArray(data.history) && Array.isArray(data.archivedHistory)){
+    const liveIds = new Set(data.history.map((s) => s?.id).filter(Boolean));
+    if(data.archivedHistory.some((s) => s?.id && liveIds.has(s.id))) errors.push('Archived history must not duplicate live history ids.');
   }
   if(data.activeSchedule!=null && typeof data.activeSchedule!=='object') errors.push('Active schedule must be an object or null.');
   if(data.eventHistory!=null && !Array.isArray(data.eventHistory)) errors.push('Event history must be an array.');
@@ -287,14 +305,56 @@ export function validateStoreData(data){
   return { ok: errors.length===0, errors };
 }
 
+function splitLiveArchived(byId, currentHistory = [], importedHistory = []){
+  const liveIds = new Set([...(currentHistory || []), ...(importedHistory || [])].map((s) => s?.id).filter(Boolean));
+  const byDate = (a,b)=> String(a?.dateISO||'').localeCompare(String(b?.dateISO||''));
+  return {
+    history: [...byId.values()].filter((s) => liveIds.has(s.id)).sort(byDate),
+    archivedHistory: [...byId.values()].filter((s) => !liveIds.has(s.id)).sort(byDate),
+  };
+}
+
+/**
+ * Sync-path history union: per-id last-write-wins with a deterministic
+ * equal-timestamp tie-break (larger canonical JSON), so the merge is
+ * commutative. Location rule: live wins over archived for the same id (an
+ * explicit restore is never silently re-archived).
+ */
+export function mergePortableHistories(currentHistory = [], currentArchived = [], importedHistory = [], importedArchived = []){
+  const newest = new Map();
+  for(const s of [...(currentHistory || []), ...(currentArchived || []), ...(importedHistory || []), ...(importedArchived || [])]){
+    if(!s?.id) continue;
+    const existing = newest.get(s.id);
+    if(!existing) newest.set(s.id, s);
+    else {
+      const a = rowTimestamp(s), b = rowTimestamp(existing);
+      if(a > b || (a === b && canonicalJson(s) > canonicalJson(existing))) newest.set(s.id, s);
+    }
+  }
+  return splitLiveArchived(newest, currentHistory, importedHistory);
+}
+
+/**
+ * Import-path history union: the current device keeps its copy on content
+ * conflicts (the preview promises "your current copy is kept"); brand-new
+ * ids union in. Archived history unions the same way. Deterministic and
+ * directional — sync convergence uses mergePortableHistories (LWW).
+ */
+export function mergeImportHistories(currentHistory = [], currentArchived = [], importedHistory = [], importedArchived = []){
+  const byId = new Map();
+  for(const s of [...(currentHistory || []), ...(currentArchived || []), ...(importedHistory || []), ...(importedArchived || [])]) if(s?.id && !byId.has(s.id)) byId.set(s.id, s);
+  return splitLiveArchived(byId, currentHistory, importedHistory);
+}
+
 export function mergeStores(current, imported, strategy='merge'){
   const currentStore=runMigrations(typeof structuredClone==='function' ? structuredClone(current||{}) : JSON.parse(JSON.stringify(current||{})));
   const importedStore=runMigrations(typeof structuredClone==='function' ? structuredClone(imported||{}) : JSON.parse(JSON.stringify(imported||{})));
   if(strategy==='replace') return { ...importedStore, version: STORE_SCHEMA_VERSION };
-  const byId = new Map();
-  for(const h of (currentStore.history||[])) byId.set(h.id, h);
-  for(const h of (importedStore.history||[])) if(!byId.has(h.id)) byId.set(h.id, h);
-  const eventById=new Map();
+  // Canonical newest-wins union: an older retained deletion must not survive
+  // alongside a newer tombstone for the same entity.
+  const tombstones = mergeTombstones(currentStore.tombstones, importedStore.tombstones);
+  const portable = mergeImportHistories(currentStore.history, currentStore.archivedHistory, importedStore.history, importedStore.archivedHistory);
+  const eventById = new Map();
   for(const e of [...(currentStore.eventHistory||[]), ...(importedStore.eventHistory||[])]) if(e?.id) eventById.set(e.id,e);
   return {
     ...currentStore,
@@ -303,7 +363,8 @@ export function mergeStores(current, imported, strategy='merge'){
     activeSchedule: currentStore.activeSchedule || importedStore.activeSchedule || null,
     activeWorkout: currentStore.activeWorkout || importedStore.activeWorkout || null,
     // Guarded comparator: an entry missing dateISO must not crash the whole import.
-    history: [...byId.values()].sort((a,b)=> String(a?.dateISO||'').localeCompare(String(b?.dateISO||''))),
+    history: applyTombstones(portable.history, tombstones, 'sessions'),
+    archivedHistory: applyTombstones(portable.archivedHistory, tombstones, 'sessions'),
     eventHistory: [...eventById.values()].sort((a,b)=> String(a.at||'').localeCompare(String(b.at||''))),
     healthSummary: currentStore.healthSummary || importedStore.healthSummary || null,
     preferences: { ...(importedStore.preferences||{}), ...(currentStore.preferences||{}) },
@@ -317,10 +378,10 @@ export function mergeStores(current, imported, strategy='merge'){
     },
     readinessLog: [...(currentStore.readinessLog||[]), ...(importedStore.readinessLog||[])].filter((v,i,a)=> a.findIndex(x=> x.dateISO===v.dateISO && x.at===v.at)===i),
     evaluationLedger: mergeEvaluationLedgers(currentStore.evaluationLedger, importedStore.evaluationLedger),
-    customTemplates: mergeCustomTemplates(currentStore.customTemplates, importedStore.customTemplates),
+    customTemplates: applyTombstones(mergeCustomTemplates(currentStore.customTemplates, importedStore.customTemplates), tombstones, 'templates'),
     programHistory: [...(currentStore.programHistory||[]), ...(importedStore.programHistory||[])].filter((v,i,a)=> a.findIndex(x=> x.programId===v.programId && x.version===v.version)===i),
-    // Deletions must propagate: incoming tombstones union with local ones.
-    tombstones: [...(currentStore.tombstones||[]), ...(importedStore.tombstones||[])].filter((v,i,a)=> a.findIndex(x=> x.id===v.id)===i),
+    // Deletions propagate through the canonical newest-wins union.
+    tombstones,
   };
 }
 
@@ -344,6 +405,7 @@ function csvCell(value){
 export function deletionPreview(store){
   return {
     historyCount: (store.history||[]).length,
+    archivedHistoryCount: (store.archivedHistory||[]).length,
     schedulePresent: !!store.activeSchedule,
     onboardingPresent: !!store.onboarding,
     readinessCount: (store.readinessLog||[]).length,

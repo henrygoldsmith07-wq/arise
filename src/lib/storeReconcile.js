@@ -78,6 +78,10 @@ export function reconcileStoreSnapshots(baseStore, localStore, remoteStore){
   const merged = reconcileValue(base, local, remote);
   merged.version = Math.max(Number(base.version)||0, Number(local.version)||0, Number(remote.version)||0);
   merged.history = mergeRows(base.history, local.history, remote.history, row=> row?.id);
+  // Archived history reconciles exactly like live history (same session shape,
+  // same identity). Live/archived disjointness is enforced at write time by
+  // the storage layer, so the reconciler only unions per-id state here.
+  merged.archivedHistory = mergeRows(base.archivedHistory, local.archivedHistory, remote.archivedHistory, row=> row?.id);
   merged.eventHistory = mergeRows(base.eventHistory, local.eventHistory, remote.eventHistory, row=> row?.id);
   merged.evaluationLedger = mergeEvidenceRows(local.evaluationLedger, remote.evaluationLedger);
   merged.customTemplates = mergeRows(base.customTemplates, local.customTemplates, remote.customTemplates, row=> row?.id);
