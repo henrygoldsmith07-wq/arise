@@ -25,7 +25,7 @@ actually sends.
 |---|---|---|---|
 | Export/share | The file or summary you explicitly choose to save/share; credentials are stripped | Wherever you save/share it; persistence is controlled by that destination | Manual, per action |
 | WebDAV sync | One versioned backup payload. With E2E encryption enabled, the host receives ciphertext | Your configured WebDAV host; the remote backup persists there until you remove/replace it | Explicit opt-in; HTTPS required; disable any time |
-| NVIDIA AI coach | Aggregated training numbers + deterministic engine findings; the API key is sent as the request credential. No raw set-by-set history, notes or health summary | `integrate.api.nvidia.com`; Arise does not control the provider's server-side retention | Requires a pasted API key and an explicit coach request |
+| NVIDIA AI coach | Aggregated training numbers + deterministic engine findings; the API key is sent as the request credential. No raw set-by-set history, notes or health summary. The coach only explains — the deterministic engine remains authoritative and the AI never creates training prescriptions | `integrate.api.nvidia.com`; Arise does not control the provider's server-side retention | Off by default; requires a pasted API key and an explicit coach request |
 | classifier.dev feedback categorisation | Redacted feedback text | `classifier.dev`; Arise does not control the service's server-side retention | Separate opt-in; off by default |
 | classifier.dev coach routing | Only an ambiguous coach question after local redaction; returns a route/lane, never a prescription | `classifier.dev`; Arise does not control the service's server-side retention | Separate opt-in; local rules run first; off by default |
 | Pulse connector | Completed-workout metadata plus aggregate volume/trends as defined in `src/lib/pulse.js` | The user/integrator-provided Pulse adapter; persistence depends on that adapter | Separate opt-in and an injected adapter |
@@ -37,7 +37,8 @@ after its separate consent is enabled.
 
 Consents are independent and revocable. WebDAV credentials and AI credentials
 are device/browser-local policy data and are excluded from Arise exports,
-diagnostics and sync payloads.
+backups, sync payloads, support diagnostics and telemetry. The AI-coach key
+is session-only by default and never enters any of them.
 
 ## Data ownership statement
 

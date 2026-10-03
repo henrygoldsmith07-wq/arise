@@ -20,6 +20,9 @@ import { restStartCue, restTickCue, restCompleteCue } from '../lib/audioCues.js'
 import { speak, cancelSpeech, voiceSupported } from '../lib/voiceCoach.js';
 import { haptic } from '../lib/haptics.js';
 import { announce, useDialogA11y } from '../lib/a11y.js';
+import { runnerHasLoggedWork, useWorkoutExit } from '../hooks/useWorkoutExit.js';
+import WorkoutDiscardDialog from './WorkoutDiscardDialog.jsx';
+import { ConfirmDialog } from './Dialog.jsx';
 import { restPresetFor } from '../lib/gymMode.js';
 import { useWorkoutClock, useWorkoutDraftPersistence, useWorkoutWakeLock } from '../hooks/useWorkoutRuntime.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
@@ -52,6 +55,13 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   const [soundOn,setSoundOn]=useState(soundCues);
   const [voiceOn,setVoiceOn]=useState(voiceCoach);
   const [announcement,setAnnouncement]=useState('');
+  const [saveUnfinishedOpen,setSaveUnfinishedOpen]=useState(false);
+  // Real user work, not plan prefill (guided sets arrive prefilled from the
+  // schedule/history): only completed/skipped steps, typed edits and notes
+  // make an exit lossy. Seeded from a restored draft so a crash resume never
+  // loses the flag.
+  const userEditedRef=useRef(Boolean(draft?.userEdited));
+  const markUserEdited = ()=>{ userEditedRef.current = true; };
   const restTickRef=useRef(null);
   const spokenStepRef=useRef(null);
   const { rootRef, closeRef, trapTab } = useDialogA11y();
@@ -78,16 +88,23 @@ export default function GuidedRunner({ session, history = [], availableEquipment
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
-  // Escape exits only via the guarded cancel path — never silently destroys
-  // a workout with logged sets.
+  // Exit is one shared contract with the Standard runner: ✕, Cancel and
+  // Escape all funnel through a single in-app confirmation whenever any step
+  // is logged — never a native dialog, never a silent destroy. Declared before
+  // the Escape effect below that drives it.
+  const { discardConfirmOpen, requestExit, keepEditing, confirmDiscard } = useWorkoutExit({
+    hasLoggedWork: runnerHasLoggedWork(blocks, userEditedRef.current),
+    onCancel,
+  });
   useEffect(()=>{
     const onKey = (e)=>{
       if(e.key!=='Escape') return;
-      onCancel();
+      if(discardConfirmOpen){ keepEditing(); return; }
+      requestExit();
     };
     window.addEventListener('keydown', onKey);
     return ()=> window.removeEventListener('keydown', onKey);
-  }, [onCancel]);
+  }, [requestExit, discardConfirmOpen, keepEditing]);
 
 
   useWorkoutWakeLock(wakeLock);
@@ -169,6 +186,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
       restLabel,
       restExerciseId,
       startedAt: startedAtRef.current,
+      userEdited: userEditedRef.current,
       // Which exercises' prospective evidence was already recorded — a resume
       // after crash/reload re-seeds shownRecommendationRef from this.
       recordedExercises: [...shownRecommendationRef.current],
@@ -257,7 +275,10 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   const currentSet = currentBlock && step ? currentBlock.sets[step.setIndex] : null;
   const currentExercise = currentBlock ? EXERCISE_BY_ID[currentBlock.exerciseId] : null;
 
-  const updateSet = (bi, si, patch)=> setBlocks(prev=> prev.map((b,i)=> i!==bi? b : { ...b, sets: b.sets.map((s,j)=> j!==si? s : { ...s, ...patch }) }));
+  const updateSet = (bi, si, patch, { userEdit = true } = {})=>{
+    if(userEdit) markUserEdited();
+    setBlocks(prev=> prev.map((b,i)=> i!==bi? b : { ...b, sets: b.sets.map((s,j)=> j!==si? s : { ...s, ...patch }) }));
+  };
 
   const startRest=(seconds,label,exerciseId=null)=>{
     const sec=Number(seconds)||0;
@@ -295,7 +316,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
         const carry = {};
         if(ns && String(ns.reps ?? '').trim()==='' && String(set.reps ?? '').trim()!=='') carry.reps = set.reps;
         if(ns && String(ns.weightKg ?? '').trim()==='' && String(set.weightKg ?? '').trim()!=='') carry.weightKg = set.weightKg;
-        if(Object.keys(carry).length) updateSet(nxt.blockIndex, nxt.setIndex, carry);
+        if(Object.keys(carry).length) updateSet(nxt.blockIndex, nxt.setIndex, carry, { userEdit:false });
       }
       const now=Date.now();
       try {
@@ -317,10 +338,14 @@ export default function GuidedRunner({ session, history = [], availableEquipment
     haptic(skipped ? 'failedSet' : 'restComplete');
   };
 
-  const toggleNoteTag=(id)=> setNoteTags(prev=> prev.includes(id) ? prev.filter(x=>x!==id) : [...prev,id]);
+  const toggleNoteTag=(id)=>{ markUserEdited(); setNoteTags(prev=> prev.includes(id) ? prev.filter(x=>x!==id) : [...prev,id]); };
 
   const finish = ()=>{
-    if(progress.pending > 0 && !window.confirm(`${progress.pending} set${progress.pending===1?'':'s'} not done yet. Save anyway? Unfinished sets are logged as skipped.`)) return;
+    if(progress.pending > 0){ setSaveUnfinishedOpen(true); return; }
+    commitFinish();
+  };
+
+  const commitFinish = ()=>{
     const labels=noteTags.map(id=> NOTE_PROMPTS.find(t=> t.id===id)?.label).filter(Boolean);
     const finalNote=[labels.join(', '), note.trim()].filter(Boolean).join(' · ');
     const payload = buildGuidedPayload({
@@ -356,7 +381,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
 
       {/* Header: session identity + live elapsed timer + overall progress bar */}
       <div className="relative shrink-0 flex items-center gap-3 px-4 py-3 border-b border-line bg-surface">
-        <button ref={closeRef} onClick={onCancel} className="w-11 h-11 grid place-items-center rounded-full border border-line bg-surface2" aria-label="Close guided session">✕</button>
+        <button ref={closeRef} onClick={requestExit} className="w-11 h-11 grid place-items-center rounded-full border border-line bg-surface2" aria-label="Close guided session">✕</button>
         <div className="min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Guided session</p>
           <p className="font-bold truncate">{session.title} • {session.dateISO}</p>
@@ -392,7 +417,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
                   <button key={prompt.id} onClick={()=> toggleNoteTag(prompt.id)} aria-pressed={noteTags.includes(prompt.id)} className={`text-xs font-semibold px-2.5 py-1.5 rounded-full border ${noteTags.includes(prompt.id)?'bg-ink text-bg border-ink':'bg-surface2 border-line'}`}>{prompt.label}</button>
                 ))}
               </div>
-              <textarea value={note} onChange={e=> setNote(e.target.value)} rows={2} placeholder="How did it go? Sleep, pain, technique, ROM, load…" className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm" />
+              <textarea value={note} onChange={e=>{ markUserEdited(); setNote(e.target.value); }} rows={2} placeholder="How did it go? Sleep, pain, technique, ROM, load…" className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm" />
             </section>
           </section>
         ) : (
@@ -487,11 +512,34 @@ export default function GuidedRunner({ session, history = [], availableEquipment
             />
           )}
           <div className="flex gap-2">
-            <button onClick={onCancel} className="btn btn-secondary min-h-11 rounded-xl px-4">Cancel</button>
+            <button onClick={requestExit} className="btn btn-secondary min-h-11 rounded-xl px-4">Cancel</button>
             <button onClick={finish} disabled={!canFinish} className="btn btn-primary flex-1 min-h-11 rounded-xl disabled:opacity-40">Save session</button>
           </div>
         </div>
       </div>
+
+      {discardConfirmOpen && (
+        <WorkoutDiscardDialog
+          completedSets={progress.completed + progress.skipped}
+          totalSets={progress.total}
+          onKeepEditing={keepEditing}
+          onDiscard={confirmDiscard}
+        />
+      )}
+      {saveUnfinishedOpen && (
+        <ConfirmDialog
+          title="Save with unfinished sets?"
+          description={`${progress.pending} set${progress.pending===1?'':'s'} not done yet. Unfinished sets are logged as skipped.`}
+          confirmLabel="Save anyway"
+          cancelLabel="Keep going"
+          // Confirming saves and dismisses the whole runner, whose own dialog
+          // lifecycle restores focus — a restore to the now-gone Save button
+          // would be a second, competing focus move.
+          restoreFocus={false}
+          onConfirm={()=>{ setSaveUnfinishedOpen(false); commitFinish(); }}
+          onCancel={()=> setSaveUnfinishedOpen(false)}
+        />
+      )}
     </div>
   );
 }

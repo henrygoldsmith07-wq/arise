@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useDialogs } from './Dialog.jsx';
 
 /**
  * The demo-mode banner: fixed under the app header while `store.demo` is
@@ -14,21 +15,30 @@ import { useState } from 'react';
 export default function DemoBanner({ onExitDemo }){
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const dialogs = useDialogs();
 
   const exitDemo = async () => {
-    if(!window.confirm('Exit demo mode? All sample data is erased and Arise starts empty.')) return;
+    const ok = await dialogs.confirm({
+      title:'Exit demo mode?',
+      description:'All sample data is erased and Arise starts empty.',
+      confirmLabel:'Erase sample data',
+      cancelLabel:'Stay in demo',
+      destructive:true,
+    });
+    if(!ok) return;
     setBusy(true); setErr(null);
     try{
       await onExitDemo?.();
       window.location.reload();
     }catch(e){
-      setErr(e?.message || 'Exit failed — try More → Clear local data.');
+      setErr(e?.message || 'Exit failed — try More → Erase all Arise data.');
       setBusy(false);
     }
   };
 
   return (
     <div role="region" aria-label="Demo mode banner" className="px-4 pt-2">
+      {dialogs.node}
       <div className="rounded-2xl border border-line bg-surface2 px-3 py-2.5 flex items-center gap-3">
         <span aria-hidden className="text-base">🧪</span>
         <div className="min-w-0 flex-1">

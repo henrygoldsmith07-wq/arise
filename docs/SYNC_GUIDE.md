@@ -44,7 +44,9 @@ device last touched what.
 ## Privacy model
 
 - Your storage, your credentials, your file. No third party is introduced
-  by syncing — the only network peer is your own WebDAV host.
+  by syncing — syncing itself only ever talks to your own WebDAV host. The
+  separate, opt-in NVIDIA AI-coach and classifier.dev integrations described
+  in `docs/PRIVACY.md` are not sync channels and never travel over it.
 - With encryption on, the host stores ciphertext only; it cannot read your
   training data.
 - Credentials, passphrase and consent choices stay device-local —

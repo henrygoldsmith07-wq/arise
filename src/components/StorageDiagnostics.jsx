@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { storageDiagnosticsService } from '../services/storageDiagnosticsService.js';
+import { useDialogs } from './Dialog.jsx';
 
 const FINDING_LABELS = {
   'duplicate-session': 'Duplicate sessions',
@@ -20,6 +21,21 @@ const RELOAD_AFTER_MS = 1400;
 export default function StorageDiagnostics({ setMsg }){
   const [diag, setDiag] = useState(null);
   const [busy, setBusy] = useState(false);
+  const dialogs = useDialogs();
+
+  const rollbackToLatest = async ()=>{
+    const snapshot = diag?.snapshots?.[0];
+    if(!snapshot) return;
+    const ok = await dialogs.confirm({
+      title:'Roll back to this snapshot?',
+      description:`Snapshot from ${new Date(snapshot.at).toLocaleString()}. Everything stored since then (live + archived history, schedule, prefs) is replaced when the snapshot passes the integrity gate. A failed check changes nothing. Exports are unaffected.`,
+      confirmLabel:'Roll back',
+      cancelLabel:'Cancel',
+      destructive:true,
+    });
+    if(!ok) return;
+    run(()=> storageDiagnosticsService.rollbackToSnapshot(snapshot.id), 'Rolled back — reloading…', { reload: true })();
+  };
 
   const refresh = useCallback(async ()=>{
     setDiag(await storageDiagnosticsService.inspect({ olderThanDays: 365 }));
@@ -46,6 +62,7 @@ export default function StorageDiagnostics({ setMsg }){
 
   return (
     <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+      {dialogs.node}
       <h3 className="text-sm font-bold">Storage health & maintenance</h3>
       {!diag && <p className="text-xs text-ink3">Checking stored data…</p>}
       {diag && (
@@ -70,7 +87,7 @@ export default function StorageDiagnostics({ setMsg }){
             <button disabled={busy || !diag.prunePreview.pruned} onClick={run(()=> storageDiagnosticsService.pruneEvents(), (r)=> `Pruned ${r.pruned} old event${r.pruned === 1 ? '' : 's'} (telemetry only — training data untouched).`, { reload: true })} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Prune old events</button>
             <button disabled={busy} onClick={run(()=> storageDiagnosticsService.captureSnapshot({ force: true, reason: 'manual' }), 'Snapshot captured (live + archived history). It is checked against the integrity gate before any rollback.')} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Snapshot now</button>
             {diag.snapshots.length > 0 && (
-              <button disabled={busy} onClick={()=> { if(confirm(`Roll back to the snapshot from ${new Date(diag.snapshots[0].at).toLocaleString()}?\n\nEverything stored since then (live + archived history, schedule, prefs) is replaced when the snapshot passes the integrity gate. A failed check changes nothing. Exports are unaffected.`)) run(()=> storageDiagnosticsService.rollbackToSnapshot(diag.snapshots[0].id), 'Rolled back — reloading…', { reload: true })(); }} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Roll back to snapshot</button>
+              <button disabled={busy} onClick={rollbackToLatest} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Roll back to snapshot</button>
             )}
             {diag.archived > 0 && (
               <button disabled={busy} onClick={run(()=> storageDiagnosticsService.restoreArchive(), (r)=> `Restored ${r} archived session${r === 1 ? '' : 's'} to live history.`, { reload: true })} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Restore archive</button>

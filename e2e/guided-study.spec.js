@@ -162,7 +162,13 @@ test('guided enforces DP assignment, records once, excludes unassigned, survives
     const skip = runner2.getByRole('button', { name: 'Skip rest' });
     if(await skip.isVisible().catch(() => false)) await skip.click();
     const sv = runner2.getByRole('button', { name: 'Save session' });
-    if(await sv.isEnabled().catch(() => false)){ await sv.click(); break; }
+    if(await sv.isEnabled().catch(() => false)){
+      await sv.click();
+      // Unfinished sets are confirmed in-app now, not via a native dialog.
+      const saveAnyway = page.getByRole('button', { name: 'Save anyway' });
+      if(await saveAnyway.waitFor({ timeout: 1500 }).then(()=> true).catch(()=> false)) await saveAnyway.click();
+      break;
+    }
   }
   await expect(runner2).toBeHidden({ timeout: 10000 });
   await page.evaluate(async () => { const { whenPersisted } = await import('/src/lib/storage.js'); await whenPersisted(); });
@@ -229,7 +235,12 @@ test('guided REPLACES the scheduled target with the assigned Arise treatment: pr
     const skip = runner.getByRole('button', { name: 'Skip rest' });
     if(await skip.isVisible().catch(() => false)) await skip.click();
     const sv = runner.getByRole('button', { name: 'Save session' });
-    if(await sv.isEnabled().catch(() => false)){ await sv.click(); break; }
+    if(await sv.isEnabled().catch(() => false)){
+      await sv.click();
+      const saveAnyway = page.getByRole('button', { name: 'Save anyway' });
+      if(await saveAnyway.waitFor({ timeout: 1500 }).then(()=> true).catch(()=> false)) await saveAnyway.click();
+      break;
+    }
   }
   await expect(runner).toBeHidden({ timeout: 10000 });
   await page.evaluate(async () => { const { whenPersisted } = await import('/src/lib/storage.js'); await whenPersisted(); });

@@ -5,12 +5,14 @@ import { isValidStudyParticipantId } from '../../lib/studyIdentity.js';
 import { participationCopy, participationStatus, studyEligibility } from '../../lib/participation.js';
 import { buildEvidenceSnapshot, exportStudyDataFile, joinEvidenceStudy, withdrawEvidenceStudy } from '../../services/evidenceService.js';
 import { useTransientMessage } from '../../hooks/useTransientMessage.js';
+import { useDialogs } from '../Dialog.jsx';
 
 const EvidenceDashboard = lazy(()=> import('../EvidenceDashboard.jsx'));
 
 export default function EvidenceSettings({ store, setStore }){
   const [open,setOpen]=useState(false);
   const { message, flash } = useTransientMessage();
+  const dialogs = useDialogs();
   const data = useMemo(()=> {
     if(!open || store.preferences?.telemetryEnabled !== true) return null;
     try{ return buildEvidenceSnapshot(store); }catch{ return null; }
@@ -30,8 +32,15 @@ export default function EvidenceSettings({ store, setStore }){
       flash(status === 'withdrawn' ? 'Rejoined the study — same pseudonymous id, same deterministic assignment.' : 'Joined the study — pseudonymous, on this device only.');
     }catch(err){ flash(`Could not enroll: ${String(err?.message || err)}`); }
   };
-  const withdraw = ()=>{
-    if(!confirm('Withdraw from the study?\n\nNew workouts stop getting study assignments (the normal engine takes over).\nEverything already recorded — sessions, measurements, export history — stays on this device exactly as it is.\n\nNote: files you already sent to the study team are copies the app cannot reach. Deleting local data never removes them; ask the study team to delete their copies if you want that.\n\nDeleting local data is a separate action and is never done by withdrawing.')) return;
+  const withdraw = async ()=>{
+    const ok = await dialogs.confirm({
+      title:'Withdraw from the study?',
+      description:'New workouts stop getting study assignments (the normal engine takes over). Everything already recorded — sessions, measurements, export history — stays on this device exactly as it is. Files you already sent to the study team are copies the app cannot reach; ask the study team to delete those if you want. Deleting local data is a separate action and is never done by withdrawing.',
+      confirmLabel:'Withdraw',
+      cancelLabel:'Stay enrolled',
+      destructive:true,
+    });
+    if(!ok) return;
     setStore(withdrawEvidenceStudy(store));
     flash('Withdrawn — new workouts are study-free; recorded history preserved.');
   };
@@ -45,6 +54,7 @@ export default function EvidenceSettings({ store, setStore }){
 
   return (
     <section id="sec-evidence" className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+      {dialogs.node}
       <h3 className="text-sm font-bold">Progression evidence</h3>
       <p className="text-xs text-ink3">Arise records each recommendation before the workout (with your measurement consent) and scores it against what you actually did next — compared against simple double progression, linear progression and a flat baseline on the same sessions.</p>
       <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2" aria-label="Real-world study onboarding">

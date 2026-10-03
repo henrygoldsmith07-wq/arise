@@ -10,7 +10,7 @@
 // .arisebak) are adapted to the current envelope before validation, so an
 // export from 2024 still imports in 2030.
 
-import { z } from 'zod';
+import { z } from './schema.js';
 import { EXPORT_CONTRACT, EXPORT_CONTRACT_MIN } from './domain.js';
 
 const APP_NAME = 'arise';

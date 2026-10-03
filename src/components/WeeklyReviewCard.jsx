@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { reviewCompletedWeek, weekOf } from '../lib/mesocycle.js';
+import { acknowledgeWeeklyReview } from '../services/settingsService.js';
 import { e1rm } from '../lib/progression.js';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { totalVolumeKg } from '../lib/store.js';
@@ -92,7 +93,7 @@ export default function WeeklyReviewCard({ store, setStore }){
     return `${name}: hold`;
   };
 
-  const accept = ()=>{ try{ setStore({ ...store, lastWeeklyReviewAck: data.ackKey }); }catch{} };
+  const accept = ()=>{ try{ setStore(acknowledgeWeeklyReview(store, data.ackKey)); }catch{} };
 
 
   return (

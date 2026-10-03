@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useDialogA11y } from '../lib/a11y.js';
+import { useDialogs } from './Dialog.jsx';
 import { PROGRAMS, PROGRAM_BY_ID, PROGRAM_TEMPLATES, programHistory as programVersionHistory, availablePrograms, EXERCISE_BY_ID, EXERCISES, plannedVsCompleted, GOALS, LEVELS } from '../lib/data.js';
 import { encodeShareCode } from '../lib/shareCodes.js';
 import { adaptScheduleForEquipment, programAdherence, userProgramHistory } from '../lib/programming.js';
@@ -21,6 +22,7 @@ function currentWeek(adherence){
 export default function TrainView({ store, setStore, onStartSession, availableEquipment }){
   const [programId,setProgramId]=useState(store.activeSchedule?.programId || PROGRAMS[0].id);
   const [builderOpen,setBuilderOpen]=useState(false);
+  const dialogs = useDialogs();
   // Modal focus capture/trap/restore for the template builder.
   const builderA11y = useDialogA11y({ active: builderOpen });
   const [editingId,setEditingId]=useState(null);
@@ -110,9 +112,16 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
   // Deletion is soft: the row stays recoverable (undo below), analytics and
   // the UI filter on deletedAt, and a tombstone records the deletion so a
   // future sync can propagate it instead of resurrecting the template.
-  const deleteCustom = (id)=>{
+  const deleteCustom = async (id)=>{
     if(!(store.customTemplates || []).some(t=> t.id === id)) return;
-    if(!confirm('Delete this template? Schedules already started from it are not affected. You can undo right after.')) return;
+    const ok = await dialogs.confirm({
+      title:'Delete this template?',
+      description:'Schedules already started from it are not affected. You can undo right after.',
+      confirmLabel:'Delete template',
+      cancelLabel:'Keep template',
+      destructive:true,
+    });
+    if(!ok) return;
     setStore(softDeleteCustomTemplate(store, id));
     if(programId === id) setProgramId(fallbackProgrammeId());
   };
@@ -169,6 +178,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
 
   return (
     <div className="px-4 py-5 space-y-4">
+      {dialogs.node}
       <div>
         <h2 className="text-lg font-extrabold tracking-tight">Train</h2>
         <p className="text-xs text-ink3">Programs are scheduled training — picking one creates dated sessions you can run from Today. Templates are reusable blueprints; mesocycles periodise load across weeks.</p>
