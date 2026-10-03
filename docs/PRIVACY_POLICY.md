@@ -12,7 +12,8 @@ site serves application files; it does not receive, store, or process your
 training data, and there is no account. Analytics/telemetry is off by
 default and, when you enable it, stays on your device. If you configure
 sync, your data goes only to the storage provider you choose, encrypted
-end-to-end when you set a passphrase. Optional AI/classifier/Pulse integrations
+end-to-end when you set a passphrase. Optional integrations — the NVIDIA AI
+coach, classifier.dev feedback categorisation and coach routing, and Pulse —
 have separate controls and are described explicitly below.
 
 ## What we collect
@@ -46,20 +47,23 @@ have separate controls and are described explicitly below.
   exported, never sent anywhere except to the endpoint you configured.
 - **AI-coach API key** — stored in `sessionStorage` by default. If you turn on
   “Remember API key on this device”, it is kept in local browser storage until
-  cleared. It is excluded from backups, sync payloads and diagnostics.
+  cleared. It is excluded from backups, exports, sync payloads, support
+  diagnostics and telemetry, and never enters any of them.
 
 ## What leaves your device, and when
 
 1. **Backups you export** — you choose where they go.
 2. **Sync you enable** — to your own WebDAV storage; end-to-end encrypted
    whenever you set a passphrase (recommended). Arise has no sync server.
-3. **AI insight, if you use it** — More → More Tools offers an optional
-   AI-coach text summary. It sends a **minimized, aggregated** training
-   context and deterministic engine findings (no raw set-by-set history,
-   notes or health summary) to NVIDIA's configured model endpoint. Your API
-   key is sent to that endpoint as the authentication credential. Off by
-   default in the sense that no request can occur without you providing a key
-   and pressing Ask.
+3. **AI insight, if you use it** — the optional AI-coach text summary. It
+   sends a **minimized, aggregated** training context and deterministic
+   engine findings (aggregated training numbers only — no raw set-by-set
+   history, notes or health summary) to NVIDIA's configured model endpoint.
+   Your API key is sent to that endpoint as the authentication credential.
+   The coach only explains the deterministic engine's decisions — it never
+   creates training prescriptions, and no cloud AI is required for any
+   training functionality. Off by default: no request can occur without you
+   providing a key and pressing Ask.
 4. **classifier.dev, if separately enabled** — feedback categorisation may
    send redacted feedback text; coach routing may send only an ambiguous,
    redacted coach question after deterministic local routing was insufficient.

@@ -52,6 +52,7 @@ import DemoBanner from './components/DemoBanner.jsx';
 const InstallCard = lazy(() => import('./components/InstallCard.jsx'));
 import { setRestPreset } from './lib/gymMode.js';
 import { cancellationPlan } from './services/workoutCancellationService.js';
+import { setTelemetryConsent } from './services/settingsService.js';
 
 // Suspense fallback for lazy tabs: same chrome height as a view header so
 // the tab bar doesn't jump when the chunk resolves.
@@ -375,7 +376,7 @@ export default function App(){
   };
 
   const chooseMeasurementConsent=(enabled)=>{
-    setStore({ ...store, preferences:{ ...(store.preferences||{}), telemetryEnabled:enabled } });
+    setStore(setTelemetryConsent(store, enabled));
     recordEvent('consent:local-measurements', { enabled }, { essential:true });
     setConsentOpen(false);
   };
@@ -473,9 +474,13 @@ export default function App(){
     }
   };
 
+  // Durable workout discard. Presentation (SessionRunner/GuidedRunner) owns
+  // its confirmation UI and calls this only after the user confirmed once —
+  // there is no second confirmation here. Telemetry (session:abandon) and the
+  // durable draft removal still happen exactly as before, and the crash-draft
+  // / cross-tab protections are released only after the removal is committed.
   const handleCancelSession = async()=>{
     const plan = cancellationPlan({ store:storeRef.current, activeSession:activeSessionRef.current });
-    if(plan.requiresConfirmation && !window.confirm(`Discard this workout? ${plan.completedSets} completed set${plan.completedSets===1?'':'s'} will be lost.`)) return;
     if(plan.event) try{ recordEvent(plan.event.type, plan.event.payload); }catch{}
     try{
       if(!saveStore(plan.nextStore)) throw new Error('Could not queue draft removal for storage.');

@@ -76,9 +76,12 @@ test.describe('Demo mode', () => {
     await page.getByRole('button', { name: 'More' }).click();
     await expect(page.getByRole('button', { name: 'Export JSON' })).toBeDisabled();
 
-    // One-tap exit wipes back to a genuinely empty app.
-    page.once('dialog', (d) => d.accept());
+    // One-tap exit wipes back to a genuinely empty app. The confirmation is
+    // an in-app alertdialog now — no native dialog fires.
     await banner.getByRole('button', { name: 'Start fresh' }).click();
+    const exitConfirm = page.getByRole('alertdialog');
+    await expect(exitConfirm).toBeVisible();
+    await exitConfirm.getByRole('button', { name: 'Erase sample data' }).click();
     await expect(page.getByRole('dialog', { name: 'Onboarding' })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('region', { name: 'Demo mode banner' })).toHaveCount(0);
     const empty = await page.evaluate(async () => {

@@ -54,9 +54,12 @@ When using a hosted copy you agree not to:
 ## 5. Your data
 
 Your training data is stored in your browser (IndexedDB) on your device and
-never leaves it unless you export a backup or configure a sync destination.
-See `docs/PRIVACY_POLICY.md` for the full data description and your rights,
-and `docs/PRIVACY.md` for how the app behaves in normal use.
+never leaves it automatically. It travels only when you export a backup,
+configure a sync destination, or explicitly use one of the optional,
+consent-gated integrations (the NVIDIA AI coach, classifier.dev, Pulse —
+each sends only what `docs/PRIVACY.md` documents). See
+`docs/PRIVACY_POLICY.md` for the full data description and your rights, and
+`docs/PRIVACY.md` for how the app behaves in normal use.
 
 ## 6. Age
 

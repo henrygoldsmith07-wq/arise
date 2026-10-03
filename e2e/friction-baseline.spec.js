@@ -354,6 +354,9 @@ test('baseline probe — guided mode two-step flow', async ({ page }) => {
   const saveBtn = runner.getByRole('button', { name: 'Save session' });
   await expect(saveBtn).toBeEnabled({ timeout: 5000 });
   await saveBtn.click();
+  // Unfinished sets (if any) are confirmed in-app now, never via a native dialog.
+  const saveAnyway = page.getByRole('button', { name: 'Save anyway' });
+  if(await saveAnyway.waitFor({ timeout: 1500 }).then(()=> true).catch(()=> false)) await saveAnyway.click();
   await expect(runner).toBeHidden({ timeout: 8000 });
 
   const probe = await readProbe(page);

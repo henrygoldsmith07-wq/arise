@@ -40,7 +40,8 @@ origin's browser-storage privileges.
 
 **Optional cloud integrations receive more data than the user expects.**
 *Defence:* each path has a narrow adapter and independent control. NVIDIA gets
-aggregated training context + deterministic findings, not raw history/notes;
+aggregated training context + deterministic findings, not raw history/notes
+(the coach only explains — it never creates training prescriptions);
 classifier.dev gets redacted text only after its relevant consent; Pulse gets
 the documented summary payload through an injected adapter. CSP `connect-src`
 allowlists the built-in remote endpoints. Arise cannot guarantee how an

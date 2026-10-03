@@ -2,8 +2,10 @@
 
 Sixteen requested improvements, sorted by what the current architecture can
 actually ship. Arise today is local-first: Vite + React, `localStorage`, no
-backend, no account, PWA-only. Six of the sixteen asks cannot be built without
-breaking one of those constraints — that gate is applied first, before priority.
+backend, no account, PWA-only (optional integrations — see `docs/PRIVACY.md`
+— send only what the user explicitly enables). Six of the sixteen asks
+cannot be built without breaking one of those constraints — that gate is
+applied first, before priority.
 
 ## Baseline (measured 2026-08-14)
 

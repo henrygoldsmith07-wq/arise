@@ -1,19 +1,27 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
-import { downloadJson, parseImportFile, mergeStores, portableCsv, deletionPreview, parseBackupFile } from '../lib/export.js';
-import { buildImportPreview } from '../lib/exportPolicy.js';
-import { buildPartialExportPayload } from '../lib/export.js';
+import { downloadJson, portableCsv, deletionPreview, buildPartialExportPayload } from '../lib/export.js';
+import { applyImportPreview as applyImport, importAppCsv, previewBackupFile, previewBackupPayload } from '../services/restoreService.js';
 import { buildCoachExport, renderCoachMarkdown } from '../lib/coachExport.js';
 import { shareTextAsFile } from '../lib/nativeShare.js';
 const SyncPanel = lazy(() => import('./SyncPanel.jsx'));
-import { clearTelemetry, telemetrySummary, getEventHistory, mergeEventHistory, replaceEventHistory, recordEvent, getErrorEvents, clearErrorEvents } from '../lib/telemetry.js';
+import { clearTelemetry, telemetrySummary, getEventHistory, recordEvent, getErrorEvents, clearErrorEvents } from '../lib/telemetry.js';
 import { mergeHealthSummary, pullHealthSummary } from '../lib/health.js';
 import { LOCATIONS, GOALS } from '../lib/data.js';
 import { setRestPreset } from '../lib/gymMode.js';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { buildSupportBundle } from '../lib/supportDiagnostics.js';
 import { buildSalvagePayload } from '../lib/salvageExport.js';
-import { normaliseHistoryEntry } from '../lib/store.js';
 import { dataLifecycleService } from '../services/dataLifecycleService.js';
+import {
+  acknowledgeConsentReview,
+  clearEventHistoryStore,
+  mergeImportedHealthSummary as mergeImportedHealthSummaryAction,
+  setConsentReviewReminder,
+  setHealthSummaryConsent as setHealthSummaryConsentAction,
+  setPulseConsent as setPulseConsentAction,
+  setTelemetryConsent as setTelemetryConsentAction,
+  setTelemetryOption,
+} from '../services/settingsService.js';
 import { backupReminderDue, dismissBackupReminder as persistBackupReminderDismissal, readBackupState } from '../lib/backupState.js';
 import { decryptEncryptedFullBackup, downloadEncryptedFullBackup, downloadFullBackup, encryptedBackupSupported } from '../services/backupService.js';
 import ToggleRow from './settings/ToggleRow.jsx';
@@ -24,11 +32,13 @@ const GuidedSettings = lazy(()=> import('./settings/GuidedSettings.jsx'));
 const TrainingPolicySettings = lazy(()=> import('./settings/TrainingPolicySettings.jsx'));
 const EvidenceSettings = lazy(()=> import('./settings/EvidenceSettings.jsx'));
 import { useTransientMessage } from '../hooks/useTransientMessage.js';
+import { useDialogs } from './Dialog.jsx';
 const StorageDiagnostics = lazy(()=> import('./StorageDiagnostics.jsx'));
 
 export default function MoreView({ store, setStore, onboardingOpen, setOnboardingOpen, onLoadDemo }){
   const [importStrategy,setImportStrategy]=useState('merge');
   const { message:msg, setMessage:setMsg, flash:flashMsg } = useTransientMessage();
+  const dialogs = useDialogs();
   const fileRef = useRef(null);
   const [showTelemetry,setShowTelemetry]=useState(false);
   const [showErrors,setShowErrors]=useState(false);
@@ -89,7 +99,14 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
 
   const exportEncrypted = async ()=>{
     if(!encryptedBackupSupported()){ flashMsg('Encrypted backups need a newer browser — plain export still works.', 4000); return; }
-    const pass = prompt('Choose a passphrase for this backup.\n\nIf you lose it, the backup cannot be recovered — there is no reset.', '');
+    const pass = await dialogs.prompt({
+      title:'Choose a passphrase for this backup',
+      description:'If you lose it, the backup cannot be recovered — there is no reset.',
+      fieldLabel:'Passphrase',
+      inputType:'password',
+      minLength:8,
+      confirmLabel:'Create encrypted backup',
+    });
     if(pass == null) return;
     if(pass.length < 8){ flashMsg('Use at least 8 characters — a short passphrase makes the backup guessable.', 4000); return; }
     try{
@@ -103,7 +120,13 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
     if(!file) return;
     try{
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const pass = prompt(`Passphrase for ${file.name}:`, '');
+      const pass = await dialogs.prompt({
+        title:`Passphrase for ${file.name}`,
+        description:'This file was sealed with a passphrase when it was exported.',
+        fieldLabel:'Passphrase',
+        inputType:'password',
+        confirmLabel:'Unlock backup',
+      });
       if(pass == null){ e.target.value = ''; return; }
       const payload = await decryptEncryptedFullBackup(bytes, pass);
       e.target.value = '';
@@ -114,14 +137,25 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
     }
   };
 
-  const resetAllData = async ()=>{
-    if(!confirm('Clear all local data on this device? This cannot be undone unless you have an export.')) return;
+  // One destructive data operation for the whole app: "Erase all Arise data
+  // from this device". The reviewable confirmation (counts/state) is shown
+  // here; dataLifecycleService.eraseDeviceData owns the already-confirmed
+  // verified wipe. On failure nothing is reloaded, so a backup is still possible.
+  const eraseAllData = async ()=>{
+    const preview = deletionPreview(store);
+    const ok = await dialogs.confirm({
+      title:'Erase all Arise data from this device?',
+      description:`History: ${preview.historyCount} sessions (+ ${preview.archivedHistoryCount} archived) · Schedule: ${preview.schedulePresent?'yes':'no'} · Onboarding: ${preview.onboardingPresent?'yes':'no'} · Readiness: ${preview.readinessCount} entries · Events: ${preview.eventCount}. Erasing cannot be undone unless you exported a backup.`,
+      confirmLabel:'Erase everything',
+      cancelLabel:'Keep my data',
+      destructive:true,
+    });
+    if(!ok) return;
     try{
-      await dataLifecycleService.clearDeviceData();
-      clearTelemetry();
+      await dataLifecycleService.eraseDeviceData();
       location.reload();
     }catch(err){
-      flashMsg(`Clear failed: ${String(err?.message || err)}. This tab was not reloaded so you can export a backup.`, 7000);
+      flashMsg(`Erase failed: ${String(err?.message || err)}. This tab was not reloaded so you can export a backup.`, 7000);
     }
   };
   const exportCsv = ()=>{
@@ -185,11 +219,12 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
 
   // Import is a two-step, reviewable flow: the file is parsed and previewed
   // (counts, conflicts, denied fields, origin metadata) and NOTHING is applied
-  // until the user confirms. Cancel discards the preview entirely.
+  // until the user confirms. Cancel discards the preview entirely. The parse /
+  // preview / apply logic lives in restoreService (tested), not here.
   const [importPreview, setImportPreview] = useState(null);
 
   const queueImportPreview = async (inner)=>{
-    const preview = buildImportPreview(inner, store);
+    const preview = previewBackupPayload(inner, store);
     if(!preview.ok){
       flashMsg(preview.reason || 'This file could not be previewed.', 5000);
       return;
@@ -204,8 +239,12 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
     e.target.value='';
     try{
       // Accepts plain JSON and the compressed .arise envelope alike.
-      const inner = await parseBackupFile(text);
-      await queueImportPreview(inner);
+      const preview = await previewBackupFile(text, store);
+      if(!preview.ok){
+        flashMsg(preview.reason || 'This file could not be previewed.', 5000);
+        return;
+      }
+      setImportPreview(preview);
     }catch(err){
       flashMsg(String(err.message || err), 5000);
     }
@@ -221,15 +260,13 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
     e.target.value='';
     try{
       const { parseAppCsv, rowsToHistory } = await import('../lib/appCsvImport.js');
-      const parsed = parseAppCsv(text, { byId: EXERCISE_BY_ID });
-      if(!parsed.rows.length){
-        flashMsg(`No usable rows found (${parsed.skipped} skipped${parsed.unmappedExercises.length ? `; unknown exercises: ${parsed.unmappedExercises.slice(0, 5).join(', ')}` : ''}).`, 6000);
+      const result = await importAppCsv({ text, store, byId: EXERCISE_BY_ID, parse: parseAppCsv, rowsToHistory });
+      if(!result.ok){
+        flashMsg(`No usable rows found (${result.skipped} skipped${result.unmappedExercises.length ? `; unknown exercises: ${result.unmappedExercises.slice(0, 5).join(', ')}` : ''}).`, 6000);
         return;
       }
-      const entries = rowsToHistory(parsed.rows, { byId: EXERCISE_BY_ID }).map(en => normaliseHistoryEntry(en));
-      const merged = mergeStores(store, { history: entries, eventHistory: [] }, 'merge');
-      setStore({ ...merged });
-      flashMsg(`Imported ${parsed.rows.length} rows into ${entries.length} sessions${parsed.unmappedExercises.length ? ` · skipped unknown exercises: ${parsed.unmappedExercises.slice(0, 5).join(', ')}` : ''}.`, 6000);
+      setStore(result.store);
+      flashMsg(`Imported ${result.rowCount} rows into ${result.sessionCount} sessions${result.unmappedExercises.length ? ` · skipped unknown exercises: ${result.unmappedExercises.slice(0, 5).join(', ')}` : ''}.`, 6000);
     }catch(err){
       flashMsg(String(err.message || err), 6000);
     }
@@ -238,31 +275,15 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
   const applyImportPreview = ()=>{
     if(!importPreview) return;
     try{
-      const imported = parseImportFile(JSON.stringify(importPreview.envelope));
-      const merged = mergeStores(store, imported, importStrategy);
-      if(importStrategy==='replace') replaceEventHistory(imported.eventHistory || []);
-      else if(imported.eventHistory?.length) mergeEventHistory(imported.eventHistory);
-      setStore({ ...merged, eventHistory:getEventHistory() }, importStrategy === 'replace' ? { collectionMode:'replace' } : null);
-      flashMsg(importStrategy==='replace'
+      const result = applyImport({ preview: importPreview, store, strategy: importStrategy });
+      setStore(result.store, result.persistenceOptions);
+      flashMsg(result.summary.kind === 'replaced'
         ? 'Backup restored — replaced this device.'
-        : `Backup merged — ${importPreview.counts.additions} new session${importPreview.counts.additions === 1 ? '' : 's'} added${importPreview.counts.updates ? `, ${importPreview.counts.updates} conflict${importPreview.counts.updates === 1 ? '' : 's'} kept your current copy` : ''}.`, 6000);
+        : `Backup merged — ${result.summary.additions} new session${result.summary.additions === 1 ? '' : 's'} added${result.summary.updates ? `, ${result.summary.updates} conflict${result.summary.updates === 1 ? '' : 's'} kept your current copy` : ''}.`, 6000);
     }catch(err){
       flashMsg(String(err.message || err), 6000);
     }
     setImportPreview(null);
-  };
-
-  const reset = resetAllData;
-  const deleteAccount = async ()=>{
-    const preview = deletionPreview(store);
-    if(!confirm(`Delete all Arise data on this device?\n\nHistory: ${preview.historyCount} sessions\nSchedule: ${preview.schedulePresent?'yes':'no'}\nOnboarding: ${preview.onboardingPresent?'yes':'no'}\nReadiness: ${preview.readinessCount} entries\n\nThis cannot be undone.`)) return;
-    try{
-      await dataLifecycleService.clearDeviceData();
-      clearTelemetry();
-      location.reload();
-    }catch(err){
-      flashMsg(`Delete failed: ${String(err?.message || err)}. This tab was not reloaded so you can export a backup.`, 7000);
-    }
   };
 
   const [storageInfo, setStorageInfo] = useState(null);
@@ -305,19 +326,19 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
   };
 
   const setTelemetryConsent=(enabled)=>{
-    setStore({ ...store, preferences:{ ...(store.preferences||{}), telemetryEnabled:enabled } });
+    setStore(setTelemetryConsentAction(store, enabled));
     recordEvent('consent:local-measurements', { enabled }, { essential:true });
     flashMsg(enabled ? 'Local measurements enabled.' : 'Local measurements disabled. Existing history remains on this device.', 3000);
   };
 
   const setPulseConsent=(enabled)=>{
-    setStore({ ...store, preferences:{ ...(store.preferences||{}), pulseEnabled:enabled } });
+    setStore(setPulseConsentAction(store, enabled));
     recordEvent('consent:pulse', { enabled }, { essential:true });
     flashMsg(enabled ? 'Pulse sharing enabled. Arise will only push completed workouts.' : 'Pulse sharing disabled.', 3000);
   };
 
   const setHealthConsent=(enabled)=>{
-    setStore({ ...store, preferences:{ ...(store.preferences||{}), healthSummaryEnabled:enabled }, healthSummary:enabled ? store.healthSummary : null });
+    setStore(setHealthSummaryConsentAction(store, enabled));
     recordEvent('consent:health-summary', { enabled }, { essential:true });
     setHealthMsg(enabled ? 'Health summary import enabled.' : 'Health summary disabled and its saved summary removed.');
   };
@@ -327,7 +348,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
     if(!store.preferences?.healthSummaryEnabled){ setHealthMsg('Enable health summary consent first.'); return; }
     const result=await pullHealthSummary(healthAdapter);
     if(!result.ok){ setHealthMsg(result.reason); return; }
-    setStore({ ...store, healthSummary:mergeHealthSummary(store.healthSummary,result.summary) });
+    setStore(mergeImportedHealthSummaryAction(store, mergeHealthSummary(store.healthSummary,result.summary)));
     recordEvent('health:summary-imported', { source:result.summary.source }, { essential:false });
     setHealthMsg('Health summary imported locally.');
   };
@@ -337,6 +358,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
 
   return (
     <div className="px-4 pt-5 pb-2 space-y-4 max-w-3xl mx-auto">
+      {dialogs.node}
       <div>
         <h2 className="text-lg font-extrabold tracking-tight">More</h2>
         <p className="text-xs text-ink3">Backup, portability, privacy and help.</p>
@@ -535,7 +557,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
               <p className="text-ink3">Ignored for your safety (device-local settings): {importPreview.deniedFields.join(', ')}</p>
             )}
             <div className="flex gap-2">
-              <button onClick={()=> { if(importStrategy==='replace' && !confirm('Replace overwrites ALL data on this device with the backup — your current history, programs and settings are gone. Export a backup first if in doubt. Continue?')) return; applyImportPreview(); }} className="btn btn-primary min-h-9 rounded-xl px-4">Apply {importStrategy}</button>
+              <button onClick={async ()=> { if(importStrategy==='replace'){ const ok = await dialogs.confirm({ title:'Replace this device with the backup?', description:'Replace overwrites ALL data on this device with the backup — your current history, programs and settings are gone. Export a backup first if in doubt.', confirmLabel:'Replace everything', cancelLabel:'Go back', destructive:true }); if(!ok) return; } applyImportPreview(); }} className="btn btn-primary min-h-9 rounded-xl px-4">Apply {importStrategy}</button>
               <button onClick={()=> setImportPreview(null)} className="btn btn-secondary min-h-9 rounded-xl px-4">Cancel</button>
             </div>
           </div>
@@ -630,25 +652,25 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
             <div className="space-y-1.5 pt-1">
               <ToggleRow bare label="Error diagnostics" hint="Keeps the last 50 crash reports locally (message + stack head, nothing else). Never in exports."
                 checked={store.preferences?.telemetryOptions?.errorDiagnostics === true}
-                onChange={(v)=> setStore({ ...store, preferences:{ ...store.preferences, telemetryOptions:{ ...(store.preferences?.telemetryOptions||{}), errorDiagnostics: v } } })} />
+                onChange={(v)=> setStore(setTelemetryOption(store, 'errorDiagnostics', v))} />
               <ToggleRow bare label="Set logging times" hint="Adds how long each set takes to log to the timing metric. Excluded when off."
                 checked={store.preferences?.telemetryOptions?.sessionTimings === true}
-                onChange={(v)=> setStore({ ...store, preferences:{ ...store.preferences, telemetryOptions:{ ...(store.preferences?.telemetryOptions||{}), sessionTimings: v } } })} />
+                onChange={(v)=> setStore(setTelemetryOption(store, 'sessionTimings', v))} />
               <ToggleRow bare label="Quarterly consent review reminder" hint="A local reminder to re-read these choices. Stored on this device only."
                 checked={store.preferences?.consentReview?.remind === true}
-                onChange={(v)=> setStore({ ...store, preferences:{ ...store.preferences, consentReview: { ...(store.preferences?.consentReview||{}), remind: v, lastReviewedAt: store.preferences?.consentReview?.lastReviewedAt || null } } })} />
+                onChange={(v)=> setStore(setConsentReviewReminder(store, v))} />
               {store.preferences?.consentReview?.remind === true && consentReviewDue && (
                 <div className="rounded-lg border border-review/30 bg-reviewsoft px-2.5 py-2 text-[11px]">
                   <p className="font-bold">Consent review due</p>
                   <p className="text-ink3 mt-0.5">You last reviewed these choices {Math.round((Date.now() - Date.parse(store.preferences.consentReview.lastReviewedAt)) / 86400000)} days ago.</p>
-                  <button onClick={()=> setStore({ ...store, preferences:{ ...store.preferences, consentReview: { ...store.preferences.consentReview, lastReviewedAt: new Date().toISOString() } } })} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px] mt-1">Mark reviewed</button>
+                  <button onClick={()=> setStore(acknowledgeConsentReview(store))} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px] mt-1">Mark reviewed</button>
                 </div>
               )}
             </div>
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={()=> setShowTelemetry(v=>!v)} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">{showTelemetry?'Hide':'Show'} local telemetry</button>          <button onClick={()=> { clearTelemetry(); clearErrorEvents(); setStore({ ...store, eventHistory:[] }, { collectionMode:'replace' }); flashMsg('Local telemetry and crash logs cleared.', 2000); }} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Clear telemetry</button>
+          <button onClick={()=> setShowTelemetry(v=>!v)} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">{showTelemetry?'Hide':'Show'} local telemetry</button>          <button onClick={()=> { clearTelemetry(); clearErrorEvents(); setStore(clearEventHistoryStore(store), { collectionMode:'replace' }); flashMsg('Local telemetry and crash logs cleared.', 2000); }} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Clear telemetry</button>
           <button onClick={()=> setShowErrors(v=>!v)} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">{showErrors?'Hide':'Show'} crash logs</button>
           <button onClick={()=> { clearErrorEvents(); flashMsg('Crash logs cleared.', 2000); }} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Clear crash logs</button>
         </div>
@@ -682,7 +704,8 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
         <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
           <summary className="text-sm font-semibold cursor-pointer">What is shared?</summary>
           <div className="text-xs text-ink3 mt-2 space-y-1.5">
-            <p><span className="font-semibold text-ink">By default: nothing.</span> No account, no analytics service, no trackers (enforced by this app's Content-Security-Policy, not just a promise).</p>
+            <p><span className="font-semibold text-ink">By default: nothing.</span> No account, no analytics service, no trackers (enforced by this app's Content-Security-Policy, not just a promise). Arise is local-first: no training data leaves the device automatically.</p>
+            <p><span className="font-semibold text-ink">Optional AI coach (NVIDIA).</span> When you paste your own NVIDIA API key and press Ask, a request goes to NVIDIA's model endpoint containing aggregated training numbers and the deterministic engine's findings only — never raw set-by-set history, notes or health summaries. Your key travels as the request credential and is session-only by default; it never enters exports, sync, backups, diagnostics or telemetry. The coach only explains — training prescriptions always come from the deterministic engine, and no cloud AI is required for any training functionality.</p>
             <p>Separate consent controls Pulse sharing, health-platform summary import, local telemetry, classifier.dev feedback categorisation, and classifier.dev coach-request routing. The feedback channel sends only redacted feedback for triage; the coach channel sends only an ambiguous redacted question for lane selection. Both classifier.dev channels are off by default. Neither sends feedback to the Arise developer or creates training prescriptions.</p>
             <p>Exercise illustrations load from one static host (bryllim.github.io). That request carries no identity beyond your IP — the browser sends nothing else.</p>
           </div>
@@ -701,9 +724,9 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
           <p className="text-xs text-ink3 mt-1">Current: {store.preferences?.pulseEnabled ? 'enabled' : 'disabled'}.</p>
           <button onClick={()=> setPulseConsent(!store.preferences?.pulseEnabled)} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs mt-2">{store.preferences?.pulseEnabled?'Disable Pulse sharing':'Enable Pulse sharing'}</button>
         </details>
-        <div className="flex gap-2 mt-2">
-          <button onClick={reset} className="text-xs font-semibold text-ink3 underline underline-offset-2">Clear local data</button>
-          <button onClick={deleteAccount} className="ml-auto text-xs font-bold text-danger underline underline-offset-2">Delete all data</button>
+        <div className="mt-2">
+          <button onClick={eraseAllData} className="text-xs font-bold text-danger underline underline-offset-2">Erase all Arise data from this device</button>
+          <p className="text-[11px] text-ink3 mt-1">History, schedule, readiness, settings, event ledger and crash logs on this device. Exports and snapshots you keep elsewhere are untouched.</p>
         </div>
       </section>
 

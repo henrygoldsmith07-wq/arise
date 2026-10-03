@@ -9,10 +9,12 @@ Your data lives in your browser's storage on your device.
 `docs/INSTALL.md`) and every screen, including logging workouts, works with
 the network off.
 
-**Is my training data private?** It never leaves the device unless you
-export it, enable the optional WebDAV sync to *your own* storage, or turn on
-a consent-gated integration. Telemetry is off by default. Details:
-`docs/PRIVACY.md`.
+**Is my training data private?** It never leaves the device automatically.
+It travels only when you export it, enable the optional WebDAV sync to *your
+own* storage, or explicitly use a consent-gated integration — the NVIDIA AI
+coach (aggregated numbers + engine findings only), classifier.dev (redacted
+feedback or a redacted coach question, off by default), or Pulse. Telemetry
+is off by default and stays on-device. Details: `docs/PRIVACY.md`.
 
 **Does it cost anything?** The code is MIT-licensed. The exercise
 illustrations are CC BY-SA 4.0 (attribution required).
@@ -50,7 +52,7 @@ companion; nutrition is out of scope.
 recommended before each workout and what you actually did, and compares that
 against simple textbook baselines on the same sessions. Aggregate results
 tell the developers (and you) whether the engine's advice actually helps.
-Nothing is automatic: your data leaves the device only when YOU export it.
+Nothing is automatic: study data leaves the device only when YOU export it.
 
 **How do I take part?** More → Progression evidence → *Join the study*.
 You need measurement consent on and at least 3 logged workouts. You get a

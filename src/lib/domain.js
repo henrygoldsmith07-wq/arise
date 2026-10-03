@@ -9,7 +9,7 @@
 // call sites, and every persisted record carries a `source` tag so analytics
 // can always answer "where did this row come from".
 
-import { z } from 'zod';
+import { z } from './schema.js';
 import { isDateOnly } from './dateOnly.js';
 
 // ── Branded IDs ─────────────────────────────────────────────────────────────

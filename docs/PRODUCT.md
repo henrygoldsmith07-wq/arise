@@ -98,6 +98,35 @@ empty start. It answers "is this for me?" in ninety seconds without
 compromising the no-demo-user data-integrity principle, because demo data
 is *visibly* not yours.
 
+## Local-first posture: data stays on your device unless you say otherwise
+
+Arise is local-first by default. No training data leaves the device
+automatically: the canonical store is IndexedDB on your device, and the only
+standing network path is sync against WebDAV storage the user owns. Explicit
+user-initiated integrations may send a deliberately minimised payload to a
+named third party — each one is opt-in, separately consented, and disclosed
+in full in [`docs/PRIVACY.md`](docs/PRIVACY.md):
+
+- **NVIDIA AI coach** (bring-your-own-key) — sends aggregated training
+  numbers plus the deterministic engine's own findings so the model can
+  explain them. It never receives raw set-by-set history, notes or the
+  health summary, and it **only explains — the deterministic progression
+  engine is authoritative and the AI never creates training prescriptions**.
+- **classifier.dev** — either redacted feedback text for categorisation, or
+  a redacted ambiguous coach question for lane selection. Both off by
+  default; routing returns a lane only, never a prescription.
+- **Pulse** — completed-workout summary through an adapter the
+  user/integrator supplies.
+- **Health summary import** — an import *into* Arise from your device's
+  health platform after separate consent, minimised to training-relevant
+  fields; it is not an outbound sharing channel.
+
+**No cloud AI is required for any training functionality.** Every
+prescription, progression, substitution and safety decision is computed
+locally and works fully offline; the AI coach is an optional explanation
+layer bolted on top, and losing it (or never enabling it) costs the product
+nothing.
+
 ## Sync posture: user-owned storage only — no hosted accounts
 
 Cross-device sync is WebDAV against storage the user owns, end-to-end
@@ -111,11 +140,12 @@ not a missing feature:
 - **Hosted Google-account sync is explicitly rejected as incompatible with
   the current strategy.** Google Sign-In was evaluated across the app suite
   and declined: it introduces a hosted identity provider and a hosted
-  data path into a product whose entire trust model is "the only network
-  peer is your own storage host". It would also silently exclude users who
-  train offline or deliberately keep no Google account. This stance holds
-  unless the product charter itself changes — which means a written,
-  argued ADR and a strategy rewrite, not a feature branch.
+  data path into a product whose entire trust model is "training data has
+  no automatic network path; the only standing peer is your own storage
+  host". It would also silently exclude users who train offline or
+  deliberately keep no Google account. This stance holds unless the product
+  charter itself changes — which means a written, argued ADR and a strategy
+  rewrite, not a feature branch.
 - **What could change the stance:** nothing incremental. Federated sync
   onto user-owned storage (already shipped), or a self-hosted appliance the
   user controls end-to-end, stay in charter. Anything where a third party
