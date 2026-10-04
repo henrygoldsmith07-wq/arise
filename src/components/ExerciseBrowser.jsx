@@ -1,8 +1,11 @@
-import { useMemo, useState } from 'react';
-import { MUSCLES, LEVELS, EQUIPMENT, EXERCISE_TAGS, searchExercises, EXERCISE_BY_ID, recommendExercises } from '../lib/data.js';
+import { useEffect, useMemo, useState } from 'react';
+import { MUSCLES, LEVELS, EQUIPMENT, EXERCISE_TAGS, searchExercises, recommendExercises } from '../lib/data.js';
 import { hasExerciseImage, getExerciseMeta } from '../lib/exerciseImages.js';
 import { teachingFor } from '../lib/exerciseTeaching.js';
-import { ALTERNATIVE_KINDS, alternativesFor, classifyExercise, isDeprecated } from '../lib/exerciseTaxonomy.js';
+import { classifyExercise, isDeprecated } from '../lib/exerciseTaxonomy.js';
+import { substitutionOptions } from '../lib/substitutions.js';
+import { loadStore } from '../lib/store.js';
+import { programmeExerciseIds, programmeUsageFor, recentExerciseSessions } from '../lib/trainSurface.js';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
 
 // Derived training-science chips: pattern, stability demand, fatigue cost,
@@ -11,7 +14,7 @@ function ClassificationChips({ exercise }){
   const c = classifyExercise(exercise);
   if(!c) return null;
   return (
-    <div className="flex flex-wrap gap-1 mt-2">
+    <div className="flex flex-wrap gap-1 mt-1">
       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-line text-ink3 bg-surface">{c.pattern || 'unclassified'}</span>
       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-line text-ink3 bg-surface">stability {c.stability}</span>
       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-line text-ink3 bg-surface">fatigue {c.fatigue}</span>
@@ -20,40 +23,125 @@ function ClassificationChips({ exercise }){
   );
 }
 
-// Grouped alternatives over the substitution graph — only non-empty groups
-// render, so the section never shows empty promises.
-function AlternativeGroups({ exercise }){
-  const groups = ALTERNATIVE_KINDS
-    .map(k => ({ ...k, items: alternativesFor(exercise, k.id) }))
-    .filter(g => g.items.length > 0);
-  if(!groups.length) return null;
-  return (
-    <div className="mt-2 space-y-1">
-      <p className="text-xs font-semibold">Alternatives by need</p>
-      {groups.map(g => (
-        <p key={g.id} className="text-[11px] text-ink3">
-          <span className="font-bold text-ink2">{g.label}:</span> {g.items.map(e => e.name).join(', ')}
+// "What in my programme uses it": scheduled sessions and live templates.
+function ProgramUsage({ rows, onFindSubstitutes }){
+  if(!rows.length){
+    return (
+      <div>
+        <p className="text-xs font-semibold">In my programme</p>
+        <p className="text-[11px] text-ink3 mt-0.5">
+          Not in your programme or templates yet. Add it from Train → Build my own & my templates.
         </p>
-      ))}
+        <button onClick={onFindSubstitutes} className="text-[11px] font-bold underline underline-offset-2 mt-1 min-h-9">See suitable substitutions</button>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <p className="text-xs font-semibold">In my programme</p>
+      <ul className="mt-1 space-y-1">
+        {rows.map((row, i)=> (
+          <li key={`${row.kind}-${row.name}-${i}`} className="text-[11px] text-ink2 flex gap-2">
+            <span className="font-bold text-ink shrink-0">{row.kind === 'schedule' ? 'Scheduled' : 'Template'}</span>
+            <span className="min-w-0">{row.name} <span className="text-ink3">• {row.detail}</span></span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
 
-export default function ExerciseBrowser({ availableEquipment, onboarding = null }){
+// Recent performance: the last logged sessions containing this exercise,
+// with just the sets that were actually done.
+function RecentPerformance({ rows, onLearnHow }){
+  if(!rows.length){
+    return (
+      <div>
+        <p className="text-xs font-semibold">Recent performance</p>
+        <p className="text-[11px] text-ink3 mt-0.5">
+          Nothing logged yet — run it in a session and your last three appearances show up here, sets included.
+        </p>
+        <button onClick={onLearnHow} className="text-[11px] font-bold underline underline-offset-2 mt-1 min-h-9">How to perform it</button>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <p className="text-xs font-semibold">Recent performance</p>
+      <ul className="mt-1 space-y-1">
+        {rows.map((row, i)=> (
+          <li key={`${row.dateISO}-${i}`} className="text-[11px] text-ink2">
+            <span className="font-mono tabular-nums text-ink3">{row.dateISO}</span>
+            {row.title ? <span className="text-ink3"> · {row.title}</span> : null}
+            {' — '}
+            <span className="font-semibold">{row.sets.map(s=> `${s.reps || '?'}${s.weightKg ? `×${s.weightKg}kg` : ''}${s.failed ? ' (failed)' : ''}`).join(' · ')}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function SubstitutionList({ exercise, availableEquipment, history, onClearFilters }){
+  const options = substitutionOptions(exercise.id, {
+    availableEquipment: availableEquipment?.length ? availableEquipment : null,
+    history,
+    limit: 4,
+  });
+  if(!options.length){
+    return (
+      <div>
+        <p className="text-xs font-semibold">Suitable substitutions</p>
+        <p className="text-[11px] text-ink3 mt-0.5">No honest swap fits your kit right now — widen the kit you own to see more.</p>
+        <button onClick={onClearFilters} className="text-[11px] font-bold underline underline-offset-2 mt-1 min-h-9">Clear filters</button>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <p className="text-xs font-semibold">Suitable substitutions</p>
+      <ul className="mt-1 space-y-1">
+        {options.map(ex=> (
+          <li key={ex.id} className="text-[11px] text-ink2">
+            <span className="font-bold text-ink">{ex.name}</span> <span className="text-ink3">• {ex.muscle} • {ex.equipment.join(', ')}</span>
+            <span className="block text-ink3">{ex.reason}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export default function ExerciseBrowser({ availableEquipment, onboarding = null, store = null }){
   const [q,setQ]=useState('');
   const [muscle,setMuscle]=useState('');
   const [level,setLevel]=useState('');
   const [equip,setEquip]=useState('');
   const [tags,setTags]=useState([]);
   const [onlyAvailable,setOnlyAvailable]=useState(!!availableEquipment?.length);
+  const [usedOnly,setUsedOnly]=useState(false);
   const [openId,setOpenId]=useState(null);
+  const [howToOpen,setHowToOpen]=useState(false);
+  const [subsOpen,setSubsOpen]=useState(false);
+
+  // The browser answers "what in my programme uses it" and "how did I do on
+  // it" from the canonical store — App owns the live copy and passes it down,
+  // so this surface never reaches into storage itself (architecture rule).
+  const storeSnapshot = store;
 
   const toggleTag = (id)=> setTags(prev=> prev.includes(id) ? prev.filter(t=> t!==id) : [...prev, id]);
+  const clearFilters = ()=>{ setQ(''); setMuscle(''); setLevel(''); setEquip(''); setTags([]); setUsedOnly(false); };
+
+  const programmeIds = useMemo(
+    ()=> programmeExerciseIds({ activeSchedule: storeSnapshot.activeSchedule, customTemplates: storeSnapshot.customTemplates || [] }),
+    [storeSnapshot.activeSchedule, storeSnapshot.customTemplates]
+  );
 
   const results = useMemo(()=> searchExercises({
     q, muscle, level, tag: tags, equipment: equip || undefined,
     availableEquipment: onlyAvailable ? availableEquipment : null
-  }).filter(e => !isDeprecated(e)), [q,muscle,level,tags,equip,onlyAvailable,availableEquipment]);
+  }).filter(e => !isDeprecated(e))
+    .filter(e => !usedOnly || programmeIds.has(e.id)), [q,muscle,level,tags,equip,onlyAvailable,availableEquipment,usedOnly,programmeIds]);
   const recs = useMemo(()=> onboarding ? recommendExercises({
     goal:onboarding.goal,
     availableEquipment:onboarding.equipment,
@@ -112,6 +200,11 @@ export default function ExerciseBrowser({ availableEquipment, onboarding = null 
           <span className="font-semibold">Only my kit</span>
           <span className="text-xs text-ink3">({availableEquipment?.join(', ') || 'no kit selected — set it in onboarding'})</span>
         </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={usedOnly} onChange={e=> setUsedOnly(e.target.checked)} />
+          <span className="font-semibold">Used in my programme</span>
+          <span className="text-xs text-ink3">({programmeIds.size ? `${programmeIds.size} exercise${programmeIds.size === 1 ? '' : 's'} in your schedule and templates` : 'nothing scheduled yet'})</span>
+        </label>
       </div>
 
       <p className="text-xs text-ink3 px-1" role="status" aria-live="polite">{results.length} exercise{results.length===1?'':'s'} • sorted by relevance</p>
@@ -146,24 +239,36 @@ export default function ExerciseBrowser({ availableEquipment, onboarding = null 
               <span className="ml-auto text-ink3" aria-hidden>{openId===ex.id ? '−' : '+'}</span>
             </button>
             {openId===ex.id && (
-              <div className="px-4 pb-4 pt-3 space-y-2 border-t border-line bg-surface2">
+              <div className="px-4 pb-4 pt-3 space-y-3 border-t border-line bg-surface2">
                 <div className="flex items-start gap-3">
                   {hasExerciseImage(ex.id) && <ExerciseIllustration exerciseId={ex.id} size="lg" />}
-                <div className="min-w-0">
+                  <div className="min-w-0">
+                    {(() => {
+                      const meta = getExerciseMeta(ex.id);
+                      return (
+                        <div className="text-[11px] text-ink2">
+                          <p><span className="font-bold text-ink">Trains:</span> {ex.muscle}{meta?.secondaryMuscles?.length ? ` (secondary: ${meta.secondaryMuscles.join(', ')})` : ''}</p>
+                          <p><span className="font-bold text-ink">Equipment:</span> {ex.equipment.join(', ')}</p>
+                        </div>
+                      );
+                    })()}
+                    <ClassificationChips exercise={ex} />
+                  </div>
+                </div>
+                <details open={howToOpen} onToggle={e=> setHowToOpen(e.currentTarget.open)} className="rounded-xl border border-line bg-surface px-3 py-2">
+                  <summary className="text-xs font-bold cursor-pointer min-h-9 flex items-center">How to perform it</summary>
                   {(() => {
                     const t = teachingFor(ex.id);
                     return (
-                      <>
+                      <div className="mt-1.5">
                         <p className="text-xs font-semibold">Set-up</p>
                         <p className="text-xs text-ink2">{t.setup}</p>
                         <p className="text-xs font-semibold mt-2">Execution</p>
                         <ul className="list-disc pl-5 text-xs text-ink2 space-y-1">{t.execution.map((line, i)=> <li key={i}>{line}</li>)}</ul>
-                        <p className="text-xs font-semibold mt-2">Breathing &amp; bracing</p>
+                        <p className="text-xs font-semibold mt-2">Breathing & bracing</p>
                         <p className="text-xs text-ink2">{t.breathing}</p>
                         <p className="text-xs font-semibold mt-2">Stay in control</p>
                         <p className="text-xs text-ink2">{t.safety}</p>
-                        <p className="text-xs font-semibold mt-2">Coaching cues</p>
-                        <ul className="list-disc pl-5 text-xs text-ink2 space-y-1">{ex.cues.map((c,i)=> <li key={i}>{c}</li>)}</ul>
                         {t.mistakes?.length > 0 && (
                           <>
                             <p className="text-xs font-semibold mt-2">Common mistakes</p>
@@ -177,30 +282,39 @@ export default function ExerciseBrowser({ availableEquipment, onboarding = null 
                             {t.equipmentVariations.length > 0 && <>With other kit: {t.equipmentVariations.slice(0, 4).map(v=> v.name).join(', ')}.</>}
                           </p>
                         )}
-                      </>
-                    );
-                  })()}
-                  {(() => {
-                    const meta = getExerciseMeta(ex.id);
-                    if(!meta) return null;
-                    return (
-                      <div className="mt-2 text-[11px] text-ink3 space-y-0.5">
-                        <p>Type: {meta.exerciseType} · Equipment: {meta.equipment} · {meta.frames} frames</p>
-                        <p>Muscles: {meta.primaryMuscle}{meta.secondaryMuscles?.length ? ` (secondary: ${meta.secondaryMuscles.join(', ')})` : ''}{meta.isStretch ? ' · stretch' : ''}</p>
                       </div>
                     );
                   })()}
-                  <ClassificationChips exercise={ex} />
-                  <p className="text-xs font-semibold mt-2">If you don’t have the kit</p>
-                  <p className="text-xs text-ink3">{ex.substitution.map(id=> EXERCISE_BY_ID[id]?.name || id).join(' • ')}</p>
-                  <AlternativeGroups exercise={ex} />
-                </div>
-                </div>
+                </details>
+                <ProgramUsage
+                  rows={programmeUsageFor(ex.id, { activeSchedule: storeSnapshot.activeSchedule, customTemplates: storeSnapshot.customTemplates || [] })}
+                  onFindSubstitutes={()=> setSubsOpen(true)}
+                />
+                <RecentPerformance
+                  rows={recentExerciseSessions(storeSnapshot.history, ex.id, 3)}
+                  onLearnHow={()=> setHowToOpen(true)}
+                />
+                <details open={subsOpen} onToggle={e=> setSubsOpen(e.currentTarget.open)} className="rounded-xl border border-line bg-surface px-3 py-2">
+                  <summary className="text-xs font-bold cursor-pointer min-h-9 flex items-center">Suitable substitutions</summary>
+                  <div className="mt-1.5">
+                    <SubstitutionList
+                      exercise={ex}
+                      availableEquipment={availableEquipment}
+                      history={storeSnapshot.history}
+                      onClearFilters={clearFilters}
+                    />
+                  </div>
+                </details>
               </div>
             )}
           </li>
         ))}
-        {!results.length && <li className="text-sm text-ink3 border border-dashed border-line rounded-2xl p-6 text-center">No matches — loosen filters or add equipment in onboarding.</li>}
+        {!results.length && (
+          <li className="text-sm text-ink3 border border-dashed border-line rounded-2xl p-6 text-center space-y-2">
+            <p>No matches — loosen filters or add equipment in onboarding.</p>
+            <button onClick={clearFilters} className="btn btn-secondary min-h-11 rounded-xl px-4 text-xs font-bold">Clear filters</button>
+          </li>
+        )}
       </ul>
     </div>
   );

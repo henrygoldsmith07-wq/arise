@@ -118,6 +118,11 @@ test.describe('Progress assessment', () => {
       store.history = history;
       store.activeSchedule = schedule;
       mod.saveStore(store);
+      // Durability is gated on the app's own write queue (whenPersisted) —
+      // reloading before the async persist drains would race the seed.
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const { whenPersisted } = await import('/src/lib/storage.js');
+      await whenPersisted();
     }, { history, schedule });
     await page.reload();
     await tapTab(page, 'Progress');
@@ -568,6 +573,10 @@ test.describe('Experience levels', () => {
         { id: 'e2e-s2', dateISO: '2026-09-03', savedAt: '2026-09-03T10:00:00.000Z', blocks: [{ exerciseId: 'push-up', sets: [{ reps: '14', weightKg: '0' }] }] },
       ];
       mod.saveStore(store);
+      // Same durability gate: drain the async write queue before reloading.
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const { whenPersisted } = await import('/src/lib/storage.js');
+      await whenPersisted();
     });
     await page.reload();
 

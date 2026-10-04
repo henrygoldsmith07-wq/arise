@@ -96,11 +96,14 @@ test.describe('Today hero — single dominant CTA with Options', () => {
     await expect(audit).toBeVisible();
     await expect(audit.getByText('Scheduled training')).toBeVisible();
     await expect(audit.getByText(/adherence so far|upcoming|No sessions due yet/)).toBeVisible();
-    await expect(audit.getByText(/What changed & why/)).toBeHidden();
+    await expect(audit.getByText(/What changed/)).toBeHidden();
+    await expect(audit.getByText('e2e seeded audit entry')).toBeHidden();
 
     await audit.getByText('Scheduled training').click();
-    // Nested audit entries stay collapsed; the section just exposes them.
-    await expect(audit.getByText(/What changed & why/)).toBeVisible();
+    // Nested audit entries stay collapsed; the section just exposes them —
+    // one tap deep, never a toggle inside a toggle.
+    await expect(audit.getByText(/What changed/)).toBeVisible();
+    await expect(audit.getByText('e2e seeded audit entry')).toBeVisible();
   });
 
   test('only one dominant start CTA is initially visible; alternates hidden until Options', async ({ page }) => {

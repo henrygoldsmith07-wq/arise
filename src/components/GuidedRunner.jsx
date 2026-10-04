@@ -16,11 +16,12 @@ import {
 import { recordEvent, trackFieldFocus, fieldCommitted } from '../lib/telemetry.js';
 import { POLICY_ORDER } from '../lib/progressionPolicies.js';
 import { buildRunnerRecommendationMeta, recordProspectiveRecommendation, runnerStudy } from '../lib/runnerRecommendations.js';
-import { restStartCue, restTickCue, restCompleteCue } from '../lib/audioCues.js';
+import { restStartCue } from '../lib/audioCues.js';
 import { speak, cancelSpeech, voiceSupported } from '../lib/voiceCoach.js';
 import { haptic } from '../lib/haptics.js';
 import { announce, useDialogA11y } from '../lib/a11y.js';
 import { runnerHasLoggedWork, useWorkoutExit } from '../hooks/useWorkoutExit.js';
+import { useRestTimer } from '../hooks/useRestTimer.js';
 import WorkoutDiscardDialog from './WorkoutDiscardDialog.jsx';
 import { ConfirmDialog } from './Dialog.jsx';
 import { restPresetFor } from '../lib/gymMode.js';
@@ -47,14 +48,11 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   const [blocks,setBlocks]=useState(()=> initGuidedBlocks(session, history, draft?.blocks));
   const [note,setNote]=useState(()=> draft?.note || '');
   const [noteTags,setNoteTags]=useState(()=> draft?.noteTags || []);
-  const [restEndsAt,setRestEndsAt]=useState(()=> draft?.restEndsAt || null);
-  const [restLabel,setRestLabel]=useState(()=> draft?.restLabel || '');
-  const [restExerciseId,setRestExerciseId]=useState(()=> draft?.restExerciseId || null);
+
   const [clock,setClock]=useWorkoutClock(true);
   const [celebrate,setCelebrate]=useState(false);
   const [soundOn,setSoundOn]=useState(soundCues);
   const [voiceOn,setVoiceOn]=useState(voiceCoach);
-  const [announcement,setAnnouncement]=useState('');
   const [saveUnfinishedOpen,setSaveUnfinishedOpen]=useState(false);
   // Real user work, not plan prefill (guided sets arrive prefilled from the
   // schedule/history): only completed/skipped steps, typed edits and notes
@@ -62,7 +60,6 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   // loses the flag.
   const userEditedRef=useRef(Boolean(draft?.userEdited));
   const markUserEdited = ()=>{ userEditedRef.current = true; };
-  const restTickRef=useRef(null);
   const spokenStepRef=useRef(null);
   const { rootRef, closeRef, trapTab } = useDialogA11y();
   // Randomised field study: the SAME frozen arm assignment the standard
@@ -109,29 +106,16 @@ export default function GuidedRunner({ session, history = [], availableEquipment
 
   useWorkoutWakeLock(wakeLock);
 
-  const restLeft = restEndsAt ? Math.max(0, Math.ceil((restEndsAt-clock)/1000)) : null;
-
-  // 3-2-1 ticks: one cue per remaining second, never repeated for the same second.
-  useEffect(()=>{
-    if(!restEndsAt){ restTickRef.current = null; return; }
-    const left = Math.ceil((restEndsAt - Date.now())/1000);
-    if(left >= 1 && left <= 3 && restTickRef.current !== left){
-      restTickRef.current = left;
-      if(soundOn) restTickCue();
-      haptic('guidedStep');
-    }
-  },[clock, restEndsAt, soundOn]);
-
-  // Rest expiry — clears the countdown, fires the completion cue and a
-  // distinct triple-pulse haptic so the next set is unmissable.
-  useEffect(()=>{
-    if(restEndsAt && restEndsAt <= Date.now()){
-      setRestEndsAt(null);
-      setAnnouncement('Rest complete — next set.');
-      if(soundOn) restCompleteCue();
-      haptic('guidedFinish');
-    }
-  },[restEndsAt, clock, soundOn]);
+  // Shared rest-timer contract (same behaviour as the standard runner, with
+  // guided-specific expiry haptic and its own live-region announcement).
+  const { restEndsAt, setRestEndsAt, restLabel, restExerciseId, restLeft, announcement, setAnnouncement, startRest } = useRestTimer({
+    clock,
+    initial: draft,
+    soundOn,
+    spoken: voiceOn,
+    expiryHaptic: 'guidedFinish',
+    appAnnounce: false,
+  });
 
   // Sound-cue toggle: flips the persisted preference when a callback is wired.
   const toggleSound = ()=>{
@@ -280,12 +264,9 @@ export default function GuidedRunner({ session, history = [], availableEquipment
     setBlocks(prev=> prev.map((b,i)=> i!==bi? b : { ...b, sets: b.sets.map((s,j)=> j!==si? s : { ...s, ...patch }) }));
   };
 
-  const startRest=(seconds,label,exerciseId=null)=>{
-    const sec=Number(seconds)||0;
-    if(sec<=0){ setRestEndsAt(null); return; }
-    setRestLabel(label);
-    setRestExerciseId(exerciseId);
-    setRestEndsAt(Date.now() + sec*1000);
+  // Rest start cue + haptic accompany the shared timer start.
+  const startRestWithCues=(seconds,label,exerciseId=null)=>{
+    startRest(seconds,label,exerciseId);
     setClock(Date.now());
     if(soundOn) restStartCue();
     haptic('setComplete');
@@ -334,7 +315,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
       } catch {}
       lastStepAtRef.current = new Date(now).toISOString();
     }
-    if(!skipped && block.restSec && nextGuidedStep(blocks)) startRest(restPresetFor(gymPrefs, block.exerciseId, block.restSec) || block.restSec, EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId, block.exerciseId);
+    if(!skipped && block.restSec && nextGuidedStep(blocks)) startRestWithCues(restPresetFor(gymPrefs, block.exerciseId, block.restSec) || block.restSec, EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId, block.exerciseId);
     haptic(skipped ? 'failedSet' : 'restComplete');
   };
 

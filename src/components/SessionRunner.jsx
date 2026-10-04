@@ -13,7 +13,7 @@ import { SESSION_QUALITY_OPTIONS, sessionQualityLabel } from '../lib/gymMode.js'
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
 import { announce, useDialogA11y } from '../lib/a11y.js';
 import { useWorkoutClock, useWorkoutDraftPersistence, useWorkoutWakeLock } from '../hooks/useWorkoutRuntime.js';
-import { restStartCue, restCompleteCue } from '../lib/audioCues.js';
+import { restStartCue } from '../lib/audioCues.js';
 import { speak, cancelSpeech } from '../lib/voiceCoach.js';
 import { LoadNumpad, RestDock, WeightInput, swipeRowHandlers } from './GymModePanel.jsx';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
@@ -23,6 +23,8 @@ const TeachingPanel = lazy(() => import('./TeachingPanel.jsx'));
 import StepperButton from './StepperButton.jsx';
 import WorkoutDiscardDialog from './WorkoutDiscardDialog.jsx';
 import { runnerHasLoggedWork, useWorkoutExit } from '../hooks/useWorkoutExit.js';
+import { useRestTimer } from '../hooks/useRestTimer.js';
+import { confidenceLanguage } from '../lib/performance.js';
 import { tracePhase, traceStart, traceEnd } from '../lib/perfTrace.js';
 import { haptic } from '../lib/haptics.js';
 import { painAftercareFor, techniquePromptFor, maxEffortWarning } from '../lib/safety.js';
@@ -58,14 +60,15 @@ import {
 
 export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, appPrefs = null, gymPrefs = null, onSetRestPreset = null, studyEnrollment = null, participantId = null, onDraftChange, onSave, onCancel }){
   const unit = asUnit(appPrefs?.units);
+  // Explanation verbosity comes from the training-policy preference; the
+  // reference was previously undefined (a latent crash when explanations
+  // exist on a recommendation).
+  const explanationMode = appPrefs?.explanationMode || 'standard';
   const [blocks,setBlocks]=useState(()=> session.blocks.map((b,i)=> normaliseRunnerBlock(b, history, draft?.blocks?.[i], i)));
   // Transient confirmation for the one-tap "apply all" fast-log path.
   const [applyAllNote,setApplyAllNote]=useState(null);
   const [note,setNote]=useState(()=> draft?.note || '');
   const [noteTags,setNoteTags]=useState(()=> draft?.noteTags || []);
-  const [restEndsAt,setRestEndsAt]=useState(()=> draft?.restEndsAt || null);
-  const [restLabel,setRestLabel]=useState(()=> draft?.restLabel || '');
-  const [restExerciseId,setRestExerciseId]=useState(()=> draft?.restExerciseId || null);
   const [clock,setClock]=useWorkoutClock(true);
   const [swapOpen,setSwapOpen]=useState(null);
   // RIR suggestion (never a silent observation): { bi, si, value, exerciseId }
@@ -80,7 +83,6 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   // reload keeps it.
   const userEditedRef=useRef(Boolean(draft?.userEdited));
   const markUserEdited = ()=>{ userEditedRef.current = true; };
-  const [restAnnouncement,setRestAnnouncement]=useState('');
   const [qualityRating,setQualityRating]=useState(()=> draft?.quality || null);
   const [skipQuery,setSkipQuery]=useState('');
   // ── Gym Mode state ──
@@ -216,16 +218,18 @@ export default function SessionRunner({ session, history = [], availableEquipmen
 
   useWorkoutWakeLock(appPrefs?.wakeLock === true);
 
-  const restLeft = restEndsAt ? Math.max(0, Math.ceil((restEndsAt-clock)/1000)) : null;
-  useEffect(()=>{
-    if(restEndsAt && restEndsAt <= Date.now()){
-      setRestEndsAt(null);
-      setRestAnnouncement('Rest complete — next set.');
-      announce('Rest complete — next set.', { key: 'rest-timer', spoken: preferences?.voiceCoach === true });
-      haptic('restComplete');
-      if(appPrefs?.soundCues !== false) restCompleteCue();
-    }
-  }, [restEndsAt, clock, appPrefs?.soundCues]);
+  // Shared rest-timer contract (same behaviour Guided gets, minus the 3-2-1
+  // tick cues the standard runner never had; the spoken rest prompt below is
+  // the standard runner's own voice-coach contract).
+  const { restEndsAt, setRestEndsAt, restLabel, restExerciseId, restLeft, announcement: restAnnouncement, setAnnouncement: setRestAnnouncement, startRest: startRestCore } = useRestTimer({
+    clock,
+    initial: draft,
+    soundOn: appPrefs?.soundCues !== false,
+    spoken: preferences?.voiceCoach === true,
+    expiryHaptic: 'restComplete',
+    appAnnounce: true,
+    tickCues: false,
+  });
 
   const draftSnapshot = useMemo(()=> ({
       version: 1,
@@ -250,10 +254,8 @@ export default function SessionRunner({ session, history = [], availableEquipmen
 
   const startRest=(seconds,label,exerciseId=null)=>{
     const sec=Number(seconds)||0;
-    if(sec<=0){ setRestEndsAt(null); return; }
-    setRestLabel(label);
-    setRestExerciseId(exerciseId);
-    setRestEndsAt(Date.now() + sec*1000);
+    startRestCore(seconds,label,exerciseId);
+    if(sec<=0) return;
     setClock(Date.now());
     // Announce once, politely — the ticking countdown itself must not flood
     // screen readers (a11y baseline: live regions announce without flooding).
@@ -807,11 +809,6 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                       {recommendation ? <span className="text-ink2">{changeChip ? ' — ' : ''}{recommendation.explanation?.[explanationMode] || recommendation.reason}</span> : null}
                     </p>
                   )}
-                  {recommendation?.confidence && (
-                    <p className="text-[10px] mt-0.5 text-ink3">
-                      Confidence {recommendation.confidence.band} ({Math.round((recommendation.confidence.score || 0) * 100)}%) · uncertainty {recommendation.uncertainty?.label || '—'} · {recommendation.evidence?.sessions ?? 0} logged sessions{recommendation.guard ? ` · ${recommendation.guard} guard active` : ''}
-                    </p>
-                  )}
                   {safetyMeta.aftercare.get(b.exerciseId) && (
                     <p role="status" className="text-[11px] mt-1 rounded-lg border border-review/40 bg-reviewsoft px-2 py-1.5 text-ink2 leading-snug">
                       ⚠️ {safetyMeta.aftercare.get(b.exerciseId).message}
@@ -840,6 +837,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                       {b.warmups?.length ? <p>Warm-ups: {b.warmups.map(w=> `${w.reps}×${w.weightKg||'bw'}${w.note?` (${w.note})`:''}`).join(' • ')}</p> : null}
                     {b.restSec ? <p>Rest {formatRest(b.restSec)} · load hint: {b.loadHint || '—'}</p> : null}
                       {b.why && <p className="italic">Prescribed: {b.why}</p>}
+                      {recommendation?.confidence && <p>{confidenceLanguage(recommendation.confidence.band, recommendation.confidence.band === 'high' ? 'repeated performance at this load supports the prescription' : recommendation.confidence.band === 'medium' ? 'your recent sessions show a consistent pattern' : 'few comparable sessions so far — this is a cautious estimate')}</p>}
                       {recommendation?.plateLoad && <p>Plate check · {recommendation.plateLoad.exact ? `${fmtWeight(recommendation.plateLoad.loadKg, unit)} exact` : `${fmtWeight(recommendation.plateLoad.targetKg, unit)} → ${fmtWeight(recommendation.plateLoad.loadKg, unit)} ${recommendation.plateLoad.direction}`} · per side: {formatPlateStack(recommendation.plateLoad.platesPerSide)}</p>}
                       {b.substitutionReason && <p className="italic">Swap rationale: {b.substitutionReason}</p>}
                     </div>

@@ -138,19 +138,30 @@ async function completeOnboarding(page){
 
 async function scheduleProgram(page){
   await page.getByRole('button', { name: 'Train' }).click();
-  // One button per program card — strict mode needs .first().
-  const generateBtn = page.getByRole('button', { name: /Generate from profile/i }).first();
-  if (await generateBtn.isVisible().catch(() => false)) await generateBtn.click();
-  await page.waitForTimeout(400);
-  const scheduleBtn = page.getByRole('button', { name: /Schedule this program/i }).first();
-  if (await scheduleBtn.isVisible().catch(() => false)) await scheduleBtn.click();
-  await page.getByText(/Start: \d{4}-\d{2}-\d{2}/).waitFor({ timeout: 10_000 });
+  // Train is recommendation-first: one tap on the recommended programme
+  // schedules it. Browse is the fallback for a profile with no match.
+  const recCard = page.locator('[aria-label="Recommended for you"]');
+  const recStart = recCard.getByRole('button', { name: 'Start programme' });
+  if (await recStart.isVisible().catch(() => false)) {
+    await recStart.click();
+  } else {
+    await page.getByRole('button', { name: 'Browse programmes' }).click();
+    await page.waitForTimeout(400);
+    const scheduleBtn = page.getByRole('button', { name: /Schedule this program/i }).first();
+    if (await scheduleBtn.isVisible().catch(() => false)) await scheduleBtn.click();
+  }
+  // The scheduled programme is proven by its card; the start-date line lives
+  // inside the collapsed "View programme" disclosure by design.
+  await page.locator('[aria-label="Current programme"]').waitFor({ timeout: 10_000 });
 }
 
 async function logOneSession(page){
   await page.getByRole('button', { name: 'Today', exact: true }).click();
-  const startBtn = page.getByRole('button', { name: /Start today.s session|Start this session/ }).first();
-  if (await startBtn.isVisible().catch(() => false)) await startBtn.click();
+  // The hero's dominant CTA ("Start workout" on a training day). The legacy
+  // labels stay as a fallback for rest-day/next-session states.
+  const startBtn = page.getByRole('button', { name: /Start workout|Start this session|Start today.s session/ }).first();
+  await startBtn.waitFor({ timeout: 10_000 });
+  await startBtn.click();
   const runner = page.getByRole('dialog', { name: /Session —/ });
   await runner.waitFor({ timeout: 10_000 });
   // Save requires EVERY set to carry reps, so fill them all; mark a handful

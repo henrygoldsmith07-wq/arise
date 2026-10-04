@@ -187,11 +187,15 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
             ))}
           </div>
           {!equipment.length && <p className="text-xs text-review bg-reviewsoft border border-review/30 rounded-xl px-3 py-2">Pick at least one — bodyweight is always an option.</p>}
+          {/* Barbell plate setup is essential: it decides the plate loads
+              Arise prescribes. Dumbbell weights and machine increments only
+              refine rounding for unusual kit, so they wait behind a disclosure
+              and never interrupt the 60-second path to a first workout. */}
           {equipment.includes('barbell') && (
             <div className="rounded-xl border border-line bg-surface2 p-3 space-y-2">
               <div>
                 <p className="text-xs font-bold">Barbell load setup</p>
-                <p className="text-[11px] text-ink3">Used only to round barbell recommendations to loads you can actually build.</p>
+                <p className="text-[11px] text-ink3">Used to round barbell recommendations to loads you can actually build.</p>
               </div>
               <div className="flex gap-2">
                 {[20,15,0].map(weight=> (
@@ -205,6 +209,11 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
               </div>
             </div>
           )}
+          {(equipment.includes('dumbbells') || equipment.includes('machine') || equipment.includes('cable')) && (
+            <details className="rounded-xl border border-line bg-surface2 p-3">
+              <summary className="text-xs font-bold cursor-pointer">Tune load rounding (optional)</summary>
+              <p className="text-[11px] text-ink3 mt-1">Only needed if your weights are unusual — targets round to loads you can actually build.</p>
+              <div className="space-y-2 mt-2">
           {equipment.includes('dumbbells') && (
             <div className="rounded-xl border border-line bg-surface2 p-3 space-y-1.5">
               <label htmlFor="onboarding-dumbbells" className="text-xs font-bold">Your dumbbell weights ({unit})</label>
@@ -220,6 +229,9 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
                 className="w-full min-h-10 rounded-lg border border-line bg-surface px-3 text-sm" />
               <p className="text-[11px] text-ink3">Enter the smallest stack jump on your machine — targets snap to real pin positions.</p>
             </div>
+          )}
+              </div>
+            </details>
           )}
         </div>
       )

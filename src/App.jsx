@@ -361,6 +361,17 @@ export default function App(){
     setStore(next);
   };
 
+  // Progress's empty-state CTA: start the scheduled session if one is due,
+  // otherwise jump to Train to pick one. Never a dead button.
+  const startFromProgress = ()=>{
+    if(!store.activeSchedule){ setTab('train'); return; }
+    import('./lib/schedule.js').then(({ sessionForToday, nextSession })=>{
+      const session = sessionForToday(store.activeSchedule) || nextSession(store.activeSchedule);
+      if(session) handleStartSession(session);
+      else setTab('train');
+    }).catch(()=> setTab('train'));
+  };
+
   const handleStartSession = (session)=>{
     if(store.activeWorkout && store.activeWorkout.session?.id !== session.id){
       setRecoveryOpen(true);
@@ -664,10 +675,10 @@ export default function App(){
         /></Suspense>
       )}
       {tab==='exercises' && (
-        <Suspense fallback={<TabFallback label="Exercises" />}><ExerciseBrowser availableEquipment={store.onboarding?.equipment || []} onboarding={store.onboarding} /></Suspense>
+        <Suspense fallback={<TabFallback label="Exercises" />}><ExerciseBrowser store={store} availableEquipment={store.onboarding?.equipment || []} onboarding={store.onboarding} /></Suspense>
       )}
 
-      {tab==='progress' && <Suspense fallback={<TabFallback label="Progress" />}><ProgressView store={store} /></Suspense>}
+      {tab==='progress' && <Suspense fallback={<TabFallback label="Progress" />}><ProgressView store={store} onStart={startFromProgress} /></Suspense>}
       {tab==='more' && <Suspense fallback={<TabFallback label="More" />}><MoreView store={store} setStore={setStore} onboardingOpen={onboardingOpen} setOnboardingOpen={setOnboardingOpen} onLoadDemo={loadDemo} /></Suspense>}
 
       {activeSession && activeSession.mode === 'guided' && (
