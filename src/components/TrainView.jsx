@@ -224,7 +224,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
           <div>
             <h3 className="text-2xl font-black tracking-tight">{recommendation.name}</h3>
             <p className="text-xs font-semibold text-ink2 tabular-nums">
-              {recommendation.daysPerWeek ? `${recommendation.daysPerWeek} days/week` : 'Flexible days'}{recommendation.estimatedMinutes != null ? ` · ~${recommendation.estimatedMinutes} min/session` : ''}
+              {recommendation.estimatedMinutes != null ? `≈${recommendation.estimatedMinutes} min` : ''}{recommendation.cappedByPreference ? ` (fits your ${recommendation.preferredLengthLabel} preference)` : ''}{recommendation.estimatedMinutes != null ? ' · ' : ''}{recommendation.daysPerWeek ? `${recommendation.daysPerWeek} days/week` : 'Flexible days'}
             </p>
             <p className="text-xs text-ink3">Built around your equipment and goal</p>
           </div>
