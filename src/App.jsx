@@ -199,6 +199,22 @@ export default function App(){
   // Warm the lazy route chunks once boot has settled (see warmLazyViews).
   useEffect(()=>{ warmLazyViews(); },[]);
 
+  // Data-loss protection: the first logged session is the first moment there
+  // is something to lose, so that is when we ask the browser to make this
+  // origin's storage persistent (never evicted under pressure). Latched to
+  // once per device — a user who declined is not re-prompted, and More keeps
+  // a manual retry. Local only: no notification, no network.
+  const persistAskedRef = useRef(false);
+  useEffect(()=>{
+    if(persistAskedRef.current) return;
+    if(!(store.history?.length > 0)) return;
+    if(store.demo) return;
+    persistAskedRef.current = true;
+    import('./lib/storageQuota.js')
+      .then(({ requestPersistentStorageOnce })=> requestPersistentStorageOnce())
+      .catch(()=>{});
+  },[store.history?.length, store.demo]);
+
   // Storage-quota watch: evaluate shortly after boot and re-check when the
   // store grows (every persistence round). Cheap, async, fail-soft.
   useEffect(()=>{

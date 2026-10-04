@@ -6,3 +6,6 @@ playwright-report/
 test-results/
 coverage/
 reports/
+
+docs/baseline/*.txt
+!docs/baseline/README.md

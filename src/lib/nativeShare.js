@@ -1,7 +1,38 @@
-// nativeShare.js — hand a file (coach export, CSV, backup) or text to the
+// nativeShare.js — hand a file (backup, CSV, coach export) or text to the
 // platform share sheet where one exists (Android, iOS 15+); fall back to a
-// clipboard copy everywhere else. Never throws: sharing is a convenience, and
-// a refused sheet (user swipe-away) must not surface as an error.
+// clipboard copy or a download everywhere else. Never throws: sharing is a
+// convenience, and a refused sheet (user swipe-away) must not surface as an
+// error.
+
+/**
+ * Can this platform hand a FILE to the share sheet? Safari/Firefox desktop
+ * answer no, so callers must keep a download fallback.
+ */
+export function canShareFiles({ mimeType = 'application/octet-stream', filename = 'f' } = {}){
+  const nav = typeof navigator !== 'undefined' ? navigator : null;
+  if(!nav?.share || !nav.canShare || typeof File === 'undefined') return false;
+  try{
+    return nav.canShare({ files: [new File([''], filename, { type: mimeType })] }) === true;
+  }catch{ return false; }
+}
+
+/**
+ * Share a real file (a backup is a File, not text) via the Web Share API
+ * (Level 2). Returns 'shared' | 'cancelled' | 'unsupported'. A caller that
+ * gets anything other than 'shared' owns the fallback, because by then the
+ * user gesture may already be spent.
+ */
+export async function shareFile({ file, title = 'Arise export' }){
+  const nav = typeof navigator !== 'undefined' ? navigator : null;
+  if(!nav?.share || !file) return 'unsupported';
+  if(nav.canShare && nav.canShare({ files: [file] }) !== true) return 'unsupported';
+  try{
+    await nav.share({ files: [file], title });
+    return 'shared';
+  }catch(err){
+    return err?.name === 'AbortError' ? 'cancelled' : 'unsupported';
+  }
+}
 
 /**
  * Share text as a named file via the Web Share API (Level 2).

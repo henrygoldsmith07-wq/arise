@@ -13,6 +13,7 @@ import {
   shortWorkoutMode,
 } from '../lib/programming.js';
 import { weekPhaseFor } from '../lib/mesocycle.js';
+import { backupRecency as computeBackupRecency, backupRecencyLabel, readBackupState } from '../lib/backupState.js';
 import { nextBestAction, whatChangedSummary } from '../lib/product.js';
 import { isSimpleView } from '../lib/experienceMode.js';
 import { safetyPanel } from '../lib/safety.js';
@@ -41,6 +42,12 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
     [store.history, store.readinessLog, store.preferences?.cautiousMode]
   );
   const simple = isSimpleView(store.preferences);
+  // Backup recency — local-only nudge source. Read fresh each render so a
+  // successful export in More clears it without needing a subscription.
+  const backupRecency = useMemo(
+    ()=> computeBackupRecency({ history:store.history || [], lastBackupAt:readBackupState().lastBackupAt }),
+    [store.history]
+  );
   // Week phase (ADR: deload as a first-class state). Derived from the schedule's
   // own adaptation stamps — no new persisted state. Week 1 of a fresh program is
   // naturally a 'build' week.
@@ -214,6 +221,24 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
             <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Next best action</p>
             <p className="text-sm font-bold truncate">{nba.title}</p>
             <p className="text-xs text-ink3">{nba.detail}</p>
+          </div>
+        </section>
+      )}
+
+      {/* Data-loss nudge: only when a backup is genuinely overdue. Quiet when
+          healthy — the recency line lives in More, so this stays a signal, not
+          a permanent banner. Local only; no notification is requested. */}
+      {backupRecency.overdue && (
+        <section className="rounded-2xl border border-review/40 bg-reviewsoft p-4" aria-label="Backup overdue">
+          <div className="flex items-start gap-3">
+            <span aria-hidden className="text-base">💾</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Backup overdue</p>
+              <p className="text-sm font-bold">{backupRecencyLabel(backupRecency)}</p>
+              <p className="text-xs text-ink3">
+                {backupRecency.sessions} session{backupRecency.sessions === 1 ? '' : 's'} on this device {backupRecency.sessions === 1 ? 'exists' : 'exist'} nowhere else. Export a copy you can restore from.
+              </p>
+            </div>
           </div>
         </section>
       )}

@@ -5,6 +5,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseImportFile, validateStoreData } from '../src/lib/export.js';
+import { buildImportPreview } from '../src/lib/exportPolicy.js';
 
 function session(i = 1, extra = {}){
   return {
@@ -16,6 +17,23 @@ function session(i = 1, extra = {}){
 }
 
 describe('import hardening', () => {
+  it('refuses a foreign product at the PREVIEW gate, not only at apply time', () => {
+    // The preview is the step that validates data before the user is asked to
+    // confirm it. A file naming a different app must never reach it.
+    const preview = buildImportPreview(
+      { app:'some-other-app', data:{ history:[session()] } },
+      { history:[] }
+    );
+    assert.equal(preview.ok, false);
+    assert.match(preview.reason, /some-other-app/);
+  });
+
+  it('still accepts a genuinely unbranded Arise snapshot', () => {
+    // No `app` field at all: supported by the unbranded adapter.
+    const preview = buildImportPreview({ data:{ history:[session()] } }, { history:[] });
+    assert.equal(preview.ok, true);
+    assert.equal(preview.counts.sessions, 1);
+  });
   it('strips __proto__/constructor/prototype keys at any depth', () => {
     const malicious = JSON.stringify({
       history: [session(1, {

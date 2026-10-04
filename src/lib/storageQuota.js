@@ -12,6 +12,15 @@
 
 const BYTES_PER_MB = 1024 * 1024;
 
+// Once-per-device latch for the automatic request. Asking on every launch
+// would re-prompt a user who already declined; More keeps a manual retry.
+export const PERSIST_REQUESTED_KEY = 'arise.persistRequested.v1';
+
+function safeStorage(storage){
+  if(storage) return storage;
+  try{ return typeof localStorage !== 'undefined' ? localStorage : null; }catch{ return null; }
+}
+
 export async function storageEstimate(){
   try{
     if(typeof navigator === 'undefined' || !navigator.storage?.estimate) return null;
@@ -42,12 +51,36 @@ export async function requestPersistentStorage(){
 }
 
 /**
+ * The automatic data-loss-protection path: called once the user has logged a
+ * real session, because that is the first moment there is anything worth
+ * losing. No-ops when the origin is already persistent or when this device was
+ * asked before, so the browser prompt is never repeated.
+ *
+ * Returns true/false for a granted/declined request, or null when the request
+ * was skipped (already persistent, already asked, or unsupported).
+ */
+export async function requestPersistentStorageOnce({
+  storage = null,
+  atISO = new Date().toISOString(),
+  persist = requestPersistentStorage,
+  alreadyPersisted = isStoragePersisted,
+} = {}){
+  if(await alreadyPersisted() === true) return true;
+  const target = safeStorage(storage);
+  try{ if(target?.getItem(PERSIST_REQUESTED_KEY)) return null; }catch{}
+  try{ target?.setItem(PERSIST_REQUESTED_KEY, atISO); }catch{}
+  return await persist();
+}
+
+/**
  * A single health label for the UI.
  *   'ok'         — plenty of headroom (or unknown)
  *   'warning'    — usage crossed 80% of the estimated quota
  *   'critical'   — usage crossed 95%; writes may start failing
- *   'evictable'  — the browser has NOT granted persistent storage, so data
- *                  can in principle be removed under pressure
+ *
+ * Eviction risk is NOT encoded as a level: it is a function of `persisted`
+ * (see storageHealth's return), not of how full the quota is, and conflating
+ * the two would let a 2% full-but-evictable store read as 'ok'.
  */
 export async function storageHealth(){
   const persisted = await isStoragePersisted();

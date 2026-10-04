@@ -14,8 +14,8 @@ import { buildSupportBundle } from '../lib/supportDiagnostics.js';
 import { buildSalvagePayload } from '../lib/salvageExport.js';
 import { normaliseHistoryEntry } from '../lib/store.js';
 import { dataLifecycleService } from '../services/dataLifecycleService.js';
-import { backupReminderDue, dismissBackupReminder as persistBackupReminderDismissal, readBackupState } from '../lib/backupState.js';
-import { decryptEncryptedFullBackup, downloadEncryptedFullBackup, downloadFullBackup, encryptedBackupSupported } from '../services/backupService.js';
+import { backupRecency, backupRecencyLabel, backupReminderDue, dismissBackupReminder as persistBackupReminderDismissal, readBackupState } from '../lib/backupState.js';
+import { decryptEncryptedFullBackup, downloadEncryptedFullBackup, encryptedBackupSupported, exportFullBackup } from '../services/backupService.js';
 import ToggleRow from './settings/ToggleRow.jsx';
 const AiCoachSettings = lazy(()=> import('./settings/AiCoachSettings.jsx'));
 const FeedbackSettings = lazy(()=> import('./settings/FeedbackSettings.jsx'));
@@ -80,8 +80,10 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
 
   const exportNow = async ()=>{
     try{
-      await downloadFullBackup(store);
-      flashMsg('Backup downloaded — keep it somewhere safe.', 3000);
+      const result = await exportFullBackup(store);
+      flashMsg(result.method === 'shared'
+        ? 'Backup shared — save it somewhere safe.'
+        : 'Backup downloaded — keep it somewhere safe.', 3000);
     }catch(err){
       flashMsg(`Backup failed: ${String(err?.message || err)}`, 5000);
     }
@@ -169,7 +171,9 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
     flashMsg('Coach summary downloaded — it contains only the sections ticked below.', 5000);
   };
 
-  // Backup reminder: a gentle weekly nudge, dismissed until next week.
+  // Backup reminder: a gentle weekly nudge, dismissed until next week. The
+  // recency summary is separate and always visible — it is the honest answer
+  // to "is my data safe somewhere else?" even when nothing is overdue.
   const storedBackupState = readBackupState();
   const [backupReminderDismissed, setBackupReminderDismissed] = useState(()=> storedBackupState.dismissedAt);
   const backupDue = backupReminderDue({
@@ -177,6 +181,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
     lastBackupAt:storedBackupState.lastBackupAt,
     dismissedAt:backupReminderDismissed,
   });
+  const recency = backupRecency({ history:store.history || [], lastBackupAt:storedBackupState.lastBackupAt });
   const dismissBackupReminder = ()=>{
     const at = new Date().toISOString();
     persistBackupReminderDismissal({ atISO:at });
@@ -412,10 +417,18 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
 
       <section id="sec-backup" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
         <h3 className="text-sm font-bold">Backup & portability</h3>
+        <p className="text-xs text-ink3" data-testid="backup-recency">
+          {backupRecencyLabel(recency)}
+          {recency.sessions > 0 ? ` · ${recency.sessions} session${recency.sessions === 1 ? '' : 's'} since` : ''}
+        </p>
         {backupDue && (
           <div role="status" className="rounded-xl border border-review/40 bg-reviewsoft px-3 py-2 text-xs space-y-1">
-            <p className="font-bold">Time for a backup</p>
-            <p className="text-ink3">It&apos;s been over a week since your last full backup. A recoverable local file is your safety copy.</p>
+            <p className="font-bold">{recency.overdue ? 'Backup overdue' : 'Time for a backup'}</p>
+            <p className="text-ink3">
+              {recency.overdue
+                ? `It has been ${recency.daysSince == null ? 'a while' : `${recency.daysSince} days`} and ${recency.sessions} session${recency.sessions === 1 ? ' is' : 's are'} backed up nowhere else. A recoverable file is your safety copy.`
+                : 'It\u2019s been over a week since your last full backup. A recoverable local file is your safety copy.'}
+            </p>
             <div className="flex gap-2">
               <button onClick={exportNow} className="btn btn-primary min-h-8 rounded-lg px-2.5 text-[11px]">Export now</button>
               <button onClick={dismissBackupReminder} className="underline font-semibold">Remind me next week</button>
