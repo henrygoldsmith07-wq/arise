@@ -2,7 +2,7 @@
 //
 // "PDF export" without a dependency: build a self-contained document from the
 // same pure insight functions the Progress view uses (product.js, analytics.js,
-// attributes.js) and print it through a hidden iframe — every OS print dialog
+// xp.js, performance.js) and print it through a hidden iframe — every OS print dialog
 // offers "Save as PDF". The document is aggregate by default: weekly volume,
 // PRs, adherence, milestones — the summary a coach or the user themselves can
 // read in one page. No per-set dump unless explicitly requested.
@@ -11,7 +11,7 @@
 // the iframe's HTML instead of printing it.
 
 import { totalVolumeKg, streakDays } from './store.js';
-import { deriveAttributes, levelFromAttributes } from './attributes.js';
+import { deriveXp } from './xp.js';
 import { milestoneState, trainingAgeDisplay, consistencyInsights, healthyStreak, monthlyDigest } from './product.js';
 import { EXERCISE_BY_ID } from './data.js';
 import { fmtWeight } from './units.ts';
@@ -36,7 +36,7 @@ export function buildProgressReport(store, { today = null, units = 'kg', include
   const history = Array.isArray(store?.history) ? store.history : [];
   const now = today || localDateISO();
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
-  const attrs = deriveAttributes(history);
+  const xp = deriveXp({ history, schedule: store?.activeSchedule || null });
   const prs = computePRs(history).slice(0, 8);
   const milestones = milestoneState(history);
   const age = trainingAgeDisplay(history, { today: now });
@@ -75,7 +75,7 @@ export function buildProgressReport(store, { today = null, units = 'kg', include
 ${section('Overview', [
   `Training age: ${esc(age?.label || age?.text || `${age ?? ''}`)}`,
   `Current streak: ${esc(streak?.currentWeeks ?? streak?.weeks ?? streakDays(history))} weeks`,
-  `Level: ${esc(levelFromAttributes(attrs))} (attributes ${attrs.map(a => `${a.label} ${a.value}`).join(', ')})`,
+  `Arise Level: ${esc(xp.level)} — ${esc(xp.title)} (${xp.totalXp} XP — training habits, not a fitness score)`,
 ])}
 ${section('Consistency', consistency?.lines || (consistency?.summary ? [consistency.summary] : []))}
 ${digestLines.length ? section('This month', digestLines) : ''}

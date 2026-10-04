@@ -9,19 +9,20 @@ import { useDialogs } from '../Dialog.jsx';
 
 const EvidenceDashboard = lazy(()=> import('../EvidenceDashboard.jsx'));
 
-export default function EvidenceSettings({ store, setStore }){
-  const [open,setOpen]=useState(false);
-  const { message, flash } = useTransientMessage();
-  const dialogs = useDialogs();
-  const data = useMemo(()=> {
-    if(!open || store.preferences?.telemetryEnabled !== true) return null;
-    try{ return buildEvidenceSnapshot(store); }catch{ return null; }
-  },[open,store]);
-  const summary = data ? `${data.coverage.totalResolved} pairs · ${data.coverage.exercisesTracked} exercises` : '';
-  const pair = data?.comparative?.pairedVsArise?.['double-progression'];
-  const pairedLine = pair?.pairs
-    ? `Paired vs double progression on ${pair.pairs} shared sessions: Arise met target where it didn't ${pair.ariseWins}×; baseline won ${pair.baselineWins}× (both met ${pair.bothMetTarget}, neither ${pair.neitherMetTarget}).`
-    : '';
+// The study export allowlist, spelled out at join time and under the export
+// button. tests/study-export.test.js holds this copy to the actual serializer.
+const SHARED_CATEGORIES = [
+  ['Workout structure and performance', 'exercises, sets, reps, load, RPE, completed/skipped/failed, structured pain flags, session mode and duration.'],
+  ['Recommendation evidence', 'the target that was shown before each workout, whether you met it, and any overrides.'],
+  ['Readiness check-ins, structured only', 'date, score, sleep, soreness, motivation.'],
+  ['Logging/timing measurements', 'how long sets took to log.'],
+  ['Programme adjustment metadata', 'why the app substituted or adapted an exercise (written by the app, not you).'],
+  ['Study lifecycle metadata', 'your pseudonymous ID, study status, enrollment and export date.'],
+];
+
+const NEVER_SHARED = 'Never included: free-text notes/session titles, onboarding profile, custom templates, health-platform data, crash diagnostics, or credentials.';
+
+function StudyParticipationCard({ store, setStore, flash, dialogs }){
   const status = participationStatus(store);
   const eligibility = studyEligibility(store);
   const audit = status === 'enrolled' ? enrollmentAudit(store.studyEnrollment) : null;
@@ -52,61 +53,92 @@ export default function EvidenceSettings({ store, setStore }){
     }catch(err){ flash(String(err?.message || err)); }
   };
 
+  const stateLine = status === 'enrolled'
+    ? `enrolled${audit?.ok ? '' : ' (assignment audit needs review)'} — new workouts get frozen arm assignments`
+    : status === 'withdrawn'
+      ? 'withdrawn — new workouts run on the normal engine with no study assignments'
+      : eligibility.problems.length
+        ? 'not yet eligible'
+        : 'eligible to join';
+
+  return (
+    <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2" aria-label="Study participation">
+      <div className="flex items-center gap-2">
+        <p className="text-xs font-bold">Study participation</p>
+        <span className={`ml-auto rounded-full border px-2 py-0.5 text-[11px] font-semibold ${status === 'enrolled' ? 'border-success text-success' : 'border-line text-ink3'}`}>{stateLine}</span>
+      </div>
+      <p className="text-[11px] text-ink3">
+        Pseudonymous participant id:{' '}
+        <span className="font-semibold text-ink2">{isValidStudyParticipantId(store.studyParticipantId) ? `${String(store.studyParticipantId).slice(0, 8)}…` : 'created when you join'}</span>
+        {' · '}nothing leaves this device unless you export it yourself.
+      </p>
+
+      {/* Exactly what a join commits to, spelled out before the join button. */}
+      {status !== 'enrolled' && (
+        <div className="rounded-lg border border-line bg-surface px-2.5 py-2 space-y-1.5">
+          <p className="text-[11px] font-semibold">What the study keeps, if you join</p>
+          <ul className="text-[11px] text-ink3 list-disc pl-4 space-y-0.5">
+            {SHARED_CATEGORIES.map(([title, detail])=> <li key={title}><span className="font-semibold text-ink2">{title}:</span> {detail}</li>)}
+          </ul>
+          <p className="text-[11px] text-ink3">{NEVER_SHARED}</p>
+          <p className="text-[11px] text-ink3">You export the file yourself — the study team receives nothing automatically, and what you already sent stays with them until they delete it.</p>
+        </div>
+      )}
+
+      {status === 'enrolled' ? (
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-semibold text-success">✓ Enrolled{audit?.ok ? '' : ' (assignment audit needs review)'} — train as normal; enrolment never changes what a good workout looks like. Export about once a week; repeated exports fold into one participant.</p>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={exportStudy} className="btn btn-primary min-h-9 rounded-lg px-2.5 text-[11px]">Export study data</button>
+            <button onClick={withdraw} className="btn btn-secondary min-h-9 rounded-lg px-2.5 text-[11px]">Withdraw from the study</button>
+          </div>
+          <details className="rounded-lg border border-line bg-surface px-2.5 py-1.5">
+            <summary className="text-[11px] font-semibold cursor-pointer">What a study export contains</summary>
+            <ul className="text-[11px] text-ink3 list-disc pl-4 mt-1 space-y-0.5">
+              {SHARED_CATEGORIES.map(([title, detail])=> <li key={title}><span className="font-semibold text-ink2">{title}:</span> {detail}</li>)}
+            </ul>
+            <p className="text-[11px] text-ink3 mt-1">{NEVER_SHARED}</p>
+          </details>
+        </div>
+      ) : status === 'withdrawn' ? (
+        <div className="space-y-1.5">
+          <p className="text-[11px] text-ink3">Recorded observations remain local until separately deleted. Withdrawal never deletes local data, and files you already sent are copies outside the app — ask the study team to delete their files.</p>
+          {eligibility.eligible && <button onClick={join} className="btn btn-secondary min-h-9 rounded-lg px-2.5 text-[11px]">Rejoin the study</button>}
+        </div>
+      ) : eligibility.problems.length ? (
+        <ul className="text-[11px] text-ink3 list-disc pl-5 space-y-0.5" aria-label="Study eligibility">{eligibility.problems.map((reason,i)=> <li key={i}>{reason}</li>)}</ul>
+      ) : (
+        <button onClick={join} className="btn btn-primary min-h-9 rounded-lg px-3 text-[11px]">Join the study</button>
+      )}
+    </div>
+  );
+}
+
+export default function EvidenceSettings({ store, setStore }){
+  const [open,setOpen]=useState(false);
+  const { message, flash } = useTransientMessage();
+  const dialogs = useDialogs();
+  const data = useMemo(()=> {
+    if(!open || store.preferences?.telemetryEnabled !== true) return null;
+    try{ return buildEvidenceSnapshot(store); }catch{ return null; }
+  },[open,store]);
+  const summary = data ? `${data.coverage.totalResolved} pairs · ${data.coverage.exercisesTracked} exercises` : '';
+  const pair = data?.comparative?.pairedVsArise?.['double-progression'];
+  const pairedLine = pair?.pairs
+    ? `Paired vs double progression on ${pair.pairs} shared sessions: Arise met target where it didn't ${pair.ariseWins}×; baseline won ${pair.baselineWins}× (both met ${pair.bothMetTarget}, neither ${pair.neitherMetTarget}).`
+    : '';
+
   return (
     <section id="sec-evidence" className="rounded-2xl border border-line bg-surface p-4 space-y-2">
       {dialogs.node}
       <h3 className="text-sm font-bold">Progression evidence</h3>
-      <p className="text-xs text-ink3">Arise records each recommendation before the workout (with your measurement consent) and scores it against what you actually did next — compared against simple double progression, linear progression and a flat baseline on the same sessions.</p>
+      <p className="text-xs text-ink3">Arise records each recommendation before the workout (with your measurement consent) and scores it against what you actually did next — compared against simple double progression, linear progression and a flat baseline on the same sessions. Until enough participants and sessions exist, reports say <span className="font-semibold">“Insufficient real-user evidence”</span> and rank nothing — synthetic tests are never presented as real-world results.</p>
       <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2" aria-label="Real-world study onboarding">
         <p className="text-xs font-bold">Take part in the real-world study</p>
         <p className="text-[11px] text-ink3">
-          Who can join: anyone training with Arise who has measurement consent on and at least 3 logged workouts. What the study keeps: the target shown before each workout and what you actually did next, structured readiness check-ins, and logging timing — never your name, health-platform data, or free-text notes. Nothing leaves this device unless you export it yourself. Pseudonymous participant id:{' '}
-          <span className="font-semibold text-ink2">{isValidStudyParticipantId(store.studyParticipantId) ? `${String(store.studyParticipantId).slice(0, 8)}…` : 'created when you join'}</span>
+          Who can join: anyone training with Arise who has measurement consent on and at least 3 logged workouts. {participationCopy(store)}
         </p>
-        {status === 'enrolled' ? (
-          <div className="space-y-1.5">
-            <p className="text-[11px] font-semibold text-success">✓ Current status: enrolled{audit?.ok ? '' : ' (assignment audit needs review)'} — new workouts get frozen arm assignments.</p>
-            <details className="rounded-lg border border-line bg-surface px-2.5 py-1.5">
-              <summary className="text-[11px] font-semibold cursor-pointer">How to take part &amp; export</summary>
-              <ul className="text-[11px] text-ink3 list-disc pl-4 mt-1 space-y-0.5">
-                <li>Train as normal — enrolment never changes what a good workout looks like.</li>
-                <li>Once a week, export study data below; repeated exports fold into one participant.</li>
-                <li>Everything stays on this device between exports; nothing uploads by itself.</li>
-              </ul>
-            </details>
-            <details className="rounded-lg border border-line bg-surface px-2.5 py-1.5">
-              <summary className="text-[11px] font-semibold cursor-pointer">What a study export contains</summary>
-              <ul className="text-[11px] text-ink3 list-disc pl-4 mt-1 space-y-0.5">
-                <li>Workout structure and performance: exercises, sets, reps, load, RPE, completed/skipped/failed, structured pain flags, session mode and duration.</li>
-                <li>Recommendation evidence: the target that was shown, whether you met it, and any overrides.</li>
-                <li>Readiness check-ins, structured only: date, score, sleep, soreness, motivation.</li>
-                <li>Logging/timing measurements: how long sets took to log. Programme adjustment metadata: why the app substituted or adapted an exercise (written by the app, not you).</li>
-                <li>Study metadata: your pseudonymous ID, study status, enrollment and export date.</li>
-              </ul>
-              <p className="text-[11px] text-ink3 mt-1">Never included: free-text notes/session titles, onboarding profile, custom templates, health-platform data, crash diagnostics, or credentials.</p>
-            </details>
-            <button onClick={exportStudy} className="btn btn-primary min-h-9 rounded-lg px-2.5 text-[11px]">Export study data</button>
-            <button onClick={withdraw} className="btn btn-secondary min-h-9 rounded-lg px-2.5 text-[11px]">Withdraw from the study</button>
-          </div>
-        ) : status === 'withdrawn' ? (
-          <div className="space-y-1.5">
-            <p className="text-[11px] font-semibold text-ink2">Current status: withdrawn.</p>
-            <p className="text-[11px] text-ink3">New workouts run on the normal engine with no study assignments. Recorded observations remain local until separately deleted.</p>
-            {eligibility.eligible && <button onClick={join} className="btn btn-secondary min-h-9 rounded-lg px-2.5 text-[11px]">Rejoin the study</button>}
-          </div>
-        ) : eligibility.problems.length ? (
-          <div className="space-y-1">
-            <p className="text-[11px] font-semibold text-ink2">Current status: not yet eligible</p>
-            <ul className="text-[11px] text-ink3 list-disc pl-5 space-y-0.5" aria-label="Study eligibility">{eligibility.problems.map((reason,i)=> <li key={i}>{reason}</li>)}</ul>
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            <p className="text-[11px] font-semibold text-ink2">Current status: eligible to join</p>
-            <button onClick={join} className="btn btn-primary min-h-9 rounded-lg px-3 text-[11px]">Join the study</button>
-          </div>
-        )}
-        <p className="text-[11px] text-ink3">{participationCopy(store)}</p>
-        <p className="text-[11px] text-ink3">Until enough participants and sessions exist, reports say <span className="font-semibold">“Insufficient real-user evidence”</span> and rank nothing — synthetic tests are never presented as real-world results.</p>
+        <StudyParticipationCard store={store} setStore={setStore} flash={flash} dialogs={dialogs} />
         {message && <p role="status" className="text-[11px] font-semibold text-ink2">{message}</p>}
       </div>
 

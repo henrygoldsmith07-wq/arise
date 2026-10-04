@@ -766,3 +766,20 @@ export function healthyStreak(history, { today, weeks = 8 } = {}){
       : 'fresh start this week',
   };
 }
+
+/**
+ * Typical duration for a workout like this one, from sessions with the same
+ * title that actually logged a duration. Only surfaced when there is real
+ * evidence (3+ timed sessions) — never a manufactured estimate.
+ */
+export function typicalDurationFor({ history = [], title = null } = {}){
+  if(!title) return null;
+  const timed = (history || [])
+    .filter((s)=> s?.title === title && !s.deletedAt && Number(s.durationMinutes) > 0)
+    .map((s)=> Number(s.durationMinutes))
+    .sort((a, b)=> a - b);
+  if(timed.length < 3) return null;
+  const lo = timed[Math.max(0, Math.floor(timed.length * 0.25))];
+  const hi = timed[Math.min(timed.length - 1, Math.floor(timed.length * 0.75))];
+  return { lo: Math.round(lo), hi: Math.round(hi), samples: timed.length };
+}

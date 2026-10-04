@@ -187,6 +187,14 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
             ))}
           </div>
           {!equipment.length && <p className="text-xs text-review bg-reviewsoft border border-review/30 rounded-xl px-3 py-2">Pick at least one — bodyweight is always an option.</p>}
+          {/* Load rounding is genuinely optional: defaults are fine for most
+              people, so it sits behind one disclosure instead of interrupting
+              the 60-second path to a first workout. */}
+          {(equipment.includes('barbell') || equipment.includes('dumbbells') || equipment.includes('machine') || equipment.includes('cable')) && (
+            <details className="rounded-xl border border-line bg-surface2 p-3">
+              <summary className="text-xs font-bold cursor-pointer">Tune load rounding (optional)</summary>
+              <p className="text-[11px] text-ink3 mt-1">Only needed if your weights are unusual — targets round to loads you can actually build.</p>
+              <div className="space-y-2 mt-2">
           {equipment.includes('barbell') && (
             <div className="rounded-xl border border-line bg-surface2 p-3 space-y-2">
               <div>
@@ -220,6 +228,9 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
                 className="w-full min-h-10 rounded-lg border border-line bg-surface px-3 text-sm" />
               <p className="text-[11px] text-ink3">Enter the smallest stack jump on your machine — targets snap to real pin positions.</p>
             </div>
+          )}
+              </div>
+            </details>
           )}
         </div>
       )

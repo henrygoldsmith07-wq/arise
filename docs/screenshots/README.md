@@ -2,21 +2,7 @@
 
 Captured from the real app by `npm run screenshots` (Playwright drives
 onboarding, a scheduled program and a logged session; the data is the
-synthetic fixture the script creates). The command builds and starts its own
-temporary production preview, so no separate dev server is required. Set
-`SHOT_URL` only when intentionally capturing an already-running deployment.
-
-The release gallery below is separate from the CI visual-regression gate.
-`e2e/visual-regression.spec.js` owns six deterministic desktop Chromium
-baselines in `e2e/visual-baselines/`; ordinary PR E2E runs compare against
-those images with a small cross-platform tolerance and fail on material drift.
-Re-baselining therefore requires an explicit `--update-snapshots` run and a
-review of the changed PNGs in the PR.
-
-The checked-in images are release documentation. Last full regeneration:
-2026-09-05. The study onboarding card and template editor shipped after that
-capture and are not pictured yet. Re-run the now self-contained command after
-meaningful UI changes and review the generated gallery before committing it.
+synthetic fixture the script creates). Re-run after meaningful UI changes.
 
 ## Today — the session for today
 
