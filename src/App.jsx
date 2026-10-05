@@ -210,9 +210,27 @@ export default function App(){
     if(!(store.history?.length > 0)) return;
     if(store.demo) return;
     persistAskedRef.current = true;
-    import('./lib/storageQuota.js')
-      .then(({ requestPersistentStorageOnce })=> requestPersistentStorageOnce())
-      .catch(()=>{});
+    // Deferred off the boot path on purpose. navigator.storage.persisted()
+    // and persist() are real async calls into the browser's storage layer; on
+    // the critical path they compete with hydration and the first paint, and
+    // on a profile that already has history they fire on EVERY app open. The
+    // ask is about durability, not about what the user is doing right now, so
+    // it waits for an idle main thread.
+    let live = true;
+    const ask = ()=>{
+      if(!live) return;
+      import('./lib/storageQuota.js')
+        .then(({ requestPersistentStorageOnce })=> requestPersistentStorageOnce())
+        .catch(()=>{});
+    };
+    const idle = typeof requestIdleCallback === 'function'
+      ? requestIdleCallback(ask, { timeout: 4000 })
+      : setTimeout(ask, 4000);
+    return ()=>{
+      live = false;
+      if(typeof cancelIdleCallback === 'function' && typeof idle === 'number') cancelIdleCallback(idle);
+      else clearTimeout(idle);
+    };
   },[store.history?.length, store.demo]);
 
   // Storage-quota watch: evaluate shortly after boot and re-check when the

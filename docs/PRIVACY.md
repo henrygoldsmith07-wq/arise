@@ -1,9 +1,48 @@
 # Privacy guide
 
-Short version: **Arise is local-first. Network sharing is opt-in or initiated
-by an explicit export/share action.** This page lists every app pathway that
-can send data away from the current browser profile and what each pathway
-actually sends.
+Short version: **Arise is local-first. The version you download cannot phone
+home at all** — not by default, not by configuration, and not by a setting
+someone else left switched on. This page lists every app pathway that can send
+data away from the current browser profile and what each pathway actually sends.
+
+## The default build has no third-party destination
+
+The NVIDIA coach, classifier.dev and the Pulse connector are **compiled out of
+the hosted build**. This is a build-time decision (`VITE_ARISE_INTEGRATIONS`,
+default `off`), not a settings toggle:
+
+- the code cannot reach those hosts;
+- the Content-Security-Policy shipped with the build does not list them, so the
+  browser blocks them even if some future code tried.
+
+Nothing you do in the app — including granting consent on an older build and
+then upgrading — can re-enable an integration that this build does not contain.
+To ship them, a maintainer must deliberately build with
+`npm run build:integrations`.
+
+### What this is checked by
+
+`e2e/network-boundary.spec.js` drives a first-run user through onboarding, logs
+a real session, exports a backup and visits every tab, with a hard interceptor
+on every request. **Any** request to an origin the build did not declare fails
+the test and is blocked, so it cannot pass by accident. The same spec proves:
+
+- the default build reports the integrations as compiled out, and the AI coach
+  refuses with "not available in this build" rather than "no API key";
+- a **stale consent grant** from an earlier build does not open the network.
+
+### The one exception, stated plainly
+
+Exercise illustrations are loaded from `bryllim.github.io` — public, static
+animation frames from a CC BY-SA exercise guide, cached by the service worker.
+That host receives **no user data**: no identifiers, no training data, no
+cookies, no referrer (`Referrer-Policy: no-referrer`). It is the only
+third-party origin any Arise user can reach, and it is the only non-`self`
+entry in the shipped `connect-src`.
+
+The test covers **default settings**. It says nothing about WebDAV sync, which
+is off unless you configure a host yourself, and nothing about what your
+browser extensions, your OS or your network do.
 
 ## What is stored, and where
 
@@ -20,6 +59,10 @@ actually sends.
   keeps the dependency surface tiny).
 
 ## What can leave the browser profile
+
+**In the default build, none of the rows below are reachable.** They describe
+what the integration-enabled build (`npm run build:integrations`) can do, and
+are kept because that build exists, is tested, and may be shipped separately.
 
 | Channel | What Arise sends | Destination / remote persistence | Control |
 |---|---|---|---|

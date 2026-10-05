@@ -15,6 +15,7 @@ import { buildSalvagePayload } from '../lib/salvageExport.js';
 import { normaliseHistoryEntry } from '../lib/store.js';
 import { dataLifecycleService } from '../services/dataLifecycleService.js';
 import { backupRecency, backupRecencyLabel, backupReminderDue, dismissBackupReminder as persistBackupReminderDismissal, readBackupState } from '../lib/backupState.js';
+import { INTEGRATIONS_COMPILED_IN, INTEGRATIONS_LABEL } from '../lib/integrations.js';
 import { decryptEncryptedFullBackup, downloadEncryptedFullBackup, encryptedBackupSupported, exportFullBackup } from '../services/backupService.js';
 import ToggleRow from './settings/ToggleRow.jsx';
 const AiCoachSettings = lazy(()=> import('./settings/AiCoachSettings.jsx'));
@@ -446,6 +447,10 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
           </div>
         )}
         <p className="text-xs text-ink3">Local-first — your history lives on this device. Export JSON (full versioned backup: live + archived training history), an encrypted backup (same complete history, sealed), or CSV (live history only) and restore/merge on another device. No account required.</p>
+        <p className="text-[11px] text-ink3 flex items-start gap-1.5" data-testid="integration-status">
+          <span aria-hidden="true">{INTEGRATIONS_COMPILED_IN ? '🛰️' : '🔒'}</span>
+          <span>{INTEGRATIONS_LABEL} Full detail: docs/PRIVACY.md</span>
+        </p>
         {store.demo && (
           <p className="text-xs text-ink2 bg-reviewsoft border border-review/30 rounded-xl px-3 py-2" role="note">
             <strong>Demo mode:</strong> export is disabled — this is sample data, not yours. Exit demo to start your real log.

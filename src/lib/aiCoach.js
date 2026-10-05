@@ -21,6 +21,7 @@ import { EXERCISE_BY_ID } from './data.js';
 import { resolveArisePriors } from './priors.js';
 import { reviewCompletedWeek } from './mesocycle.js';
 import { routeCoachRequest } from './feedbackClassifier.js';
+import { integrationEnabledByBuild } from './integrations.js';
 
 const SETTINGS_KEY = 'arise.ai.settings.v1';
 const SESSION_KEY = 'arise.ai.session-key.v1';
@@ -208,6 +209,10 @@ export function buildTrainingContext({ history = [], schedule = null, readinessL
 // ── Request ─────────────────────────────────────────────────────────────
 
 export async function requestCoachInsight({ context, apiKey, model = DEFAULT_MODEL, timeoutMs = 15000, fetchImpl = null } = {}){
+  // Build-time boundary first: the hosted build ships with this integration
+  // compiled out, so no key and no click can reach NVIDIA. An API key is a
+  // second gate, not the first one.
+  if(!integrationEnabledByBuild()) return { ok:false, error:'The AI coach is not available in this build.', notAvailable:true };
   if(!apiKey) return { ok:false, error:'No API key set.' };
   if(!context) return { ok:false, error:'Nothing to analyse yet — log some sessions first.' };
   const doFetch = fetchImpl || (typeof fetch !== 'undefined' ? fetch : null);

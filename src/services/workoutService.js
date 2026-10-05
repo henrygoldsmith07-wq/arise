@@ -7,6 +7,7 @@ import { reviewCompletedWeek, applyWeeklyReview } from '../lib/mesocycle.js';
 import { attachOutcome } from '../lib/longitudinal.js';
 import { recordEvent } from '../lib/telemetry.js';
 import { pushToPulse } from '../lib/pulse.js';
+import { integrationEnabledByBuild } from '../lib/integrations.js';
 export { cancellationPlan } from './workoutCancellationService.js';
 
 export function completeWorkout({ store, payload }){
@@ -107,7 +108,9 @@ export function runPostSaveIntegrations({ store, payload, history, setStore }){
     .catch(()=>{});
   try{
     const adapter = typeof window !== 'undefined' ? window.__PULSE_ADAPTER__ : null;
-    if(store?.preferences?.pulseEnabled && adapter){
+    // Three gates: the build contains the integration, the user consented,
+    // and an adapter is actually injected. Any one missing means no request.
+    if(integrationEnabledByBuild() && store?.preferences?.pulseEnabled && adapter){
       Promise.resolve(pushToPulse(payload, history, adapter)).then(result=>{
         const ok = result?.ok ?? Object.values(result || {}).every(value=> value?.ok !== false);
         recordEvent('pulse:sync', { sessionId:payload.id, ok, result }, { essential:false });

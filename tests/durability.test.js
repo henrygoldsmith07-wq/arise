@@ -4,6 +4,7 @@
 // (same API surface as the browser).
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { hydrateStorage, persistStore, loadStoreFromIdb, whenPersisted, clearAllStoredData } from '../src/lib/storage.js';
 import { idbGetAll, idbPut } from '../src/lib/idb.js';
 import { idbTransaction } from '../src/lib/idb-tx.js';
@@ -186,6 +187,17 @@ describe('automatic persistence request', ()=>{
     const storage = { getItem:()=> null, setItem:()=> {} };
     const result = await requestPersistentStorageOnce({ storage, persist:async ()=> { throw new Error('must not ask'); }, alreadyPersisted:async ()=> true });
     assert.equal(result, true);
+  });
+
+  it('is deferred off the boot path in App.jsx', ()=>{
+    // navigator.storage.persisted()/persist() are real async calls into the
+    // browser storage layer. Running them inline during hydration competed with
+    // the first paint and perturbed the save/hydrate race that
+    // e2e/product.spec.js relies on — a real regression this test's absence
+    // let through once. The ask now waits for an idle main thread.
+    const source = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
+    const effect = source.slice(source.indexOf('requestPersistentStorageOnce'), source.indexOf('requestPersistentStorageOnce') + 2000);
+    assert.match(effect, /requestIdleCallback/);
   });
 });
 
