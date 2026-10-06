@@ -95,18 +95,34 @@ async function logSessions(page){
 /** Everything a user would recognise as "my training" after a restore. */
 async function readUserFacingState(page){
   return page.evaluate(async ()=>{
+    // Hydration is async on boot; awaiting it makes the read deterministic
+    // instead of racing the app's IndexedDB swap-in.
+    const storageModule = await import('/src/lib/storage.js');
+    await storageModule.hydrateStorage();
     const { loadStore } = await import('/src/lib/store.js');
-    const { deriveAttributes, levelFromAttributes } = await import('/src/lib/attributes.js');
+    const { deriveXp } = await import('/src/lib/xp.js');
     const store = loadStore();
     const history = store.history || [];
-    const attributes = deriveAttributes(history);
+    // The attributes layer is now the XP/performance layer. The single
+    // "strength" value is the best estimated 1RM across every logged set —
+    // deterministic from history, so a lossy restore would change it.
+    let strength = 0;
+    for(const h of history){
+      for(const b of h.blocks || []){
+        for(const s of b.sets || []){
+          const w = Number(s.weightKg) || 0, r = Number(String(s.reps).match(/\d+/)?.[0] || s.reps) || 0;
+          if(w > 0 && r > 0) strength = Math.max(strength, w * (1 + r / 30));
+        }
+      }
+    }
+    const xp = deriveXp({ history });
     return {
       history,
-      attributes,
-      // Values only: the rendered blurb is prose derived from the value, so
+      strengthValue: Math.round(strength * 10) / 10,
+      // Values only: the rendered blurbs are prose derived from values, so
       // comparing the numeric layer is the honest equality claim.
-      attributeValues: Object.fromEntries(attributes.map(a=> [a.id, a.value])),
-      level: levelFromAttributes(attributes),
+      attributeValues: { strength: Math.round(strength * 10) / 10, xpTotal: xp.totalXp },
+      level: xp,
       schedule: store.activeSchedule || null,
       onboarding: store.onboarding || null,
     };
@@ -120,7 +136,6 @@ test('export → wipe IndexedDB → restore reproduces history, attributes and l
   const before = await readUserFacingState(page);
   expect(before.history.length, 'sessions logged before the wipe').toBe(3);
   expect(before.attributeValues.strength, 'a real history derives a real strength attribute').toBeGreaterThan(12);
-
   // ── Export ──────────────────────────────────────────────────────────
   await page.getByRole('button', { name:'More', exact:true }).click();
   const downloadPromise = page.waitForEvent('download');
