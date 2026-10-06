@@ -627,7 +627,10 @@ export function snapLoad(v, config = null){
   const step = v < 20 ? cfg.under20KgStep : v < 60 ? cfg.under60KgStep : cfg.defaultStep;
   return Math.round(v/step)*step;
 }
-function equipmentForExercise(exerciseId){
+// Exported: the swap-time e1RM carry needs the same equipment dispatch the
+// plate-aware prescription uses, so a carried load lands on the replacement's
+// own achievable increments (never the original lift's).
+export function equipmentForExercise(exerciseId){
   const ex = EXERCISE_BY_ID[exerciseId];
   if(!ex) return 'barbell';
   const eq = (ex.equipment || []).join(' ');

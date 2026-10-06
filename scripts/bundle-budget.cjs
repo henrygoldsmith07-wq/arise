@@ -189,7 +189,15 @@ const CHUNK_BUDGET_KB = 34;
 // settings refactor, which restructured the boot chunk (boot 108.8) and adds
 // its own product code. All new feature logic is lazy-route; largest-lazy
 // 26.4 unchanged; measured total 363.4.
-const TOTAL_BUDGET_KB = 364;
+//
+// total 364 → 369 kB with the session-speed & clarity round: swap-time
+// e1RM-equivalent carry (sessionRunnerModel), the on-row plate-check line and
+// working-set guide (SessionRunner/SetRow), the first-run programme shelf
+// (programShelf.js + TrainView cards), and the local 4-week progression
+// preview (progressionPreview.js + lazy ProgressionPreview). TrainView's own
+// chunk grows (shelf cards); boot 108.8 and largest-lazy 26.4 unchanged;
+// measured total 366.4.
+const TOTAL_BUDGET_KB = 369;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

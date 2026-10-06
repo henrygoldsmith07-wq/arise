@@ -8,7 +8,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const manifest = JSON.parse(fs.readFileSync('node_modules/@bryllim/workout-guide/manifest.json','utf8'));
-const ariseSrc = fs.readFileSync('src/lib/data.js','utf8');
+// Exercise ids live across the split data modules (data.js assembles them
+// from src/lib/data/); scan them in assembly order for stable output.
+const DATA_SOURCES = ['src/lib/data.js', 'src/lib/data/exercises-primary.js', 'src/lib/data/exercises-coverage.js', 'src/lib/data/programs.js'];
+const ariseSrc = DATA_SOURCES.map(f=> fs.readFileSync(f, 'utf8')).join('\n');
 
 // Collect existing IDs to avoid duplicates
 const idRe = /id:\s*'([^']+)'/g;

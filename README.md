@@ -74,22 +74,17 @@ The living plan and public backlog: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 keeps its 2026-08-14 baseline — the architecture gates are still accurate,
 the "today" numbers are not.)
 
-## Consolidation
-
-Arise is the canonical training app. `vendor/life-os-scrape` is an **archived, read-only mirror** of the old standalone Life OS production build (scraped 2026-07-03) and is no longer developed. Its strongest fitness practices have been ported into Arise — see `vendor/life-os-scrape/README.md` for the porting log — and its one known engineering issue (`eval()` in the analytics Web Worker) is documented there and **not** carried forward (Arise uses safe in-thread helpers).
-
 ## Run
 
 ```bash
-cd apps/arise
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # → dist/
 npm run lint:content
 npm run type-check # tsc --noEmit (jsconfig.json, src + scripts)
-npm test           # node:test — 600+ unit/integration/property/fuzz tests
+npm test           # node:test — 1500+ unit/integration/property/fuzz tests
 npm run benchmark  # seeded engine gates + determinism artifacts (also in CI)
-npm run verify     # lint:content && type-check && test && build  (also in CI)
+npm run verify     # lint:content && lint:encoding && type-check && test && integrations && build  (also in CI)
 npm run e2e        # Playwright browser E2E (dev server)
 npm run e2e:pwa    # Playwright E2E against the production build (service worker paths)
 npm run screenshots # regenerate docs/screenshots/ from the real app
@@ -155,8 +150,8 @@ This app shares the Le Studio monochrome design system and has no franchise, her
 ## Project layout
 
 ```
-src/lib/data.js        single source of truth + schedule helpers + programme/template versioning
-src/lib/attributes.js  history-derived attributes + level
+src/lib/data.js        content source of truth (assembles src/lib/data/ — exercises by muscle, programmes) + schedule helpers + programme/template versioning
+src/lib/xp.js          history-derived XP + level (level 1–60); derived metrics in performance.js
 src/lib/storage.js     IndexedDB persistence + integrity gate + snapshots + recovery
 src/lib/idb.js         IndexedDB wrapper (15 object stores, transactional writes)
 src/lib/export.js      versioned backup (+ exportPolicy.js: contract, adapters, dangerous-field policy)

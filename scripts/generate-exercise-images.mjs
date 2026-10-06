@@ -20,7 +20,12 @@ import path from 'node:path';
 const manifest = JSON.parse(fs.readFileSync(path.resolve('node_modules/@bryllim/workout-guide/manifest.json'), 'utf8'));
 const exercises = manifest;
 
-const ariseSrc = fs.readFileSync('src/lib/data.js', 'utf8');
+// Exercise ids live across the split data modules (data.js assembles them
+// from src/lib/data/); scan them in assembly order (data.js constants, then
+// primary, then coverage) so the generated registry keeps its historical
+// insertion order and stays byte-identical across the split.
+const DATA_SOURCES = ['src/lib/data.js', 'src/lib/data/exercises-primary.js', 'src/lib/data/exercises-coverage.js', 'src/lib/data/programs.js'];
+const ariseSrc = DATA_SOURCES.map(f=> fs.readFileSync(f, 'utf8')).join('\n');
 const idRe = /id:\s*'([^']+)'/g;
 const ariseIds = new Set();
 let m;

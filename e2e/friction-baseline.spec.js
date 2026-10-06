@@ -66,7 +66,10 @@ async function enableTelemetry(page){
 }
 
 async function startStandardWorkout(page){
-  await page.getByRole('button', { name: 'Train' }).click();
+  // exact: the nav tab's accessible name is exactly "Train"; without exact,
+  // a still-mounted onboarding dialog (flake window) contributes a second
+  // button whose name merely CONTAINS "Train" and the click over-matches.
+  await page.getByRole('button', { name: 'Train', exact: true }).click();
   const recCard = page.locator('[aria-label="Recommended for you"]');
   if (await recCard.getByRole('button', { name: 'Start programme' }).isVisible().catch(() => false)) {
     await recCard.getByRole('button', { name: 'Start programme' }).click();

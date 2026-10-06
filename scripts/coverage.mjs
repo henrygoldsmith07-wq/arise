@@ -1,10 +1,15 @@
 import fs from 'node:fs';
-const src = fs.readFileSync('src/lib/data.js','utf8');
-// Extract EXERCISES array source and evaluate it in isolation.
-const start = src.indexOf('export const EXERCISES');
-const end = src.indexOf('];', start);
-const body = src.slice(src.indexOf('[', start), end + 1);
-const EXERCISES = eval(body);
+// Exercise entries live across the split data modules; concatenate them in
+// assembly order (primary then coverage, matching data.js) before evaluating.
+const src = [
+  'src/lib/data/exercises-primary.js',
+  'src/lib/data/exercises-coverage.js',
+].map(f=> fs.readFileSync(f, 'utf8')).join('\n');
+// Extract EXERCISES array sources and evaluate them in isolation.
+const EXERCISES = [];
+const arrayRe = /export const EXERCISES_(?:PRIMARY|COVERAGE) = (\[[\s\S]*?\n\]);/g;
+let arrayMatch;
+while((arrayMatch = arrayRe.exec(src))) EXERCISES.push(...eval(arrayMatch[1]));
 const COLS = [
   ['BW', ['bodyweight']],
   ['DB', ['dumbbells','kettlebell']],
