@@ -10,10 +10,15 @@ import {
   attributePrescribedSets,
   buildPrescriptionSnapshot,
   carryPrescription,
+  e1rm,
+  epleyToLoad,
+  equipmentForExercise,
   freezePrescriptionBlock,
   removeSetAt,
+  snapLoad,
   userAddedSet,
 } from './progression.js';
+import { nearestAchievableLoad } from './plates.js';
 import { runnerRecommendationForBlock } from './runnerRecommendations.js';
 import { NOTE_PROMPTS } from './sessionNotes.js';
 import { fmtWeight, weightInputValue } from './units.ts';
@@ -152,6 +157,24 @@ export function transitionChip(recommendation, previousSummary, unit = 'kg'){
   return null;
 }
 
+// Working-set guide: the Alpha-Progression-style line every working set logs
+// against — target (clearTargetParts), the plan's rep range, and the effort
+// contract. The effort text is NOT a new prescription: it restates the engine's
+// existing room rule (progression only moves when ~2 reps are left in reserve;
+// the policy layer clamps loads when a set lands below that), in plain language.
+export function workingSetGuide(block, recommendation){
+  const planned = String(block?.reps ?? '').trim();
+  const rangeMatch = planned.match(/\d+\s*[–\-]\s*\d+/);
+  const rangeText = rangeMatch ? rangeMatch[0].replace(/\s+/g, '') : null;
+  const recRepsRaw = recommendation?.reps;
+  const recReps = recRepsRaw != null && String(recRepsRaw).trim() !== '' ? String(recRepsRaw) : null;
+  return {
+    rangeText,
+    recReps,
+    effortText:'leave ~2 in the tank',
+  };
+}
+
 export function hasUnfinishedSet(blocks, blockIndex, setIndex){
   for(let index = blockIndex; index < blocks.length; index++){
     const start = index === blockIndex ? setIndex + 1 : 0;
@@ -267,6 +290,44 @@ export function captureVisiblePrescriptions({
   return changed ? next : blocks;
 }
 
+// e1RM-equivalent carry for swaps (pure, deterministic).
+// Source of truth is the ORIGINAL movement's best known performance — first
+// the sets already in this session's block (what the user was about to do),
+// then their logged history for that exercise. The load is re-expressed at the
+// planned reps via Epley and rounded to the REPLACEMENT's own achievable
+// increments (its equipment class + the user's plate config), so a barbell 60kg
+// becomes a plate-legal dumbbell/machine load, never an unbuildable number.
+// Returns { loadKg: 0 } when there is nothing honest to carry: bodyweight
+// replacements, bodyweight-only source work, or no known performance.
+export function swapCarryPlan({ target, option, history = [], plateConfig = null } = {}){
+  if(!target || !option?.id || option.id === target.exerciseId) return { loadKg:0, fromE1rmKg:0 };
+  if(option.supportsWeighted !== true) return { loadKg:0, fromE1rmKg:0 };
+  const candidates = [];
+  for(const set of target.sets || []){
+    const reps = Number(String(set?.reps ?? '').match(/\d+/)?.[0] ?? set?.reps) || 0;
+    const weightKg = Number(set?.weightKg) || 0;
+    if(reps > 0 && weightKg > 0) candidates.push(e1rm(weightKg, reps));
+  }
+  if(!candidates.length){
+    for(const set of lastExerciseSets(history, target.exerciseId)?.sets || []){
+      const reps = Number(String(set?.reps ?? '').match(/\d+/)?.[0] ?? set?.reps) || 0;
+      const weightKg = Number(set?.weightKg) || 0;
+      if(reps > 0 && weightKg > 0) candidates.push(e1rm(weightKg, reps));
+    }
+  }
+  const fromE1rmKg = candidates.length ? Math.max(...candidates) : 0;
+  if(!(fromE1rmKg > 0)) return { loadKg:0, fromE1rmKg:0 };
+  const reps = Number(String(target.reps ?? '').match(/\d+/)?.[0]) || 8;
+  const equivalent = epleyToLoad(fromE1rmKg, reps);
+  if(!(equivalent > 0)) return { loadKg:0, fromE1rmKg };
+  // Plate-legal for the replacement's own equipment; without a plate config,
+  // fall back to the engine's generic increment grid.
+  const rounded = plateConfig
+    ? nearestAchievableLoad(equivalent, { equipment: equipmentForExercise(option.id), config: plateConfig })?.loadKg
+    : snapLoad(equivalent, null);
+  return { loadKg: rounded > 0 ? rounded : 0, fromE1rmKg };
+}
+
 export function buildRunnerSwapTransition({
   blocks = [],
   index,
@@ -295,6 +356,20 @@ export function buildRunnerSwapTransition({
     studyEnrollment,
     policy,
   });
+  // e1RM-equivalent carry: a swap must not throw away the work the session was
+  // built around. When the replacement has no history of its own, its fresh
+  // rows are seeded with the ORIGINAL movement's estimated 1RM expressed at the
+  // planned reps — rounded to the REPLACEMENT's own achievable increments.
+  // Rows with a real prior performance, and bodyweight replacements, stay as
+  // the generic factory made them.
+  const carry = swapCarryPlan({ target, option, history, plateConfig });
+  const newSet = carry.loadKg > 0
+    ? (reps, unilateral, previous)=>{
+      const base = newRunnerSet(reps, unilateral, previous);
+      if(String(base.weightKg ?? '').trim() !== '') return base;
+      return { ...base, weightKg:String(carry.loadKg) };
+    }
+    : newRunnerSet;
   const next = applySwapToBlocks({
     blocks,
     index,
@@ -305,7 +380,7 @@ export function buildRunnerSwapTransition({
     planIndex,
     policy,
     nowISO,
-    newSet:newRunnerSet,
+    newSet,
     makeId,
   });
   const replacementIndex = next.findIndex(block=>

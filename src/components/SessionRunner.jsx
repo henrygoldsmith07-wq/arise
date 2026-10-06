@@ -56,6 +56,7 @@ import {
   sessionSaveState,
   stepRir,
   transitionChip,
+  workingSetGuide,
 } from '../lib/sessionRunnerModel.js';
 
 export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, appPrefs = null, gymPrefs = null, onSetRestPreset = null, studyEnrollment = null, participantId = null, onDraftChange, onSave, onCancel }){
@@ -778,18 +779,20 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           const supportsAssisted=ex?.supportsAssisted;
           const recommendation=blockMeta.recs.get(b.exerciseId) || null;
           const clearTarget = clearTargetParts(recommendation, b, unit);
+          const guide = workingSetGuide(b, recommendation);
           const prevSummary = prev ? previousPerformanceSummary(prev, unit) : null;
           const goalText = prevSummary && prevSummary.totalReps > 0 ? `beat ${prevSummary.totalReps} total reps` : 'set your baseline';
           const changeChip = transitionChip(recommendation, prevSummary, unit);
           // Swap sheet honours the user's liked/disliked movements, and never
           // offers a swap back to the original lift — A→B→A loops would erase
-          // the substitution audit trail.
+          // the substitution audit trail. Top 4 after the origin filter, so a
+          // declared alternative that is the swap origin never costs a slot.
           const swapOrigin = b.substitutionFrom || null;
           const options = swapOpen===bi ? substitutionOptions(b.exerciseId,{
             availableEquipment, history, limit:5,
             preferredExerciseIds: preferences?.preferredExerciseIds || [],
             dislikedExerciseIds: preferences?.dislikedExerciseIds || [],
-          }).filter(o=> o.id && o.id!==swapOrigin) : [];
+          }).filter(o=> o.id && o.id!==swapOrigin).slice(0,4) : [];
           return (
             <div key={`${b.exerciseId}-${bi}`} id={`block-${bi}`} className={`rounded-2xl border bg-surface p-3 space-y-3 ${gymMode && skipQuery && skipTarget?.blockIndex === bi ? 'border-ink ring-2 ring-ink/30' : 'border-line'}`}>
               <div className="flex items-start justify-between gap-3">
@@ -803,10 +806,34 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     {recommendation && <button onClick={()=> applyRecommendation(bi,recommendation)} className="relative text-[10px] font-bold underline underline-offset-2 shrink-0 before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']">Use</button>}
                     <Suspense fallback={null}><TeachingPanel exerciseId={b.exerciseId} variant="inline" /></Suspense>
                   </div>
+                  {/* Target · range · effort — visible on every set row of the
+                      block while it is being logged. The effort text restates
+                      the engine's own room rule; it prescribes nothing new. */}
+                  {(guide.rangeText || guide.recReps) && (
+                    <p className="text-[11px] text-ink3 mt-1 tabular-nums">
+                      {guide.rangeText && <span>range {guide.rangeText}</span>}
+                      {guide.rangeText && guide.recReps ? ' · ' : ''}
+                      {guide.recReps && <span>this week {guide.recReps} reps</span>}
+                      {guide.rangeText || guide.recReps ? ' · ' : ''}
+                      <span>{guide.effortText}</span>
+                    </p>
+                  )}
                   {(changeChip || recommendation?.reason) && (
                     <p className="text-[11px] mt-1 leading-snug">
                       {changeChip && <span className="font-bold text-success">{changeChip}</span>}
                       {recommendation ? <span className="text-ink2">{changeChip ? ' — ' : ''}{recommendation.explanation?.[explanationMode] || recommendation.reason}</span> : null}
+                    </p>
+                  )}
+                  {/* Plate check lives ON the set row, not in a disclosure: a
+                      barbell user must see the exact stack they are about to
+                      build without leaving the row. One compact line, only
+                      when the engine computed a plate load for this target. */}
+                  {recommendation?.plateLoad && (
+                    <p className="text-[11px] mt-1 rounded-lg border border-line bg-surface2 px-2 py-1 text-ink2 leading-snug tabular-nums">
+                      🏋️ {recommendation.plateLoad.exact
+                        ? `${fmtWeight(recommendation.plateLoad.loadKg, unit)} exact`
+                        : `${fmtWeight(recommendation.plateLoad.targetKg, unit)} → ${fmtWeight(recommendation.plateLoad.loadKg, unit)} (${recommendation.plateLoad.direction})`}
+                      {' '}· per side: {formatPlateStack(recommendation.plateLoad.platesPerSide)}
                     </p>
                   )}
                   {safetyMeta.aftercare.get(b.exerciseId) && (
@@ -838,7 +865,6 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     {b.restSec ? <p>Rest {formatRest(b.restSec)} · load hint: {b.loadHint || '—'}</p> : null}
                       {b.why && <p className="italic">Prescribed: {b.why}</p>}
                       {recommendation?.confidence && <p>{confidenceLanguage(recommendation.confidence.band, recommendation.confidence.band === 'high' ? 'repeated performance at this load supports the prescription' : recommendation.confidence.band === 'medium' ? 'your recent sessions show a consistent pattern' : 'few comparable sessions so far — this is a cautious estimate')}</p>}
-                      {recommendation?.plateLoad && <p>Plate check · {recommendation.plateLoad.exact ? `${fmtWeight(recommendation.plateLoad.loadKg, unit)} exact` : `${fmtWeight(recommendation.plateLoad.targetKg, unit)} → ${fmtWeight(recommendation.plateLoad.loadKg, unit)} ${recommendation.plateLoad.direction}`} · per side: {formatPlateStack(recommendation.plateLoad.platesPerSide)}</p>}
                       {b.substitutionReason && <p className="italic">Swap rationale: {b.substitutionReason}</p>}
                     </div>
                   </details>

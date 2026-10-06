@@ -8,6 +8,8 @@ import { trainRecommendation } from '../lib/trainRecommendation.js';
 import { whyChoseBullets } from '../lib/trainSurface.js';
 import { buildEditorTemplate, moveItem, editorSubstitutionPreview } from '../lib/templateEditor.js';
 import { applyEquipmentAdaptation, duplicateCustomTemplate, fallbackProgrammeId, generateProgrammeFromProfile, installSharedTemplate, restoreCustomTemplate, saveCustomTemplate, softDeleteCustomTemplate, startProgramme } from '../services/programmeService.js';
+import ProgressionPreview from './ProgressionPreview.jsx';
+import { asUnit } from '../lib/units.ts';
 
 const EMPTY_DAY = { title: '', exercises: [{ exerciseId: '', sets: 3, reps: '8–12', restSec: 90 }] };
 
@@ -21,6 +23,7 @@ function currentWeek(adherence){
 }
 
 export default function TrainView({ store, setStore, onStartSession, availableEquipment }){
+  const unit = asUnit(store.preferences?.units);
   const [programId,setProgramId]=useState(store.activeSchedule?.programId || PROGRAMS[0].id);
   const [builderOpen,setBuilderOpen]=useState(false);
   const dialogs = useDialogs();
@@ -213,6 +216,12 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
               ))}
             </ul>
           </details>
+          <ProgressionPreview
+            program={programMeta(active.programId)}
+            history={store.history || []}
+            plateConfig={store.onboarding?.plateConfig || null}
+            unit={unit}
+          />
           <button onClick={()=> setStore({...store, activeSchedule:null})} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs">Clear schedule</button>
         </section>
       )}
