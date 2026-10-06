@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState, Fragment, lazy, Suspense } from 'react';
+import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { lastExerciseSets } from '../lib/store.js';
-import { isSetPerformed } from '../lib/progression.js';
 import { POLICY_ORDER } from '../lib/progressionPolicies.js';
 import { formatPlateStack } from '../lib/plates.js';
 import { substitutionOptions } from '../lib/substitutions.js';
@@ -9,18 +8,16 @@ import { recordEvent, trackFieldFocus, fieldCommitted } from '../lib/telemetry.j
 import { markRecommendationOverride } from '../lib/longitudinal.js';
 import { buildRunnerRecommendationMeta, recordProspectiveRecommendation, runnerStudy } from '../lib/runnerRecommendations.js';
 import { quickJumps, applyQuickJump, skipTo, restPresetFor, visiblePrescriptionIndexes } from '../lib/gymMode.js';
-import { SESSION_QUALITY_OPTIONS, sessionQualityLabel } from '../lib/gymMode.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
 import { announce, useDialogA11y } from '../lib/a11y.js';
 import { useWorkoutClock, useWorkoutDraftPersistence, useWorkoutWakeLock } from '../hooks/useWorkoutRuntime.js';
 import { restStartCue } from '../lib/audioCues.js';
 import { speak, cancelSpeech } from '../lib/voiceCoach.js';
-import { LoadNumpad, RestDock, WeightInput, swipeRowHandlers } from './GymModePanel.jsx';
+import { LoadNumpad, WeightInput } from './GymModePanel.jsx';
+import SetRow from './session/SetRow.jsx';
+import SessionSummary from './session/SessionSummary.jsx';
+import { RestDock } from './session/RestDock.jsx';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
-// Teaching opens on a deliberate tap, so the panel + its derived content
-// ride their own lazy chunk — boot logging weight is untouched.
-const TeachingPanel = lazy(() => import('./TeachingPanel.jsx'));
-import StepperButton from './StepperButton.jsx';
 import WorkoutDiscardDialog from './WorkoutDiscardDialog.jsx';
 import { runnerHasLoggedWork, useWorkoutExit } from '../hooks/useWorkoutExit.js';
 import { useRestTimer } from '../hooks/useRestTimer.js';
@@ -30,7 +27,7 @@ import { haptic } from '../lib/haptics.js';
 import { painAftercareFor, techniquePromptFor, maxEffortWarning } from '../lib/safety.js';
 import { createVoiceInput, parseSetPhrase } from '../lib/voiceInput.js';
 import { asUnit, fmtWeight, weightInputToKg } from '../lib/units.ts';
-import { NOTE_PROMPTS } from '../lib/sessionNotes.js';
+
 import {
   addUserSetToBlock,
   applyAllRecommendations as applyAllRunnerRecommendations,
@@ -51,13 +48,15 @@ import {
   patchRunnerSet,
   previousPerformanceSummary,
   removeRunnerSet,
-  rirFromRpe,
   rpeFromRir,
   sessionSaveState,
-  stepRir,
   transitionChip,
   workingSetGuide,
 } from '../lib/sessionRunnerModel.js';
+
+// Teaching opens on a deliberate tap, so the panel + its derived content
+// ride their own lazy chunk — boot logging weight is untouched.
+const TeachingPanel = lazy(() => import('./TeachingPanel.jsx'));
 
 export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, appPrefs = null, gymPrefs = null, onSetRestPreset = null, studyEnrollment = null, participantId = null, onDraftChange, onSave, onCancel }){
   const unit = asUnit(appPrefs?.units);
@@ -904,91 +903,28 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                 <div className="hidden sm:grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] gap-1.5 text-[10px] font-bold uppercase tracking-widest text-ink3 px-1">
                   <span>#</span><span>Load {unit}</span><span>Reps</span><span>RIR</span><span>{b.unilateral?'L/R':''}</span><span>Done</span><span></span>
                 </div>
-                {b.sets.map((s,si)=> {
-                  const activeSetIdx = b.sets.findIndex(x=> !x.completed);
-                  const isActive = si === activeSetIdx; // the row being logged now
-                  // Gym Mode row gestures: right = complete, left = failed,
-                  // long-press = load keypad. Buttons/inputs stay exclusive.
-                  const gestures = gymMode && !s.completed ? swipeRowHandlers({
-                    onComplete: ()=> completeSet(bi,si),
-                    onFail: ()=> markFailed(bi,si),
-                    onLongPress: ()=> openKeypad(bi,si),
-                  }) : null;
-                  return (
-                  <Fragment key={si}>
-                  <div {...(gestures ? { onPointerDown:gestures.onPointerDown, onPointerMove:gestures.onPointerMove, onPointerUp:gestures.onPointerUp, onPointerLeave:gestures.onPointerLeave, onPointerCancel:gestures.onPointerCancel } : {})} style={gestures?.style}
-                    className={`grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)] gap-1 sm:grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] sm:gap-1.5 items-center rounded-xl ${s.failed ? 'bg-reviewsoft border border-review/30' : ''}`}>
-                    <span className={`w-7 h-7 grid place-items-center rounded-full border text-xs font-bold tabular-nums ${s.completed?'bg-success text-bg border-success':s.failed?'bg-review text-bg border-review':'bg-surface2 border-line'}`}>{si+1}</span>
-                    <div className="min-w-0 flex items-center gap-1">
-                      <WeightInput type="text" inputMode="decimal" value={s.weightKg} unit={unit} onChange={v=> updateSet(bi,si,{weightKg:v})} {...commitProps('load-field-commit', b.exerciseId, si)} placeholder={supportsWeighted?(unit === 'lb' ? '50' : '22'):'bw'} aria-label={`Load set ${si+1} in ${unit === 'lb' ? 'pounds' : 'kilograms'}`} className={`min-w-0 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center ${s.completed?'opacity-60':''}`} />
-                      {supportsWeighted && !s.completed && (
-                        <button onClick={()=> openKeypad(bi,si)} aria-label={`Open load keypad for set ${si+1}`} title="Load keypad" className="shrink-0 w-11 h-11 grid place-items-center rounded-xl border border-line bg-surface2 text-sm font-black">✛</button>
-                      )}
-                    </div>
-                    {isActive ? (
-                      <div className="flex items-center gap-1 min-w-0">
-                        <StepperButton label="−" ariaLabel={`Decrease reps set ${si+1}`} onStep={()=> adjustReps(bi,si,-1)} className="min-w-11 px-0" />
-                        <input type="number" min="0" step="1" inputMode="numeric" value={s.reps} onChange={e=> updateSet(bi,si,{reps:e.target.value})} {...commitProps('reps-field-commit', b.exerciseId, si)} placeholder="9" aria-label={`Reps set ${si+1}`} className={`min-w-0 flex-1 rounded-xl border border-line bg-surface2 px-1 py-2 text-xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
-                        <StepperButton label="+" ariaLabel={`Increase reps set ${si+1}`} onStep={()=> adjustReps(bi,si,1)} className="min-w-11 px-0" />
-                      </div>
-                    ) : (
-                    <input type="number" min="0" step="1" inputMode="numeric" value={s.reps} onChange={e=> updateSet(bi,si,{reps:e.target.value})} {...commitProps('reps-field-commit', b.exerciseId, si)} placeholder="9" aria-label={`Reps set ${si+1}`} className={`min-w-0 rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
-                    )}
-                    {/* Second line on narrow screens (RIR + side + actions); on
-                        sm+ this wrapper dissolves (display:contents) so the
-                        children join the single 7-column desktop grid in DOM
-                        order — desktop layout is pixel-identical. */}
-                    <div className="col-span-3 row-start-2 grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-1 items-center sm:contents sm:col-auto sm:row-auto">
-                    <input type="number" min="0" max="10" step="1" inputMode="numeric" value={rirFromRpe(s.rpe)} onChange={e=> updateSet(bi,si,{rpe:rpeFromRir(e.target.value)})} {...commitProps('rir-field-commit', b.exerciseId, si)} placeholder="—" aria-label={`Reps in reserve set ${si+1}`} className={`min-w-0 rounded-xl border border-line bg-surface2 px-1 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
-                    {b.unilateral ? (
-                      <select value={s.side||'L'} onChange={e=> updateSet(bi,si,{side:e.target.value})} aria-label={`Side set ${si+1}`} className="min-w-0 rounded-xl border border-line bg-surface2 px-1 py-3 text-xs font-bold"><option value="L">L</option><option value="R">R</option></select>
-                    ) : <span />}
-                    <span className="flex items-center gap-1">
-                      <button onClick={()=> completeSet(bi,si)} aria-pressed={s.completed} className={`min-h-12 px-2.5 rounded-xl border text-[11px] font-bold whitespace-nowrap ${s.completed?'bg-success text-bg border-success':'bg-surface2 border-line'}`}>{s.completed?'✓':'Done'}</button>
-                      {/* Gesture parity: the swipe-left "failed" action and the
-                          long-press keypad both exist as buttons, so touch-only
-                          gestures never gate an action (WCAG 2.5.6 / 2.1.1). */}
-                      {gymMode && !s.completed && (
-                        <button
-                          onClick={()=> { if(s.failed){ try{ recordEvent('undo-set', { sessionId:session.id, exerciseId:b.exerciseId, setIndex:si, ...(s.setId ? { setId: s.setId } : {}), mode: gymMode ? 'gym' : 'standard' }); }catch{} updateSet(bi,si,{ failed:false }); } else markFailed(bi,si); }}
-                          aria-pressed={s.failed}
-                          aria-label={s.failed ? `Unmark set ${si+1} failed` : `Mark set ${si+1} failed`}
-                          className={`min-h-12 w-9 grid place-items-center rounded-xl border text-[11px] font-bold ${s.failed?'bg-review text-bg border-review':'bg-surface2 border-line'}`}>{s.failed?'↺':'✗'}</button>
-                      )}
-                      {/* Standard mode gets the same one-tap failure log: a
-                          failed attempt stays a failed attempt in history
-                          instead of being deleted or faked as completed. */}
-                      {!gymMode && !s.completed && (
-                        <button
-                          onClick={()=> { if(s.failed){ try{ recordEvent('undo-set', { sessionId:session.id, exerciseId:b.exerciseId, setIndex:si, ...(s.setId ? { setId: s.setId } : {}), mode: 'standard' }); }catch{} updateSet(bi,si,{ failed:false }); } else markFailed(bi,si); }}
-                          aria-pressed={s.failed}
-                          aria-label={s.failed ? `Unmark set ${si+1} failed` : `Mark set ${si+1} failed`}
-                          className={`min-h-12 min-w-11 grid place-items-center rounded-xl border text-[11px] font-bold ${s.failed?'bg-review text-bg border-review':'bg-surface2 border-line'}`}>{s.failed?'↺':'✗'}</button>
-                      )}
-                    </span>
-                    {isSetPerformed(s) ? (
-                      <span className="w-9 h-9 grid place-items-center text-ink3" title="Already performed — undo it before removing" aria-label={`Set ${si+1} performed`}>·</span>
-                    ) : (
-                      <button onClick={()=> removeSet(bi,si)} aria-label={`Remove set ${si+1}`} className="relative w-9 h-9 grid place-items-center rounded-full border border-line text-ink3 before:absolute before:-inset-1.5 before:rounded-full before:content-['']">×</button>
-                    )}
-                    </div>
-                  </div>
-                  {/* RIR suggestion: the previous set's RIR offered for one-tap
-                      confirm — never written until confirmed or typed. Hidden
-                      once the row carries any RIR (confirmed, edited) or is
-                      done: Done alone must never persist a suggestion. */}
-                  {rirSuggest && rirSuggest.bi===bi && rirSuggest.si===si && !s.completed && rirFromRpe(s.rpe).trim()==='' && (
-                    <div role="group" aria-label={`Suggested RIR ${rirSuggest.value} for set ${si+1}`} className="flex items-center gap-1.5 rounded-xl border border-dashed border-line bg-surface2 px-2.5 py-1.5 -mt-1">
-                      <span className="text-[11px] text-ink3 flex-1 min-w-0">RIR {rirSuggest.value} suggested from last set</span>
-                      <button onClick={()=> confirmRirSuggestion(rirSuggest.value)} aria-label={`Use suggested RIR ${rirSuggest.value} for set ${si+1}`} className="min-h-11 px-3 rounded-full bg-ink text-bg text-xs font-bold">Same</button>
-                      <button onClick={()=> confirmRirSuggestion(stepRir(rirSuggest.value,-1))} aria-label={`Decrease suggested RIR for set ${si+1}`} className="min-h-11 min-w-11 grid place-items-center rounded-full border border-line bg-surface text-sm font-black">−</button>
-                      <span aria-hidden className="text-xs font-black tabular-nums w-6 text-center">{rirSuggest.value}</span>
-                      <button onClick={()=> confirmRirSuggestion(stepRir(rirSuggest.value,1))} aria-label={`Increase suggested RIR for set ${si+1}`} className="min-h-11 min-w-11 grid place-items-center rounded-full border border-line bg-surface text-sm font-black">+</button>
-                    </div>
-                  )}
-                  </Fragment>
-                  );
-                })}
+                {b.sets.map((s,si)=> (
+                  <SetRow
+                    key={si}
+                    block={b}
+                    blockIndex={bi}
+                    set={s}
+                    setIndex={si}
+                    sessionId={session.id}
+                    gymMode={gymMode}
+                    unit={unit}
+                    supportsWeighted={supportsWeighted}
+                    rirSuggest={rirSuggest}
+                    confirmRirSuggestion={confirmRirSuggestion}
+                    updateSet={updateSet}
+                    adjustReps={adjustReps}
+                    completeSet={completeSet}
+                    markFailed={markFailed}
+                    removeSet={removeSet}
+                    openKeypad={openKeypad}
+                    commitProps={commitProps}
+                  />
+                ))}
                 {(supportsAssisted || b.unilateral) && b.sets.length>0 && (
                   <div className="grid grid-cols-2 gap-2">
                     {supportsAssisted && <label className="text-[11px]">Assisted {unit} off (all sets) <WeightInput value={b.sets[0]?.assistedKg||''} unit={unit} onChange={v=> { setBlocks(prev=> prev.map((blk,idx)=> idx!==bi?blk:{...blk, sets: blk.sets.map(x=> ({...x, assistedKg:v}))})); }} inputMode="decimal" placeholder={unit === 'lb' ? 'e.g. 20' : 'e.g. 10'} className="ml-1 rounded-lg border border-line bg-surface2 px-2 py-1 text-xs w-20" /></label>}
@@ -1022,25 +958,14 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           </div>
         )}
 
-        <section className="rounded-2xl border border-line bg-surface p-3 space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold">Session notes</span>
-            <span className="text-[11px] text-ink3">Optional, useful for next targets</span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {NOTE_PROMPTS.map(prompt=> <button key={prompt.id} onClick={()=> toggleNoteTag(prompt.id)} aria-pressed={noteTags.includes(prompt.id)} className={`text-xs font-semibold px-2.5 py-1.5 rounded-full border ${noteTags.includes(prompt.id)?'bg-ink text-bg border-ink':'bg-surface2 border-line'}`}>{prompt.label}</button>)}
-          </div>
-          <div role="group" aria-label="How did the session feel?" className="flex flex-wrap gap-1.5">
-            <span className="text-[11px] text-ink3 self-center mr-1">Session quality:</span>
-            {SESSION_QUALITY_OPTIONS.map(opt=> (
-              <button key={opt.id} onClick={()=>{ markUserEdited(); setQualityRating(q=> q===opt.id ? null : opt.id); }} aria-pressed={qualityRating===opt.id}
-                className={`text-xs font-semibold px-2.5 py-1.5 rounded-full border ${qualityRating===opt.id?'bg-ink text-bg border-ink':'bg-surface2 border-line'}`}>
-                {opt.emoji} {opt.label}
-              </button>
-            ))}
-          </div>
-          <textarea value={note} onChange={e=>{ markUserEdited(); setNote(e.target.value); }} rows={2} placeholder="What should change next time? Mention sleep, pain, technique, ROM, time or load." className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm" />
-        </section>
+        <SessionSummary
+          note={note}
+          noteTags={noteTags}
+          qualityRating={qualityRating}
+          onNoteChange={(value)=>{ markUserEdited(); setNote(value); }}
+          onToggleNoteTag={toggleNoteTag}
+          onQualityToggle={(id)=>{ markUserEdited(); setQualityRating(q=> q===id ? null : id); }}
+        />
 
       </div>
 
