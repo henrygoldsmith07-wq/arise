@@ -9,6 +9,7 @@ import { whyChoseBullets } from '../lib/trainSurface.js';
 import { buildEditorTemplate, moveItem, editorSubstitutionPreview } from '../lib/templateEditor.js';
 import { applyEquipmentAdaptation, duplicateCustomTemplate, fallbackProgrammeId, generateProgrammeFromProfile, installSharedTemplate, restoreCustomTemplate, saveCustomTemplate, softDeleteCustomTemplate, startProgramme } from '../services/programmeService.js';
 import ProgressionPreview from './ProgressionPreview.jsx';
+import { programShelf } from '../lib/programShelf.js';
 import { asUnit } from '../lib/units.ts';
 
 const EMPTY_DAY = { title: '', exercises: [{ exerciseId: '', sets: 3, reps: '8–12', restSec: 90 }] };
@@ -58,6 +59,22 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
     ()=> trainRecommendation({ onboarding: store.onboarding, customTemplates: store.customTemplates || [], history: store.history || [] }),
     [store.onboarding, store.customTemplates, store.history]
   );
+  // First-run shelf: ≤5 kit-surviving templates (the hero's pick first, then
+  // the next best), each with its swaps visible BEFORE start. The shelf is
+  // built by the scheduler's own substitution engine, so a card's swap list is
+  // exactly what Start will apply — and an empty kit is never offered a
+  // barbell programme.
+  const shelf = useMemo(
+    ()=> programShelf({ onboarding: store.onboarding, customTemplates: store.customTemplates || [], history: store.history || [], availableEquipment }),
+    [store.onboarding, store.customTemplates, store.history, availableEquipment]
+  );
+  const shelfAlternates = useMemo(()=> {
+    if(!shelf) return [];
+    const heroId = recommendation?.programId || recommendation?.template?.programId || null;
+    const rest = shelf.items.filter(item=> item.programId !== heroId);
+    // Hero occupies one shelf slot: alternates cap the offer at 5 total.
+    return (recommendation ? rest.slice(0, 4) : rest.slice(0, 5));
+  }, [shelf, recommendation]);
   // Secondary management surfaces start collapsed: the screen answers
   // "what should I train?" first, programme management second.
   const [browseOpen, setBrowseOpen] = useState(false);
@@ -72,6 +89,13 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
 
   const start = ()=>{
     const result = startProgramme({ store, programId, availableEquipment });
+    if(result.started) setStore(result.store);
+  };
+  // Shelf start: same path as the browse selection, with the selection state
+  // following the tap so Browse opens on the same programme.
+  const startShelfItem = (shelfProgramId)=>{
+    setProgramId(shelfProgramId);
+    const result = startProgramme({ store, programId: shelfProgramId, availableEquipment });
     if(result.started) setStore(result.store);
   };
 
@@ -282,6 +306,46 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
               )}
             </details>
           </div>
+        </section>
+      )}
+
+      {/* ── The rest of the shelf: ≤5 offers total, swaps visible first ── */}
+      {!active && shelfAlternates.length > 0 && (
+        <section className="space-y-2" aria-label="More programmes that fit">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Other good fits</p>
+          {shelfAlternates.map(item=> (
+            <div key={item.templateId} className="rounded-2xl border border-line bg-surface p-3 space-y-2">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold">
+                    {item.name}
+                    {item.isCustom && <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-surface2 border border-line text-ink3 align-middle">your template</span>}
+                  </p>
+                  <p className="text-[11px] text-ink3 tabular-nums">
+                    {item.level} • {item.daysPerWeek ? `${item.daysPerWeek}×/week` : 'flexible days'}{item.estimatedMinutes != null ? ` • ≈${item.estimatedMinutes} min` : ''}{item.weeks ? ` • ${item.weeks}-week cycle` : ''}
+                  </p>
+                </div>
+                <button onClick={()=> startShelfItem(item.programId)} className="btn btn-primary shrink-0 min-h-11 rounded-xl px-3 text-xs font-bold">Start</button>
+              </div>
+              {item.reasons[0] && <p className="text-[11px] text-ink3">{item.reasons[0]}</p>}
+              {/* Swaps are visible BEFORE start — the same list scheduling will
+                  apply, from the same engine. Nothing is decided invisibly. */}
+              {item.swapCount > 0 && (
+                <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+                  <summary className="text-[11px] font-bold cursor-pointer">{item.swapCount} swap{item.swapCount === 1 ? '' : 's'} for your kit — see them before you start</summary>
+                  <ul className="mt-1.5 space-y-1">
+                    {item.swaps.slice(0, 6).map((swap, i)=> (
+                      <li key={`${swap.from}-${i}`} className="text-[11px] text-ink2">
+                        {EXERCISE_BY_ID[swap.from]?.name || swap.from} → {EXERCISE_BY_ID[swap.to]?.name || swap.to}
+                        {swap.reason ? <span className="text-ink3"> — {swap.reason}</span> : null}
+                      </li>
+                    ))}
+                    {item.swapCount > 6 && <li className="text-[11px] text-ink3">…{item.swapCount - 6} more at schedule time</li>}
+                  </ul>
+                </details>
+              )}
+            </div>
+          ))}
         </section>
       )}
 
