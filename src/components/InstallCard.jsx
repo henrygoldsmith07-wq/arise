@@ -56,6 +56,8 @@ export default function InstallCard(){
             <li>Scroll and choose <span className="font-semibold text-ink">Add to Home Screen</span></li>
             <li>Tap <span className="font-semibold text-ink">Add</span> — Arise opens fullscreen like a native app</li>
           </ol>
+          {/* Honest iOS limits, stated where someone installs — not buried: */}
+          <p className="text-ink3">iOS notes: no vibration on iPhone; rest-timer sound can be silenced when the screen locks; the keep-screen-awake option needs iOS 16.4+ and is not yet verified on devices. Logging works fully offline either way.</p>
         </>
       ) : promptable ? (
         <>
