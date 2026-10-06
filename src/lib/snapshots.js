@@ -117,6 +117,7 @@ export function recomposeSnapshotPayload(payload){
     eventHistory: Array.isArray(p.events) ? p.events : [],
     readinessLog: readiness?.log ?? [],
     customTemplates: Array.isArray(p.templates) ? p.templates : [],
+    experiments: Array.isArray(p.experiments) ? p.experiments : [],
     tombstones: Array.isArray(p.tombstones) ? p.tombstones : [],
     evaluationLedger: [...ledgerMap.values()],
   };

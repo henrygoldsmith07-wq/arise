@@ -33,6 +33,7 @@
 import { buildExportPayload, parseImportFile, mergeStores, mergePortableHistories } from "./export.js";
 import { STORE_SCHEMA_VERSION, mergeCustomTemplates } from "./store.js";
 import { mergeEvaluationLedgers } from "./longitudinal.js";
+import { mergeExperiments } from "./trainingExperiments.js";
 import { mergeTombstones, applyTombstones, canonicalJson } from "./domain.js";
 
 
@@ -239,6 +240,7 @@ export function mergeStoresWithConflicts(current, imported){
     readinessLog: unionBy([...(imp.readinessLog||[]), ...(cur.readinessLog||[])], r=>`${r.dateISO}|${r.at||r.score}`).sort((a,b)=> String(a?.dateISO||'').localeCompare(String(b?.dateISO||''))),
     evaluationLedger: mergeEvaluationLedgers(cur.evaluationLedger, imp.evaluationLedger),
     customTemplates: applyTombstones(mergeCustomTemplates(cur.customTemplates, imp.customTemplates), tombstones, 'templates'),
+    experiments: mergeExperiments(cur.experiments, imp.experiments),
     programHistory: unionBy([...(imp.programHistory||[]), ...(cur.programHistory||[])], v=>`${v.programId}|${v.version}`),
     tombstones,
   };

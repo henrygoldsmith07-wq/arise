@@ -152,6 +152,17 @@
 // correctness infrastructure; revisit only by shipping less code, never more
 // budget.
 //
+// total 349 → 351 kB with the data-loss-protection pass: the once-per-device
+// persistent-storage request after the first logged session (storageQuota.js),
+// backup recency ("Last backup: N days ago", overdue at >14 days or >=10
+// sessions) shown in More plus a quiet Today nudge, and one-tap backup export
+// through navigator.share({ files }) with a download fallback (nativeShare.js
+// + backupService.exportFullBackup). This is the requested top-priority
+// durability work in small, lazily-loaded modules — not dependency growth and
+// not incidental code. Boot and largest-lazy budgets are UNCHANGED
+// (114.0 ≤ 120, 26.4 ≤ 34); measured total is 350.1, so ~1 kB of binding
+// headroom is retained above it.
+//
 
 // The budgets are regression bounds with headroom, not aspirations: a change
 // that crosses one must either undo the bloat or consciously re-baseline here
@@ -169,7 +180,16 @@ if(!fs.existsSync(dist)){
 
 const BOOT_BUDGET_KB = 120;
 const CHUNK_BUDGET_KB = 34;
-const TOTAL_BUDGET_KB = 349;
+// total 351 → 364 kB with the adaptive-programming product pass: the training
+// experiment engine (trainingExperiments.js, lazy via ProgressView), the
+// cross-exercise plateau investigation (plateauInvestigation.js, lazy), the
+// post-workout quality debrief (workoutQualityReport.js riding the lazy
+// workoutService chunk), and the why-changed explanation trail on the Today
+// hero — measured on the tree that also merges origin/main's XP/performance/
+// settings refactor, which restructured the boot chunk (boot 108.8) and adds
+// its own product code. All new feature logic is lazy-route; largest-lazy
+// 26.4 unchanged; measured total 363.4.
+const TOTAL_BUDGET_KB = 364;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

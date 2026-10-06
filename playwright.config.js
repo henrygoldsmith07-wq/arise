@@ -25,6 +25,10 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev -- --port 5187 --strictPort --host 127.0.0.1',
     url: 'http://127.0.0.1:5187',
+    // Inherit VITE_ARISE_INTEGRATIONS so `npm run e2e:integrations` gets a dev
+    // server that actually contains the integrations. The default run leaves it
+    // unset, matching the shipped build.
+    env: { ...process.env },
     // Never reuse an arbitrary process on the test port. Local multi-project
     // workspaces can otherwise point Arise's E2E suite at a different Vite app.
     reuseExistingServer: false,

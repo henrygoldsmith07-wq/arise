@@ -1,4 +1,7 @@
 // feedbackClassifier.js — conservative, opt-in classifier.dev adapter.
+// GATED TWICE: the hosted build compiles this integration out by default
+// (see integrations.js / VITE_ARISE_INTEGRATIONS), and the per-user consent
+// key below must also be on. Both gates must pass before anything is sent.
 // Scope: user-feedback categorisation, developer issue categorisation,
 // optional cloud AI-coach request routing (lane only, never prescription).
 // Non-goals: readinessClassifier, trainRecommendation, sessionGenerator,
@@ -6,6 +9,7 @@
 // imports them, and they never import it (enforced by tests).
 // Privacy: cloud-only opt-in, redacted + truncated input, no raw text in
 // telemetry/exports/logs, timeout/failure fallback to other, confidence gate.
+import { integrationEnabledByBuild } from './integrations.js';
 export const CLASSIFIER_ENDPOINT = 'https://classifier.dev';
 // CLASSIFIER_SETTINGS_KEY is the pre-split feedback consent key. It remains
 // readable for existing users, but it never grants coach-routing consent.
@@ -96,9 +100,11 @@ export function clearClassifierSettings(){
   try{ s?.removeItem(CLASSIFIER_COACH_ROUTING_SETTINGS_KEY); }catch{}
 }
 export function isFeedbackClassifierEnabled(){
+  if(!integrationEnabledByBuild()) return false;
   return getFeedbackClassifierSettings().enabled === true;
 }
 export function isCoachRoutingEnabled(){
+  if(!integrationEnabledByBuild()) return false;
   return getCoachRoutingSettings().enabled === true;
 }
 // Redaction: best-effort scrub before anything leaves the device. Callers

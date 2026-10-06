@@ -1,0 +1,2297 @@
+﻿
+> arise@0.1.0 verify
+> npm run lint:content && npm run lint:encoding && npm run type-check && npm run screenshots:check && npm run exercise-images:check && npm test && npm run build
+
+
+> arise@0.1.0 lint:content
+> node scripts/lint-content.mjs
+
+Content lint OK — exercises and programs valid.
+
+> arise@0.1.0 lint:encoding
+> node scripts/mojibake-gate.cjs
+
+Encoding gate passed — no mojibake in tracked text files.
+
+> arise@0.1.0 type-check
+> tsc --noEmit
+
+
+> arise@0.1.0 screenshots:check
+> node --check scripts/screenshots.mjs
+
+
+> arise@0.1.0 exercise-images:check
+> node scripts/generate-exercise-images.mjs --check
+
+exercise-images: generated registry is up to date
+Mapped: 295 / 370 Arise exercises have images
+Auto-aliases added: 0
+Package total: 302 · still unmatched: 7
+  unmatched: dumbbell-bench-press (Dumbbell Bench Press)
+  unmatched: hanging-leg-raise (Hanging Leg Raise)
+  unmatched: nordic-hamstring-curl (Nordic Hamstring Curl)
+  unmatched: bench-dip (Bench Dip)
+  unmatched: superman-hold (Superman Hold)
+  unmatched: forward-lunge (Forward Lunge)
+  unmatched: banded-row (Banded Row)
+
+> arise@0.1.0 test
+> node --test tests/*.test.js
+
+▶ a11y — live announcer scheduling
+  ✔ suppresses an immediate identical repeat, but re-announces later (0.972ms)
+  ✔ lets a different message through immediately after the global gap (0.1947ms)
+  ✔ collapses a rapid burst of different messages into one (0.194ms)
+  ✔ different keys do not wait on each other beyond the global gap (0.1845ms)
+  ✔ ignores empty messages (0.1538ms)
+✔ a11y — live announcer scheduling (3.1447ms)
+▶ a11y — focus trap wrap decision
+  ✔ wraps forward from the last element to the first (0.2373ms)
+  ✔ wraps backward from the first element to the last (0.1879ms)
+  ✔ leaves normal navigation alone (0.1584ms)
+  ✔ does nothing with no focusable elements (0.1809ms)
+✔ a11y — focus trap wrap decision (1.125ms)
+▶ aiCoachRoute uses the classifier only as semantic fallback
+  ✔ deterministic keyword rules fire without any network call (2.65ms)
+  ✔ feedback-or-bug intent is routed to the feedback pipeline by keywords (1.1889ms)
+  ✔ production router resolves the training, feedback, and explanation examples locally (1.6545ms)
+  ✔ classifier.dev is consulted only when keywords are silent (and not opted in) (0.6326ms)
+  ✔ when opted in, classifier.dev is consulted for an ambiguous prompt (1.1469ms)
+  ✔ cloud training-question routes to the deterministic engine lane, not a prescription (0.4127ms)
+  ✔ cloud failure falls back to clarify, never throws (0.6621ms)
+  ✔ exposes a constant feedback URL for the feedback-pipeline lane (0.5524ms)
+✔ aiCoachRoute uses the classifier only as semantic fallback (11.2651ms)
+▶ fitness engine modules never depend on the classifier
+  ✔ src/lib/readinessClassifier.js is free of classifier/cloud coupling (7.3753ms)
+  ✔ src/lib/trainRecommendation.js is free of classifier/cloud coupling (0.5072ms)
+  ✔ src/lib/sessionGenerator.js is free of classifier/cloud coupling (0.3ms)
+  ✔ src/lib/progression.js is free of classifier/cloud coupling (0.451ms)
+  ✔ src/lib/substitutions.js is free of classifier/cloud coupling (0.2939ms)
+  ✔ src/lib/safety.js is free of classifier/cloud coupling (0.3914ms)
+  ✔ src/lib/progressionModel.js is free of classifier/cloud coupling (0.4068ms)
+  ✔ src/lib/programming.js is free of classifier/cloud coupling (0.5246ms)
+  ✔ src/lib/mesocycle.js is free of classifier/cloud coupling (0.3308ms)
+✔ fitness engine modules never depend on the classifier (11.1397ms)
+▶ ai settings storage
+  ✔ keeps API keys session-only by default and clears both stores (2.8168ms)
+  ✔ persists a key only after explicit opt-in (0.3374ms)
+  ✔ migrates legacy persisted keys into session-only storage (0.2618ms)
+✔ ai settings storage (5.0972ms)
+▶ training context builder
+  ✔ averages only the recent readiness window (last-8 bug regression) (1.7962ms)
+  ✔ muscle balance uses the exercise database, not id prefixes (1.9642ms)
+  ✔ carries engine findings as authoritative decisions (98.4696ms)
+✔ training context builder (102.6057ms)
+▶ requestCoachInsight
+  ✔ sends the explanation-layer system prompt and engine findings payload (1.3195ms)
+  ✔ refuses without key/context before any network call (0.2188ms)
+  ✔ surfaces API errors and timeouts as soft failures (9.4959ms)
+✔ requestCoachInsight (12.0692ms)
+▶ analytics worker boundary
+  ✔ passes the real evaluation ledger into the worker (458.0343ms)
+✔ analytics worker boundary (459.1957ms)
+▶ core: config, flags, errors, container
+  ✔ config is frozen and pins the canonical versions (103.5412ms)
+  ✔ flags resolve defaults, preference overrides and typed gating (1.5582ms)
+  ✔ typed errors carry stable codes and user-safe messages (0.4709ms)
+  ✔ container resolves singletons, detects cycles, and swaps adapters (8.5389ms)
+✔ core: config, flags, errors, container (120.0968ms)
+▶ repository layer
+  ✔ exposes history through typed facades with NotFound and soft delete (48.5482ms)
+  ✔ templates, preferences and tombstone pruning round-trip (99.9513ms)
+  ✔ upsert normalises and persists atomically through the write path (2.0634ms)
+✔ repository layer (150.9306ms)
+▶ domain services
+  ✔ progression stays pure: service passthrough equals direct engine call (20.1304ms)
+  ✔ analytics, schedule and evidence read through repositories (3.1158ms)
+  ✔ import preview is read-only; apply merges through the service (117.4243ms)
+  ✔ sync is flag-gated and provider-typed (13.6657ms)
+✔ domain services (154.7894ms)
+▶ archive integrity
+  ✔ counts sessions without archive metadata (1.5137ms)
+  ✔ restores archived sessions and rebuilds flattened set mirrors (2.4411ms)
+  ✔ does not report set rows owned by archived sessions as orphaned (1.0484ms)
+  ✔ reports impossible calendar dates as invalid-date findings (8.9453ms)
+✔ archive integrity (16.3268ms)
+▶ primary Coaching Evidence uses assigned arms only
+  ✔ counts trained-under transitions per arm with ITT adherence (11.0199ms)
+✔ primary Coaching Evidence uses assigned arms only (22.2543ms)
+▶ shadow analysis cannot produce a causal headline
+  ✔ tags every shadow output causal:false with the exact label (17.0579ms)
+✔ shadow analysis cannot produce a causal headline (17.2891ms)
+▶ pooled assigned-arm aggregation
+  ✔ pools genuine assigned outcomes, folds repeats, excludes unconsented (91.5159ms)
+  ✔ withholds the read below gates and counts every exclusion (7.5626ms)
+✔ pooled assigned-arm aggregation (99.4404ms)
+▶ clustered uncertainty
+  ✔ is deterministic and needs ≥2 participants (2.3443ms)
+✔ clustered uncertainty (2.6441ms)
+▶ next-exposure comparison by treatment
+  ✔ splits follow-up performance by assigned arm (1.0004ms)
+✔ next-exposure comparison by treatment (1.2389ms)
+▶ timing values absent when sessionTimings=false
+  ✔ strips durations at write but keeps the action facts (4.6713ms)
+  ✔ persists durations when sessionTimings=true (0.3807ms)
+✔ timing values absent when sessionTimings=false (5.3435ms)
+▶ recommendation targets absent from telemetry
+  ✔ drops target text/load/rep keys even if a call site sends them (0.8579ms)
+✔ recommendation targets absent from telemetry (1.424ms)
+▶ action telemetry contains no load/reps/RIR values
+  ✔ commits only on blur-and-changed, never keystrokes (0.4409ms)
+  ✔ strips smuggled values from field-commit payloads (0.3335ms)
+✔ action telemetry contains no load/reps/RIR values (0.9562ms)
+▶ legacy telemetry degrades safely
+  ✔ aggregates old names into the same buckets with null timings (0.6995ms)
+✔ legacy telemetry degrades safely (0.8346ms)
+▶ attributes derive from history
+  ✔ empty history gives low base attrs (1.4124ms)
+  ✔ history raises attributes (0.6964ms)
+✔ attributes derive from history (4.1016ms)
+▶ point-in-time progression backtesting
+  ✔ validates the synthetic fixture and reports every requested evaluation family (834.2079ms)
+  ✔ does not change an historical recommendation when future rows are appended (805.7174ms)
+  ✔ does not use the future outcome row as the rep prescription (1867.3796ms)
+  ✔ uses as-of training age instead of wall-clock time (16.1233ms)
+  ✔ keeps sparse strata on priors instead of fabricating calibration (803.3132ms)
+  ✔ does not turn the empty real-history template into evidence (1.3674ms)
+✔ point-in-time progression backtesting (4330.5595ms)
+▶ full-backup state
+  ✔ uses a clean full-backup key instead of the historically contaminated export key (4.8659ms)
+  ✔ records only explicit successful full backups and reminder dismissal separately (1.116ms)
+  ✔ nudges after a week of training without a full backup (0.2955ms)
+  ✔ honours a recent full backup or reminder dismissal (1.6284ms)
+✔ full-backup state (95.7609ms)
+▶ backup download lifecycle
+  ✔ marks a plain backup only after download initiation succeeds (1.1863ms)
+  ✔ does not mark a failed plain backup (0.8374ms)
+  ✔ does not mark cancelled/invalid or failed encrypted backup attempts (1.2512ms)
+  ✔ marks an encrypted backup only after the encrypted file trigger succeeds (0.5944ms)
+✔ backup download lifecycle (8.8429ms)
+▶ 1. archive → full backup → wipe → restore
+  ✔ live history → archive old sessions → export → clear device → restore → all sessions present (127.5814ms)
+  ✔ encrypted backup path carries the same complete payload shape (0.8906ms)
+✔ 1. archive → full backup → wipe → restore (130.174ms)
+▶ 2. archive → sync → fresh device
+  ✔ WebDAV-style pull/push carries archived sessions to a fresh device (3.1196ms)
+✔ 2. archive → sync → fresh device (3.3084ms)
+▶ 3. atomic snapshot capture during concurrent save
+  ✔ a snapshot is one coherent point-in-time, never a mix of two saves (5.7286ms)
+✔ 3. atomic snapshot capture during concurrent save (5.9322ms)
+▶ 4-5. snapshot rollback validation and restoration
+  ✔ 4. corrupted snapshots are refused before any live store is modified (9.7918ms)
+  ✔ 5. a valid snapshot restores every canonical store (incl. archive/ledger/events) (107.8393ms)
+  ✔ recomposeSnapshotPayload mirrors hydration exactly (5.3481ms)
+✔ 4-5. snapshot rollback validation and restoration (123.6693ms)
+▶ 6-8. deterministic singleton sync
+  ✔ 6. active workout: newest legitimate updatedAt wins, both directions (0.3616ms)
+  ✔ 7. active schedule: explicit revision converges; adaptations bump it (2.2077ms)
+  ✔ 8. gymPrefs converge regardless of sync direction; presets merge per exercise (2.4934ms)
+✔ 6-8. deterministic singleton sync (5.3459ms)
+▶ 9-11. tombstone semantics
+  ✔ 9. newest tombstone wins in the canonical union (0.3715ms)
+  ✔ 10. tombstone entity isolation: same refId across two entity types (0.6266ms)
+  ✔ 11. edit-after-delete vs delete-after-edit (0.1776ms)
+✔ 9-11. tombstone semantics (1.3637ms)
+▶ 12. algebraic sync properties
+  ✔ idempotence: merge(A, A) == A over the portable subset (1.0139ms)
+  ✔ commutativity: merge(A, B) == merge(B, A) over the portable subset (1.0074ms)
+  ✔ convergence: A→B→A reaches a fixed point (1.7495ms)
+  ✔ convergence: A→B→C→A repeated cycles reach one fixed point (8.6574ms)
+✔ 12. algebraic sync properties (26.8704ms)
+▶ archive + tombstone interaction
+  ✔ archive → delete propagates; delete → archive attempt keeps the deletion (1.5902ms)
+  ✔ archive restored after a newer deletion respects the deletion (1.3876ms)
+  ✔ archived session updated on another device converges to live (no silent loss) (0.2291ms)
+✔ archive + tombstone interaction (3.5417ms)
+▶ 13-14. study safety and device-local fields
+  ✔ 13. conflicting study identities fail closed (refused, nothing merged) (0.5826ms)
+  ✔ 14. consent/credentials stay device-local through merge and push (0.4085ms)
+  ✔ portable preferences still converge on non-local keys (0.1311ms)
+✔ 13-14. study safety and device-local fields (1.2684ms)
+▶ recovery honesty: deletion preview and salvage cover archives
+  ✔ deletionPreview counts archived history; salvage rescues it (0.6098ms)
+✔ recovery honesty: deletion preview and salvage cover archives (0.7136ms)
+▶ import/replace determinism with archives
+  ✔ replace reconstructs the exact archive/live split; merge never duplicates (0.8442ms)
+✔ import/replace determinism with archives (0.9462ms)
+▶ evidence pipeline CI gate
+  ✔ benchmark/study.js runs to completion (4389.8696ms)
+  ✔ prints at least one conclusive segment line (0.3329ms)
+  ✔ never labels the synthetic corpus real evidence (#12) (0.1579ms)
+  ✔ readiness wiring produces high, low AND unknown buckets (fixture) (197.5102ms)
+  ✔ readiness trio: prior high, prior low and unknown all occur (#4) (13.402ms)
+✔ evidence pipeline CI gate (4602.8688ms)
+▶ deterministic engine imports nothing cloudy
+  ✔ src/lib/readinessClassifier.js has no classifier/fetch/network import (2.411ms)
+  ✔ src/lib/trainRecommendation.js has no classifier/fetch/network import (0.45ms)
+  ✔ src/lib/sessionGenerator.js has no classifier/fetch/network import (0.3079ms)
+  ✔ src/lib/progression.js has no classifier/fetch/network import (0.5901ms)
+  ✔ src/lib/substitutions.js has no classifier/fetch/network import (0.404ms)
+  ✔ src/lib/safety.js has no classifier/fetch/network import (0.4288ms)
+  ✔ the classifier adapter imports no training-engine module (0.4598ms)
+✔ deterministic engine imports nothing cloudy (6.7668ms)
+▶ engine outputs are identical with classifier on/off/unreachable
+  ✔ progression + readiness + session + recommendation are bit-identical (594.0597ms)
+✔ engine outputs are identical with classifier on/off/unreachable (594.3806ms)
+▶ aggregation
+  ✔ exerciseSummaries computes best sets and volume per exercise (1.1379ms)
+  ✔ sinceISO limits the window (1.0908ms)
+  ✔ weeklyVolume buckets Monday-based weeks, oldest last (77.9186ms)
+✔ aggregation (81.7471ms)
+▶ section gating
+  ✔ default export carries summary + no sensitive sections (0.4858ms)
+  ✔ readiness only travels when explicitly ticked, scores only (0.3527ms)
+  ✔ full detail includes per-session sets only when ticked (0.2898ms)
+✔ section gating (1.4705ms)
+▶ privacy properties
+  ✔ coach export never carries credentials, device or study ids (0.3723ms)
+✔ privacy properties (0.595ms)
+▶ markdown rendering
+  ✔ renders a readable summary of the picked sections (0.6809ms)
+  ✔ omits unticked sections from the markdown too (0.9554ms)
+✔ markdown rendering (1.9031ms)
+▶ partial exports
+  ✔ history-only export parses and carries no preferences (2.8031ms)
+  ✔ settings-only export carries preferences (minus device-local sync) but no history (0.3981ms)
+  ✔ unknown kind is rejected loudly (0.4749ms)
+✔ partial exports (3.8923ms)
+▶ recommendation outcome labels
+  ✔ exposes the five conservative labels (9.9898ms)
+  ✔ a met, non-easy increase that was followed is successful (0.4964ms)
+  ✔ a missed target after an attempted increase is too-aggressive (1.1918ms)
+  ✔ a regression after an increase is too-aggressive (0.254ms)
+  ✔ a failed set on a progression attempt is too-aggressive (0.1948ms)
+  ✔ an easy, unaggressive gain is too-conservative (0.4109ms)
+  ✔ a hold that still gained is too-conservative (0.1919ms)
+  ✔ an unfollowed or unknown-adherence prescription is NOT punished (0.4494ms)
+  ✔ a pain or technique session is neutral and not attempted (engine not graded) (1.0463ms)
+  ✔ an unresolved record is insufficient-evidence (0.6849ms)
+✔ recommendation outcome labels (17.3571ms)
+▶ prospective-only evidence gate
+  ✔ live-engine records with a live outcome count; reconstructed ones never do (0.3238ms)
+  ✔ confidence band and recommendation type read from the frozen audit (1.061ms)
+✔ prospective-only evidence gate (2.714ms)
+▶ shrinkage toward safe defaults
+  ✔ a single success barely moves off the default prior (6.4529ms)
+  ✔ a large sample converges to the empirical rate (0.1443ms)
+  ✔ zero samples returns the prior with no weight (0.1083ms)
+✔ shrinkage toward safe defaults (6.9013ms)
+▶ recommendation calibration aggregation
+  ✔ counts only prospective, resolved pairs and reports withheld segments honestly (3.9118ms)
+  ✔ a conclusive segment reports success + over/under rates and a bounded calibration error (0.9993ms)
+  ✔ segments by exercise, category, policy, experience, type and band (94.1849ms)
+  ✔ empty ledger yields an honest "not yet" state, not a fabricated 0% (0.6218ms)
+  ✔ is deterministic across repeated aggregation (0.8289ms)
+✔ recommendation calibration aggregation (100.8473ms)
+▶ conservative personalisation learned from logged history only
+  ✔ sparse history keeps the default stance (never learns from a couple sessions) (1.2232ms)
+  ✔ repeated over-prescription shrinks future jumps (0.5054ms)
+  ✔ repeated easy, successful gains nudge progression slightly bolder (bounded) (0.4763ms)
+  ✔ pain/technique exposures are not used to personalise (0.3265ms)
+  ✔ respects the prior-only cut (asOfDateISO) (0.3131ms)
+  ✔ is deterministic (0.408ms)
+✔ conservative personalisation learned from logged history only (3.6534ms)
+▶ prospective → outcome end-to-end through the real recorder
+  ✔ a met increase attaches label=successful and flows into calibration (23.9412ms)
+  ✔ an imported recommendation is excluded from prospective calibration (39.962ms)
+  ✔ legacy rows without provenance are not counted as prospective (0.34ms)
+✔ prospective → outcome end-to-end through the real recorder (64.4571ms)
+▶ attempt adherence is recorded separately from target achievement
+  ✔ correct load + missed reps → followed, gradeable, too-aggressive (25×8 shown, 25×6 done) (41.0305ms)
+  ✔ correct assistance + missed reps → followed and gradeable (24.8563ms)
+  ✔ bodyweight rep miss → followed and gradeable (performing counts as an attempt) (6.769ms)
+  ✔ wrong load (20×8 vs 25×8) → unfollowed and non-gradeable (10.4735ms)
+  ✔ an explicit manual override → followed=false, non-gradeable, never graded (4.5181ms)
+  ✔ a failed set at the prescribed setup is gradeable and counts in the denominator (76.7418ms)
+  ✔ met target stays successful with the setup rule (5.1962ms)
+✔ attempt adherence is recorded separately from target achievement (170.0473ms)
+▶ coachingCalibration presentation layer
+  ✔ is honest and inactive before the prospective sample clears the gate (0.5924ms)
+  ✔ becomes active and states a tendency once conclusive (0.5863ms)
+  ✔ survives reload/export round-trip identically (provenance + outcome labels ride through) (0.7965ms)
+✔ coachingCalibration presentation layer (2.1606ms)
+▶ shown recommendation == recorded prospective record (no recompute)
+  ✔ a conservative-policy target is stored exactly, not recomputed (18.087ms)
+  ✔ an aggressive-policy target is stored exactly (never re-derived by the engine) (70.5538ms)
+  ✔ a personal-calibration adjustment is persisted on the record (18.4627ms)
+✔ shown recommendation == recorded prospective record (no recompute) (107.337ms)
+▶ gradeable vs non-gradeable outcomes
+  ✔ a manual override is never graded or used to personalise (4.5813ms)
+  ✔ a skipped / unfollowed recommendation is resolved but not gradeable (0.3108ms)
+  ✔ pain or technique makes a met attempt non-gradeable (0.3805ms)
+  ✔ 5 resolved but only 1 gradeable keeps calibration inactive (0.5053ms)
+  ✔ calibration error is computed from gradeable rows only (0.4503ms)
+✔ gradeable vs non-gradeable outcomes (7.1787ms)
+▶ personalisation ignores overridden and ungradeable exposures
+  ✔ overridden exposures do not count toward the sample (0.499ms)
+  ✔ a run that is majority overridden never activates (0.7611ms)
+  ✔ without overrides, 6 missed increases still activate caution (regression guard) (0.4457ms)
+  ✔ genuine failed attempts at the shown setup still teach (never silently dropped) (1.5105ms)
+✔ personalisation ignores overridden and ungradeable exposures (5.0833ms)
+▶ cohort ops: ingestion folds repeated exports into one participant
+  ✔ two exports of the same id merge — sessions union, never duplicated (87.7711ms)
+  ✔ distinct ids stay distinct people (2.9201ms)
+  ✔ byte-identical duplicate files are counted, not merged twice (8.9697ms)
+  ✔ malformed participant ids are detected and routed to the unidentified pool (127.4623ms)
+  ✔ conflicting records between exports are reported, never silently overwritten (4.942ms)
+  ✔ impossible arm changes are detected and the earliest frozen assignment wins (3.3736ms)
+  ✔ study-version mismatches warn (0.8332ms)
+  ✔ invalid files are counted as import errors, not silently dropped (0.5477ms)
+✔ cohort ops: ingestion folds repeated exports into one participant (239.5735ms)
+▶ cohort ops: cohort summary
+  ✔ totals, lifecycle and arm balance (1.9837ms)
+  ✔ withdrawn participants are counted as withdrawn, not active (3.0697ms)
+  ✔ never ranks treatments while gates are unmet — report says so explicitly (2.8128ms)
+  ✔ gate passes only when participants, transitions AND per-arm counts clear (14.8596ms)
+  ✔ data-quality warnings surface per participant (0.6147ms)
+  ✔ logging-friction completeness reports both tiers (0.3869ms)
+  ✔ unresolved recommendations are listed, not lost (0.4843ms)
+  ✔ contribution balance: one workhorse plus ghosts shows high concentration (0.6823ms)
+  ✔ report is deterministic (same inputs → same markdown) (70.0631ms)
+  ✔ empty cohort renders honestly with zero everything (0.3574ms)
+✔ cohort ops: cohort summary (96.1336ms)
+▶ cohort ops: unconsented exports stay out of product-success pooling
+  ✔ product-success counts exclusions instead of averaging them in (5.5239ms)
+✔ cohort ops: unconsented exports stay out of product-success pooling (5.6436ms)
+▶ cohort integrity: contributor gates, exhaustive conflicts, unresolved starts
+  ✔ 9 non-contributors + 1 contributor: the participant gate counts ONE, never the enrolled nine (1.2368ms)
+  ✔ per-arm contributor counts split by assigned arm (0.5945ms)
+  ✔ unconsented people with valid rows are still not contributors (0.4702ms)
+  ✔ same session id with different reps/load/exercise is an exhaustive conflict (4.177ms)
+  ✔ same-id history with identical content but reordered keys is NOT a conflict (1.4242ms)
+  ✔ a conflicting event row is reported, not dropped (2.3374ms)
+  ✔ duplicate detection is byte-exact: near-identical payloads are NOT duplicates (1.9136ms)
+  ✔ started-but-unresolved workouts appear as missing outcomes with n (3.3952ms)
+  ✔ repeated exports stay deterministic: same files twice → identical reports (3.8189ms)
+✔ cohort integrity: contributor gates, exhaustive conflicts, unresolved starts (20.0216ms)
+▶ credential hygiene
+  ✔ keeps AI and WebDAV credentials out of exports and support diagnostics (75.2668ms)
+✔ credential hygiene (76.5331ms)
+▶ cross-tab invalidation transport
+  ✔ BroadcastChannel sends only small invalidation messages between tabs (1.6802ms)
+  ✔ falls back to storage pulses when BroadcastChannel is unavailable (0.5964ms)
+  ✔ close detaches a tab and reopen receives later changes (0.2854ms)
+✔ cross-tab invalidation transport (4.0436ms)
+▶ cross-tab refresh coordinator
+  ✔ tab A workout completion updates idle tab B without reload (8.5558ms)
+  ✔ preference changes refresh an idle peer (1.2078ms)
+  ✔ protects an active workout and applies the deferred refresh after it ends (39.7158ms)
+  ✔ coalesces rapid consecutive updates and finishes on the latest canonical state (83.0567ms)
+✔ cross-tab refresh coordinator (138.6729ms)
+▶ cross-tab three-way persistence reconciliation
+  ✔ returns local unchanged when no remote snapshot exists (0.7665ms)
+  ✔ merges from an empty base without dropping independent nested fields (0.5947ms)
+  ✔ draft autosave preserves a preference changed by another tab (0.31ms)
+  ✔ preserves concurrent history additions from both tabs (0.3996ms)
+  ✔ keeps a local preference edit when remote did not change that field (0.1639ms)
+  ✔ preserves an intentional local collection deletion when remote is unchanged (0.2133ms)
+  ✔ keeps a remote edit when local deletes a row that changed remotely (0.1581ms)
+  ✔ keeps a local edit when remote deletes a row that changed locally (0.1294ms)
+  ✔ lets an unchanged side yield to a changed side for the same row (0.2212ms)
+  ✔ uses the newer timestamp when both tabs edit the same entity (0.1797ms)
+  ✔ keeps local deterministically when conflicting edits have equal or unusable timestamps (0.1651ms)
+  ✔ honours one-sided unchanged deletions in either direction (0.2126ms)
+  ✔ uses updatedAt, at, and dateISO fallbacks when savedAt is absent (0.3251ms)
+  ✔ keeps evidence rows monotonic across tabs and prefers resolved outcomes (0.2917ms)
+  ✔ merges entity collections even when there was no prior durable base (0.2336ms)
+  ✔ takes the highest schema version while preserving merged collections (0.2687ms)
+  ✔ treats absent collections as empty and ignores rows without a stable identity (0.2039ms)
+  ✔ uses every composite identity field for readiness and programme history (0.249ms)
+  ✔ merges every entity collection by its documented stable identity (0.287ms)
+  ✔ merges nested objects field-by-field but lets local win irreducible scalar conflicts (0.2739ms)
+✔ cross-tab three-way persistence reconciliation (7.1193ms)
+▶ custom templates — engine integration
+  ✔ appear in listings alongside built-ins (1.9677ms)
+  ✔ instantiate with an embedded programme produces dated sessions (2.442ms)
+  ✔ swaps exercises the kit cannot support during instantiation (29.5169ms)
+  ✔ scheduleProgram honours an inline programme override (0.2702ms)
+  ✔ recommendTemplate ranks customs with the same kit-honest scoring (1.4276ms)
+  ✔ templateVersionInfo reports custom versions without changelog history (1.3384ms)
+  ✔ unknown custom ids fail loudly, not silently (0.3718ms)
+✔ custom templates — engine integration (39.303ms)
+▶ custom templates — persistence
+  ✔ mergeCustomTemplates prefers newer edits (0.5389ms)
+  ✔ rides inside export payloads and survives import allowlist + merges (4.0428ms)
+  ✔ a hand-edited backup without customTemplates still imports cleanly (1.2334ms)
+✔ custom templates — persistence (6.5511ms)
+▶ data lifecycle service
+  ✔ waits for queued persistence before clearing canonical device data (1.9978ms)
+  ✔ still clears device data when the prior persistence queue already failed (0.3619ms)
+  ✔ owns integrity notice and persistent-storage browser operations (0.5561ms)
+✔ data lifecycle service (4.4222ms)
+▶ storage diagnostics service
+  ✔ builds one persisted-state inspection snapshot (0.6919ms)
+  ✔ awaits persistence after destructive maintenance operations (0.3338ms)
+✔ storage diagnostics service (1.3073ms)
+▶ arise data
+  ✔ validates (3.6357ms)
+  ✔ library has grown past the starter set and every exercise carries tags (0.7199ms)
+  ✔ tag vocabulary covers real browsing needs (0.8297ms)
+  ✔ searchExercises filters by single tag and by tag combinations (0.4081ms)
+  ✔ searchExercises filters by muscle (0.2682ms)
+  ✔ only-my-kit gates correctly (0.4073ms)
+  ✔ recommendations change with equipment (7.5587ms)
+  ✔ availablePrograms filters by kit (0.2997ms)
+  ✔ scheduleProgram creates dated sessions (1.8373ms)
+✔ arise data (17.9122ms)
+▶ date-only utilities
+  ✔ formats a local calendar date without converting through UTC (2.0289ms)
+  ✔ handles positive UTC offsets across local midnight (1.4847ms)
+  ✔ handles negative UTC offsets across local midnight (0.246ms)
+  ✔ keeps date-only arithmetic stable across DST boundary dates (0.6989ms)
+  ✔ rejects timestamps where a date-only domain value is required (0.7592ms)
+  ✔ fails closed for invalid local-date and offset inputs (0.4521ms)
+  ✔ requires the complete YYYY-MM-DD shape, not a matching substring (0.2089ms)
+  ✔ rejects impossible calendar dates instead of accepting Date.parse normalisation (0.6391ms)
+✔ date-only utilities (8.881ms)
+▶ linear regression intervals
+  ✔ flat series has a flat fitted trend and zero-width confidence interval (0.7998ms)
+  ✔ perfect linear growth fits exactly (0.3483ms)
+  ✔ noisy linear growth has finite confidence intervals (0.2232ms)
+  ✔ does not invent intervals for very small samples (0.1824ms)
+  ✔ outliers expand residual uncertainty instead of being hidden (0.1745ms)
+  ✔ malformed workout rows are ignored by the e1RM series (0.3877ms)
+✔ linear regression intervals (2.5789ms)
+▶ domain schemas and branded IDs
+  ✔ accepts a valid session and exposes branded id schemas (12.5301ms)
+  ✔ rejects sessions with unparseable dates or broken blocks (1.1344ms)
+  ✔ coerces numeric set fields from imported files to the canonical string form (0.5218ms)
+✔ domain schemas and branded IDs (15.5571ms)
+▶ write-time normalisation
+  ✔ normalises, tags and drops unreadable entries with a count (0.9472ms)
+  ✔ never resurrects a soft-deleted row while normalising (0.3608ms)
+✔ write-time normalisation (1.6294ms)
+▶ versioned export contract
+  ✔ builds an envelope with app, schema and device metadata (1.1336ms)
+  ✔ adapts pre-contract, gzip and bare-store files to the current envelope (0.833ms)
+  ✔ the real export payload carries the contract and round-trips through parseImportFile (59.8205ms)
+✔ versioned export contract (62.2794ms)
+▶ dangerous-field policy
+  ✔ strips consent toggles and unknown keys, keeps study/health portability (2.8621ms)
+  ✔ keeps every allow-listed key available to imports (0.9483ms)
+✔ dangerous-field policy (4.0171ms)
+▶ import preview and conflicts
+  ✔ previews counts, additions and conflicts without mutating anything (1.0959ms)
+  ✔ flags contract-unrecognised files honestly but still previews them (0.4518ms)
+  ✔ merge keeps the current copy on conflicts and unions tombstones (1.405ms)
+✔ import preview and conflicts (3.2634ms)
+▶ provenance and source tags
+  ✔ stamps provenance with origin, time and device (0.494ms)
+  ✔ tags records with a valid data source without clobbering (0.1802ms)
+✔ provenance and source tags (0.8041ms)
+▶ soft delete and tombstones
+  ✔ marks, detects and un-deletes records (0.1926ms)
+  ✔ creates well-formed tombstones and applies them with edit-wins semantics (0.2443ms)
+  ✔ sync merge applies tombstones to history and templates (1.3502ms)
+✔ soft delete and tombstones (1.9387ms)
+▶ validator coheres with the schema
+  ✔ validateStoreData accepts what sessionSchema accepts for canonical rows (0.3342ms)
+✔ validator coheres with the schema (0.4192ms)
+▶ atomic persistence
+  ✔ a full save round-trips through the transaction layer (168.336ms)
+  ✔ a throwing write aborts the whole transaction and changes nothing (3.0999ms)
+  ✔ clearAllStoredData empties every store, and nothing resurrects (6.5637ms)
+  ✔ demo-style clearing preserves an explicit safety snapshot only (1.7972ms)
+✔ atomic persistence (181.5465ms)
+▶ boot integrity: validate, quarantine, repair
+  ✔ a healthy store passes validation untouched (0.7768ms)
+  ✔ a broken recomposition is detected, quarantined and repaired (1.6462ms)
+  ✔ per-row salvage keeps readable history rows and drops only the broken one (0.6143ms)
+✔ boot integrity: validate, quarantine, repair (3.4643ms)
+▶ storage quota health
+  ✔ reports a health level without a real StorageManager (fail-soft) (0.6559ms)
+✔ storage quota health (1.545ms)
+▶ encrypted backups
+  ✔ is available under node webcrypto and round-trips (2094.0493ms)
+  ✔ a wrong passphrase fails authentication with a clear error (1491.106ms)
+  ✔ rejects files that are not arise encrypted backups (0.609ms)
+  ✔ tampering with the ciphertext breaks authentication (AAD binds the header) (1652.2042ms)
+✔ encrypted backups (5238.7255ms)
+▶ support diagnostics
+  ✔ summarises shape without leaking any record contents (6.6206ms)
+  ✔ builds a full bundle with platform info and no training data (10.304ms)
+  ✔ tolerates broken stores (0.6082ms)
+✔ support diagnostics (28.4734ms)
+▶ salvage export
+  ✔ rescues intact rows and counts dropped ones without throwing (1.1364ms)
+  ✔ builds a salvage envelope, or null when nothing survives (0.3158ms)
+✔ salvage export (1.8042ms)
+▶ quota guard
+  ✔ prompts once per escalation level and never nags twice (0.5259ms)
+  ✔ treats unknown health as write-safe (fail-soft) (0.1918ms)
+✔ quota guard (1.0562ms)
+▶ share codes
+  ✔ round-trips a template through a URI-safe code (1.9907ms)
+  ✔ rejects truncated, junk, and tampered codes loudly (0.8224ms)
+  ✔ carries only the template definition — never history or ids (0.2704ms)
+✔ share codes (3.4589ms)
+▶ voice input parsing
+  ✔ parses spoken loads and reps including decimals (5.9163ms)
+  ✔ treats a lone number as reps and rejects noise (0.2237ms)
+✔ voice input parsing (6.3023ms)
+▶ app CSV importers
+  ✔ maps loose columns, delimiters and lb units into portable rows (1.2717ms)
+  ✔ handles headerless comma CSVs (0.2163ms)
+  ✔ expands a set-count column when headers name it (0.4047ms)
+  ✔ resolves names via catalogue when provided (0.1474ms)
+  ✔ groups parsed rows into day-level history entries (171.7242ms)
+✔ app CSV importers (174.6408ms)
+▶ printable report
+  ✔ renders an aggregate HTML document from real history (3.9415ms)
+  ✔ includes set detail only when requested (1.9722ms)
+✔ printable report (6.3778ms)
+▶ units.ts slice
+  ✔ keeps the formatter contract identical after the TS migration (0.1679ms)
+✔ units.ts slice (0.4664ms)
+▶ mojibake detection
+  ✔ flags the classic UTF-8-as-CP1252 sequences with their repairs (2.2153ms)
+  ✔ leaves legitimate non-ASCII untouched (0.2257ms)
+  ✔ the repository passes the encoding gate (4572.6053ms)
+✔ mojibake detection (4582.7956ms)
+▶ indexed queries, pagination and lazy loading
+  ✔ a save decomposes history into queryable stores (127.5279ms)
+  ✔ pages sessions newest-first with a lazy-loading cursor (0.7218ms)
+  ✔ answers by exercise, session and date without loading history wholesale (1.4277ms)
+✔ indexed queries, pagination and lazy loading (131.3845ms)
+▶ archive mode and event pruning
+  ✔ archives sessions older than the cutoff and restores them (1.9137ms)
+  ✔ prunes stale telemetry but keeps migration logs (0.7495ms)
+✔ archive mode and event pruning (2.9501ms)
+▶ automatic snapshots and rollback
+  ✔ captures a restorable snapshot and rolls the stores back to it (2.7341ms)
+✔ automatic snapshots and rollback (3.7001ms)
+▶ data hygiene audit and repair
+  ✔ detects duplicate sets, orphans, invalid dates and impossible values (1.2973ms)
+  ✔ repairs every detected class atomically and comes out clean (1.5865ms)
+  ✔ does not flag empty (unlogged) values as impossible (0.4375ms)
+✔ data hygiene audit and repair (3.7428ms)
+▶ migration dry-run, logs and failure recovery
+  ✔ dry-run reports the destination version without touching the payload (0.9537ms)
+  ✔ migrateWithLogging migrates and appends a durable log row (0.3757ms)
+✔ migration dry-run, logs and failure recovery (1.4787ms)
+▶ compressed exports
+  ✔ compresses large payloads into a versioned envelope and round-trips (1132.0971ms)
+  ✔ passes small or incompressible payloads through as plain JSON (1.9021ms)
+✔ compressed exports (1134.3471ms)
+▶ prior-only invariant (hard): no future data in point-in-time decisions
+  ✔ recommendNext never sees the future (95 kg tell stays invisible) (130.2265ms)
+  ✔ recommendNextWithModel honours the cut (229.0224ms)
+  ✔ recommendNextWithPolicy honours the cut (32.7214ms)
+  ✔ noisy flags are judged as of the cut, not the true last session (0.5256ms)
+  ✔ computeArms (ledger snapshots) honours the cut (93.7916ms)
+  ✔ ledger records freeze a prior-only recommendation even when handed the full future (8.3735ms)
+  ✔ backtest replay is leakage-safe on a clean fixture (316.1413ms)
+  ✔ benchmark study script runs to completion from the repo root (7581.974ms)
+✔ prior-only invariant (hard): no future data in point-in-time decisions (8395.5991ms)
+▶ edge-case fixture packs survive the whole pipeline
+  ✔ exposes exactly the eight documented packs (0.5266ms)
+  ✔ pack/missing-data: backtest, point-in-time recommendation and study all execute (378.2519ms)
+  ✔ pack/noisy-data: backtest, point-in-time recommendation and study all execute (301.9917ms)
+  ✔ pack/long-layoff: backtest, point-in-time recommendation and study all execute (942.565ms)
+  ✔ pack/mixed-equipment: backtest, point-in-time recommendation and study all execute (130.3884ms)
+  ✔ pack/contradictory-readiness: backtest, point-in-time recommendation and study all execute (267.6189ms)
+  ✔ pack/duplicate-records: backtest, point-in-time recommendation and study all execute (102.0324ms)
+  ✔ pack/corrupted-recoverable: backtest, point-in-time recommendation and study all execute (19.7495ms)
+  ✔ missing-data: blank/empty/absent rows never crash and never prescribe off garbage (3.5185ms)
+  ✔ noisy-data: the pain + short + missed session is held, not progressed into (2.6765ms)
+  ✔ long-layoff: return prescriptions stay below pre-break loads (97.8306ms)
+  ✔ mixed-equipment: dumbbell and machine rows never cross-contaminate the barbell chain (11.9238ms)
+  ✔ contradictory-readiness: readiness and performance disagree without crashing the study (14.1817ms)
+  ✔ duplicate-records: the replay tolerates exact and shuffled duplicates (153.0656ms)
+  ✔ corrupted-recoverable: string numbers parse, impossible values are refused, garbage tail never informs (8.6523ms)
+  ✔ fixtures are deterministic: same pack, same bytes (5.4212ms)
+✔ edge-case fixture packs survive the whole pipeline (2442.3015ms)
+▶ priors/policy version freeze
+  ✔ priors carry a version and the benchmark corpus stays pinned to it (0.8561ms)
+✔ priors/policy version freeze (1.0167ms)
+▶ evidence metrics from synthesised ledger records
+  ✔ acceptance splits followed vs rejected with unknowns never counted (35.0687ms)
+  ✔ adherence reports deviation stats over resolved records only (151.0875ms)
+  ✔ agreement counts met-when-followed and classifications (12.9052ms)
+  ✔ calibration buckets by confidence band; legacy rows land in none (91.8147ms)
+  ✔ overshoot flags followed progressions that failed (13.0543ms)
+  ✔ deload usefulness and plateau resolution read the same record honestly (13.1884ms)
+  ✔ dashboard gates by sample size and renders the Markdown report (140.2351ms)
+  ✔ band thresholds: 2 insufficient, 3 emerging, 8 consistent, 20 high (0.1873ms)
+✔ evidence metrics from synthesised ledger records (460.4932ms)
+▶ ledger hygiene: archiving and the no-feedback invariant
+  ✔ archive append + count round-trips resolved records (20.5567ms)
+  ✔ NO-FEEDBACK: recommendations never read the evaluation ledger (176.5027ms)
+✔ ledger hygiene: archiving and the no-feedback invariant (197.3669ms)
+▶ benchmark hardening gates
+  ✔ determinism script passes on the shipped fixture (18332.6862ms)
+  ✔ threshold gate passes on the shipped fixture (12835.0574ms)
+  ✔ artifact compare passes against the committed baseline (10946.5832ms)
+  ✔ artifact carries corpus hash and priors version (0.5744ms)
+✔ benchmark hardening gates (42115.4884ms)
+▶ compact exercise illustration registry
+  ✔ keeps the complete mapped coverage with a fixed three-frame contract (130.4565ms)
+  ✔ preserves curated aliases while using canonical Arise metadata (0.5847ms)
+  ✔ retains upstream-only metadata needed by the exercise browser (0.2758ms)
+  ✔ returns null/empty metadata for unmapped Arise exercises (1.4613ms)
+✔ compact exercise illustration registry (135.5204ms)
+▶ exercise teaching covers every library exercise
+  ✔ all 8 sections exist and are non-empty for every exercise (5.2095ms)
+  ✔ curated overrides cover the core lifts and all exist in the library (0.2852ms)
+  ✔ regressions/progressions/variations only reference real exercises (4.0845ms)
+  ✔ core lifts have level-honest difficulty directions (0.3947ms)
+✔ exercise teaching covers every library exercise (11.4876ms)
+▶ teaching content stays practical coaching, never medical advice
+  ✔ no medical or treatment language anywhere in derived text (187.3388ms)
+  ✔ unknown ids yield null, not fabricated teaching (0.2387ms)
+  ✔ curated breath/safety lines make up a real share of the core library (0.2582ms)
+✔ teaching content stays practical coaching, never medical advice (188.1976ms)
+▶ exercise taxonomy — derived classification
+  ✔ classifies EVERY exercise with pattern, stability, fatigue and joint stress (157.7861ms)
+  ✔ keeps curated patterns authoritative and derives the rest (0.4044ms)
+  ✔ assigns higher fatigue cost to big compounds than to isolation work (0.1936ms)
+  ✔ treats low-impact and machine paths as joint-friendly, explosive work as stressful (0.1837ms)
+  ✔ rates machines and supported setups lower stability than free unilateral work (0.1709ms)
+✔ exercise taxonomy — derived classification (161.249ms)
+▶ grouped alternatives over the substitution graph
+  ✔ offers the declared kinds and returns only graph members (0.4195ms)
+  ✔ filters each kind correctly for a known exercise (0.2428ms)
+  ✔ returns empty (not errors) for kinds with no matches (4.4547ms)
+✔ grouped alternatives over the substitution graph (5.6078ms)
+▶ aliases and deprecation
+  ✔ search matches aliases as well as names (1.5075ms)
+  ✔ deprecates the near-duplicate rows and resolves them to replacements (0.4134ms)
+  ✔ hides deprecated rows from browsing and substitution pools (17.1441ms)
+✔ aliases and deprecation (19.6941ms)
+▶ content lint expansion
+  ✔ hard errors stay zero (reciprocity, aliases, deprecation, presets) (3.028ms)
+  ✔ preset equipment ids all exist and include bodyweight (0.3595ms)
+  ✔ reports the missing-reachable-fallback warnings as a separate queue (1.0978ms)
+✔ content lint expansion (4.7093ms)
+▶ unit display (kg/lb localization)
+  ✔ round-trips conversions (0.2377ms)
+  ✔ formats canonical kg values in the chosen display unit (0.3935ms)
+✔ unit display (kg/lb localization) (0.7999ms)
+▶ export / import
+  ✔ round-trips and merges (126.1409ms)
+  ✔ rejects non-json (0.3481ms)
+  ✔ validates malformed history before migration (0.561ms)
+  ✔ rejects impossible calendar dates in imported history (0.3668ms)
+  ✔ round-trips portable Gym Mode preferences and keeps current values on merge (0.8331ms)
+  ✔ merges event history and optional health summary (0.383ms)
+✔ export / import (130.1911ms)
+▶ classifier settings default off
+  ✔ disabled by default and round-trips (2.185ms)
+  ✔ legacy feedback consent never grants new coach-routing consent (0.3706ms)
+✔ classifier settings default off (4.382ms)
+▶ redaction and taxonomy
+  ✔ redacts emails phones secrets and truncates (1.5966ms)
+  ✔ taxonomy pins the required labels with other last (0.3435ms)
+✔ redaction and taxonomy (2.2352ms)
+▶ opt-in gating and local fallback
+  ✔ disabled path never fetches and uses local keywords (1.0703ms)
+  ✔ empty text collapses to other without network (1.3969ms)
+✔ opt-in gating and local fallback (2.7464ms)
+▶ cloud path thresholds and failures
+  ✔ high confidence cloud label passes through (2.6558ms)
+  ✔ keeps the category for the review band (2.0036ms)
+  ✔ low confidence collapses to other (0.4229ms)
+  ✔ sends semantic descriptions and maps them back to stable ids (0.7158ms)
+  ✔ rejects malformed responses and non-finite scores (0.7088ms)
+  ✔ redacts and truncates dynamic instructions (1.4267ms)
+  ✔ http error and throw fall back to other (0.8084ms)
+  ✔ timeout falls back to other (172.0738ms)
+  ✔ never sends raw sensitive text (1.5621ms)
+  ✔ coach routing returns lanes not prescriptions (7.892ms)
+  ✔ coach routing is local-first and tightens add/missing intent (0.7128ms)
+  ✔ separate consents gate only their own cloud path (0.6078ms)
+✔ cloud path thresholds and failures (192.7249ms)
+▶ local feedback metadata store
+  ✔ stores redacted text and structured metadata only (7.2005ms)
+  ✔ marks an operator review without changing the classifier metadata (1.9414ms)
+  ✔ builds an explicit-share payload from redacted feedback only (0.8644ms)
+✔ local feedback metadata store (12.3273ms)
+▶ prospectiveFieldComparison — gradeable prospective evidence only
+  ✔ scores only gradeable pairs and accounts every exclusion exactly once (33.7812ms)
+  ✔ withholds any read below the sample gates (3.9519ms)
+  ✔ counts the same user/exercise/baseline repeated pair once (1.7354ms)
+  ✔ compares against presented baselines only, never fabricated arms (0.6652ms)
+  ✔ aggregates as a mean of per-user effects, never a naive pooled rate (156.3363ms)
+  ✔ re-derives gradeability for legacy rows without the stored flag (0.3069ms)
+✔ prospectiveFieldComparison — gradeable prospective evidence only (198.794ms)
+▶ pooledProspectiveComparison — one user, one unit; consent enforced
+  ✔ folds repeated exports, excludes unconsented and unidentified packages (15.8217ms)
+✔ pooledProspectiveComparison — one user, one unit; consent enforced (17.2598ms)
+▶ fieldStudyStatus — local contribution, static facts only
+  ✔ reports off / observing / enrolled modes honestly (17.9055ms)
+✔ fieldStudyStatus — local contribution, static facts only (23.3778ms)
+▶ loggingFrictionStats — instrumented where possible, degraded never invented
+  ✔ segments by mode and records swap/save timings (3.6327ms)
+  ✔ aggregates the canonical value-free taxonomy (4.8307ms)
+  ✔ marks legacy sessionComplete-only flows degraded without inventing times (0.887ms)
+  ✔ logs a commit-without-open swap without a time (5.7334ms)
+✔ loggingFrictionStats — instrumented where possible, degraded never invented (15.509ms)
+▶ coachingEvidence — assigned arms only, never shadow
+  ✔ renders assigned users, transitions, achievement, difference and uncertainty (0.6114ms)
+  ✔ marks a conclusive read descriptive, never proven (0.2233ms)
+  ✔ refuses a causal headline from shadow-shaped input (0.2112ms)
+  ✔ withholds firmly below the gates (0.1596ms)
+✔ coachingEvidence — assigned arms only, never shadow (1.4505ms)
+▶ field study measurements (per participant)
+  ✔ computes adherence, completion and missed sessions (40.2137ms)
+  ✔ measures acceptance and logging time from telemetry events (0.3329ms)
+  ✔ resolves ledger outcome metrics (0.1717ms)
+  ✔ detects programme-change overrides by users (0.1615ms)
+  ✔ replays comparative arms with arise transitions present (0.1699ms)
+  ✔ feeds the participant readiness log into the comparative replay (141.2925ms)
+✔ field study measurements (per participant) (184.7521ms)
+▶ pooled field study + headline gates
+  ✔ withholds the claim below sample gates but still reports honestly (149.3307ms)
+  ✔ produces the headline sentence when gates pass, arithmetic intact (243.653ms)
+  ✔ loads participant packages through the import validator (9.1861ms)
+✔ pooled field study + headline gates (402.5963ms)
+▶ study identity: one person × many exports = ONE participant
+  ✔ folds repeated exports of the same id into a single participant without double-counting (384.1014ms)
+  ✔ never lets file order become identity or satisfy the participant gate (281.9657ms)
+  ✔ the participant breadth gate counts CONTRIBUTORS, not identifications (1218.973ms)
+  ✔ study id survives the export → import round trip (16.7138ms)
+✔ study identity: one person × many exports = ONE participant (1903.0254ms)
+▶ session summaries stay aggregate-only
+  ✔ flags completion, abandonment and timing presence without raw events (17.3409ms)
+  ✔ untimed sessions report missing timing data, counts intact (0.5903ms)
+✔ session summaries stay aggregate-only (19.2858ms)
+▶ participant-balanced aggregation beats naive pooling
+  ✔ a six-switch user gets one vote, not six (101.6115ms)
+  ✔ repeated sessions from one person aggregate under that person (6.7906ms)
+✔ participant-balanced aggregation beats naive pooling (108.7227ms)
+▶ sample-quality gates refuse thin cohorts
+  ✔ a lone participant is insufficient, never ranked (2.1794ms)
+  ✔ too few sessions, thin attendance and thin modes each fail openly (6.0053ms)
+  ✔ a mode below its observation gate is flagged, not ranked (10.828ms)
+  ✔ single-user domination cannot satisfy the breadth gate (6.2349ms)
+✔ sample-quality gates refuse thin cohorts (25.9562ms)
+▶ missing timing consent is reported, never reconstructed
+  ✔ untimed cohort: null timings, intact counts, explicit missing rate (2.5207ms)
+✔ missing timing consent is reported, never reconstructed (2.8157ms)
+▶ mode switching attributes intervals per mode
+  ✔ one session across two modes splits its intervals honestly (2.4961ms)
+✔ mode switching attributes intervals per mode (2.6538ms)
+▶ synthetic comparison stays descriptive
+  ✔ matching direction confirms descriptively with n reported (2.3165ms)
+  ✔ reversed direction contradicts descriptively (1.5294ms)
+  ✔ synthetic expectation derives from the validated doc, guided cheapest (1.0936ms)
+✔ synthetic comparison stays descriptive (5.1563ms)
+▶ per-mode gates refuse one-participant domination
+  ✔ a single prolific participant cannot make guided rankable (101.7172ms)
+  ✔ thin session counts gate a mode even with multiple participants (38.5778ms)
+✔ per-mode gates refuse one-participant domination (144.7975ms)
+▶ completion rates are mode-specific
+  ✔ a mode only present in abandoned sessions reports 0, not the cohort rate (5.6929ms)
+✔ completion rates are mode-specific (6.0169ms)
+▶ reports expose aggregates only — never histories or values
+  ✔ no event streams, histories or workout values anywhere in the output (11.9153ms)
+✔ reports expose aggregates only — never histories or values (12.0482ms)
+▶ baseline artifact is executable source data
+  ✔ the shipped docs/friction-baseline.json validates clean (1.716ms)
+  ✔ tampered derived statistics fail loudly (2.5452ms)
+  ✔ malformed documents fail with clear errors, never silent defaults (1.2295ms)
+  ✔ deriveMetric handles first-measured and zero baselines without inventing numbers (1.3795ms)
+✔ baseline artifact is executable source data (8.4666ms)
+▶ regression thresholds on live probe results
+  ✔ live values within guardrails pass and report derives from validated claims (1.181ms)
+  ✔ regressions past maxAllowed fail CI loudly (0.6479ms)
+  ✔ completions below minAllowed fail (a flow that logs less proves nothing) (105.4441ms)
+  ✔ stale and unbaselined metrics fail instead of drifting silently (1.0927ms)
+✔ regression thresholds on live probe results (108.9781ms)
+▶ timing consent disabled degrades measurement without losing counts
+  ✔ durations are stripped at write; actions still aggregate; timings degrade to null (28.5342ms)
+✔ timing consent disabled degrades measurement without losing counts (28.8204ms)
+▶ telemetry stays workout-content free across all logging event types
+  ✔ smuggled loads, reps, RIR and targets are stripped at write (1.2969ms)
+✔ telemetry stays workout-content free across all logging event types (1.5048ms)
+▶ real-user measurement mapping (synthetic → observed → conclusion)
+  ✔ one aggregate exposes every listed measurement, segmented by mode (1.0543ms)
+  ✔ apply-previous usage is honestly zero until a control emits it (0.6261ms)
+✔ real-user measurement mapping (synthetic → observed → conclusion) (1.8331ms)
+▶ guidedMode — init
+  ✔ flattens session blocks into per-set guided blocks with history prefill (1.278ms)
+  ✔ prefers draft blocks over fresh init (crash recovery) (0.6245ms)
+  ✔ marks unilateral exercises from the exercise catalogue (0.5575ms)
+✔ guidedMode — init (5.1746ms)
+▶ guidedMode — steps and progress
+  ✔ returns the first unfinished set as the current step (1.3483ms)
+  ✔ advances across block boundaries (0.6091ms)
+  ✔ returns null when every set is resolved (0.2188ms)
+  ✔ counts completed, skipped and pending correctly (0.264ms)
+  ✔ computes volume only over completed sets, honouring assisted subtraction (0.2608ms)
+✔ guidedMode — steps and progress (3.1945ms)
+▶ guidedMode — timers
+  ✔ formats rest times as m:ss or Ns (0.2817ms)
+  ✔ formats elapsed milliseconds as m:ss (0.2238ms)
+  ✔ clamps negative elapsed to zero and handles invalid input (69.9769ms)
+✔ guidedMode — timers (70.7984ms)
+▶ guidedMode — save payload
+  ✔ builds a history payload matching the standard schema with mode guided (1.0146ms)
+  ✔ records the performed date when a future guided session is started early (0.5102ms)
+  ✔ marks pain flag when the pain tag is selected (3.1556ms)
+  ✔ omits note fields when empty (0.4284ms)
+  ✔ keeps note tag vocabulary aligned with the standard runner (0.174ms)
+✔ guidedMode — save payload (10.3322ms)
+▶ guided mode enforces the frozen assignment
+  ✔ studyArmFor drives the same arms as the standard runner (1.0825ms)
+  ✔ DP-assigned step: treatment fills unfinished sets, skips performed work (1.4877ms)
+  ✔ BOTH assigned arms use the same application path; null keeps normal behaviour (0.268ms)
+  ✔ assistance is applied only where the exercise supports it (0.2313ms)
+  ✔ performed work is never rewritten by treatment (1.1399ms)
+  ✔ prior-only: the 40 kg future session never reaches the DP treatment (0.4132ms)
+✔ guided mode enforces the frozen assignment (189.0061ms)
+▶ guided snapshots carry the treatment provenance
+  ✔ DP step freezes an engine-source snapshot; plain step stays schedule-source; idempotent (1.8437ms)
+✔ guided snapshots carry the treatment provenance (2.0271ms)
+▶ guided prospective evidence records once with the true arm
+  ✔ recorded prescription = applied target = performed work; outcome resolves against it (300.6606ms)
+  ✔ identical inputs produce an identical prescription wherever it is used (217.3084ms)
+  ✔ unassigned exercise records assignedArm null, never arise (22.2746ms)
+  ✔ DP exercise records the DP arm and the DP prescription verbatim (4.1285ms)
+  ✔ without measurement consent nothing is recorded at all (0.2271ms)
+✔ guided prospective evidence records once with the true arm (545.1095ms)
+▶ enrollment parity across modes
+  ✔ the same schedule yields the same arms whether run guided or standard (0.8284ms)
+✔ enrollment parity across modes (0.9596ms)
+▶ gym mode — equipment-aware load jumps
+  ✔ derives increments from the equipment class (6.204ms)
+  ✔ labels quick jumps in real kilos for each equipment class (2.1593ms)
+  ✔ offers no quick jumps for bodyweight movements (0.3841ms)
+  ✔ snaps quick jumps onto achievable loads (9.2715ms)
+  ✔ steps to the next achievable load with adjacentLoad (141.8467ms)
+  ✔ respects a custom plate configuration (0.2774ms)
+✔ gym mode — equipment-aware load jumps (164.03ms)
+▶ gym mode — rest presets
+  ✔ offers the standard preset ladder (0.2447ms)
+  ✔ defaults to the nearest preset below the programme rest (0.2567ms)
+  ✔ stores, reads and clears per-exercise presets (0.329ms)
+✔ gym mode — rest presets (1.1401ms)
+▶ gym mode — skip-to navigation
+  ✔ finds a block by id or name, case-insensitively (0.444ms)
+  ✔ matches the first unfinished set inside the block (0.1768ms)
+  ✔ falls back to the last set when the block is finished (0.121ms)
+  ✔ returns null for empty queries and misses (0.1548ms)
+✔ gym mode — skip-to navigation (1.1219ms)
+▶ gym mode — session quality
+  ✔ offers a stable four-level rating (0.1869ms)
+  ✔ resolves labels for saved sessions (0.158ms)
+✔ gym mode — session quality (0.4894ms)
+▶ real-history data model
+  ✔ normalises a legacy history entry into the full real-history shape (1.8628ms)
+  ✔ captures pain flags, skipped sets and substitutions when present (0.2751ms)
+✔ real-history data model (3.3847ms)
+▶ noisy session handling
+  ✔ flags a short session and pain but not a normal one (1.7512ms)
+  ✔ flags a long training gap against prior history (1.8852ms)
+  ✔ flags unusual performance drop vs prior best (0.3779ms)
+  ✔ holds progression after a noisy session instead of overreacting to one bad day (113.1498ms)
+  ✔ does not hold a clean session after a clean streak (8.6926ms)
+  ✔ requires multiple observations via shouldDeferProgressionForNoisy (0.6594ms)
+✔ noisy session handling (127.113ms)
+▶ loadability across equipment types
+  ✔ snaps to nearest dumbbell pair including asymmetric increments (1.163ms)
+  ✔ machine rounding clamps to the rack maximum (0.3934ms)
+  ✔ dispatches by equipment type (1.3548ms)
+  ✔ minimum jump reports achievable next load per equipment (0.4355ms)
+  ✔ isLoadAchievable is exact only on buildable loads (1.2975ms)
+  ✔ recommendNext rounds non-barbell exercises to real available loads when config supplied (94.1303ms)
+✔ loadability across equipment types (99.3221ms)
+▶ substitution quality
+  ✔ excludes disliked exercises and prefers preferred ones (6.3264ms)
+  ✔ prefers a liked movement when both are viable (2.2191ms)
+  ✔ short-session bias ranks compounds higher (0.1794ms)
+  ✔ validateSubstitutionChain catches impossible replacements (1.9592ms)
+✔ substitution quality (10.9542ms)
+▶ longitudinal outcome evaluation
+  ✔ returns descriptive series without claiming superiority (2.5126ms)
+✔ longitudinal outcome evaluation (2.6398ms)
+▶ backtesting progression validation breakdown
+  ✔ reports success/failure/regression/stagnation rates and noise handling (157.09ms)
+  ✔ breaks strata down by rep range and movement type (163.11ms)
+  ✔ never leaks future rows into recommendations (regression) (512.6843ms)
+✔ backtesting progression validation breakdown (833.1575ms)
+▶ indexeddb canonical storage
+  ✔ migrates a legacy localStorage payload into the object stores (191.1822ms)
+  ✔ recomposes the exact monolithic shape from the stores (1.5117ms)
+  ✔ saveStore writes through the cache into IDB after hydration (3.93ms)
+  ✔ round-trips demo and gym preference state through the IndexedDB profile row (6.4673ms)
+  ✔ keeps the durable merge base isolated from nested live-state mutation (0.8999ms)
+  ✔ mirrors the latest preferences synchronously before the IndexedDB write resolves (0.7316ms)
+  ✔ surfaces durable-write failures, rolls back the cache, and permits a retry (3.3903ms)
+  ✔ bases a queued recovery write on the last durable snapshot after the previous write fails (0.9523ms)
+  ✔ uses the hydrated IndexedDB-backed store as the live event ledger (61.3707ms)
+  ✔ preserves newer events during ordinary saves but permits an explicit replacement (1.8036ms)
+  ✔ uses the hydrated IndexedDB-backed ledger as the default live evidence store (2.0436ms)
+  ✔ preserves newer evidence during ordinary saves but permits an explicit replacement (0.6942ms)
+  ✔ without hydration, store.js keeps its legacy synchronous path (2.8061ms)
+  ✔ removes legacy live and archived evidence keys during a verified clear (0.5124ms)
+  ✔ rejects a destructive clear when fallback clearing cannot be verified (0.3758ms)
+✔ indexeddb canonical storage (283.6094ms)
+▶ import hardening
+  ✔ strips __proto__/constructor/prototype keys at any depth (4.5504ms)
+  ✔ rejects files nested beyond the depth cap (0.8378ms)
+  ✔ rejects oversized import files before parsing (12.8599ms)
+  ✔ still accepts a normal, honest backup (107.0602ms)
+  ✔ validateStoreData flags negative weight/reps/RPE and non-finite values (11.2501ms)
+  ✔ validateStoreData flags implausible magnitudes (0.2584ms)
+  ✔ plausible sets still validate clean (0.8451ms)
+✔ import hardening (139.3173ms)
+▶ integration: persistence flows
+  ✔ a full store round-trips: persist → recompose → identical domain data (115.2616ms)
+  ✔ the active-workout draft survives the round-trip (crash recovery data path) (1.2836ms)
+  ✔ a throwing write aborts the transaction and leaves the store untouched (1.8163ms)
+  ✔ clearAllStoredData empties everything — deleted data does not resurrect (3.9283ms)
+✔ integration: persistence flows (124.0539ms)
+▶ integration: export → import flows
+  ✔ full payload round-trips through parseImportFile with credentials stripped (7.0333ms)
+  ✔ every partial export kind carries only its slice, in the same envelope contract (0.4699ms)
+  ✔ import preview reports counts, updates and denied fields before anything applies (1.5341ms)
+  ✔ merge unions history; replace wholesale takes the imported side (2.0373ms)
+  ✔ validation rejects impossible values that would poison e1RM and volume (0.7961ms)
+  ✔ a session whose id already exists keeps the newer saveAt on merge (0.8854ms)
+  ✔ compressed backups round-trip through parseBackupFile (852.184ms)
+  ✔ portableCsv escapes formula-injection cells and carries one row per set (0.6226ms)
+✔ integration: export → import flows (867.4388ms)
+▶ integration: corrupted-data recovery
+  ✔ repairStore fixes a broken recomposition into a readable store (0.561ms)
+  ✔ enforceIntegrity leaves a healthy store semantically unchanged (4.9507ms)
+✔ integration: corrupted-data recovery (5.6916ms)
+▶ Pulse integration
+  ✔ runs the write/read E2E path with a mock adapter (5.1425ms)
+  ✔ reports partial connector failure (0.4272ms)
+✔ Pulse integration (7.0381ms)
+▶ optional health summary
+  ✔ normalises and merges a small summary (0.9126ms)
+✔ optional health summary (1.1851ms)
+▶ measurement summaries
+  ✔ deduplicates resumed sessions for abandonment measurement (0.6637ms)
+  ✔ measures recommendation acceptance and logging time (0.4839ms)
+✔ measurement summaries (1.4179ms)
+▶ longitudinal validation — consent and separation
+  ✔ records nothing without explicit consent (2.6429ms)
+  ✔ keeps the evaluation ledger in its own key, separate from training data (167.0579ms)
+  ✔ ledger contents never influence recommendations (training/eval separation) (17.7183ms)
+✔ longitudinal validation — consent and separation (195.4597ms)
+▶ longitudinal validation — prospective recording and outcomes
+  ✔ snapshots the recommendation with prior-only basis; later sessions cannot alter it (6.7956ms)
+  ✔ attaches the real outcome and classifies progression success (6.133ms)
+  ✔ resolves the exact target session even when that scheduled workout is performed early (2.1874ms)
+  ✔ does not let an unrelated later session consume a session-bound recommendation (1.8584ms)
+  ✔ does not resolve a record from a session earlier than its due date (128.2512ms)
+  ✔ classifies regression when a progression is followed by a drop (5.2692ms)
+  ✔ caps open records per exercise so skipped sessions do not pile up (15.874ms)
+✔ longitudinal validation — prospective recording and outcomes (167.1638ms)
+▶ longitudinal validation — segmentation and sample gates
+  ✔ withholds segment conclusions below the minimum sample size (2.5934ms)
+  ✔ reports conclusive rates at or above the minimum sample size (1.2494ms)
+  ✔ segments by all four equipment classes including bodyweight and cables (0.6421ms)
+  ✔ separates movement categories (6.1037ms)
+  ✔ derives training-age phases from visible history at record time (6.4086ms)
+✔ longitudinal validation — segmentation and sample gates (17.5274ms)
+▶ weekOf
+  ✔ returns Monday-start keys (4.625ms)
+✔ weekOf (5.8545ms)
+▶ programmeWeekDateISO
+  ✔ uses the scheduled date for programme accounting while leaving ordinary history on the performed date (0.4305ms)
+✔ programmeWeekDateISO (5.0365ms)
+▶ reviewCompletedWeek
+  ✔ reviews the finished week and holds a healthy prescription (171.9691ms)
+  ✔ forces a deload when the mesocycle deload week arrives (3.2935ms)
+  ✔ fatigue across the week triggers the fatigue deload first (9.2064ms)
+  ✔ rotates to a variation after a genuine plateau (135.6271ms)
+  ✔ refuses to review when nothing is complete (0.8504ms)
+  ✔ reports scheduled and completed session counts separately (6.16ms)
+✔ reviewCompletedWeek (327.922ms)
+▶ applyWeeklyReview
+  ✔ writes deload directives into next week with audit trail, idempotently (5.2792ms)
+  ✔ leaves the schedule untouched for hold-only reviews (6.2988ms)
+✔ applyWeeklyReview (11.8834ms)
+▶ weekPhaseFor — deload as a first-class state
+  ✔ returns null with no schedule (0.3102ms)
+  ✔ names a build week when no cuts are stamped (0.3798ms)
+  ✔ names a deload week when the weekly review stamped cuts on most blocks (0.2432ms)
+  ✔ names a deload week when the mesocycle deload week is due (0.1432ms)
+  ✔ falls through to the nearest upcoming week on rest days (0.2ms)
+  ✔ names a recovery week when recovery-session stamps dominate (0.1863ms)
+✔ weekPhaseFor — deload as a first-class state (1.7255ms)
+▶ runMigrations — hostile and edge inputs
+  ✔ returns a valid default store for null (7.196ms)
+  ✔ returns a valid store for undefined and for primitives (0.2684ms)
+  ✔ passes a future version through untouched — the import gate owns rejection (0.3886ms)
+  ✔ does not mutate nested entries (top-level reassignment is the documented contract) (0.5668ms)
+✔ runMigrations — hostile and edge inputs (9.8142ms)
+▶ runMigrations — every hop, forward only
+  ✔ v1 lands on current with all cumulative preference defaults (0.6036ms)
+  ✔ v2 backfills set shapes without touching real values (0.6103ms)
+  ✔ v3 creates event/health fields explicitly (0.4428ms)
+  ✔ v4 history rows gain the durable fields from normaliseHistoryEntry (0.3148ms)
+  ✔ v5, v6, v7, v8 each add their preference default (0.4753ms)
+  ✔ is idempotent: migrating an already-current store is a no-op (0.6456ms)
+  ✔ preserves an explicit user choice against the default backfill (0.5533ms)
+  ✔ clamps a corrupt accessibility object to strict booleans (0.1901ms)
+  ✔ repairs non-array customTemplates and non-array history (0.1392ms)
+✔ runMigrations — every hop, forward only (5.7576ms)
+▶ normaliseHistory — duplicate and corrupt rows
+  ✔ deduplicates by id keeping the newer save (0.5709ms)
+  ✔ drops a malformed entry without losing its siblings (16.6182ms)
+  ✔ sorts chronologically by date regardless of input order (0.3698ms)
+✔ normaliseHistory — duplicate and corrupt rows (18.0023ms)
+▶ wilsonInterval
+  ✔ never reports a degenerate 100% at small n (0.2888ms)
+  ✔ rejects impossible inputs with null (0.0888ms)
+  ✔ is symmetric at p=0.5 and inside [0,1] everywhere (0.151ms)
+✔ wilsonInterval (0.6804ms)
+▶ parseReps / e1rm
+  ✔ parses the first integer out of messy human input (0.224ms)
+  ✔ e1rm follows Epley and rejects zeros (6.0702ms)
+✔ parseReps / e1rm (6.444ms)
+▶ mergeEvaluationLedgers
+  ✔ unions by id without duplicating (0.6897ms)
+  ✔ resolved beats unresolved regardless of side (0.2004ms)
+  ✔ first outcome wins over later conflicting outcomes (append-only ledger) (0.2883ms)
+  ✔ drops records without an id and tolerates null sides (0.2312ms)
+  ✔ is stable on empty inputs (0.0979ms)
+✔ mergeEvaluationLedgers (1.7413ms)
+▶ clustered bootstraps — determinism and degenerate inputs
+  ✔ returns null/unfinished shapes for degenerate inputs (0.5906ms)
+  ✔ is deterministic for the same seed (98.538ms)
+  ✔ different seeds vary within a plausible range, same rate anchor (1.1514ms)
+  ✔ win rate counts only arise-met / arm-not-met pairs, participants only (0.721ms)
+  ✔ a strongly separated fixture produces a positive interval that excludes zero (0.8661ms)
+✔ clustered bootstraps — determinism and degenerate inputs (102.2074ms)
+▶ per-mode first-set timing anchors on mode entry
+  ✔ session starting directly in Standard measures from its entry (34.1454ms)
+  ✔ Gym timing measures from Gym entry, not workout start (0.7068ms)
+  ✔ Gym → Standard attributes each interval to its own entry (0.4889ms)
+  ✔ repeated switching never uses a stale entry (0.3872ms)
+  ✔ Guided entered mid-session measures from its own entry (1.9554ms)
+  ✔ resume after reload anchors on the fresh entry without session:start (0.3598ms)
+  ✔ legacy telemetry without entries keeps overall timing, nulls per-mode timing (1.3139ms)
+  ✔ duplicate entry ids collapse to one anchor (0.8712ms)
+  ✔ entry after its completion is never used as an anchor (0.5736ms)
+✔ per-mode first-set timing anchors on mode entry (47.8225ms)
+▶ mode intervals measure independently across reload and repeats
+  ✔ reload/resume in the same mode produces two intervals, never reuses completion A (0.7364ms)
+  ✔ repeated Gym entries in one session each contribute their interval (0.3027ms)
+  ✔ Standard → Gym → Gym-after-resume attributes every interval (0.6017ms)
+  ✔ Guided remount starts a fresh guided interval (0.5342ms)
+  ✔ an interval with no completion contributes nothing (0.2518ms)
+✔ mode intervals measure independently across reload and repeats (2.9702ms)
+▶ mode:enter respects consent and stays content-free
+  ✔ persists as an ordering anchor without timing consent, but yields no intervals (158.9181ms)
+  ✔ drops smuggled workout values at write (0.3454ms)
+✔ mode:enter respects consent and stays content-free (159.4153ms)
+▶ entries change no counts
+  ✔ mode:enter events move no counter except through anchored timing (0.3914ms)
+✔ entries change no counts (0.5186ms)
+▶ net completion counts work left completed, not actions
+  ✔ complete once → 1 net set, 1 event (3.5592ms)
+  ✔ complete → undo → complete → 1 net set, 2 events, 1 correction, 3 interactions (156.0231ms)
+  ✔ two different sets → 2 net sets (7.4075ms)
+  ✔ stray undos with no matching completion change nothing (0.4977ms)
+✔ net completion counts work left completed, not actions (169.1495ms)
+▶ failed/unfailed transitions never fabricate work
+  ✔ failed → unfailed leaves net at zero without going negative (0.5813ms)
+  ✔ a set left failed is not left completed (0.3779ms)
+  ✔ unmarking failure never re-completes (0.326ms)
+✔ failed/unfailed transitions never fabricate work (1.6932ms)
+▶ identity across swaps, duplicates and legacy gaps
+  ✔ the same setId under a swapped exercise is one net set, not two (0.3672ms)
+  ✔ duplicate telemetry event ids count once (0.5808ms)
+  ✔ legacy events fall back to session+exercise+setIndex identity (0.3274ms)
+  ✔ events with no usable identity count as actions but never invent a net set (0.1991ms)
+✔ identity across swaps, duplicates and legacy gaps (1.8767ms)
+▶ denominators and mode segmentation use net completions
+  ✔ actions/set divides by net work, corrections still counted (0.3516ms)
+  ✔ mode buckets net their own in-scope events honestly (0.4181ms)
+✔ denominators and mode segmentation use net completions (1.0458ms)
+▶ mode buckets attribute final work globally, actions locally
+  ✔ Gym complete → Standard undo leaves no stale work in Gym (0.6212ms)
+  ✔ Gym complete → Standard undo → Standard re-complete attributes work to Standard (0.248ms)
+  ✔ Standard complete → Gym undo → Gym re-complete attributes work to Gym (0.2181ms)
+  ✔ multiple sets across modes attribute independently (0.2503ms)
+  ✔ undo after a swap nets against the same stable set (0.5522ms)
+✔ mode buckets attribute final work globally, actions locally (2.1736ms)
+▶ resumed sessions keep one continuous set history
+  ✔ same sessionId later in time continues the same net state (3.5524ms)
+  ✔ the same setId in a different session is different work (0.3402ms)
+✔ resumed sessions keep one continuous set history (4.0938ms)
+▶ mode session denominators require a real interaction
+  ✔ sessions that never use Gym do not enter the Gym denominator (0.3493ms)
+  ✔ a bare session:start puts the session in no mode bucket (0.2961ms)
+✔ mode session denominators require a real interaction (0.8609ms)
+▶ setId survives the write path (call-site wiring guard)
+  ✔ recordEvent persists stable set identity alongside the other ids (6.3587ms)
+✔ setId survives the write path (call-site wiring guard) (6.6129ms)
+▶ note recommendation extraction
+  ✔ recognises loads written in kilograms or pounds (1.992ms)
+  ✔ uses structured form-focus tags even without free text (0.3377ms)
+✔ note recommendation extraction (97.0218ms)
+▶ scope helpers partition the ledger
+  ✔ trusted + open-prospective + diagnostic covers every record exactly once (1.0006ms)
+✔ scope helpers partition the ledger (3.0419ms)
+▶ imported resolved rows do not change observed rates
+  ✔ evaluateLongitudinal overall and segments ignore non-live rows (6.0854ms)
+  ✔ evidenceDashboard metrics are identical with imported rows present (3.1719ms)
+✔ imported resolved rows do not change observed rates (9.5487ms)
+▶ replayed rows do not move evidence bands
+  ✔ band thresholds read trusted resolved outcomes only (0.4599ms)
+✔ replayed rows do not move evidence bands (0.6442ms)
+▶ live open rows count as awaiting, never resolved
+  ✔ dashboard and evaluation agree: open is prospective, not evidence (100.3716ms)
+✔ live open rows count as awaiting, never resolved (100.9799ms)
+▶ live/live rows count normally
+  ✔ trusted observed rates reflect the genuine outcomes (0.9232ms)
+✔ live/live rows count normally (1.174ms)
+▶ shadow diagnostics exclude non-live outcomes
+  ✔ byArm and paired wins count genuine resolved prospective transitions only (1.0158ms)
+✔ shadow diagnostics exclude non-live outcomes (1.1457ms)
+▶ primary comparison and calibration are unchanged by untrusted rows
+  ✔ identical outputs with imported/replayed rows added (3.3454ms)
+✔ primary comparison and calibration are unchanged by untrusted rows (3.4655ms)
+✔ generated offline fallback keeps dark mode readable and keyboard focus visible (2720.6938ms)
+▶ canonical participant identity
+  ✔ one anonymous user across 10 exercises = 1 participant (252.5039ms)
+  ✔ one identified user across many exercises = 1 participant (2.2442ms)
+  ✔ multiple identified users remain distinct (3.029ms)
+  ✔ participantOf: id, blank id and bootstrap-pair shapes (0.2285ms)
+  ✔ participantOfStore: study id, else store-scoped fallback (0.3495ms)
+✔ canonical participant identity (259.8626ms)
+▶ participant thresholds cannot be inflated by exercise count
+  ✔ gate reads people, not transitions — 10 exercises ≠ 10 participants (2.5325ms)
+  ✔ shadow comparison clusters the same rows as one user (1.7572ms)
+✔ participant thresholds cannot be inflated by exercise count (4.8378ms)
+▶ pooled store-scoped clustering
+  ✔ multiple anonymous imported stores remain distinct only when store boundaries represent independent participants (3.7306ms)
+  ✔ identified multi-user pooling still counts people once each (2.1057ms)
+✔ pooled store-scoped clustering (6.4006ms)
+▶ clustered uncertainty honours identity
+  ✔ between-person assignment yields a conclusive clustered CI (38.758ms)
+  ✔ within-person crossover keeps the paired read and is deterministic (4.3719ms)
+  ✔ a single participant cluster cannot produce a clustered CI (0.1819ms)
+✔ clustered uncertainty honours identity (43.625ms)
+▶ assigned-arm treatment calculations unchanged otherwise
+  ✔ rates, ITT adherence and next-exposure are the same arithmetic as before (1.232ms)
+✔ assigned-arm treatment calculations unchanged otherwise (1.4168ms)
+▶ study lifecycle: eligibility
+  ✔ checks consent, workout history and something to assign (9.4523ms)
+✔ study lifecycle: eligibility (24.1737ms)
+▶ study lifecycle: join and withdraw
+  ✔ joining freezes a balanced enrollment and stamps the status (2.8339ms)
+  ✔ withdrawal stops treatment but preserves every observed record (1.2483ms)
+  ✔ withdrawal without enrollment is still recorded as a status change (0.1922ms)
+  ✔ rejoining regenerates the same deterministic assignment — no re-randomisation (1.5023ms)
+  ✔ deleting observations is a separate action and is destructive only when called (0.2692ms)
+  ✔ plain-language copy exists for every state (0.6365ms)
+✔ study lifecycle: join and withdraw (7.2364ms)
+▶ study lifecycle: export/import round trip
+  ✔ studyStatus travels inside the export envelope (140.6286ms)
+✔ study lifecycle: export/import round trip (141.1715ms)
+▶ pilot roster
+  ✔ healthy participant produces no warnings and full roster facts (41.7554ms)
+  ✔ flags stale exports and missing export timestamps (10.4705ms)
+  ✔ missing-export-timestamp needs the flag even with a fresh file when no export timestamp exists (122.7378ms)
+  ✔ flags consent loss and no workouts (4.3346ms)
+  ✔ withdrawn participants are exempt from staleness — that is the lifecycle working (1.2248ms)
+  ✔ flags single-arm evidence only above the volume floor (4.0592ms)
+  ✔ flags high abandonment and override-heavy participants (2.7324ms)
+  ✔ flags logging-time outliers against the cohort median (5.8141ms)
+  ✔ flags unresolved workout starts in the roster (0.7844ms)
+  ✔ orders attention-first and keeps counts honest across a mixed roster (1.8331ms)
+✔ pilot roster (208.6486ms)
+▶ programme templates
+  ✔ lists templates with their linked program (1.2731ms)
+  ✔ instantiates a dated schedule; full kit needs no substitutions (2.6883ms)
+  ✔ swaps missing equipment honestly and logs the swaps (52.3346ms)
+  ✔ bodyweight-only kit: swaps even the anywhere template's band work (87.5643ms)
+  ✔ throws on an unknown template (0.7345ms)
+  ✔ counts either-or declared substitutes as valid equipment coverage (0.3731ms)
+  ✔ recommends the strength template for a barbell strength profile (0.7545ms)
+  ✔ recommends the anywhere template for a bodyweight-only beginner (0.5738ms)
+  ✔ reports template and program version changelogs (0.4153ms)
+✔ programme templates (148.684ms)
+▶ volume balance advice
+  ✔ flags a neglected priority muscle and suggests a swap (1.0355ms)
+  ✔ reports balanced when share matches the goal's priorities (0.5448ms)
+  ✔ asks for a baseline with too little data (0.2087ms)
+✔ volume balance advice (2.0729ms)
+▶ fatigue-aware ordering
+  ✔ keeps compounds early, cardio last, same-muscle pairs apart (0.8355ms)
+  ✔ trains weak-point muscles while fresh (0.6155ms)
+  ✔ derives weak points from least-trained muscles (1.0755ms)
+  ✔ scores same-muscle overlap highest, family overlap lower (0.1694ms)
+✔ fatigue-aware ordering (3.0279ms)
+▶ plate-aware loadability
+  ✔ returns an exact per-side stack when the target is loadable (4.6659ms)
+  ✔ chooses the nearest lower load on a tie (0.4773ms)
+  ✔ respects an explicitly empty plate inventory (0.3218ms)
+  ✔ rounds only when an explicit plate setup is supplied to progression (14.9535ms)
+✔ plate-aware loadability (93.2825ms)
+▶ equipment profiles from onboarding
+  ✔ rounds dumbbell targets to pairs the user actually owns (0.479ms)
+  ✔ snaps machine targets to the configured stack increment (0.4249ms)
+✔ equipment profiles from onboarding (1.6854ms)
+▶ prescription snapshots
+  ✔ freezes every required field at prescription time (2.1311ms)
+  ✔ captures schedule prescriptions without inventing engine fields (0.4232ms)
+  ✔ refuses to build without identity, planned sets or a timestamp (0.1908ms)
+  ✔ survives normalisation unchanged and is never regenerated there (3.7357ms)
+✔ prescription snapshots (8.1929ms)
+▶ observed prescription follow-through
+  ✔ scores stored prescriptions across workouts (13.8883ms)
+  ✔ counts extra sets as modified work, not as prescription success (0.4169ms)
+  ✔ scores only the active revision, never a superseded prescription in the denominator (0.527ms)
+  ✔ ignores legacy sessions instead of reconstructing them (0.3443ms)
+  ✔ does not let a changed engine rewrite a stored outcome (94.652ms)
+✔ observed prescription follow-through (110.4892ms)
+▶ assessment source separation
+  ✔ prefers stored prescriptions and keeps replay out of the verdict (73.1007ms)
+  ✔ falls back to labelled replay for legacy histories at reduced coverage (20.7342ms)
+✔ assessment source separation (94.0476ms)
+▶ prescription export compatibility
+  ✔ round-trips stored snapshots without fabricating legacy ones (2.933ms)
+✔ prescription export compatibility (3.0562ms)
+▶ prescription identity and provenance
+  ✔ stamps a deterministic id, revision and initial reason on first freeze (0.3897ms)
+✔ prescription identity and provenance (0.5077ms)
+▶ a shown prescription is immutable — policy changes cannot mutate it
+  ✔ refuses to overwrite an existing snapshot even if a rebuild would differ (63.2492ms)
+✔ a shown prescription is immutable — policy changes cannot mutate it (63.4207ms)
+▶ draft, refresh and crash recovery preserve the snapshot
+  ✔ re-freezes a prescription returning from storage and rebuilds nothing (0.4996ms)
+  ✔ drops a null/absent prescription so legacy drafts gain none (0.1137ms)
+✔ draft, refresh and crash recovery preserve the snapshot (0.7507ms)
+▶ final save copies the exact snapshot and never re-runs the engine
+  ✔ carryPrescription returns the identical frozen object (plus history) (0.4145ms)
+  ✔ a stored priors version is not silently restamped by a newer engine (4.003ms)
+✔ final save copies the exact snapshot and never re-runs the engine (4.5602ms)
+▶ exercise swaps create explicit new provenance
+  ✔ supersede records previous exercise + id and preserves the old snapshot (0.4651ms)
+✔ exercise swaps create explicit new provenance (0.5691ms)
+▶ guided mode freezes the schedule prescription on first-visible step
+  ✔ init does NOT fabricate a snapshot — capture waits for the active step (0.7217ms)
+  ✔ captures only the active block when its step is first shown (0.765ms)
+  ✔ a later step is captured only when it becomes active; earlier ones are untouched (0.4434ms)
+  ✔ re-capturing an already-shown step is a no-op (stable array, no loop) (0.398ms)
+  ✔ a restored draft keeps its snapshot and save carries it unchanged (1.1183ms)
+✔ guided mode freezes the schedule prescription on first-visible step (3.7616ms)
+▶ first-visible timing in the standard runner
+  ✔ Gym Mode freezes only the focused block; standard mode all rendered blocks (0.2799ms)
+  ✔ a first-visible snapshot records createdAt and firstShownAt at the show moment, not session start (0.2888ms)
+✔ first-visible timing in the standard runner (0.7041ms)
+▶ deep prescription immutability
+  ✔ nested mutation attempts throw, at every level (0.5254ms)
+  ✔ deepFreezePrescription freezes a plain restored object deeply and is idempotent (2.8569ms)
+  ✔ a restored draft block re-freezes its nested snapshot and history (1.0186ms)
+✔ deep prescription immutability (4.669ms)
+▶ provenance chains record every legitimate revision
+  ✔ policy, equipment and programme changes each add a link with reason + preserved history (1.0037ms)
+  ✔ supersede never mutates the previous snapshot it preserves (0.5888ms)
+✔ provenance chains record every legitimate revision (1.7791ms)
+▶ export/import preserves the full revision chain and deep fields
+  ✔ round-trips active snapshot, history and provenance without fabricating legacy ones (0.8136ms)
+✔ export/import preserves the full revision chain and deep fields (0.9236ms)
+▶ early observed follow-through never decides the verdict
+  ✔ surfaces 1–3 observed workouts as a separate non-deciding signal while replay decides (149.1101ms)
+  ✔ shows early observed follow-through even while the verdict is withheld (7.0997ms)
+✔ early observed follow-through never decides the verdict (156.3706ms)
+▶ stable set identity separates prescribed from user-added work
+  ✔ capture attributes every planned slot with a stable, distinct id (0.6854ms)
+  ✔ user-added sets contribute to history but not the denominator (0.4081ms)
+  ✔ add then swap keeps user-added rows out of the transferred targets (1.2975ms)
+  ✔ removing a prescribed set voids its slot (never collapses positions) (0.4306ms)
+  ✔ removing an UNFINISHED user-added set deletes it (no phantom slot) (0.5055ms)
+  ✔ remove then swap keeps the removed slot with the original revision (0.5459ms)
+  ✔ reload, export and import all preserve per-set identity and removals (1.4043ms)
+  ✔ multiple identity swaps chain r1 → r2 → r3 across the planned slots (1.144ms)
+  ✔ a legacy block without identity falls back conservatively (no fabrication) (0.3512ms)
+✔ stable set identity separates prescribed from user-added work (7.2151ms)
+▶ partial exercise swaps never relabel completed work
+  ✔ no work performed → replaced in place (single block), never split (0.7945ms)
+  ✔ one completed set → split: done set keeps original exercise + prescription (0.5671ms)
+  ✔ a failed set is retained by the original block too (0.3758ms)
+  ✔ multiple swaps chain the slot partition across three revisions (0.6694ms)
+  ✔ split survives reload/crash restore and stays deeply frozen (0.5794ms)
+  ✔ saved history keeps distinct exercise identities for completed vs replacement work (0.6427ms)
+  ✔ observed denominator is governed targets (3), never prescribedSets summed (4) (1.2742ms)
+  ✔ a row set at the wrong target does not borrow the bench revision (0.4401ms)
+  ✔ strength/e1RM history attributes the bench set to bench and the row set to row (0.5795ms)
+  ✔ export/import preserves the split, provenance and deep snapshot fields (1.0862ms)
+  ✔ swap after 2 of 3 sets → bench governs [0,1], replacement governs [2] (0.3507ms)
+  ✔ a whole, unswapped block governs all its planned slots (legacy fallback) (0.2651ms)
+  ✔ mixed legacy and attributed histories sum governed targets without double counting (0.5422ms)
+✔ partial exercise swaps never relabel completed work (8.7527ms)
+▶ performed sets are protected from destructive removal
+  ✔ a completed prescribed set cannot be directly removed (0.3242ms)
+  ✔ a failed prescribed set cannot be directly removed (0.1263ms)
+  ✔ undoing completion first, THEN removing yields a removed slot (0.188ms)
+  ✔ a removed target means removed-before-performance, never completed work (0.1453ms)
+  ✔ a user-added set stays removable (0.1292ms)
+  ✔ a COMPLETED user-added set is protected (origin does not matter) (0.1145ms)
+  ✔ a FAILED user-added set is protected too (0.1058ms)
+  ✔ undoing a completed user-added set makes it removable (unfinished → deleted) (0.143ms)
+  ✔ invalid index is a no-op and protection never corrupts history/analytics (0.2929ms)
+✔ performed sets are protected from destructive removal (1.8734ms)
+▶ guided mode carries stable set identity end-to-end
+  ✔ first-visible capture attributes each guided set (0.4092ms)
+  ✔ attribution survives a draft restore and is not re-stamped (0.6131ms)
+  ✔ the save payload emits identity and the identified analytics score it (0.9919ms)
+  ✔ a legacy guided block without identity still falls back (0.385ms)
+✔ guided mode carries stable set identity end-to-end (2.6086ms)
+▶ product success: retention windows
+  ✔ week-1 and week-4 retention with honest denominators (120.2134ms)
+  ✔ participants without enough elapsed time are excluded from the denominator, not counted as churned (0.6853ms)
+  ✔ sessions/user/week derives from observed weeks (0.7838ms)
+✔ product success: retention windows (123.4405ms)
+▶ product success: behaviour metrics
+  ✔ completion, abandonment, acceptance and override rates carry n (0.9425ms)
+  ✔ median logging time and its missingness (1.1449ms)
+  ✔ Guided/Gym/Standard usage is counted per saved session (2.5607ms)
+  ✔ dropout flags a >28-day silence, not a busy month (1.82ms)
+✔ product success: behaviour metrics (7.9046ms)
+▶ product success: consent + rendering
+  ✔ unconsented exports are excluded entirely and counted (0.7389ms)
+  ✔ every rendered rate carries a denominator; empty data renders honestly (0.7221ms)
+  ✔ full report renders every promised metric (1.0562ms)
+  ✔ is deterministic for identical inputs (1.001ms)
+✔ product success: consent + rendering (4.146ms)
+▶ milestones
+  ✔ reach, show next, and count distance honestly (1.3017ms)
+  ✔ an empty history has everything ahead and no reached milestones (0.7197ms)
+✔ milestones (3.6324ms)
+▶ training age display
+  ✔ counts months from the first session and labels the phase (0.9332ms)
+  ✔ is null-safe on an empty history (0.2066ms)
+✔ training age display (1.6066ms)
+▶ consistency insights
+  ✔ counts weeks with any training, capped by the span since first session (1.9743ms)
+  ✔ a lapsed run is not a punishment — just a fresh start flag (1.4114ms)
+  ✔ no guilt vocabulary in any framing string (0.722ms)
+✔ consistency insights (5.4499ms)
+▶ monthly digest
+  ✔ aggregates the named month only (15.2233ms)
+  ✔ defaults to the previous calendar month and returns zeros for none (0.266ms)
+✔ monthly digest (16.6793ms)
+▶ next best action
+  ✔ walks the ladder: onboard → program → today → recovery → next → milestone (112.2242ms)
+✔ next best action (112.4186ms)
+▶ what changed summary
+  ✔ formats adaptation and session bases without inventing reasons (1.159ms)
+✔ what changed summary (1.5457ms)
+▶ progress assessment
+  ✔ labels reconstructed targets as replay and reduces coverage (177.1641ms)
+  ✔ calls flat repeated performance holding steady (18.7524ms)
+  ✔ calls opposing exercise trends mixed signals (189.0964ms)
+  ✔ does not label a planned deload dip as regression (34.7455ms)
+  ✔ withholds a verdict for sparse history (6.3107ms)
+  ✔ assesses bodyweight-only progress from reps rather than lifted volume (147.3651ms)
+✔ progress assessment (574.0172ms)
+▶ experience mode gate
+  ✔ defaults to standard and clamps invalid values (0.2443ms)
+✔ experience mode gate (0.3393ms)
+▶ demo store honesty invariants
+  ✔ is deterministic per seed and fully labeled as demo (3.4307ms)
+  ✔ has a live schedule with an undated-future session and passes boot validation (2.4567ms)
+  ✔ keeps the generator deterministic while alive on the real calendar (0.571ms)
+✔ demo store honesty invariants (6.6751ms)
+▶ template editor: build with per-exercise rest
+  ✔ carries rest seconds per block, clamped, and defaults when missing (2.6169ms)
+  ✔ editing an existing template bumps its version; creating starts at v1 (0.5846ms)
+  ✔ daysPerWeek follows the day count (weekly frequency editing) (0.4055ms)
+✔ template editor: build with per-exercise rest (94.7583ms)
+▶ template editor: reordering is index-safe
+  ✔ moves items and refuses illegal moves (1.621ms)
+✔ template editor: reordering is index-safe (1.8067ms)
+▶ template editor: duplication
+  ✔ produces a fresh, independently versioned copy (0.4093ms)
+✔ template editor: duplication (0.8787ms)
+▶ template editor: substitution preview matches the scheduler
+  ✔ reports coverage and the honest kit swaps (16.288ms)
+  ✔ null template returns an honest empty preview (0.424ms)
+✔ template editor: substitution preview matches the scheduler (17.2922ms)
+▶ profile programme generator
+  ✔ applies frequency, time and disliked-exercise constraints to the schedule (155.4406ms)
+  ✔ uses recent history when choosing an equipment-honest alternative (15.2726ms)
+  ✔ reports an unsatisfied preference constraint instead of hiding it (134.5934ms)
+✔ profile programme generator (307.6576ms)
+▶ programme application service
+  ✔ generates and records a programme from the stored profile without mutating input (109.153ms)
+  ✔ owns custom-template save, soft-delete, restore and duplicate transitions (0.9915ms)
+  ✔ installs a share code once and rejects a duplicate name (1.57ms)
+✔ programme application service (114.0532ms)
+▶ programming layer
+  ✔ returns a transparent progression decision with evidence and a rule (15.7527ms)
+  ✔ detects a genuine plateau but attributes a fatigue run separately (85.096ms)
+  ✔ measures adherence and moves missed sessions forward in order (2.0516ms)
+  ✔ re-plan leaves non-colliding future sessions exactly where they were (0.4635ms)
+  ✔ creates a short workout without mutating the planned session (2.2865ms)
+  ✔ short mode trims the only conditioning block to fit instead of dropping it (2.2435ms)
+  ✔ short mode uses the time budget — omissions alone must not slash per-block volume twice (3.7861ms)
+  ✔ adapts an active schedule when kit changes (6.6245ms)
+  ✔ feeds repeated performance into the next programme session and is idempotent (89.1686ms)
+  ✔ reduces the next block after repeated high-effort difficulty (4.2723ms)
+  ✔ summarises exercise history and keeps programme runs separate (6.4082ms)
+  ✔ reports deload evidence and recommendation calibration limits (5.7019ms)
+✔ programming layer (226.1919ms)
+▶ response estimators
+  ✔ estimates a positive individual response for a consistently rising lift (27.0931ms)
+  ✔ groups responses by movement pattern and rep-range bucket (3.0238ms)
+  ✔ measures volume tolerance over paired weeks (61.0515ms)
+  ✔ detects fatigue carry-over after high-RPE sessions (0.9037ms)
+  ✔ buckets frequency effects by inter-session gap (0.5762ms)
+  ✔ quantifies the later-slot penalty for order effects (1.4521ms)
+  ✔ models substitute equivalence from recorded swaps (0.7744ms)
+✔ response estimators (97.3517ms)
+▶ autoregulation shift
+  ✔ proposes a positive shift when RPEs run roomy, none when sparse (1.0684ms)
+✔ autoregulation shift (1.5367ms)
+▶ capability gating + overlay
+  ✔ opens exercise-specific logic only under proven weakness (87.7523ms)
+  ✔ emits a bounded strategy override exactly for weak exercises (10.5813ms)
+  ✔ never mutates the frozen default priors (138.8975ms)
+  ✔ recommendNextWithModel stays inert without evidence and annotates results (25.9496ms)
+✔ capability gating + overlay (263.6239ms)
+▶ short-break return easing (evidence-gated)
+  ✔ stays fully inert without the policy � engine treats gaps like any other gap (6.3887ms)
+  ✔ model capability stays dormant until BOTH gates hold (81.3396ms)
+  ✔ opens when =7d gaps show no detriment AND arise stagnates vs double-progression (36.9562ms)
+  ✔ refuses to open when =7d gaps actually hurt (61.7984ms)
+✔ short-break return easing (evidence-gated) (186.7878ms)
+▶ training-age policy boundaries
+  ✔ handles empty, invalid, future and unsorted histories deterministically (4.4411ms)
+  ✔ uses exact phase boundaries instead of fuzzy threshold comparisons (1.1052ms)
+  ✔ uses the matching multiplier at every phase boundary (0.8785ms)
+  ✔ returns a rounded coherent training-age summary (1.5189ms)
+✔ training-age policy boundaries (9.8127ms)
+▶ training-break policy boundaries
+  ✔ requires an as-of date and safely handles invalid/empty history (2.4831ms)
+  ✔ uses the latest visible session and ignores future sessions (0.6824ms)
+  ✔ treats the configured long-break day as inclusive (0.7804ms)
+✔ training-break policy boundaries (4.3502ms)
+▶ short-break policy boundaries
+  ✔ is disabled without an as-of date or when policy is disabled (36.4484ms)
+  ✔ uses only the requested exercise and the latest visible exposure (0.6826ms)
+  ✔ uses exact light, moderate and long-break boundaries (1.8344ms)
+  ✔ returns no short break when the exercise has no prior exposure (0.3456ms)
+✔ short-break policy boundaries (39.9994ms)
+▶ progression
+  ✔ recommendNext: no history returns low reps (4.7907ms)
+  ✔ bodyweight adds reps until top (50.6295ms)
+  ✔ isPlateau false for rising, true for flat (0.4613ms)
+  ✔ isPlateauV2 distinguishes noise (1.3897ms)
+  ✔ rirFromRpe (0.3075ms)
+  ✔ meaningful PR filters noise (0.44ms)
+  ✔ classifyPR respects technique change (0.5513ms)
+  ✔ readiness 1..5 maps 0..100 (0.5293ms)
+  ✔ readinessEMA smooths single-day outliers (0.7521ms)
+  ✔ personalisedRate learns from history (29.8025ms)
+  ✔ validateProgression returns metrics (19.0813ms)
+  ✔ strengthTrendWithConfidence (0.931ms)
+  ✔ sideImbalance (0.2666ms)
+  ✔ strategyForExercise (0.215ms)
+✔ progression (112.9707ms)
+▶ substitutions
+  ✔ ranks by muscle+pattern, respects equipment (94.5582ms)
+  ✔ scoreSubstitution higher for same muscle (0.1609ms)
+  ✔ substitutionByPerformance prefers history (5.3549ms)
+  ✔ substitutionOptions explains an equipment-fit alternative (7.624ms)
+✔ substitutions (108.0123ms)
+▶ analytics + generator + sync + migrations
+  ✔ weeklyVolume groups (0.4661ms)
+  ✔ frequencyByMuscleSync counts via byId (0.1672ms)
+  ✔ volumeLandmarks cautious (0.3281ms)
+  ✔ volumeDistribution (0.2373ms)
+  ✔ extractNoteRecommendations (1.1661ms)
+  ✔ generateSession respects equipment and explains why (5.5275ms)
+  ✔ warmupSets + rest + duration (0.4939ms)
+  ✔ runMigrations adds syncEnabled, activeWorkout and bumps to current schema (8.015ms)
+  ✔ prsHitBySession respects ROM guard (2.0499ms)
+  ✔ syncUp/Down merge (3.8631ms)
+  ✔ mergeStoresWithConflicts last-write-wins (0.2722ms)
+✔ analytics + generator + sync + migrations (23.3983ms)
+▶ progression policies — registry and versioning
+  ✔ exposes exactly four versioned policies (3.0487ms)
+  ✔ resolvePolicy honours overrides and falls back to standard (0.4539ms)
+✔ progression policies — registry and versioning (5.3423ms)
+▶ progression policies — enriched recommendations
+  ✔ standard is behaviour-preserving and carries confidence/evidence/uncertainty (135.726ms)
+  ✔ maintenance never raises load or reps (119.2038ms)
+  ✔ conservative never exceeds the plain-engine load and stays on-grid (27.3116ms)
+  ✔ aggressive respects its jump cap (86.4552ms)
+  ✔ confidence veto fires below the policy floor (deterministic via override) (13.3943ms)
+✔ progression policies — enriched recommendations (382.7497ms)
+▶ progression policies — deloads and plateaus
+  ✔ multiWindowTrend sees a rising series across the 6-week window (2.1946ms)
+  ✔ single bad session never triggers a deload (noise, not signal) (1.7231ms)
+  ✔ sustained decline + low readiness triggers under conservative policy (1.081ms)
+  ✔ deload effectiveness measures recovery against pre-deload best (0.4325ms)
+  ✔ plateau confidence: noisy flat series is a false plateau, clean flat is genuine (0.7325ms)
+✔ progression policies — deloads and plateaus (6.8085ms)
+▶ progression policies — explanation modes
+  ✔ simple mode strips the detail; advanced mode adds policy, confidence and trends (82.2235ms)
+✔ progression policies — explanation modes (82.3724ms)
+▶ properties: progression engine
+  ✔ recommendNext is deterministic for identical inputs (814.4598ms)
+  ✔ prior-only: adding FUTURE sessions never changes the past recommendation (577.5164ms)
+  ✔ outputs are always sane: loads snap to increments, reps inside target bands, reason present (771.1069ms)
+  ✔ order of history rows never changes the recommendation (chronological contract) (175.1879ms)
+✔ properties: progression engine (2339.9424ms)
+▶ properties: substitution ranking
+  ✔ rankedSubstitutions never suggests the exercise itself, always returns valid exercises (245.0567ms)
+  ✔ disliking a candidate demotes it without breaking the ranking shape (294.4218ms)
+  ✔ same muscle swaps score at least as well as cross-muscle ones (ordering sanity) (110.1492ms)
+✔ properties: substitution ranking (650.0419ms)
+▶ properties: schedule & history invariants
+  ✔ markSessionDone is idempotent: completing twice never duplicates the row (1.5365ms)
+  ✔ upsertHistory dedupes arbitrary id/order permutations to one row per id (0.4861ms)
+  ✔ volume and streaks tolerate any malformed row without going negative (78.2922ms)
+✔ properties: schedule & history invariants (83.0358ms)
+▶ fuzz: hostile import files
+  ✔ every hostile input either throws a descriptive error or yields a safe store (13.8117ms)
+  ✔ random garbage JSON never throws non-Error or corrupts validation (17.8935ms)
+  ✔ oversized imports are rejected before parsing, not OOM-ed (0.9141ms)
+✔ fuzz: hostile import files (41.0406ms)
+▶ date boundaries & DST
+  ✔ streaks span the spring-forward DST gap without snapping (0.3619ms)
+  ✔ streaks span the fall-back DST gap without double-counting (0.1498ms)
+  ✔ month and year boundaries keep consecutive-day streaks intact (0.1627ms)
+  ✔ normaliseHistory sorts across year boundary as ISO strings (not locale dates) (0.33ms)
+  ✔ prior-only cutoff at a date boundary includes the boundary day, excludes tomorrow (47.2637ms)
+  ✔ PR detection uses e1RM so a boundary-day heavy single stays a PR (0.8901ms)
+✔ date boundaries & DST (49.775ms)
+▶ prospective arm comparison (real-training ledger)
+  ✔ freezes all five arms at record time as PURE shadows; prescription captured separately (32.3498ms)
+  ✔ is prior-only: future sessions cannot change a frozen snapshot (34.4378ms)
+  ✔ scores every frozen arm against the same realised outcome (5.5968ms)
+  ✔ gates rates behind the sample minimum and pairs every transition (60.6321ms)
+  ✔ tolerates schema-v1 records without frozen arms (5.0207ms)
+✔ prospective arm comparison (real-training ledger) (139.7107ms)
+▶ trial design, policy freezing and honest scoring
+  ✔ exercise-level assignment is deterministic and balanced (#6) (0.6369ms)
+  ✔ engine-version changes cannot silently merge evaluated treatments (#9) (9.154ms)
+  ✔ missing prescription means adherence UNKNOWN, never compliant (#10) (4.0357ms)
+  ✔ an aggressive prescription is scored as an overshoot, not progress (#11) (4.1107ms)
+  ✔ participant-clustered bootstrap is deterministic and widens with few participants (143.0049ms)
+✔ trial design, policy freezing and honest scoring (161.4746ms)
+▶ prospective/open/resolved-evidence helpers
+  ✔ live open recommendation is prospective but not resolved evidence (1.2432ms)
+  ✔ imported open recommendation is not prospective at all (0.3689ms)
+  ✔ live resolved + live outcome is eligible resolved evidence (59.3486ms)
+  ✔ live resolved + missing outcome provenance is excluded (1.1194ms)
+  ✔ live resolved + imported/replayed outcome is excluded (0.3407ms)
+✔ prospective/open/resolved-evidence helpers (64.6495ms)
+▶ open prospective accounting
+  ✔ live open rows appear in prospective + open, never in exclusion buckets (3.0304ms)
+  ✔ imported open rows are excluded as non-prospective, never open (0.5278ms)
+  ✔ calibration counts open live rows as prospective+open and mislabels nothing as reconstructed (2.2597ms)
+  ✔ calibration excludes resolved rows with unproven outcomes from every rate (1.5929ms)
+✔ open prospective accounting (8.1903ms)
+▶ open counts through reload/export
+  ✔ live open export stays prospective+open through study loading (31.4803ms)
+  ✔ consumer import downgrades live open rows to non-prospective (fail closed) (1.1065ms)
+✔ open counts through reload/export (32.9165ms)
+▶ open → resolved lifecycle keeps measurement semantics
+  ✔ record → resolve: open counts, then eligible; empty RIR stays unobserved (47.2996ms)
+✔ open → resolved lifecycle keeps measurement semantics (47.6179ms)
+▶ RIR suggestion friction telemetry (value-free)
+  ✔ shown is display; confirmed is one counted action; neither carries a value (121.3817ms)
+✔ RIR suggestion friction telemetry (value-free) (121.7279ms)
+▶ loadParticipantFile preserves exact exported provenance
+  ✔ raw live-engine rows stay live-engine (eligible) (116.4099ms)
+  ✔ raw imported rows stay imported (excluded) (1.8594ms)
+  ✔ raw replayed rows stay replayed (excluded) (1.4087ms)
+  ✔ raw seed rows stay seed (excluded) (0.9385ms)
+  ✔ missing recommendation provenance is excluded, never trusted by default (1.7918ms)
+  ✔ missing outcome provenance is excluded from resolved prospective evidence (1.3596ms)
+  ✔ malformed provenance never becomes trusted (1.9621ms)
+  ✔ consumer import → re-export → study load stays imported (never regains live-engine) (6.8176ms)
+  ✔ valid untouched live export remains eligible end to end (4.1826ms)
+✔ loadParticipantFile preserves exact exported provenance (139.357ms)
+▶ write-once provenance (withProvenance / withOutcomeProvenance)
+  ✔ first write records the origin; equal writes refresh metadata; upgrades are denied (0.6152ms)
+  ✔ outcome provenance follows the same write-once rule (0.2683ms)
+  ✔ importLedgerProvenance downgrades both sides and never upgrades after (8.0985ms)
+  ✔ PROVENANCE_ORIGINS enumerates exactly the four known origins (0.2299ms)
+✔ write-once provenance (withProvenance / withOutcomeProvenance) (10.4414ms)
+▶ assigned-arm analysis excludes every non-live row
+  ✔ live both sides count; every other combination is excluded (4.5835ms)
+  ✔ primary evaluation reaches the same exclusion via isProspectiveRecord (2.7371ms)
+✔ assigned-arm analysis excludes every non-live row (7.7628ms)
+▶ recording path stamps live exactly once at write time
+  ✔ recordRecommendation sets live-engine with the device id (11.8339ms)
+✔ recording path stamps live exactly once at write time (11.9776ms)
+▶ platform classification (pure)
+  ✔ recognises iPhone and Android UAs (1.7405ms)
+  ✔ unmasks iPadOS 13+ (Macintosh UA with multi-touch) (8.6999ms)
+  ✔ flags social in-app browsers that cannot install (0.2288ms)
+✔ platform classification (pure) (14.5197ms)
+▶ standalone detection
+  ✔ false without window (node test env) (0.4062ms)
+  ✔ display-mode watcher removes the exact media-query listener on cleanup (0.6632ms)
+✔ standalone detection (2.1415ms)
+▶ install manager lifecycle
+  ✔ destroy removes the exact global handler references (0.8898ms)
+✔ install manager lifecycle (1.2125ms)
+▶ home-screen shortcuts
+  ✔ maps shortcut params to tabs, pure (0.2771ms)
+  ✔ consumeShortcut navigates and scrubs the URL once (0.5305ms)
+✔ home-screen shortcuts (1.1108ms)
+▶ haptic policy (pure core)
+  ✔ every known event maps to a named pattern (0.2642ms)
+  ✔ respects the preference source and platform support (0.461ms)
+  ✔ patterns are documented constants (1.1341ms)
+✔ haptic policy (pure core) (2.0436ms)
+▶ native share fallback chain
+  ✔ falls back to clipboard when Web Share is missing (0.9808ms)
+  ✔ reports cancelled on user abort (no throw) (0.4008ms)
+  ✔ uses the share sheet when the platform supports files (0.3471ms)
+✔ native share fallback chain (1.9516ms)
+▶ quota protection service
+  ✔ keeps health reading and prompt evaluation in one runtime boundary (2.3151ms)
+  ✔ attempts the safety snapshot exactly once on a new critical prompt (1.1762ms)
+  ✔ reports snapshot failure honestly instead of claiming protection (0.3088ms)
+  ✔ does not snapshot when the same critical level was already prompted (0.2448ms)
+  ✔ does not snapshot when the owning UI effect was cancelled mid-check (0.2269ms)
+✔ quota protection service (5.8276ms)
+▶ graduated readiness classifier
+  ✔ orders the four graduated recommendations (2.0525ms)
+  ✔ returns as-planned on healthy longitudinal data (133.6154ms)
+  ✔ treats a one-day readiness dip as a non-event (12.1115ms)
+  ✔ escalates to genuine-deload only on many distinct sustained signals (2.5389ms)
+  ✔ keeps a strong-but-lonely fatigue verdict below genuine-deload (distinct-factor gate) (2.4236ms)
+  ✔ caps escalation when the final session is noisy and confidence is not high (1.9775ms)
+  ✔ adds weight when a previous cut never normalised, and guards fresh successful deloads (82.2737ms)
+  ✔ degrades honestly with no data at all (1.7228ms)
+  ✔ reports soreness as its own factor (8.9714ms)
+  ✔ uses session completion when a schedule with planned sessions exists (14.2226ms)
+✔ graduated readiness classifier (264.0121ms)
+▶ mesocycle wiring
+  ✔ emits and applies a recovery-session directive for mid-band fatigue (5.4427ms)
+  ✔ suppresses add-sets while the classifier advises small-adjustment — and allows it when healthy (147.3946ms)
+  ✔ still reports readiness alongside a legacy deload (2.8684ms)
+✔ mesocycle wiring (156.0293ms)
+▶ progression-model wiring
+  ✔ stays inert below the escalation gate even with long history (199.1209ms)
+  ✔ activates on gated evidence and shifts the personalisedRate band down, bounded (9.9032ms)
+  ✔ annotates recommendNextWithModel when readiness shaping applies (16.8161ms)
+  ✔ never mutates the frozen default priors (115.6998ms)
+✔ progression-model wiring (341.9484ms)
+▶ collecting real workout histories
+  ✔ converts a portable export into a valid benchmark dataset (5.3556ms)
+  ✔ records consent explicitly instead of assuming it (1.584ms)
+  ✔ never turns the empty example into evidence (105.8353ms)
+✔ collecting real workout histories (114.3459ms)
+▶ success, failure, stagnation, regression
+  ✔ labels each comparison row with exactly one outcome class (0.9805ms)
+  ✔ aggregates the four classes over a replayed history (1152.9869ms)
+  ✔ carries the previous exposure on every observation row (771.1105ms)
+✔ success, failure, stagnation, regression (1925.4428ms)
+▶ noisy-session detection validation
+  ✔ computes precision/recall/specificity from known forecast outcomes (0.5682ms)
+  ✔ reports why nothing was evaluable rather than zeros that look like skill (0.2898ms)
+✔ noisy-session detection validation (1.1407ms)
+▶ substitution quality validation
+  ✔ audits engine-proposed substitutes against co-logged performance (11.7865ms)
+  ✔ flags substitutes whose progression diverges from the target (4.5399ms)
+  ✔ detects swap events against the planned schedule (140.505ms)
+  ✔ says what is missing instead of inventing swap events (0.1571ms)
+✔ substitution quality validation (157.2871ms)
+▶ load rounding validation
+  ✔ checks recommendations against the priors rounding grid and plate stacks (16.5349ms)
+  ✔ skips plate checks honestly when the profile has no barbell (0.2992ms)
+✔ load rounding validation (17.1248ms)
+▶ longitudinal programme effectiveness
+  ✔ tracks weekly progress and cycle-over-cycle movement (2.0023ms)
+  ✔ refuses an effectiveness verdict without enough classified exercises (0.6141ms)
+✔ longitudinal programme effectiveness (2.7672ms)
+▶ full real-world validation report
+  ✔ runs every requested evaluation family over the synthetic fixture (645.4415ms)
+  ✔ propagates invalid datasets with their issues (0.1928ms)
+✔ full real-world validation report (645.7953ms)
+▶ shared runner recommendation lifecycle
+  ✔ resolves the same recommendation for standard and guided callers (196.487ms)
+  ✔ returns an explicit null result for a block without an exercise identity (0.2555ms)
+  ✔ deduplicates repeated exercises and can carry previous-performance lookup (13.2612ms)
+  ✔ skips invalid blocks and does not invoke previous lookup when none was supplied (4.9787ms)
+  ✔ builds the prospective evidence record from one shared contract (0.4466ms)
+  ✔ uses null/default evidence fields when optional study context is absent (0.475ms)
+  ✔ returns a valid inconclusive study when no history exists (1.2883ms)
+  ✔ fails soft to null when comparative-study evaluation itself throws (0.3097ms)
+  ✔ records through the same prospective contract when measurement consent is enabled (7.5085ms)
+✔ shared runner recommendation lifecycle (226.8975ms)
+▶ safety — volume and e1RM primitives
+  ✔ computes session volume with assisted credit (1.0458ms)
+  ✔ best e1RM ignores empty sets (0.3644ms)
+  ✔ weekly volumes bucket sessions into Monday-based ISO weeks (87.9106ms)
+✔ safety — volume and e1RM primitives (91.2041ms)
+▶ safety — pain trends and aftercare
+  ✔ escalates two painful exposures of one exercise within the window (0.6162ms)
+  ✔ stays quiet when exposures are far apart or singular (0.2791ms)
+  ✔ offers aftercare inside 14 days of the painful exposure, then stops (7.4516ms)
+✔ safety — pain trends and aftercare (8.7641ms)
+▶ safety — volume, load and PR jumps
+  ✔ flags week-over-week volume spikes beyond the threshold (17.8492ms)
+  ✔ does not flag steady volume (0.2721ms)
+  ✔ flags per-exercise e1RM load jumps (0.3921ms)
+  ✔ flags implausible PRs but not normal progress (0.4838ms)
+✔ safety — volume, load and PR jumps (19.3775ms)
+▶ safety — failed reps and recovery
+  ✔ flags repeated failed sets of one exercise within the window (0.3951ms)
+  ✔ stays quiet on two failures or a spread-out pattern (0.2023ms)
+  ✔ flags a recovery deficit only after sustained low readiness (0.2757ms)
+  ✔ escalates to a stop-severity warning only when deficit AND high RPE stack (0.3617ms)
+✔ safety — failed reps and recovery (1.4414ms)
+▶ safety — deload prompts and restarts
+  ✔ prompts a deload when weekly volume runs hot vs the 3-week average (0.374ms)
+  ✔ restarts conservatively after a long break, harder after illness (0.2671ms)
+✔ safety — deload prompts and restarts (0.7707ms)
+▶ safety — panel aggregation and cautious mode
+  ✔ aggregates signals with stop first, then caution, then info (0.7052ms)
+  ✔ cautious mode lowers thresholds so earlier signals appear (0.4439ms)
+  ✔ exposes restart advice through the panel (0.1662ms)
+✔ safety — panel aggregation and cautious mode (1.469ms)
+▶ safety — technique prompts and max-effort toggle
+  ✔ prompts technique when the last exposure noted shallow ROM (0.5037ms)
+  ✔ stays quiet on clean full-range logs or silence (0.2221ms)
+  ✔ max-effort warning honours the toggle and RIR (0.1697ms)
+✔ safety — technique prompts and max-effort toggle (1.0448ms)
+▶ safety — configuration surface
+  ✔ keeps every tunable finite and positive (0.1629ms)
+✔ safety — configuration surface (0.2726ms)
+▶ content security policy
+  ✔ does not require unsafe-inline for scripts (1.5667ms)
+  ✔ keeps the generated offline fallback free of inline event handlers (0.3934ms)
+✔ content security policy (4.0736ms)
+▶ sessionPace — live ETA from actual logging speed
+  ✔ projects remaining time and finish clock time (1.025ms)
+  ✔ flags ahead and behind outside the ±5 min dead band (0.2861ms)
+  ✔ works without a plan and returns null when there is no pace (0.2014ms)
+✔ sessionPace — live ETA from actual logging speed (2.887ms)
+▶ note signals
+  ✔ flags negative notes (111.2972ms)
+  ✔ flags positive notes (0.6739ms)
+  ✔ detects technique/ROM changes (0.38ms)
+  ✔ empty notes are neutral (1.1437ms)
+✔ note signals (119.7199ms)
+▶ session quality
+  ✔ classifies a low-readiness near-failure session as bad (1.2374ms)
+  ✔ classifies a fresh easy session with a good note as good (0.6118ms)
+  ✔ neutral sessions land in the middle (3.0308ms)
+✔ session quality (5.2649ms)
+▶ bad session ratio
+  ✔ flags a rough patch (2.0275ms)
+  ✔ attributes an isolated bad session without overreacting (2.5394ms)
+✔ bad session ratio (4.8806ms)
+▶ plateau attribution
+  ✔ calls a flat stretch with good readiness a genuine plateau (18.1021ms)
+  ✔ calls a flat stretch with bad sessions fatigue-driven, not a plateau (1.5658ms)
+  ✔ needs 4+ sessions (0.2765ms)
+  ✔ reports progress when strength is still moving (0.2763ms)
+✔ plateau attribution (20.7069ms)
+▶ deload readiness assessment
+  ✔ does not deload on a single one-day readiness dip (2.9176ms)
+  ✔ deloads on sustained low readiness plus other fatigue signals (1.7514ms)
+  ✔ ignores a dip when other signals are clean (92.5384ms)
+✔ deload readiness assessment (97.4543ms)
+▶ PR scan
+  ✔ flags technique-changed and jitter records, keeps genuine PRs (1.2678ms)
+✔ PR scan (1.4142ms)
+▶ SessionRunner model — effort conversion
+  ✔ round-trips RPE/RIR and clamps deliberate suggestion steps (0.9049ms)
+✔ SessionRunner model — effort conversion (2.13ms)
+▶ SessionRunner model — set transitions
+  ✔ patches one set immutably and carries the block override flag (0.8915ms)
+  ✔ detects a meaningful load override but ignores rounding noise (12.9651ms)
+  ✔ plans reps/load carry-forward without silently copying RIR (3.7917ms)
+  ✔ adds and duplicates user sets with stable user-added identity (0.7666ms)
+  ✔ finds the next actionable focus block and wraps (0.3118ms)
+✔ SessionRunner model — set transitions (19.7905ms)
+▶ SessionRunner model — recommendations
+  ✔ applies one recommendation only to unfinished sets (0.6037ms)
+  ✔ apply-all changes only pristine blocks and reports exact acceptances (1.3613ms)
+✔ SessionRunner model — recommendations (2.5428ms)
+▶ SessionRunner model — prescription lifecycle
+  ✔ freezes only visible prescriptions and is idempotent after first capture (2.8611ms)
+  ✔ plans an untouched swap as one replacement block with a resume target (110.2597ms)
+  ✔ keeps performed work on the original block during a partial swap (17.8711ms)
+✔ SessionRunner model — prescription lifecycle (131.4415ms)
+▶ SessionRunner model — save boundary
+  ✔ names the real save blocker and enables save after one completed set (0.7684ms)
+  ✔ records the performed date when a future scheduled session is started early (0.7471ms)
+  ✔ builds the immutable history payload with identity, notes and substitutions (1.0486ms)
+✔ SessionRunner model — save boundary (2.8214ms)
+▶ store — soundCues, voiceCoach and voiceRate preference migrations (v6 → v9)
+  ✔ defaults sound cues on, voice coach off, rate 1× for older stores, honouring explicit choices (1.6154ms)
+  ✔ carries legacy v4 and v5 stores through every later migration (2.8469ms)
+✔ store — soundCues, voiceCoach and voiceRate preference migrations (v6 → v9) (6.6157ms)
+▶ store — lastExerciseSets / prsHitBySession (Life OS port)
+  ✔ returns most recent prior sets for an exercise (0.8896ms)
+  ✔ returns null when exercise never logged (0.4995ms)
+  ✔ detects new PR vs prior history (Epley) (1.1131ms)
+  ✔ does not flag bodyweight-only sets as PRs (4.8663ms)
+  ✔ upserts duplicate session ids and keeps the newer edited record (0.8497ms)
+✔ store — lastExerciseSets / prsHitBySession (Life OS port) (76.272ms)
+▶ studyArmFor — only randomised exercises carry an arm
+  ✔ enrolled exercises resolve to their frozen arm (1.0917ms)
+  ✔ unseen swaps, adaptations and new exercises are excluded, never defaulted to Arise (0.2229ms)
+  ✔ no enrollment (or an empty one) means no study, not a free Arise label (0.1477ms)
+  ✔ deterministic across reloads (same enrollment object → same answer) (0.1925ms)
+✔ studyArmFor — only randomised exercises carry an arm (3.2561ms)
+▶ ledger + export never carry a fake arm
+  ✔ unassigned exercise records assignedArm null and is excluded from both analyses (102.6028ms)
+  ✔ a genuinely randomised DP exercise keeps its arm end to end (6.5499ms)
+✔ ledger + export never carry a fake arm (109.4329ms)
+▶ randomised assignment (participant × exercise)
+  ✔ balances arms EXACTLY per participant (#P0 stratified) (4.5422ms)
+  ✔ varies lift↔arm pairing across participants (no exercise confound) (2.8344ms)
+  ✔ is deterministic and persists before treatment (1.7323ms)
+  ✔ round-trips through export/import allowlist (2.2795ms)
+  ✔ scheduledExerciseIds reads the active schedule (0.3051ms)
+✔ randomised assignment (participant × exercise) (13.2786ms)
+▶ treatment enforcement + adherence vs assigned arm
+  ✔ adherence measures against the ASSIGNED prescription (#10) (106.0197ms)
+  ✔ primary comparison counts only ASSIGNED transitions and separates shadow (#11-adjacent) (66.4465ms)
+✔ treatment enforcement + adherence vs assigned arm (173.0699ms)
+▶ §1 dedicated study export — the participant file IS the ingest file
+  ✔ imports through real pilot ingestion with identity, metadata and evidence intact (118.0379ms)
+  ✔ carries exportedAt at both envelope layers plus a versioned schema (2.5645ms)
+  ✔ excludes backup-only private data (profile, templates, credentials, health) (1.5905ms)
+  ✔ carries product events but never crash/error diagnostics (1.8664ms)
+  ✔ is deterministic for the same logical content (0.8573ms)
+  ✔ repeated study exports fold into ONE participant (2.8086ms)
+✔ §1 dedicated study export — the participant file IS the ingest file (133.6715ms)
+▶ §2 missing-export-timestamp semantics
+  ✔ flags a file without a usable export stamp as missing-export-timestamp, not never-exported (2.7362ms)
+  ✔ a normally stamped export never gets the missing-timestamp flag (14.8781ms)
+✔ §2 missing-export-timestamp semantics (17.9717ms)
+▶ §3 abandonment warning uses the terminal denominator
+  ✔ 1 abandoned + 3 unresolved starts does NOT trigger high-abandonment (1.7594ms)
+  ✔ 3 abandoned + 1 completed DOES trigger high-abandonment-75pct (1.3003ms)
+✔ §3 abandonment warning uses the terminal denominator (3.4397ms)
+▶ §4/§5 guidance and privacy wording stay honest
+  ✔ documents the exact eligibility gates (0.363ms)
+  ✔ never describes the backup as the study export (175.0114ms)
+  ✔ withdrawal section: assignments stop, history preserved, shared files need operator-side deletion (0.2155ms)
+  ✔ no local-deletion claim reaches copies already shared (0.2487ms)
+✔ §4/§5 guidance and privacy wording stay honest (176.1141ms)
+▶ § recursive closure — no nested passthrough, vocabularies locked
+  ✔ private fields injected at every nesting level never appear in the exported JSON (1.7298ms)
+  ✔ unknown vocabulary strings are dropped; valid ids and labels never travel (8.3763ms)
+  ✔ evaluation ledger is locked to the analysis schema with exact key sets (1.586ms)
+  ✔ schedule adaptations and nested scheduled blocks are rebuilt, not passed through (6.9205ms)
+  ✔ raw-store analysis equals study-export analysis for the frozen study outputs (23.6052ms)
+  ✔ schema-version invariant is documented next to the serializers (0.5091ms)
+✔ § recursive closure — no nested passthrough, vocabularies locked (43.2713ms)
+▶ § export minimisation — only disclosed, study-required data leaves
+  ✔ session.note "PRIVATE TEXT" and every free-text field never appear in the exported JSON (0.6702ms)
+  ✔ excludes onboarding, credentials, health summary, crash diagnostics and unknown fields; keeps required evidence (0.5593ms)
+  ✔ serialisers are direct allowlists: unknown keys dropped, known keys kept (0.2561ms)
+  ✔ disclosure contract: every exported category is stated in participant-facing study copy (0.8453ms)
+✔ § export minimisation — only disclosed, study-required data leaves (2.5702ms)
+▶ § malicious shapes fail closed — scalars type-locked
+  ✔ hostile scalars, objects and arrays never reach the exported JSON; valid scalars survive (2.2061ms)
+  ✔ valid scalars in a clean store round-trip exactly (no over-blocking) (2.7952ms)
+✔ § malicious shapes fail closed — scalars type-locked (5.2058ms)
+▶ §6 numeric boundary — coercible values fail closed to null
+  ▶ direct serializers (no JSON round-trip): the truth tables
+    ✔ number fields reject every coercible value and every numeric string (0.678ms)
+    ✔ integer fields reject every coercible value; fractional and numeric strings never pass (0.4498ms)
+    ✔ readiness numbers reject every coercible value (0.5558ms)
+    ✔ canonical numbers travel: 3 → 3, 3.5 → 3.5, 0 → 0, -2.25 → -2.25 (0.679ms)
+    ✔ integer fields additionally require Number.isInteger: 3 → 3, 3.5 → null, "3.5" → null (0.2356ms)
+    ✔ set-level canonical string numbers are untouched: "8"/"42.5"/"7.5" travel as strings (0.2249ms)
+  ✔ direct serializers (no JSON round-trip): the truth tables (14.4637ms)
+  ▶ real nested injection through buildStudyExportPayload
+    ✔ every poisoned numeric slot exports null; canonical siblings survive; no malformed value reaches the JSON (128.2395ms)
+  ✔ real nested injection through buildStudyExportPayload (128.3606ms)
+✔ §6 numeric boundary — coercible values fail closed to null (143.6133ms)
+▶ participant self-onboarding (More → study card) joins cleanly
+  ✔ ensures a stable pseudonymous id, then freezes a balanced enrollment (9.36ms)
+  ✔ an empty schedule falls back to exercised history, and audit is honest without enrollment (0.2633ms)
+  ✔ leaving is just dropping the enrollment — recorded pairs are untouched (0.2024ms)
+✔ participant self-onboarding (More → study card) joins cleanly (11.3014ms)
+▶ canonical transition predicate
+  ✔ accepts exactly the rows that meet every requirement (0.9426ms)
+  ✔ evaluateTransitionEvidence buckets every rejection reason separately (1.0055ms)
+✔ canonical transition predicate (3.2374ms)
+▶ canonical evidence counting
+  ✔ total = valid arise + valid double-progression; invalid rows never count (0.815ms)
+  ✔ unconsented participants contribute nothing (0.2705ms)
+  ✔ unidentified exports earn no breadth credit (0.2518ms)
+  ✔ invalid provenance earns no transition credit and no contributor credit (0.2187ms)
+  ✔ cross-export duplicate rows fold instead of inflating depth (0.285ms)
+✔ canonical evidence counting (2.2926ms)
+▶ canonical gate evaluation
+  ✔ 995 arise + 5 double-progression fails the per-arm gate (77.7479ms)
+  ✔ 400 arise + 400 dp + 200 invalid rows fails the total-transition gate (4.5296ms)
+  ✔ 500 arise + 500 dp across 10 genuine contributors passes every gate (11.0083ms)
+  ✔ identifies the exact deficits below the gates (0.5774ms)
+✔ canonical gate evaluation (94.2436ms)
+▶ one readiness result everywhere
+  ✔ cohort.gate.eligible and fieldStudy status agree on an insufficient cohort (442.6989ms)
+  ✔ cohort.gate.eligible and fieldStudy status agree on a ready cohort (501.6142ms)
+  ✔ unconsented and unidentified participants move every surface identically (387.0971ms)
+  ✔ override: a lowered configuration moves every surface together (3.6822ms)
+  ✔ override: minimumSegmentSamples labels metrics but never changes readiness (3.2147ms)
+  ✔ inverse: readiness false blocks the claim even when metric-level sample gates pass (4.1457ms)
+✔ one readiness result everywhere (1342.9093ms)
+▶ baseline arms
+  ✔ double progression adds a rep until top of range (2.9019ms)
+  ✔ double progression steps load only at the very top of range (0.351ms)
+  ✔ linear progression always adds its increment for loaded lifts (0.7401ms)
+  ✔ linear progression degenerates to rep gains for bodyweight lifts (0.3548ms)
+  ✔ flat arm repeats the last performance exactly (1.1237ms)
+  ✔ all arms handle cold-start without crashing (1.427ms)
+✔ baseline arms (9.2634ms)
+▶ runComparativeStudy
+  ✔ scores every arm on identical prior-only transitions (0.3495ms)
+  ✔ is deterministic (46.0112ms)
+  ✔ withholds conclusions below the sample gate (0.3084ms)
+  ✔ rising history makes flat-arm conservatism measurable and success rates sane (0.4664ms)
+  ✔ never lets a later session influence an earlier prescription (prior-only) (7.7674ms)
+  ✔ reports per-exercise segments gated by sample size (0.2764ms)
+  ✔ pairs every baseline against arise on identical transitions (0.2157ms)
+  ✔ segments the replay by experience level (0.1653ms)
+  ✔ every feature carries provenance with timestamps <= prescription date (#5) (62.2482ms)
+  ✔ provenance helper flags a future-dated observation (#5) (0.5789ms)
+✔ runComparativeStudy (119.1167ms)
+▶ evaluation ledger portability
+  ✔ unions ledgers by id and prefers resolved records (0.2762ms)
+  ✔ travels inside the backup payload and round-trips through import/merge (11.7853ms)
+✔ evaluation ledger portability (12.2216ms)
+▶ studyCoverage
+  ✔ reports deficits against the minimum segment size (1.6946ms)
+✔ studyCoverage (1.8071ms)
+▶ coach comparator
+  ✔ scores coach prescriptions that precede a real exposure (1.107ms)
+  ✔ ignores prescriptions with no following exposure (0.2519ms)
+✔ coach comparator (1.6731ms)
+▶ deload validation
+  ✔ detects an applied cut and the rebound (1.576ms)
+  ✔ marks a decision not followed by a cut as unapplied (0.28ms)
+  ✔ collects decisions from schedule adaptation histories (0.243ms)
+✔ deload validation (2.4457ms)
+▶ substitution validation
+  ✔ measures adoption and retention of swapped-in exercises (1.1722ms)
+✔ substitution validation (1.6467ms)
+▶ segmented comparisons
+  ✔ segments every requested dimension with gated arms (0.3097ms)
+  ✔ classifies structure and equipment from the exercise database (0.1043ms)
+  ✔ buckets readiness high vs low using nearby logs (0.0833ms)
+  ✔ never classifies a transition with a readiness score logged AFTER it (81.8145ms)
+  ✔ readiness classification uses only prior-or-same-day scores (22.3461ms)
+  ✔ rep-range segments are defined by PRIOR exposures only (86.2382ms)
+✔ segmented comparisons (191.358ms)
+▶ movement pattern classification
+  ✔ classifies known patterns and returns null for unknown ids (0.921ms)
+✔ movement pattern classification (73.3107ms)
+▶ scoreSubstitution invariants
+  ✔ same muscle scores above different muscle, all else equal (0.8312ms)
+  ✔ a candidate identical to the target is heavily penalised (self-exclusion) (0.2729ms)
+  ✔ disliked exercises are penalised below neutral alternatives (0.2206ms)
+  ✔ preferred exercises gain over identical un-preferred candidates (0.1979ms)
+  ✔ history familiarity adds diminishing returns (capped bonus) (0.2305ms)
+  ✔ declared manual substitutions get a strong boost (0.2339ms)
+  ✔ loadability is rewarded, un-loadability punished (0.2329ms)
+  ✔ scoring is deterministic (0.1875ms)
+  ✔ rewards exact movement-pattern matches above near and unrelated patterns (1.0024ms)
+✔ scoreSubstitution invariants (4.1726ms)
+▶ rankedSubstitutions
+  ✔ returns up to limit candidates, never the target itself (17.2207ms)
+  ✔ respects equipment filtering when equipment is provided (9.1173ms)
+  ✔ is deterministic across calls (6.7286ms)
+✔ rankedSubstitutions (33.3713ms)
+▶ substitutionOptions (full pipeline)
+  ✔ honours disliked lists and limits (89.6385ms)
+  ✔ boosts user-declared preferred exercises toward the top (6.7104ms)
+✔ substitutionOptions (full pipeline) (96.5699ms)
+▶ validateSubstitutionChain
+  ✔ passes a kit-compatible chain (0.3868ms)
+  ✔ returns the documented shape { valid, issues } even with unknown exercises (0.1572ms)
+✔ validateSubstitutionChain (0.6967ms)
+▶ substitutionByPerformance
+  ✔ ranks candidates the user has actually performed well on (2.6604ms)
+✔ substitutionByPerformance (2.7757ms)
+▶ catalog same-kit coverage
+  ✔ keeps the soft substitution-gap work queue limited to intentional special cases (0.498ms)
+  ✔ marks pull-up variants as requiring a pull-up bar (0.1491ms)
+  ✔ does not require optional loading equipment for bodyweight-capable movements (0.1251ms)
+  ✔ uses modality-specific rows instead of requiring two alternative implements (0.0987ms)
+  ✔ supports explicit either-or equipment without pretending both implements are required (0.1573ms)
+✔ catalog same-kit coverage (1.2426ms)
+▶ observePeerDevice
+  ✔ records a peer device from a pulled payload envelope (2.4503ms)
+  ✔ is best-effort: garbage, missing device, or no payload change nothing (0.8836ms)
+  ✔ keeps only the most recent entries (bounded registry) (166.9013ms)
+  ✔ normalize + sanitize carry devices without leaking secrets (5.5681ms)
+✔ observePeerDevice (177.2904ms)
+▶ runSync records peers through a real cycle
+  ✔ pull of a device-stamped remote populates the registry and merges safely (5.0577ms)
+✔ runSync records peers through a real cycle (5.2439ms)
+▶ sync config
+  ✔ defaults are privacy-first: no url, no password, encryption on (2.4709ms)
+  ✔ normalizeSyncConfig keeps persisted fields and caps queue/log growth (0.3307ms)
+  ✔ sanitizeSyncConfig never exposes the password, states that it is set (0.2165ms)
+  ✔ pushLog caps at the log limit (1.6881ms)
+✔ sync config (6.1914ms)
+▶ offline queue + backoff
+  ✔ backoff doubles and caps at MAX_BACKOFF_MS (0.3059ms)
+  ✔ enqueueOffline appends with the reason and caps the queue (0.3829ms)
+  ✔ drainQueue removes succeeded items and schedules failed ones with backoff (0.7308ms)
+  ✔ drainQueue on an empty queue is a no-op (0.2045ms)
+✔ offline queue + backoff (2.0174ms)
+▶ runSync cycle
+  ✔ pushes the merged payload and stamps the config (1.3753ms)
+  ✔ merges a remote payload and pushes the converged result (93.6773ms)
+  ✔ pushes the converged union of local and remote events (1.1894ms)
+  ✔ preserves live evidence provenance on trusted sync while ordinary import still downgrades it (1.6496ms)
+  ✔ adopts one enrolled study identity across trusted sync without copying device-local consent (1.8895ms)
+  ✔ refuses incompatible frozen enrollment metadata even when arm assignments match (1.0317ms)
+  ✔ refuses to merge two different active study participants onto one sync path (0.6964ms)
+  ✔ treats a 404-style pull as a first sync, not an error (0.355ms)
+  ✔ records a sync error in config without throwing (0.2922ms)
+  ✔ never writes sync credentials into the pushed payload (0.2788ms)
+  ✔ round-trips through parseImportFile (the remote is a valid backup) (0.874ms)
+✔ runSync cycle (104.1208ms)
+▶ status label
+  ✔ reflects error > queued > synced > never (0.1767ms)
+✔ status label (0.2786ms)
+▶ telemetry payload sanitizer
+  ✔ strips health and identity keys, keeps scalar facts (2.2568ms)
+  ✔ drops object/array values and truncates long strings (0.4399ms)
+  ✔ neutralises prototype-pollution keys (0.2756ms)
+✔ telemetry payload sanitizer (4.3775ms)
+▶ consent gating
+  ✔ records nothing without consent (0.7867ms)
+  ✔ sanitizes on write when consented (2.0258ms)
+  ✔ granular options are off by default and gate their metric types (0.4186ms)
+  ✔ exposes the option list for the settings UI (0.3195ms)
+✔ consent gating (160.2296ms)
+▶ error diagnostics isolation
+  ✔ records nothing unless errorDiagnostics is opted in (1.035ms)
+  ✔ caps the crash-log store at 50 and stores only safe fields (5.3268ms)
+  ✔ keeps error events out of the product ledger (0.5012ms)
+  ✔ clear functions empty both stores (0.3802ms)
+✔ error diagnostics isolation (7.5917ms)
+▶ test-data generator: determinism
+  ✔ the same seed yields byte-identical stores (14.7025ms)
+  ✔ different seeds yield different data (seeds actually matter) (1.4918ms)
+  ✔ the mulberry32 stream itself is pinned (1.0419ms)
+✔ test-data generator: determinism (18.7575ms)
+▶ test-data generator: journey fixtures are valid app data
+  ✔ journey "beginner" passes boot-time store validation (1.647ms)
+  ✔ journey "beginner" survives normalisation and feeds every consumer (102.1201ms)
+  ✔ journey "consistent" passes boot-time store validation (0.8271ms)
+  ✔ journey "consistent" survives normalisation and feeds every consumer (9.4091ms)
+  ✔ journey "noisy" passes boot-time store validation (0.9566ms)
+  ✔ journey "noisy" survives normalisation and feeds every consumer (78.1444ms)
+  ✔ journey "layoff" passes boot-time store validation (6.3858ms)
+  ✔ journey "layoff" survives normalisation and feeds every consumer (13.7291ms)
+  ✔ profile knobs shape the data: low adherence → fewer sessions, layoff → a long gap (2.6795ms)
+  ✔ a noisy journey contains noisy sessions (the fixture is what it claims) (0.5129ms)
+✔ test-data generator: journey fixtures are valid app data (217.4638ms)
+▶ trainRecommendation — explanation integrity
+  ✔ returns null without a profile (nothing to recommend from) (1.7762ms)
+  ✔ surfaces the engine’s top template — same pick as recommendTemplate (output unchanged) (89.6161ms)
+  ✔ every "Used to choose" factor is exactly what reaches the scorer — and nothing else (20.7736ms)
+  ✔ history is never described as a ranking input — it lives in adaptation inputs (80.6701ms)
+  ✔ no history → no history factor anywhere (never claims absent evidence) (10.9209ms)
+  ✔ preferred duration is a labelled preference — never presented as the programme’s measured duration (11.7006ms)
+  ✔ a measured estimate that fits inside the preference is not flagged as capped (9.5019ms)
+  ✔ a measured estimate over the preference is honestly flagged as capped (44.7011ms)
+  ✔ absent/invalid preferred minutes disappear entirely (82.823ms)
+  ✔ equipment substitutions appear as adaptation, not as a ranking claim (6.4564ms)
+  ✔ a full-kit gym profile recommends a gym split, not the bodyweight default (6.2774ms)
+  ✔ ranks custom templates alongside built-ins (legacy custom data still works) (1.4039ms)
+  ✔ the previewed schedule is exactly what generateProgramme builds from Start (14.0588ms)
+  ✔ soft-deleted templates never win the recommendation (60.647ms)
+  ✔ legacy onboarding shapes (missing optional fields) still recommend (6.3923ms)
+✔ trainRecommendation — explanation integrity (455.1969ms)
+▶ feature UI architecture boundary
+  ✔ keeps persistence and repositories behind services (15.5588ms)
+✔ feature UI architecture boundary (16.7414ms)
+▶ weight unit input boundary
+  ✔ round-trips pound input through canonical kg storage (1.1329ms)
+  ✔ preserves kg input text without an unnecessary conversion (0.2161ms)
+  ✔ keeps blank and invalid input safe (0.1712ms)
+  ✔ formats canonical kg in the selected display unit (6.391ms)
+  ✔ round-trips common imperial equipment values exactly enough for setup (0.3512ms)
+✔ weight unit input boundary (9.8833ms)
+▶ training age personalisation
+  ✔ phases and multipliers (2.8266ms)
+  ✔ trainingAgeMonths counts from first logged session (5.6258ms)
+  ✔ cold-start load bumps scale by training age (19.9692ms)
+✔ training age personalisation (30.1479ms)
+▶ assisted progression
+  ✔ adds reps first, keeps assist (71.7076ms)
+  ✔ reduces assist at top of range (4.8215ms)
+  ✔ assist never drops below zero (3.9906ms)
+  ✔ session generator surfaces assist in the load hint (4.9004ms)
+✔ assisted progression (86.0409ms)
+▶ set progression
+  ✔ requires two distinct sessions, not two sets from one session (0.773ms)
+  ✔ adds a set after two top-of-range sessions with room (13.0801ms)
+  ✔ holds when RPE was high (0.5347ms)
+  ✔ caps at maxSets (0.4234ms)
+✔ set progression (15.2514ms)
+▶ long-break recovery
+  ✔ restarts conservatively after a long gap without erasing training age (2.9413ms)
+  ✔ does not trigger a return plan for a normal training gap (0.2532ms)
+✔ long-break recovery (3.3468ms)
+▶ ROM progression
+  ✔ nudges deeper only at top of range (108.5798ms)
+  ✔ holds at full ROM and for unsupported exercises (0.5542ms)
+✔ ROM progression (109.2858ms)
+▶ weekly grouping
+  ✔ keeps Monday-start weeks in one key (regression: deload detection) (0.4276ms)
+✔ weekly grouping (0.5233ms)
+▶ readiness ↔ performance validation
+  ✔ recovers a planted correlation with session RPE (0.9755ms)
+  ✔ falls back to nearest prior readiness within 3 days (0.1828ms)
+  ✔ reports insufficient data gracefully (0.11ms)
+✔ readiness ↔ performance validation (1.4204ms)
+▶ deload outcomes
+  ✔ detects a volume-cut week and measures the rebound (0.6463ms)
+✔ deload outcomes (0.7351ms)
+▶ mesocycle comparison
+  ✔ splits into ~4-week cycles and compares last vs previous (0.6283ms)
+  ✔ needs enough sessions (0.1155ms)
+✔ mesocycle comparison (0.9031ms)
+▶ planned vs completed per exercise
+  ✔ flags skipped exercises (0.5045ms)
+✔ planned vs completed per exercise (0.6193ms)
+▶ recommendation follow-through
+  ✔ gains are higher when recommendations are met (8.0957ms)
+✔ recommendation follow-through (8.2044ms)
+▶ webdavBaseUrl
+  ✔ trims trailing slashes and rejects non-https (1.5744ms)
+✔ webdavBaseUrl (2.8082ms)
+▶ makeWebdavAdapter
+  ✔ pull returns null on 404 (first sync) and exact BYTES on 200 (1.9702ms)
+  ✔ pull raises on other error statuses (0.7534ms)
+  ✔ push PUTs the body to the file URL and fails on error status (0.7205ms)
+  ✔ detaches the external abort listener when a request settles (0.6032ms)
+✔ makeWebdavAdapter (4.5364ms)
+▶ webdavCheck
+  ✔ reports WebDAV capability from headers and rejects 401 (0.8069ms)
+✔ webdavCheck (100.7873ms)
+▶ E2E encryption round-trip through runSync
+  ✔ sealed payload decrypts with the passphrase, not the app password (3949.5856ms)
+  ✔ buildExportPayload output decrypts and round-trips via parseImportFile (1917.1618ms)
+  ✔ sync refuses to run encrypted without a passphrase (0.745ms)
+✔ E2E encryption round-trip through runSync (5868.1882ms)
+▶ two-device encrypted sync over bytes
+  ✔ A pushes sealed → B pulls, decrypts, merges, pushes converged payload (3602.7746ms)
+  ✔ wrong passphrase: clear error, local history intact, remote untouched (1780.0108ms)
+  ✔ corrupted ciphertext is refused, not merged as garbage (1174.0999ms)
+  ✔ empty remote is a first sync, not a failure (788.1622ms)
+  ✔ plaintext mode round-trips over the same byte transport (2.4409ms)
+✔ two-device encrypted sync over bytes (7347.9964ms)
+▶ workoutMode — preference resolution
+  ✔ accepts exactly the three contract modes (1.5829ms)
+  ✔ keeps valid stored modes (0.3391ms)
+  ✔ falls back to standard for legacy/missing/invalid values (0.191ms)
+  ✔ patch persists the pick without clobbering sibling preferences (0.196ms)
+  ✔ patch normalises an invalid pick instead of persisting it (0.1667ms)
+  ✔ labels every mode for the "Last used" hint (0.1723ms)
+✔ workoutMode — preference resolution (143.3709ms)
+▶ workoutMode — store migration
+  ✔ keeps a valid stored mode through migrations (0.6897ms)
+  ✔ defaults legacy stores (no key) to standard (0.2194ms)
+  ✔ resets an invalid hand-edited value to standard (0.1801ms)
+  ✔ never invents preferences on a hostile/empty payload (0.2296ms)
+✔ workoutMode — store migration (1.6772ms)
+▶ workout application service
+  ✔ upserts history, marks schedule done, clears the draft, and returns save metrics (10.4387ms)
+  ✔ does not mutate the input store or duplicate a re-saved session (0.4953ms)
+  ✔ builds save telemetry and toast after the workflow completes (1.6892ms)
+  ✔ cancellation planning protects completed work and owns abandon metrics (0.3965ms)
+✔ workout application service (14.5694ms)
+ℹ tests 1389
+ℹ suites 390
+ℹ pass 1389
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 177363.8898
+
+> arise@0.1.0 build
+> node scripts/gen-offline.cjs && vite build
+
+gen-offline: wrote public\offline.html (1740 bytes)
+vite v6.4.3 building for production...
+transforming...
+✓ 178 modules transformed.
+rendering chunks...
+npm.cmd : [plugin vite:reporter] 
+At line:5 char:1
++ & $npm run verify *>&1 | Out-File "$r\docs\baseline\verify-baseline.t ...
++ ~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([plugin vite:reporter] :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+(!) C:/Users/rober/arise/src/lib/idb.js is dynamically imported by C:/Users/rober/arise/src/lib/idb-tx.js, 
+C:/Users/rober/arise/src/lib/store.js but also statically imported by C:/Users/rober/arise/src/lib/archive.js, 
+C:/Users/rober/arise/src/lib/audit.js, C:/Users/rober/arise/src/lib/integrity.js, 
+C:/Users/rober/arise/src/lib/migrationLog.js, C:/Users/rober/arise/src/lib/snapshots.js, 
+C:/Users/rober/arise/src/lib/storage.js, dynamic import will not move module into another chunk.
+
+computing gzip size...
+dist/index.html                                            4.62 kB │ gzip:  1.59 kB
+dist/assets/analytics-worker-CvuGAFG0.js                  27.98 kB
+dist/assets/index-CtUkhn67.css                            42.75 kB │ gzip:  9.18 kB
+dist/assets/settingsService-sc2p-tn-.js                    0.22 kB │ gzip:  0.14 kB
+dist/assets/voiceCoach-BNL746kb.js                         0.50 kB │ gzip:  0.31 kB
+dist/assets/autoSync-BhFYB35x.js                           0.54 kB │ gzip:  0.36 kB
+dist/assets/experienceMode-DpR7LGUi.js                     0.55 kB │ gzip:  0.32 kB
+dist/assets/units-C1gBzqP9.js                              0.72 kB │ gzip:  0.33 kB
+dist/assets/schedule-DgE2UPZS.js                           0.76 kB │ gzip:  0.39 kB
+dist/assets/storageQuota-DAD2bKsM.js                       0.84 kB │ gzip:  0.37 kB
+dist/assets/quotaGuard-BbyVeyim.js                         1.77 kB │ gzip:  0.77 kB
+dist/assets/cryptoBackup-CjqwyiPl.js                       1.89 kB │ gzip:  0.90 kB
+dist/assets/crossTabStore-Dm8mfxmF.js                      2.04 kB │ gzip:  1.01 kB
+dist/assets/TrainingPolicySettings-B5UxGFzQ.js             2.37 kB │ gzip:  0.93 kB
+dist/assets/GuidedSettings-DIfZxO8v.js                     2.37 kB │ gzip:  1.19 kB
+dist/assets/attributes-B1HF80b_.js                         2.73 kB │ gzip:  1.22 kB
+dist/assets/InstallCard-BrC469Pr.js                        2.96 kB │ gzip:  1.16 kB
+dist/assets/demoData-DeQb3Rda.js                           3.14 kB │ gzip:  1.69 kB
+dist/assets/TeachingPanel-CCHIDEJP.js                      3.30 kB │ gzip:  1.34 kB
+dist/assets/snapshots-DuvmEDKs.js                          3.40 kB │ gzip:  1.51 kB
+dist/assets/printReport-D7CwTdtT.js                        3.86 kB │ gzip:  2.06 kB
+dist/assets/appCsvImport-C4unbw32.js                       4.01 kB │ gzip:  1.87 kB
+dist/assets/workoutService-Dvz11hxI.js                     4.36 kB │ gzip:  1.97 kB
+dist/assets/AppearanceAccessibilitySettings-ljxkmEOF.js    4.36 kB │ gzip:  1.63 kB
+dist/assets/mesocycle-D20nZAEi.js                          8.40 kB │ gzip:  3.41 kB
+dist/assets/feedbackClassifier-Dnu408lM.js                 9.50 kB │ gzip:  3.60 kB
+dist/assets/studyExport-afXAg4TN.js                        9.51 kB │ gzip:  3.06 kB
+dist/assets/FeedbackSettings-CLAPGU_g.js                   9.52 kB │ gzip:  3.35 kB
+dist/assets/progressionPrescription-QFqKHQat.js            9.62 kB │ gzip:  3.25 kB
+dist/assets/webdav-B0EzwWIH.js                             9.72 kB │ gzip:  3.81 kB
+dist/assets/ExerciseBrowser-aKzbNX7K.js                    9.91 kB │ gzip:  2.73 kB
+dist/assets/SyncPanel-BSVv7b0N.js                          9.93 kB │ gzip:  3.36 kB
+dist/assets/safety-DJPNzMp2.js                            10.04 kB │ gzip:  4.10 kB
+dist/assets/progressionPolicies-BfoRBuLD.js               10.24 kB │ gzip:  4.11 kB
+dist/assets/AiCoachSettings-Cs7f0pH4.js                   10.48 kB │ gzip:  4.44 kB
+dist/assets/StorageDiagnostics-DiLqTk5P.js                10.86 kB │ gzip:  4.08 kB
+dist/assets/sessionQuality-LlBJJ1ja.js                    10.93 kB │ gzip:  4.20 kB
+dist/assets/EvidenceDashboard-CX3q-cCD.js                 13.55 kB │ gzip:  4.88 kB
+dist/assets/Onboarding-BYmtqN6P.js                        14.00 kB │ gzip:  4.32 kB
+dist/assets/exerciseTeaching-BTQw7dbt.js                  14.68 kB │ gzip:  5.16 kB
+dist/assets/EvidenceSettings-DNxH9IbO.js                  16.10 kB │ gzip:  5.66 kB
+dist/assets/GuidedRunner-Bucv3AlE.js                      16.46 kB │ gzip:  5.91 kB
+dist/assets/ExerciseIllustration-0fEF4tj6.js              18.57 kB │ gzip:  4.59 kB
+dist/assets/TodayView-grJgVorT.js                         18.59 kB │ gzip:  5.72 kB
+dist/assets/GymModePanel-GZoEXvhU.js                      19.42 kB │ gzip:  6.91 kB
+dist/assets/product-ZOppqWU4.js                           19.43 kB │ gzip:  7.37 kB
+dist/assets/progressionModel-GDrcJ9kA.js                  26.74 kB │ gzip:  9.03 kB
+dist/assets/ProgressView-4-3Gv5yi.js                      39.22 kB │ gzip: 10.37 kB
+dist/assets/TrainView-C_TEBMPb.js                         40.82 kB │ gzip: 11.48 kB
+dist/assets/SessionRunner-odcsxlJP.js                     49.18 kB │ gzip: 15.44 kB
+dist/assets/programming-BLxXsZGU.js                       53.99 kB │ gzip: 18.84 kB
+dist/assets/MoreView-B9Xsey8L.js                          59.68 kB │ gzip: 18.06 kB
+dist/assets/vendor-D3F3s8fL.js                           141.72 kB │ gzip: 45.48 kB
+dist/assets/catalogue-HG6CHQmv.js                        177.81 kB │ gzip: 27.08 kB
+dist/assets/index-CIOXa6kU.js                            234.14 kB │ gzip: 71.02 kB
+✓ built in 1m 26s

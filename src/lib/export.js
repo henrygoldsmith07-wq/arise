@@ -2,6 +2,7 @@
 // No cloud sync; the user owns the file.
 
 import { runMigrations, STORE_SCHEMA_VERSION, mergeCustomTemplates, normaliseHistory } from './store.js';
+import { mergeExperiments } from './trainingExperiments.js';
 import { getEventHistory } from './telemetry.js';
 import { loadEvaluationLedger, mergeEvaluationLedgers } from './longitudinal.js';
 import { ensureStudyParticipantId } from './studyIdentity.js';
@@ -173,7 +174,7 @@ export async function parseBackupFile(textOrEnvelope){
 // Anything else in a hand-edited backup is dropped rather than persisted forever.
 // studyParticipantId is the pseudonymous study identity (studyIdentity.js) —
 // preserved so repeated exports fold into ONE field-study participant.
-const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','archivedHistory','preferences','gymPrefs','readinessLog','programHistory','evaluationLedger','customTemplates','studyParticipantId','studyEnrollment','studyStatus','studyStatusChangedAtISO','tombstones'];
+const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','archivedHistory','preferences','gymPrefs','readinessLog','programHistory','evaluationLedger','customTemplates','experiments','studyParticipantId','studyEnrollment','studyStatus','studyStatusChangedAtISO','tombstones'];
 
 // ── Import hardening (malicious/hostile JSON) ───────────────────────────────
 // Imports are untrusted input. Beyond schema validation, three structural
@@ -302,6 +303,7 @@ export function validateStoreData(data){
   if(data.readinessLog!=null && !Array.isArray(data.readinessLog)) errors.push('Readiness log must be an array.');
   if(data.programHistory!=null && !Array.isArray(data.programHistory)) errors.push('Program history must be an array.');
   if(data.customTemplates!=null && !Array.isArray(data.customTemplates)) errors.push('Custom templates must be an array.');
+  if(data.experiments!=null && !Array.isArray(data.experiments)) errors.push('Experiments must be an array.');
   return { ok: errors.length===0, errors };
 }
 
@@ -379,6 +381,7 @@ export function mergeStores(current, imported, strategy='merge'){
     readinessLog: [...(currentStore.readinessLog||[]), ...(importedStore.readinessLog||[])].filter((v,i,a)=> a.findIndex(x=> x.dateISO===v.dateISO && x.at===v.at)===i),
     evaluationLedger: mergeEvaluationLedgers(currentStore.evaluationLedger, importedStore.evaluationLedger),
     customTemplates: applyTombstones(mergeCustomTemplates(currentStore.customTemplates, importedStore.customTemplates), tombstones, 'templates'),
+    experiments: mergeExperiments(currentStore.experiments, importedStore.experiments),
     programHistory: [...(currentStore.programHistory||[]), ...(importedStore.programHistory||[])].filter((v,i,a)=> a.findIndex(x=> x.programId===v.programId && x.version===v.version)===i),
     // Deletions propagate through the canonical newest-wins union.
     tombstones,

@@ -7,6 +7,8 @@ import { reviewCompletedWeek, applyWeeklyReview } from '../lib/mesocycle.js';
 import { attachOutcome } from '../lib/longitudinal.js';
 import { recordEvent } from '../lib/telemetry.js';
 import { pushToPulse } from '../lib/pulse.js';
+import { integrationEnabledByBuild } from '../lib/integrations.js';
+import { workoutQualityReport } from '../lib/workoutQualityReport.js';
 export { cancellationPlan } from './workoutCancellationService.js';
 
 export function completeWorkout({ store, payload }){
@@ -51,19 +53,33 @@ export function completeWorkout({ store, payload }){
   }catch{}
 
   const savedSets = (payload.blocks || []).reduce((n,b)=> n + (b.sets || []).filter(s=> s.completed).length, 0);
+
+  // Post-workout debrief: quality vs target + recovery context, computed from
+  // the SAME data the save already touched. Never throws — a debrief failure
+  // must not fail the save.
+  let qualityReport = null;
+  try{
+    qualityReport = workoutQualityReport(payload, {
+      readinessLog: current.readinessLog || [],
+      schedule: activeSchedule,
+      historyBefore,
+    });
+  }catch{}
+
   return {
     store: { ...current, history, activeSchedule, activeWorkout: null },
     historyBefore,
     history,
     adaptation,
     weeklyReview,
+    qualityReport,
     summary: { savedSets },
   };
 }
 
 export function completeWorkoutWorkflow({ store, payload, saveStartedAt = null, performanceNow = null }){
   const result = completeWorkout({ store, payload });
-  const { store:next, historyBefore, history, adaptation, weeklyReview, summary } = result;
+  const { store:next, historyBefore, history, adaptation, weeklyReview, qualityReport, summary } = result;
   try{
     attachOutcome({
       sessionId:payload.id,
@@ -84,13 +100,18 @@ export function completeWorkoutWorkflow({ store, payload, saveStartedAt = null, 
   }
   if(adaptation?.changed) events.push(['programme:adapt', { sessionId:payload.id, changes:adaptation.changes, decision:adaptation.decision }]);
   if(weeklyReview?.changed) events.push(['programme:weekly-review', { basisWeek:weeklyReview.entry.basisKey, changes:weeklyReview.changes }]);
+  if(qualityReport) events.push(['session:quality-computed', { sessionId:payload.id, quality:qualityReport.quality, band:qualityReport.band }]);
   return {
     ...result,
     events,
     toast:{
       title:`${payload.title} saved`,
-      detail:[`${summary.savedSets} set${summary.savedSets===1?'':'s'}`, `${payload.durationMinutes} min`].join(' · '),
-      note:adaptation?.changed ? 'Your next sessions were adjusted from this result.' : null,
+      detail:[
+        `${summary.savedSets} set${summary.savedSets===1?'':'s'}`,
+        `${payload.durationMinutes} min`,
+        qualityReport ? `quality ${qualityReport.quality}/100 (${qualityReport.band})` : null,
+      ].filter(Boolean).join(' · '),
+      note:adaptation?.changed ? 'Your next sessions were adjusted from this result.' : (qualityReport ? qualityReport.whatToChangeNext[0] : null),
     },
   };
 }
@@ -107,7 +128,9 @@ export function runPostSaveIntegrations({ store, payload, history, setStore }){
     .catch(()=>{});
   try{
     const adapter = typeof window !== 'undefined' ? window.__PULSE_ADAPTER__ : null;
-    if(store?.preferences?.pulseEnabled && adapter){
+    // Three gates: the build contains the integration, the user consented,
+    // and an adapter is actually injected. Any one missing means no request.
+    if(integrationEnabledByBuild() && store?.preferences?.pulseEnabled && adapter){
       Promise.resolve(pushToPulse(payload, history, adapter)).then(result=>{
         const ok = result?.ok ?? Object.values(result || {}).every(value=> value?.ok !== false);
         recordEvent('pulse:sync', { sessionId:payload.id, ok, result }, { essential:false });

@@ -583,6 +583,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
                 {importPreview.counts.events > 0 && <span>{importPreview.counts.events} event{importPreview.counts.events === 1 ? '' : 's'}</span>}
                 {importPreview.counts.ledger > 0 && <span>{importPreview.counts.ledger} recommendation record{importPreview.counts.ledger === 1 ? '' : 's'}</span>}
                 {importPreview.counts.templates > 0 && <span>{importPreview.counts.templates} template{importPreview.counts.templates === 1 ? '' : 's'}</span>}
+                {importPreview.counts.experiments > 0 && <span>{importPreview.counts.experiments} experiment{importPreview.counts.experiments === 1 ? '' : 's'}</span>}
                 {importPreview.counts.readiness > 0 && <span>{importPreview.counts.readiness} readiness entr{importPreview.counts.readiness === 1 ? 'y' : 'ies'}</span>}
               </div>
               <p>
@@ -621,6 +622,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
                 {(store.history||[]).length} live session(s){(store.archivedHistory||[]).length ? ` + ${(store.archivedHistory||[]).length} archived` : ''} ·
                 {[...(store.history||[]), ...(store.archivedHistory||[])].reduce((n,h)=> n + (h.blocks||[]).reduce((m,b)=> m + (b.sets||[]).length, 0), 0)} set(s) ·
                 {(store.customTemplates||[]).length} template(s) ·
+                {(store.experiments||[]).filter(e=> !e.deletedAt).length} experiment(s) ·
                 {(store.readinessLog||[]).length} readiness entr{(store.readinessLog||[]).length === 1 ? 'y' : 'ies'} ·
                 {getEventHistory().length} event(s)
                 {store.studyParticipantId ? ' · your pseudonymous study id' : ''}

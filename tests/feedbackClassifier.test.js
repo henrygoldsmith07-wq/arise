@@ -3,6 +3,7 @@
 // and that deterministic training systems never touch the network.
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { SKIP_WHEN_OFF, SKIP_WHEN_ON } from './helpers/integrations.js';
 class MemoryStorage {
   constructor(){ this.map = new Map(); }
   getItem(k){ return this.map.has(k) ? this.map.get(k) : null; }
@@ -16,7 +17,7 @@ function enable(){ M.saveFeedbackClassifierSettings({ enabled: true }); }
 function cloudFetch(label, confidence = 0.92){
   return async () => ({ ok: true, json: async () => ({ results: [{ label, confidence, scores: { [label]: confidence } }] }) });
 }
-describe('classifier settings default off', () => {
+describe('classifier settings default off', SKIP_WHEN_OFF, () => {
   it('disabled by default and round-trips', () => {
     assert.equal(M.isFeedbackClassifierEnabled(), false);
     assert.deepEqual(M.getFeedbackClassifierSettings(), { enabled: false });
@@ -37,6 +38,30 @@ describe('classifier settings default off', () => {
     assert.equal(M.isCoachRoutingEnabled(), false);
   });
 });
+describe('the shipped default refuses the network entirely', SKIP_WHEN_ON, () => {
+  // The counterpart to the suites above. Those prove the integration works
+  // when compiled in; these prove the shipped build cannot reach it at all,
+  // including when a user has granted consent on some earlier build.
+  it('reports itself off', async () => {
+    const { INTEGRATIONS_COMPILED_IN } = await import('../src/lib/integrations.js');
+    assert.equal(INTEGRATIONS_COMPILED_IN, false);
+  });
+
+  it('stays local even with consent granted', async () => {
+    globalThis.localStorage = new MemoryStorage();
+    M.saveFeedbackClassifierSettings({ enabled: true });
+    M.saveCoachRoutingSettings({ enabled: true });
+    assert.equal(M.isFeedbackClassifierEnabled(), false);
+    assert.equal(M.isCoachRoutingEnabled(), false);
+
+    let called = false;
+    const r = await M.classifyText('crash on save', { fetchImpl: () => { called = true; return {}; } });
+    assert.equal(called, false, 'a stale consent grant must not produce a request');
+    assert.equal(r.cloudAttempted, false);
+    assert.equal(r.ok, true);
+  });
+});
+
 describe('redaction and taxonomy', () => {
   it('redacts emails phones secrets and truncates', () => {
     const out = M.redactTextForClassification('Contact me at sam@example.com or +1 555 123 4567 api-key: SECRET bear xyz');
@@ -49,7 +74,7 @@ describe('redaction and taxonomy', () => {
     assert.equal(M.FEEDBACK_LABELS[M.FEEDBACK_LABELS.length - 1], 'other');
   });
 });
-describe('opt-in gating and local fallback', () => {
+describe('opt-in gating and local fallback', SKIP_WHEN_OFF, () => {
   it('disabled path never fetches and uses local keywords', async () => {
     let called = false;
     const r = await M.classifyText('The app crashes on export', { fetchImpl: () => { called = true; return {}; } });
@@ -67,7 +92,7 @@ describe('opt-in gating and local fallback', () => {
     assert.equal(r.label, 'other');
   });
 });
-describe('cloud path thresholds and failures', () => {
+describe('cloud path thresholds and failures', SKIP_WHEN_OFF, () => {
   it('high confidence cloud label passes through', async () => {
     enable();
     const r = await M.classifyText('crash on save', { fetchImpl: cloudFetch('bug', 0.95) });

@@ -359,6 +359,62 @@ export function createRecommendationLedgerRepository(){
   };
 }
 
+// ── ExperimentRepository ────────────────────────────────────────────────────
+// Training experiments ride the same soft-delete + tombstone contract as
+// templates: a deletion is local first, and syncs to other devices through
+// the canonical tombstone union.
+export function createExperimentRepository(){
+  return {
+    name: 'experimentRepository',
+
+    async all(){
+      const store = requireStore();
+      return (store.experiments || []).filter((e) => !e.deletedAt);
+    },
+
+    async byId(id){
+      const store = requireStore();
+      const row = (store.experiments || []).find((e) => e.id === id && !e.deletedAt);
+      if(!row) throw new NotFoundError(`Experiment ${id} not found.`);
+      return row;
+    },
+
+    async upsert(experiment){
+      const store = requireStore();
+      const stamped = tagRecord({ ...experiment, updatedAtISO: new Date().toISOString() }, 'manual');
+      const list = store.experiments || [];
+      const exists = list.some((e) => e.id === stamped.id);
+      const next = {
+        ...store,
+        experiments: exists ? list.map((e) => e.id === stamped.id ? stamped : e) : [...list, stamped],
+      };
+      setCachedStore(next);
+      await whenPersisted();
+      return stamped;
+    },
+
+    async softDelete(id){
+      const store = requireStore();
+      const row = (store.experiments || []).find((e) => e.id === id);
+      if(!row) throw new NotFoundError(`Experiment ${id} not found.`);
+      const tombstone = makeTombstone('experiments', id);
+      const next = {
+        ...store,
+        experiments: (store.experiments || []).map((e) => e.id === id ? markSoftDeleted(e) : e),
+        tombstones: [...(store.tombstones || []), tombstone],
+      };
+      setCachedStore(next);
+      await whenPersisted();
+      return true;
+    },
+
+    async allIncludingDeleted(){
+      const store = requireStore();
+      return store.experiments || [];
+    },
+  };
+}
+
 /** Assemble the full repository set (shared cache; single hydration). */
 export function createRepositories({ adapters: adapterBag } = {}){
   const historyRepository = createHistoryRepository({ adapters: adapterBag });
@@ -366,6 +422,7 @@ export function createRepositories({ adapters: adapterBag } = {}){
     historyRepository,
     programRepository: createProgramRepository(),
     templateRepository: createTemplateRepository(),
+    experimentRepository: createExperimentRepository(),
     preferencesRepository: createPreferencesRepository(),
     eventRepository: createEventRepository(),
     recommendationLedgerRepository: createRecommendationLedgerRepository(),

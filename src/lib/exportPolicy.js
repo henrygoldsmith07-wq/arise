@@ -86,6 +86,15 @@ export function isCurrentContract(envelope){
  * @returns {{ envelope: object|null, adapter: string|null }}
  */
 export function adaptImportEnvelope(parsed){
+  // A file that CLAIMS to be another product's backup is refused outright.
+  // Without this, the unbranded fallback below would happily adapt a
+  // `{"app":"something-else","data":{...}}` file and the preview would present
+  // its contents as a legitimate Arise backup — the review step validating
+  // data that is not Arise's, right before the user confirms it.
+  if(parsed && typeof parsed === 'object' && typeof parsed.app === 'string'
+    && parsed.app.length > 0 && parsed.app !== APP_NAME){
+    return { envelope:null, adapter:null, foreignApp: parsed.app };
+  }
   // The current contract, verbatim.
   if(parsed?.app === APP_NAME && parsed?.contract === EXPORT_CONTRACT){
     return { envelope: parsed, adapter: null };
@@ -185,7 +194,7 @@ export const DENY_FIELDS = [
 export const IMPORT_ALLOW_KEYS = [
   'onboarding', 'activeSchedule', 'activeWorkout', 'history', 'archivedHistory', 'preferences', 'gymPrefs',
   'readinessLog', 'programHistory', 'evaluationLedger', 'customTemplates',
-  'eventHistory', 'studyEnrollment', 'tombstones',
+  'experiments', 'eventHistory', 'studyEnrollment', 'tombstones',
   'studyParticipantId', 'healthSummary',
   'studyStatus', 'studyStatusChangedAtISO', // participation lifecycle (participation.js)
 ];
@@ -240,8 +249,8 @@ export function buildImportPreview(rawData, currentStore){
   let parsed;
   try{ parsed = typeof rawData === 'string' ? JSON.parse(rawData) : rawData; }
   catch{ return { ok: false, reason: 'Not valid JSON.' }; }
-  const { envelope, adapter } = adaptImportEnvelope(parsed);
-  if(!envelope) return { ok: false, reason: 'Not a recogniseable arise backup.' };
+  const { envelope, adapter, foreignApp } = adaptImportEnvelope(parsed);
+  if(!envelope) return { ok: false, reason: foreignApp ? `This backup belongs to "${foreignApp}", not Arise.` : 'Not a recogniseable arise backup.' };
   const gate = validateEnvelope({ ...envelope, schemaVersion: envelope.schemaVersion || 1 });
   if(!gate.ok) return { ok: false, reason: `Backup failed the contract check: ${gate.errors.join(' ')}` };
 
@@ -275,6 +284,7 @@ export function buildImportPreview(rawData, currentStore){
     events: Array.isArray(data?.eventHistory) ? data.eventHistory.length : 0,
     ledger: Array.isArray(data?.evaluationLedger) ? data.evaluationLedger.length : 0,
     templates: Array.isArray(data?.customTemplates) ? data.customTemplates.length : 0,
+    experiments: Array.isArray(data?.experiments) ? data.experiments.length : 0,
     readiness: Array.isArray(data?.readinessLog) ? data.readinessLog.length : 0,
     additions,
     updates: conflicts.length,

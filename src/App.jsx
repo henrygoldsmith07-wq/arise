@@ -200,6 +200,40 @@ export default function App(){
   // Warm the lazy route chunks once boot has settled (see warmLazyViews).
   useEffect(()=>{ warmLazyViews(); },[]);
 
+  // Data-loss protection: the first logged session is the first moment there
+  // is something to lose, so that is when we ask the browser to make this
+  // origin's storage persistent (never evicted under pressure). Latched to
+  // once per device — a user who declined is not re-prompted, and More keeps
+  // a manual retry. Local only: no notification, no network.
+  const persistAskedRef = useRef(false);
+  useEffect(()=>{
+    if(persistAskedRef.current) return;
+    if(!(store.history?.length > 0)) return;
+    if(store.demo) return;
+    persistAskedRef.current = true;
+    // Deferred off the boot path on purpose. navigator.storage.persisted()
+    // and persist() are real async calls into the browser's storage layer; on
+    // the critical path they compete with hydration and the first paint, and
+    // on a profile that already has history they fire on EVERY app open. The
+    // ask is about durability, not about what the user is doing right now, so
+    // it waits for an idle main thread.
+    let live = true;
+    const ask = ()=>{
+      if(!live) return;
+      import('./lib/storageQuota.js')
+        .then(({ requestPersistentStorageOnce })=> requestPersistentStorageOnce())
+        .catch(()=>{});
+    };
+    const idle = typeof requestIdleCallback === 'function'
+      ? requestIdleCallback(ask, { timeout: 4000 })
+      : setTimeout(ask, 4000);
+    return ()=>{
+      live = false;
+      if(typeof cancelIdleCallback === 'function' && typeof idle === 'number') cancelIdleCallback(idle);
+      else clearTimeout(idle);
+    };
+  },[store.history?.length, store.demo]);
+
   // Storage-quota watch: evaluate shortly after boot and re-check when the
   // store grows (every persistence round). Cheap, async, fail-soft.
   useEffect(()=>{
@@ -678,7 +712,7 @@ export default function App(){
         <Suspense fallback={<TabFallback label="Exercises" />}><ExerciseBrowser store={store} availableEquipment={store.onboarding?.equipment || []} onboarding={store.onboarding} /></Suspense>
       )}
 
-      {tab==='progress' && <Suspense fallback={<TabFallback label="Progress" />}><ProgressView store={store} onStart={startFromProgress} /></Suspense>}
+      {tab==='progress' && <Suspense fallback={<TabFallback label="Progress" />}><ProgressView store={store} setStore={setStore} onStart={startFromProgress} /></Suspense>}
       {tab==='more' && <Suspense fallback={<TabFallback label="More" />}><MoreView store={store} setStore={setStore} onboardingOpen={onboardingOpen} setOnboardingOpen={setOnboardingOpen} onLoadDemo={loadDemo} /></Suspense>}
 
       {activeSession && activeSession.mode === 'guided' && (

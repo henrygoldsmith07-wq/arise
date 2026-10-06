@@ -263,6 +263,11 @@ test.describe('Progress assessment', () => {
         };
       });
       mod.saveStore(store);
+      // Durability is gated on the app's own write queue (whenPersisted) —
+      // reloading before the async persist drains would race the seed
+      // (same gate the other seeded tests in this file apply).
+      const { whenPersisted } = await import('/src/lib/storage.js');
+      await whenPersisted();
     }, { rows });
     await page.reload();
     await tapTab(page, 'Progress');
@@ -378,10 +383,18 @@ test.describe('Prospective prescription capture', () => {
       const store = loadStore();
       store.preferences = { ...(store.preferences || {}), focusDefault: true };
       saveStore(store);
+      // Same durability gate as the other seeded tests: drain the async
+      // write queue before reloading, or the seed races the persist.
+      const { whenPersisted } = await import('/src/lib/storage.js');
+      await whenPersisted();
     });
     await page.reload();
     await page.getByRole('button', { name: 'Today', exact: true }).click();
     const startBtn = page.getByRole('button', { name: /Start workout|Start this session/ }).first();
+    // Wait for the button instead of an instant isVisible(): after a reload the
+    // tab content may not have rendered yet, and a skipped click here would
+    // strand the rest of the test with no session runner at all.
+    await startBtn.waitFor({ state: 'visible', timeout: 8000 }).catch(() => null);
     if (await startBtn.isVisible()) await startBtn.click();
     const runner = page.getByRole('dialog', { name: /Session —/ });
     await expect(runner).toBeVisible({ timeout: 8000 });

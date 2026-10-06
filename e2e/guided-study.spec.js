@@ -65,9 +65,16 @@ async function enrollGuidedStudy(page, { consent = true, arm = 'double-progressi
 
 async function startGuided(page){
   await page.getByRole('button', { name: 'Today', exact: true }).click();
+  // Wait for the Options sheet trigger rather than testing for it instantly.
+  // Checking visibility with no wait raced the render: when Today had not
+  // painted yet the helper skipped the click, so 'Guided mode' never appeared
+  // and the test failed depending on which test in the file ran first.
   const optionsBtn = page.getByRole('button', { name: 'Options' });
-  if(await optionsBtn.isVisible().catch(() => false)) await optionsBtn.click();
-  await page.getByRole('button', { name: 'Guided mode' }).click();
+  await optionsBtn.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
+  if (await optionsBtn.isVisible().catch(() => false)) await optionsBtn.click();
+  const guidedBtn = page.getByRole('button', { name: 'Guided mode' });
+  await guidedBtn.waitFor({ state: 'visible', timeout: 10_000 });
+  await guidedBtn.click();
   const runner = page.getByRole('dialog', { name: /Guided session/ });
   await expect(runner).toBeVisible({ timeout: 8000 });
   return runner;

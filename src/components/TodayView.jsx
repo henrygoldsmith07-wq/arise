@@ -13,6 +13,7 @@ import {
   shortWorkoutMode,
 } from '../lib/programming.js';
 import { weekPhaseFor } from '../lib/mesocycle.js';
+import { backupRecency as computeBackupRecency, backupRecencyLabel, readBackupState } from '../lib/backupState.js';
 import { nextBestAction, whatChangedSummary, typicalDurationFor } from '../lib/product.js';
 import { confidenceLanguage } from '../lib/performance.js';
 import WhatChangedPanel from './WhatChangedPanel.jsx';
@@ -43,13 +44,19 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
     [store.history, store.readinessLog, store.preferences?.cautiousMode]
   );
   const simple = isSimpleView(store.preferences);
+  // Backup recency — local-only nudge source. Read fresh each render so a
+  // successful export in More clears it without needing a subscription.
+  const backupRecency = useMemo(
+    ()=> computeBackupRecency({ history:store.history || [], lastBackupAt:readBackupState().lastBackupAt }),
+    [store.history]
+  );
   // Week phase (ADR: deload as a first-class state). Derived from the schedule's
   // own adaptation stamps — no new persisted state. Week 1 of a fresh program is
   // naturally a 'build' week.
   const weekPhase = useMemo(()=> weekPhaseFor(sched, isoToday()), [sched]);
   const nba = useMemo(()=> nextBestAction({ store, today: isoToday(), todaySession: today, nextSess: nxt, recovery }), [store, today, nxt, recovery]);
   const changes = useMemo(()=> whatChangedSummary({ schedule: sched, history: store.history || [] }), [sched, store.history]);
-  const explanations = useMemo(()=> heroSession ? heroSession.blocks.map(block=> progressionExplanation({ exerciseId: block.exerciseId, targetReps: block.reps, asOfDateISO: heroSession.dateISO, history: store.history || [], plateConfig })) : [], [heroSession, store.history, plateConfig]);
+  const explanations = useMemo(()=> heroSession ? heroSession.blocks.map(block=> progressionExplanation({ exerciseId: block.exerciseId, targetReps: block.reps, asOfDateISO: heroSession.dateISO, history: store.history || [], plateConfig, block })) : [], [heroSession, store.history, plateConfig]);
   const typical = useMemo(()=> heroSession ? typicalDurationFor({ history: store.history||[], title: heroSession.title }) : null, [heroSession, store.history]);
 
   const applyReplan = ()=>{
@@ -146,6 +153,22 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
               );
             })}
           </ul>
+
+          {/* ── Why today looks like this: the visible face of adaptive
+              programming. Rendered ONLY when the engine actually adjusted a
+              block in the hero — never as filler. ── */}
+          {explanations.some(ex => ex?.adapted) && (
+            <div className="rounded-xl border border-review/30 bg-reviewsoft px-3 py-2" role="status" data-testid="today-adaptation-reasons">
+              <p className="text-xs font-bold text-review">⚡ Adjusted from your training</p>
+              <ul className="mt-1 space-y-1">
+                {explanations.filter(ex => ex?.adapted).map((ex, i) => (
+                  <li key={i} className="text-[11px] text-ink2 leading-snug">
+                    <span className="font-bold text-ink">{ex.exerciseName}</span> — {ex.adapted.summary}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <details className="rounded-xl border border-line bg-surface px-3 py-2">
             <summary className="text-xs font-bold cursor-pointer">Why these prescriptions?</summary>
@@ -245,6 +268,24 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
             <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Next best action</p>
             <p className="text-sm font-bold truncate">{nba.title}</p>
             <p className="text-xs text-ink3">{nba.detail}</p>
+          </div>
+        </section>
+      )}
+
+      {/* Data-loss nudge: only when a backup is genuinely overdue. Quiet when
+          healthy — the recency line lives in More, so this stays a signal, not
+          a permanent banner. Local only; no notification is requested. */}
+      {backupRecency.overdue && (
+        <section className="rounded-2xl border border-review/40 bg-reviewsoft p-4" aria-label="Backup overdue">
+          <div className="flex items-start gap-3">
+            <span aria-hidden className="text-base">💾</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Backup overdue</p>
+              <p className="text-sm font-bold">{backupRecencyLabel(backupRecency)}</p>
+              <p className="text-xs text-ink3">
+                {backupRecency.sessions} session{backupRecency.sessions === 1 ? '' : 's'} on this device {backupRecency.sessions === 1 ? 'exists' : 'exist'} nowhere else. Export a copy you can restore from.
+              </p>
+            </div>
           </div>
         </section>
       )}

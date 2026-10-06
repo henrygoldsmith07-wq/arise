@@ -11,6 +11,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { aiCoachRoute, COACH_FEEDBACK_URL } from '../src/lib/aiCoach.js';
+import { SKIP_WHEN_OFF } from './helpers/integrations.js';
 import {
   isCoachRoutingEnabled, saveCoachRoutingSettings,
   clearClassifierSettings,
@@ -35,7 +36,7 @@ function cloudFetch(label, confidence = 0.92){
   });
 }
 
-describe('aiCoachRoute uses the classifier only as semantic fallback', () => {
+describe('aiCoachRoute uses the classifier only as semantic fallback', SKIP_WHEN_OFF, () => {
   it('deterministic keyword rules fire without any network call', async () => {
     let called = false;
     const res = await aiCoachRoute('how should I progress my squat', {

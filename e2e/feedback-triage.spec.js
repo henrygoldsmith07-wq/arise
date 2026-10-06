@@ -1,4 +1,11 @@
 import { test, expect } from '@playwright/test';
+import { INTEGRATIONS_ON, NEEDS_INTEGRATIONS } from './helpers/integrations.js';
+
+// These specs mock classifier.dev at the network layer and assert on the exact
+// redacted payload it receives, so they need a build that contains the
+// integration. The CSP on disk always describes the shipped default, which
+// does not permit that origin — hence bypassCSP. See helpers/integrations.js.
+test.use({ bypassCSP: true });
 
 async function completeOnboarding(page){
   await page.goto('/');
@@ -33,6 +40,7 @@ async function openFeedback(page){
 }
 
 test('feedback flows through redaction, opt-in cloud triage, uncertainty, and operator review', async ({ page }) => {
+  test.skip(!INTEGRATIONS_ON, NEEDS_INTEGRATIONS);
   await page.addInitScript(() => {
     window.__ariseShares = [];
     Object.defineProperty(navigator, 'share', {
@@ -125,6 +133,7 @@ test('feedback classification stays local when cloud assistance is disabled', as
 });
 
 test('the real Ask the coach flow routes locally first and keeps cloud consent independent', async ({ page }) => {
+  test.skip(!INTEGRATIONS_ON, NEEDS_INTEGRATIONS);
   await completeOnboarding(page);
   let classifierCalls = 0;
   let coachCalls = 0;

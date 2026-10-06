@@ -26,6 +26,7 @@ const DEFAULT = {
   readinessLog: [], // [{ dateISO, score, sleep, soreness, motivation }]
   programHistory: [], // [{ programId, version, startDateISO, endDateISO }]
   customTemplates: [], // user-created templates: { id, isCustom:true, version, program:{...}, deletedAt? , ... }
+  experiments: [], // training experiments (trainingExperiments.js): { id, createdAtISO, status, name, question, metric, result, ... }
   // Deletion tombstones for sync: { id:'entity:refId', entity, refId, deletedAt, deviceId }.
   // Soft-deleted rows keep their data locally; the tombstone tells other
   // devices (when sync lands) that the deletion should win over their copy.
@@ -325,6 +326,7 @@ export function runMigrations(raw){
   if(j.studyStatus === undefined) j.studyStatus=null;
   if(j.studyStatusChangedAtISO === undefined) j.studyStatusChangedAtISO=null;
   if(!Array.isArray(j.customTemplates)) j.customTemplates=[];
+  if(!Array.isArray(j.experiments)) j.experiments=[];
   j.history = normaliseHistory(j.history || []);
   // Portable archive + Gym Mode prefs: same normalisation/disjointness as the
   // canonical storage layer so old backups hydrate into the new shape.

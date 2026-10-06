@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { SKIP_WHEN_OFF, SKIP_WHEN_ON } from './helpers/integrations.js';
 import {
   getAiSettings, saveAiSettings, clearAiSettings,
   buildTrainingContext, requestCoachInsight, DEFAULT_MODEL,
@@ -124,7 +125,7 @@ describe('training context builder', ()=>{
   });
 });
 
-describe('requestCoachInsight', ()=>{
+describe('requestCoachInsight', SKIP_WHEN_OFF, ()=>{
   function capture(){
     let captured = null;
     const fake = async (url, opts)=>{
@@ -164,5 +165,24 @@ describe('requestCoachInsight', ()=>{
       fetchImpl: (url, opts)=> new Promise((_, rej)=> opts.signal.addEventListener('abort', ()=> { const e = new Error('aborted'); e.name='AbortError'; rej(e); })),
     });
     assert.match(aborter.error, /timed out/);
+  });
+});
+
+describe('the shipped default cannot reach the coach', SKIP_WHEN_ON, ()=>{
+  it('refuses before it looks at the API key', async ()=>{
+    let called = false;
+    const fake = async ()=> { called = true; return { ok:true, json: async()=> ({}) }; };
+
+    // No key at all, and a plausible key — both must refuse identically, and
+    // neither may attempt a request. The refusal is "not in this build", not
+    // "you forgot to configure me".
+    const noKey = await requestCoachInsight({ context:{ muscles:{ Chest:1 } }, fetchImpl: fake });
+    const withKey = await requestCoachInsight({ context:{ muscles:{ Chest:1 } }, apiKey:'nvapi-whatever', fetchImpl: fake });
+
+    assert.equal(noKey.ok, false);
+    assert.equal(withKey.ok, false);
+    assert.equal(called, false, 'the NVIDIA endpoint must never be contacted in the default build');
+    assert.equal(withKey.notAvailable, true);
+    assert.equal(noKey.notAvailable, true);
   });
 });

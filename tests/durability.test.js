@@ -4,11 +4,12 @@
 // (same API surface as the browser).
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { hydrateStorage, persistStore, loadStoreFromIdb, whenPersisted, clearAllStoredData } from '../src/lib/storage.js';
 import { idbGetAll, idbPut } from '../src/lib/idb.js';
 import { idbTransaction } from '../src/lib/idb-tx.js';
 import { enforceIntegrity, repairStore, latestQuarantinedStore, quarantineBrokenStore } from '../src/lib/integrity.js';
-import { storageHealth } from '../src/lib/storageQuota.js';
+import { PERSIST_REQUESTED_KEY, requestPersistentStorageOnce, storageHealth } from '../src/lib/storageQuota.js';
 import { encryptBackup, decryptBackup, looksEncrypted, cryptoAvailable } from '../src/lib/cryptoBackup.js';
 import { STORE_SCHEMA_VERSION } from '../src/lib/store.js';
 
@@ -142,6 +143,61 @@ describe('storage quota health', ()=>{
     assert.ok(['ok','warning','critical'].includes(health.level));
     assert.ok(health.estimate === null || typeof health.estimate.usageBytes === 'number');
     assert.ok(health.persisted === null || typeof health.persisted === 'boolean');
+  });
+});
+
+describe('automatic persistence request', ()=>{
+  it('asks once per device and latches the request', async ()=>{
+    const values = new Map();
+    const storage = {
+      getItem:k=> values.has(k) ? values.get(k) : null,
+      setItem:(k,v)=> values.set(k, String(v)),
+    };
+    const asked = [];
+    const makeRequest = (granted)=> async ()=> { asked.push(granted); return granted; };
+    const notPersisted = async ()=> false;
+
+    // First call on a device that has never been asked: the latch is set and
+    // the underlying request runs.
+    const first = await requestPersistentStorageOnce({ storage, persist: makeRequest(true), alreadyPersisted:notPersisted });
+    assert.equal(first, true);
+    assert.equal(asked.length, 1);
+    assert.equal(values.get(PERSIST_REQUESTED_KEY) != null, true);
+
+    // Second call on the same device: no re-prompt, no second request.
+    const second = await requestPersistentStorageOnce({ storage, persist: makeRequest(true), alreadyPersisted:notPersisted });
+    assert.equal(second, null);
+    assert.equal(asked.length, 1);
+  });
+
+  it('still records a declined answer without re-asking', async ()=>{
+    const values = new Map();
+    const storage = {
+      getItem:k=> values.has(k) ? values.get(k) : null,
+      setItem:(k,v)=> values.set(k, String(v)),
+    };
+    const notPersisted = async ()=> false;
+    const declined = await requestPersistentStorageOnce({ storage, persist:async ()=> false, alreadyPersisted:notPersisted });
+    assert.equal(declined, false);
+    const again = await requestPersistentStorageOnce({ storage, persist:async ()=> { throw new Error('must not re-ask'); }, alreadyPersisted:notPersisted });
+    assert.equal(again, null);
+  });
+
+  it('never asks at all when the origin is already persistent', async ()=>{
+    const storage = { getItem:()=> null, setItem:()=> {} };
+    const result = await requestPersistentStorageOnce({ storage, persist:async ()=> { throw new Error('must not ask'); }, alreadyPersisted:async ()=> true });
+    assert.equal(result, true);
+  });
+
+  it('is deferred off the boot path in App.jsx', ()=>{
+    // navigator.storage.persisted()/persist() are real async calls into the
+    // browser storage layer. Running them inline during hydration competed with
+    // the first paint and perturbed the save/hydrate race that
+    // e2e/product.spec.js relies on — a real regression this test's absence
+    // let through once. The ask now waits for an idle main thread.
+    const source = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
+    const effect = source.slice(source.indexOf('requestPersistentStorageOnce'), source.indexOf('requestPersistentStorageOnce') + 2000);
+    assert.match(effect, /requestIdleCallback/);
   });
 });
 

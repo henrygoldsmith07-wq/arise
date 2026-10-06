@@ -60,6 +60,7 @@ export function repairStore(store){
   if(!Array.isArray(fixed.readinessLog)) fixed.readinessLog = [];
   if(!Array.isArray(fixed.programHistory)) fixed.programHistory = [];
   if(!Array.isArray(fixed.customTemplates)) fixed.customTemplates = [];
+  if(!Array.isArray(fixed.experiments)) fixed.experiments = [];
   if(fixed.healthSummary != null && (typeof fixed.healthSummary !== 'object' || Array.isArray(fixed.healthSummary))) fixed.healthSummary = null;
   if(fixed.preferences == null || typeof fixed.preferences !== 'object' || Array.isArray(fixed.preferences)) fixed.preferences = {};
   if(fixed.onboarding != null && (typeof fixed.onboarding !== 'object' || Array.isArray(fixed.onboarding))) fixed.onboarding = null;

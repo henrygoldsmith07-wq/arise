@@ -3,6 +3,7 @@ import ToggleRow from './ToggleRow.jsx';
 import { DEFAULT_MODEL, clearAiSettings, getAiSettings } from '../../lib/aiCoach.js';
 import { getCoachRoutingSettings, saveCoachRoutingSettings } from '../../lib/feedbackClassifier.js';
 import { runCoachRequest } from '../../services/coachService.js';
+import { INTEGRATIONS_COMPILED_IN } from '../../lib/integrations.js';
 import { useTransientMessage } from '../../hooks/useTransientMessage.js';
 
 export default function AiCoachSettings({ store }){
@@ -56,6 +57,15 @@ export default function AiCoachSettings({ store }){
   return (
     <section id="sec-ai" className="rounded-2xl border border-line bg-surface p-4 space-y-2">
       <h3 className="text-sm font-bold">AI coach (optional)</h3>
+      {!INTEGRATIONS_COMPILED_IN && (
+        <p role="note" className="text-xs text-ink2 bg-surface2 border border-line rounded-xl px-3 py-2">
+          <strong>Not available in this build.</strong> This copy of Arise was built
+          without the optional integrations, so it cannot contact NVIDIA or
+          classifier.dev at all — pasting a key below will not change that. The
+          coach is an explanation layer; your prescriptions come from the local
+          deterministic engine either way.
+        </p>
+      )}
       <p className="text-xs text-ink3">NVIDIA gets <span className="font-semibold text-ink">aggregated training data and engine findings only</span>. Keys default to session-only and never enter exports, sync, diagnostics or backups.</p>
       <ToggleRow
         label="Cloud-assisted coach request routing"

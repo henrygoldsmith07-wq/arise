@@ -1,7 +1,7 @@
 # Data dictionary
 
 Every field Arise stores and what it means. The canonical store is
-recomposed from fourteen IndexedDB object stores (see
+recomposed from fifteen IndexedDB object stores (see
 `docs/STORAGE_SCHEMA.md` for the storage mechanics); this page is the
 vocabulary.
 
@@ -92,6 +92,38 @@ classify past sessions.
 `{ source, asOf, steps?, sleepHours?, weightKg?, restingHeartRate? }` — a
 small derived summary only, never raw health history. Consent-gated,
 minimised by design.
+
+## Training experiments (experiments store)
+
+One row per self-run A/B question ("does 16 weekly chest sets beat 12?").
+Arise records the claim the user made and measures the outcome from logged
+history only — experiments are measurement, never treatment: the ledger
+never feeds the recommender. Rows travel in backups/sync like custom
+templates (union by id; a terminal `completed`/`cancelled` status outranks
+mere recency in merges).
+
+| Field | Meaning |
+|---|---|
+| `id` | deterministic `exp:YYYY-MM-DD:N` (prefix + creation date + counter) |
+| `status` | `draft` / `active` / `completed` / `cancelled` — only the last two are terminal |
+| `name`, `question` | what is being tested, phrased measurably (preset-backed) |
+| `metric` | `strength` (weekly mean of best e1RM) or `session-quality` (weekly mean sessionQuality score) |
+| `mode` | `exercise` (one movement) or `muscle` (all exercises of a muscle group) |
+| `exerciseId`, `comparatorExerciseId` | scope; the comparator is optional context, never required |
+| `startDateISO`, `expectedEndISO` | the two-phase window: logged history before `startDateISO` is the baseline, from `startDateISO` on is the intervention (no separate pre-phase exists in the row — weeks fully before start classify as `pre`) |
+| `baselineDays`, `interventionDays` | phase lengths in days (priors-clamped, defaults from `priors.experiments`) |
+| `minimumSessions` | intervention sessions required before a conclusion is allowed |
+| `interventionNote` | what the user SAID they changed — recorded as a claim, never verified |
+| `presetId` | which `EXPERIMENT_PRESETS` entry seeded the row, if any |
+| `result` | `improved` / `no-difference` / `worse` / `inconclusive` — null until concluded; `inconclusive` is the honest default when sample size or variance gates fail |
+| `concludedAtISO`, `conclusionNote` | when it was called and the auto/plain-language conclusion |
+| `cancelledAtISO` | set on cancel; observations stay for the record |
+| `deletedAt` | soft-delete tombstone, carried into merges/sync like templates |
+
+Evaluations are computed on demand (`evaluateExperiment`), never stored:
+phase means, effect size vs the minimal detectable effect, and a
+`low`/`medium`/`high` confidence derived from week counts, intervention
+sessions and whether the diff clears the noise floor.
 
 ## Quarantine / snapshots / archive / tombstones
 

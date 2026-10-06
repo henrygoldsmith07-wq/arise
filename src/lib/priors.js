@@ -288,6 +288,30 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
       equipmentChangeFlag: true,
     },
   },
+  // Training experiment system (trainingExperiments.js). Phase lengths and
+  // data gates for the user's own self-experiments; conclusions stay
+  // 'inconclusive' until the minimums are met — the honest default.
+  experiments: {
+    baselineDays: 14,
+    interventionDays: 28,
+    // Intervention sessions needed before a conclusion is even attempted.
+    minimumSessions: 4,
+    minimumDataDays: 21,
+    suggestAfterSessions: 12,
+  },
+  // Post-workout debrief adjustments (workoutQualityReport.js). The session
+  // quality engine score is the base; the target lens shifts it by a bounded
+  // amount so "met the plan" and "met the plan AND beat last time" read
+  // differently without double-penalising a rough day.
+  workoutQuality: {
+    targetHitBonus: 8,
+    targetMissPenalty: 10,
+    prBeatBonus: 6,
+    // All sets completed at a sub-grind average effort (RPE ≤ max): the
+    // sustainable-work signal — good, repeatable training, not a lucky day.
+    sustainableEffortBonus: 8,
+    sustainableEffortMaxRpe: 8,
+  },
   longitudinal: {
     // Segment-level conclusions (rates) are withheld until a segment has this
     // many resolved recommendation→outcome pairs.

@@ -2,14 +2,19 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  BACKUP_OVERDUE_DAYS,
   BACKUP_REMINDER_INTERVAL_MS,
   LAST_FULL_BACKUP_AT_KEY,
+  SESSIONS_SINCE_BACKUP_WARN,
+  backupRecency,
+  backupRecencyLabel,
   backupReminderDue,
   dismissBackupReminder,
   markSuccessfulFullBackup,
   readBackupState,
+  sessionsSinceBackup,
 } from '../src/lib/backupState.js';
-import { downloadEncryptedFullBackup, downloadFullBackup } from '../src/services/backupService.js';
+import { downloadEncryptedFullBackup, downloadFullBackup, exportFullBackup } from '../src/services/backupService.js';
 
 function memoryStorage(){
   const values = new Map();
@@ -126,5 +131,112 @@ describe('backup download lifecycle', ()=>{
     });
     assert.equal(triggered, true);
     assert.equal(readBackupState(storage).lastBackupAt, '2026-09-26T13:00:00.000Z');
+  });
+});
+
+describe('backup recency', ()=>{
+  const NOW = Date.parse('2026-10-01T12:00:00.000Z');
+
+  it('counts sessions that exist only on this device', ()=>{
+    const history = [
+      { id:'a', savedAt:'2026-09-20T10:00:00.000Z' },
+      { id:'b', savedAt:'2026-09-28T10:00:00.000Z' },
+      { id:'c', savedAt:'2026-09-30T10:00:00.000Z' },
+    ];
+    assert.equal(sessionsSinceBackup({ history, lastBackupAt:'2026-09-25T00:00:00.000Z' }), 2);
+  });
+
+  it('treats a session with an unreadable timestamp as at risk, not as safe', ()=>{
+    const history = [{ id:'good', savedAt:'2026-09-30T10:00:00.000Z' }, { id:'blank' }];
+    assert.equal(sessionsSinceBackup({ history, lastBackupAt:'2026-09-25T00:00:00.000Z' }), 2);
+  });
+
+  it('never nags a user who has not logged anything', ()=>{
+    const summary = backupRecency({ history:[], nowMs:NOW });
+    assert.equal(summary.overdue, false);
+    assert.equal(summary.sessions, 0);
+  });
+
+  it('goes overdue after the day threshold', ()=>{
+    const history = [{ id:'a', savedAt:'2026-09-01T10:00:00.000Z' }];
+    const justInside = backupRecency({ history, lastBackupAt:new Date(NOW - (BACKUP_OVERDUE_DAYS - 1) * 86400000).toISOString(), nowMs:NOW });
+    const justOutside = backupRecency({ history, lastBackupAt:new Date(NOW - (BACKUP_OVERDUE_DAYS + 1) * 86400000).toISOString(), nowMs:NOW });
+    assert.equal(justInside.overdue, false);
+    assert.equal(justOutside.overdue, true);
+  });
+
+  it('goes overdue on session count even when the days are fresh', ()=>{
+    const backupAt = new Date(NOW - 3600000).toISOString(); // 1h ago
+    const history = Array.from({ length:SESSIONS_SINCE_BACKUP_WARN }, (_, i)=> ({
+      id:`s${i}`,
+      savedAt:new Date(NOW - (i + 1) * 1000).toISOString(), // all after the backup
+    }));
+    const summary = backupRecency({ history, lastBackupAt:backupAt, nowMs:NOW });
+    assert.equal(summary.overdue, true);
+    assert.equal(summary.sessions, SESSIONS_SINCE_BACKUP_WARN);
+    assert.equal(summary.daysSince, 0);
+  });
+
+  it('reports never-backed-up separately from backed-up-but-old', ()=>{
+    const history = [{ id:'a', savedAt:'2026-09-30T10:00:00.000Z' }];
+    const summary = backupRecency({ history, nowMs:NOW });
+    assert.equal(summary.never, true);
+    assert.equal(backupRecencyLabel(summary), 'Last backup: never');
+  });
+
+  it('labels the recency in plain days', ()=>{
+    assert.equal(backupRecencyLabel({ never:false, daysSince:0 }), 'Last backup: today');
+    assert.equal(backupRecencyLabel({ never:false, daysSince:1 }), 'Last backup: 1 day ago');
+    assert.equal(backupRecencyLabel({ never:false, daysSince:9 }), 'Last backup: 9 days ago');
+  });
+});
+
+describe('one-tap export delivery', ()=>{
+  it('marks a backup only once the share sheet actually took the file', async ()=>{
+    const storage = memoryStorage();
+    const built = [];
+    const result = await exportFullBackup({ history:[] }, {
+      atISO:'2026-09-26T12:00:00.000Z',
+      storage,
+      buildPayload:store=> ({ app:'test' }),
+      buildFile:(payload, filename)=> ({ payload, filename }),
+      canShare:()=> true,
+      share:async ()=> 'shared',
+      download:async ()=> { throw new Error('download must not run when the share sheet succeeds'); },
+    });
+    assert.equal(result.method, 'shared');
+    assert.equal(readBackupState(storage).lastBackupAt, '2026-09-26T12:00:00.000Z');
+  });
+
+  it('does not mark a backup when the user swipes the share sheet away', async ()=>{
+    const storage = memoryStorage();
+    const result = await exportFullBackup({ history:[] }, {
+      atISO:'2026-09-26T12:00:00.000Z',
+      storage,
+      buildPayload:()=> ({ app:'test' }),
+      buildFile:(payload, filename)=> ({ payload, filename }),
+      canShare:()=> true,
+      share:async ()=> 'cancelled',
+      download:async ()=> { throw new Error('a cancelled share must not silently download'); },
+    });
+    assert.equal(result.method, 'cancelled');
+    assert.equal(readBackupState(storage).lastBackupAt, null);
+  });
+
+  it('falls back to a download when the platform cannot share files', async ()=>{
+    const storage = memoryStorage();
+    const downloads = [];
+    const result = await exportFullBackup({ history:[] }, {
+      atISO:'2026-09-26T12:00:00.000Z',
+      storage,
+      buildPayload:()=> ({ app:'test' }),
+      // canShareFiles() is false under node:test (no navigator/File), so the
+      // download fallback is the path exercised here.
+      share:async ()=> { throw new Error('share must not be attempted when canShare is false'); },
+      download:async (payload, filename)=> { downloads.push(filename); },
+    });
+    assert.equal(result.method, 'downloaded');
+    assert.deepEqual(downloads, ['arise-backup-2026-09-26.arise']);
+    assert.equal(readBackupState(storage).lastBackupAt, '2026-09-26T12:00:00.000Z');
   });
 });
