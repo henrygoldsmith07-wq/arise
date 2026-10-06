@@ -12,15 +12,16 @@
 //   events          auto           durable event measurements
 //   readiness       id:'log'       readiness log entries
 //   templates       id             user-created templates
+//   experiments     id             training experiments (trainingExperiments.js)
 //
 // When IndexedDB is unavailable (node tests / very old browsers) the wrapper
 // transparently falls back to an in-memory backend with identical semantics,
 // so every caller stays testable and fail-soft.
 
 const DB_NAME = 'arise-idb-v1';
-const DB_VERSION = 5; // v2 'quarantine'; v3 snapshots+indexes; v4 'archive'; v5 'tombstones'.
+const DB_VERSION = 6; // v2 'quarantine'; v3 snapshots+indexes; v4 'archive'; v5 'tombstones'; v6 'experiments'.
 
-export const STORES = ['profile','sessions','sets','programme','adaptations','recommendations','outcomes','events','readiness','templates','quarantine','snapshots','archive','tombstones'];
+export const STORES = ['profile','sessions','sets','programme','adaptations','recommendations','outcomes','events','readiness','templates','quarantine','snapshots','archive','tombstones','experiments'];
 
 let dbPromise = null;
 

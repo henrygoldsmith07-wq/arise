@@ -8,13 +8,17 @@ import { linearRegressionIntervals } from '../lib/statistics.js';
 import { strengthTrendWithConfidence, classifyPR } from '../lib/progression.js';
 import { exerciseHistorySummary, plateauDetection, programAdherence, recommendationCalibration, validateDeloadLogic } from '../lib/programming.js';
 import { badSessionAttribution, plateauAttribution } from '../lib/sessionQuality.js';
+import { workoutQualityReport } from '../lib/workoutQualityReport.js';
+import { investigatePlateau } from '../lib/plateauInvestigation.js';
+import { evaluateExperiment, experimentDaysRemaining } from '../lib/trainingExperiments.js';
+import { suggestNextExperiment, startExperiment, concludeExperimentById, cancelExperimentById, deleteExperiment } from '../services/experimentService.js';
 import { longitudinalSummaryAsync } from '../lib/analyticsWorker.js';
 import { isSimpleView, isExpertView } from '../lib/experienceMode.js';
 import { milestoneState, trainingAgeDisplay, consistencyInsights, healthyStreak, monthlyDigest, nextBestAction, progressAssessment, whatChangedSummary, coachingCalibration, coachingEvidence, shadowAgreement } from '../lib/product.js';
 import { todayISO, sessionForToday, nextSession } from '../lib/schedule.js';
 import { missedWorkoutRecovery } from '../lib/programming.js';
 
-export default function ProgressView({ store }){
+export default function ProgressView({ store, setStore = null }){
   const attrs = useMemo(()=> deriveAttributes(store.history), [store.history]);
   const lvl = useMemo(()=> levelFromAttributes(attrs), [attrs]);
   const history = store.history || [];
@@ -139,6 +143,69 @@ export default function ProgressView({ store }){
       .sort((a,b)=> (a.result.kind==='genuine'?0:1) - (b.result.kind==='genuine'?0:1))
       .slice(0,5);
   }, [history, store.readinessLog]);
+
+  // ── Post-workout debrief: the last session's quality vs its target, with
+  // what went well / what limited you / what to change next. Derived from the
+  // SAME saved history the rest of this screen reads — no separate state, so
+  // it can never disagree with the export.
+  const lastQuality = useMemo(()=> {
+    const last = history[history.length - 1];
+    if(!last) return null;
+    return workoutQualityReport(last, {
+      readinessLog: store.readinessLog || [],
+      schedule: store.activeSchedule || null,
+    });
+  }, [history, store.readinessLog, store.activeSchedule]);
+
+  // ── Plateau investigation: when the selected exercise's plateau is real,
+  // run the five cross-exercise checks and attach the recommendation.
+  const investigation = useMemo(()=> {
+    if(!plateau?.detected || !exerciseId) return null;
+    return investigatePlateau(history, exerciseId, { readinessLog: store.readinessLog || [] });
+  }, [plateau?.detected, exerciseId, history, store.readinessLog]);
+
+  // ── Training experiments: live status per experiment, for the Progress card.
+  const experimentEvaluations = useMemo(()=> (store.experiments || [])
+    .filter(e=> e?.id && !e.deletedAt)
+    .sort((a,b)=> String(b.createdAtISO||'').localeCompare(String(a.createdAtISO||'')))
+    .slice(0, 3)
+    .map(e=> ({ experiment: e, evaluation: evaluateExperiment(e, history) })),
+  [store.experiments, history]);
+
+  // ── Experiment lifecycle: start/conclude/cancel through the service layer.
+  // The service is pure — it returns the next store and this view commits it.
+  // Without a save path the section stays read-only.
+  const canManageExperiments = typeof setStore === 'function';
+  const [experimentFormOpen, setExperimentFormOpen] = useState(false);
+  const [experimentMsg, setExperimentMsg] = useState(null);
+  const experimentSuggestion = useMemo(()=> suggestNextExperiment({ store }), [store]);
+
+  const submitExperiment = (spec)=>{
+    try{
+      const result = startExperiment(store, spec);
+      setStore(result.store);
+      setExperimentFormOpen(false);
+      setExperimentMsg(`Started “${result.experiment.name}”. Log sessions as usual — the evaluation updates as history grows.`);
+    }catch(err){
+      setExperimentMsg(String(err?.message || err));
+    }
+  };
+  const doConclude = (id)=>{
+    if(!confirm('Conclude this experiment now? Arise will call the result from your logged history, and it cannot go back to active.')) return;
+    const result = concludeExperimentById(store, id);
+    setStore(result.store);
+    if(result.concluded) setExperimentMsg(`Concluded: ${result.result}. ${(result.conclusion || '').slice(0, 140)}`);
+  };
+  const doCancel = (id)=>{
+    if(!confirm('Cancel this experiment without a conclusion? Your logged history is not affected.')) return;
+    const result = cancelExperimentById(store, id);
+    setStore(result.store);
+  };
+  const doDeleteExperiment = (id)=>{
+    if(!confirm('Remove this concluded experiment from Progress? It is recoverable only via backup/undo-free sync — the row is tombstoned.')) return;
+    const result = deleteExperiment(store, id);
+    setStore(result.store);
+  };
 
   return (
     <div className="px-4 py-5 space-y-4">
@@ -409,6 +476,29 @@ export default function ProgressView({ store }){
               <span className={plateau?.detected ? 'font-bold text-review' : ''}>{plateau?.detected ? 'Plateau detected' : plateau?.status === 'fatigue' ? 'Fatigue signal' : 'No plateau'}</span>
             </div>
             <p className="text-xs text-ink3">{plateau?.reason || 'Keep logging consistent sets before judging a plateau.'}</p>
+            {investigation && investigation.status === 'investigated' && (
+              <div className="mt-2 rounded-xl border border-line bg-surface2 px-3 py-2" data-testid="plateau-investigation">
+                <p className="text-xs font-bold">Why is this stalled?</p>
+                <p className="text-[11px] text-ink2 mt-0.5">{investigation.diagnosis}</p>
+                <ul className="mt-1.5 space-y-0.5">
+                  {investigation.checks.map(check=> (
+                    <li key={check.id} className="text-[11px] text-ink3">
+                      <span className={`font-semibold ${check.verdict === 'cause' ? 'text-review' : check.verdict === 'clear' ? 'text-success' : 'text-ink3'}`}>{check.label}:</span> {check.finding}
+                      {check.evidence.map((line, i)=> <span key={i} className="block pl-3">— {line}</span>)}
+                    </li>
+                  ))}
+                </ul>
+                {investigation.recommendation && (
+                  <div className="mt-2 rounded-lg border border-line bg-surface px-2.5 py-2">
+                    <p className="text-[11px] font-bold text-ink">Try: {investigation.recommendation.headline}</p>
+                    <p className="text-[11px] text-ink3 mt-0.5">{investigation.recommendation.detail}</p>
+                  </div>
+                )}
+              </div>
+            )}
+            {investigation && investigation.status === 'insufficient' && (
+              <p className="text-[11px] text-ink3 mt-1">{investigation.reason}</p>
+            )}
             {trendBand && (
               <figure className="rounded-xl border border-line bg-surface2 px-3 py-2">
                 <svg viewBox="0 0 320 84" className="w-full h-20" role="img" aria-hidden="true" focusable="false">
@@ -641,8 +731,100 @@ export default function ProgressView({ store }){
               </div>
             );
           })()}
+          {lastQuality && (
+            <div className="mt-3 rounded-xl border border-line bg-surface2 px-3 py-3" data-testid="last-quality-report">
+              <div className="flex items-baseline gap-2">
+                <p className="text-xs font-bold">Workout quality</p>
+                <p className="ml-auto text-sm font-black tabular-nums" data-testid="quality-score">{lastQuality.quality}/100</p>
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border border-line bg-surface">{lastQuality.band}</span>
+              </div>
+              {lastQuality.target && (
+                <p className="text-[11px] text-ink3 mt-1">{lastQuality.target.hit ? '✓' : '△'} {lastQuality.target.detail}</p>
+              )}
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-success">What went well</p>
+                  <ul className="mt-1 space-y-0.5">{lastQuality.whatWentWell.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}</ul>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-review">What limited you</p>
+                  <ul className="mt-1 space-y-0.5">{lastQuality.whatLimitedYou.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}</ul>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-ink3">Next session</p>
+                  <ul className="mt-1 space-y-0.5">{lastQuality.whatToChangeNext.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}</ul>
+                </div>
+              </div>
+            </div>
+          )}
         </section>
       ) : null}
+
+      <section className="rounded-2xl border border-line bg-surface p-4" aria-label="Training experiments">
+        <div className="flex items-baseline gap-2">
+          <h3 className="text-sm font-bold">Training experiments</h3>
+          {canManageExperiments ? (
+            <button
+              type="button"
+              onClick={()=> { setExperimentFormOpen(o=> !o); setExperimentMsg(null); }}
+              className="ml-auto text-[11px] font-bold underline underline-offset-2"
+              data-testid="experiment-new"
+            >{experimentFormOpen ? 'Close' : '+ New'}</button>
+          ) : <span className="ml-auto text-[11px] text-ink3">Your own A/B test, tracked honestly</span>}
+        </div>
+        {experimentMsg ? <p className="text-[11px] text-ink mt-1" role="status" data-testid="experiment-msg">{experimentMsg}</p> : null}
+        {experimentFormOpen && (
+          <ExperimentForm
+            history={history}
+            exerciseOptions={exerciseOptions}
+            initial={experimentSuggestion}
+            onSubmit={submitExperiment}
+            onCancel={()=> setExperimentFormOpen(false)}
+          />
+        )}
+        {!experimentFormOpen && !experimentEvaluations.length && experimentSuggestion && canManageExperiments ? (
+          <div className="mt-2 rounded-xl border border-line bg-surface2 px-3 py-2" data-testid="experiment-suggestion">
+            <p className="text-xs font-bold">Suggested next: {experimentSuggestion.name}</p>
+            <p className="text-[11px] text-ink2 mt-0.5">{experimentSuggestion.question}</p>
+            <button type="button" onClick={()=> setExperimentFormOpen(true)} className="mt-1.5 text-[11px] font-bold underline underline-offset-2">Set it up</button>
+          </div>
+        ) : null}
+        {!experimentEvaluations.length && !experimentSuggestion ? (
+          <p className="text-xs text-ink3 mt-2">No experiments yet. Track one of your own training questions with your logged data — e.g. “does 16 weekly chest sets beat 12?”</p>
+        ) : experimentEvaluations.length ? (
+          <ul className="mt-2 space-y-2">
+            {experimentEvaluations.map(({ experiment, evaluation })=> {
+              const daysLeft = experimentDaysRemaining(experiment, today);
+              const statusLabel = experiment.status === 'completed'
+                ? `Concluded: ${experiment.result || 'inconclusive'}`
+                : experiment.status === 'cancelled' ? 'Cancelled'
+                : evaluation.phase === 'baseline' ? 'Baseline phase'
+                : `Intervention — ${daysLeft != null ? `${daysLeft} days left` : 'running'}`;
+              return (
+                <li key={experiment.id} className="rounded-xl border border-line bg-surface2 px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-bold truncate">{experiment.name}</p>
+                    <span className={`ml-auto shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ${experiment.status === 'completed' ? 'border-success text-success' : 'border-line text-ink3'}`}>{statusLabel}</span>
+                  </div>
+                  <p className="text-[11px] text-ink2 mt-0.5">{experiment.question}</p>
+                  <p className="text-[11px] text-ink3 mt-1">
+                    {evaluation.baselineMean != null ? `Baseline ~${evaluation.baselineMean}` : 'Baseline —'} → {evaluation.interventionMean != null ? `intervention ~${evaluation.interventionMean}` : 'intervention —'} · confidence {evaluation.confidence}
+                    {experiment.conclusionNote ? ` · ${experiment.conclusionNote}` : ''}
+                  </p>
+                  {canManageExperiments && experiment.status === 'active' ? (
+                    <div className="mt-1.5 flex gap-3">
+                      <button type="button" onClick={()=> doConclude(experiment.id)} className="text-[11px] font-bold underline underline-offset-2" data-testid="experiment-conclude">Conclude now</button>
+                      <button type="button" onClick={()=> doCancel(experiment.id)} className="text-[11px] text-ink3 underline underline-offset-2">Cancel</button>
+                    </div>
+                  ) : canManageExperiments ? (
+                    <button type="button" onClick={()=> doDeleteExperiment(experiment.id)} className="mt-1.5 text-[11px] text-ink3 underline underline-offset-2" data-testid="experiment-delete">Remove</button>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+      </section>
 
       <section className="rounded-2xl border border-line bg-surface p-4">
         <h3 className="text-sm font-bold">History</h3>
@@ -651,6 +833,65 @@ export default function ProgressView({ store }){
         )}
       </section>
     </div>
+  );
+}
+
+// Start-experiment form: preset-backed, minimal by design. The claim is what
+// matters — Arise measures the outcome from logged history and never verifies
+// the user "did" the change (see trainingExperiments.js posture).
+function ExperimentForm({ history = [], exerciseOptions = [], initial = null, onSubmit, onCancel }){
+  const [name, setName] = useState(initial?.name || '');
+  const [question, setQuestion] = useState(initial?.question || '');
+  const [exerciseId, setExerciseId] = useState(initial?.exerciseId || '');
+  const [interventionNote, setInterventionNote] = useState('');
+  const hasHistory = history.length > 0;
+  const canSubmit = hasHistory && name.trim() && (exerciseId || initial?.metric === 'session-quality');
+  return (
+    <form
+      className="mt-2 rounded-xl border border-line bg-surface2 px-3 py-2 space-y-2"
+      onSubmit={(e)=> { e.preventDefault(); if(canSubmit) onSubmit({ name, question, exerciseId: exerciseId || null, interventionNote: interventionNote || null, metric: 'strength' }); }}
+      data-testid="experiment-form"
+    >
+      <div>
+        <label className="block text-[10px] font-bold uppercase tracking-widest text-ink3" htmlFor="experiment-name">What are you testing?</label>
+        <input
+          id="experiment-name"
+          value={name}
+          onChange={(e)=> setName(e.target.value)}
+          placeholder="e.g. Bench: 5–8 vs 8–12 reps"
+          className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-xs"
+        />
+      </div>
+      {question ? <p className="text-[11px] text-ink2">Question: {question}</p> : null}
+      <div>
+        <label className="block text-[10px] font-bold uppercase tracking-widest text-ink3" htmlFor="experiment-exercise">Exercise</label>
+        <select
+          id="experiment-exercise"
+          data-testid="experiment-exercise-select"
+          value={exerciseId}
+          onChange={(e)=> setExerciseId(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-xs"
+        >
+          <option value="">Choose an exercise…</option>
+          {exerciseOptions.map((id)=> <option key={id} value={id}>{EXERCISE_BY_ID[id]?.name || id}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="block text-[10px] font-bold uppercase tracking-widest text-ink3" htmlFor="experiment-note">What will you change?</label>
+        <input
+          id="experiment-note"
+          value={interventionNote}
+          onChange={(e)=> setInterventionNote(e.target.value)}
+          placeholder="e.g. Switching bench to 5–8 reps"
+          className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-xs"
+        />
+      </div>
+      {!hasHistory ? <p className="text-[11px] text-ink3">Log at least one session first — the baseline comes from history that already exists.</p> : null}
+      <div className="flex gap-3">
+        <button type="submit" disabled={!canSubmit} className="btn btn-primary min-h-10 rounded-xl px-4 text-xs font-bold disabled:opacity-50" data-testid="experiment-submit">Start experiment</button>
+        <button type="button" onClick={onCancel} className="text-[11px] font-bold underline underline-offset-2">Never mind</button>
+      </div>
+    </form>
   );
 }
 

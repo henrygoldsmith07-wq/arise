@@ -99,7 +99,7 @@ function exerciseLogs(history, exerciseId){
 
 // A machine-readable explanation for every next-load decision. The UI can
 // show this without exposing implementation details or inventing a reason.
-export function transparentProgressionDecision({ exerciseId, history = [], targetReps = '8–12', recommendation = null, config = null, asOfDateISO = null, calibration = null, plateConfig = null } = {}){
+export function transparentProgressionDecision({ exerciseId, history = [], targetReps = '8–12', recommendation = null, config = null, asOfDateISO = null, calibration = null, plateConfig = null, block = null } = {}){
   // plateConfig is safe to pass for every equipment type: the engine's plate
   // dispatcher rounds barbells via plates and dumbbells/machines via their own
   // achievable increments, so non-barbell users get loadable targets too.
@@ -140,6 +140,13 @@ export function transparentProgressionDecision({ exerciseId, history = [], targe
   const confidenceCfg = resolveArisePriors(config).progression.confidence;
   const confidence = logs.length >= confidenceCfg.highSessions ? 'high' : logs.length >= confidenceCfg.mediumSessions ? 'medium' : 'low';
   const name = ex?.name || exerciseId || 'this exercise';
+  // ── Adaptation trail: WHY this block differs from the programme blueprint.
+  // adaptActiveSchedule stamps `why` + `adaptation {kind, reason, basisKey}` on
+  // blocks it changed; the scheduler stamps substitutionReason on swaps. The
+  // caller passes the scheduled block when it has one, and the trail surfaces
+  // here — the user-facing half of adaptive programming: the change AND its
+  // reason, newest first.
+  const adapted = buildAdaptationTrail(block);
   return {
     ...rec,
     exerciseId,
@@ -148,11 +155,42 @@ export function transparentProgressionDecision({ exerciseId, history = [], targe
     evidence,
     rule,
     confidence,
+    adapted,
     summary: `${name}: ${rec.reason || 'follow the programme prescription.'}`,
   };
 }
 
 export const progressionExplanation = transparentProgressionDecision;
+
+/**
+ * Normalise a scheduled block's adaptation/substitution stamps into the
+ * explanation shape the UI renders: { summary, kind, when } — newest first,
+ * empty when the block matches its programme prescription.
+ */
+export function buildAdaptationTrail(block){
+  if(!block || typeof block !== 'object') return null;
+  const trail = [];
+  const when = block.adaptedAtISO || block.savedAt || null;
+  if(block.adaptation?.kind){
+    trail.push({
+      kind: block.adaptation.kind,
+      summary: block.why || block.adaptation.reason || 'adjusted by the engine',
+      when,
+    });
+  } else if(block.why){
+    trail.push({ kind: 'adjusted', summary: block.why, when });
+  }
+  if(block.substitutionReason){
+    trail.push({
+      kind: 'substitution',
+      summary: block.substitutionFrom
+        ? `Swapped from ${EXERCISE_BY_ID[block.substitutionFrom]?.name || block.substitutionFrom}: ${block.substitutionReason}`
+        : block.substitutionReason,
+      when: block.substitutedAt || when,
+    });
+  }
+  return trail.length ? trail : null;
+}
 
 // One row per completed exposure to an exercise. This is intentionally
 // session-level rather than set-level so the history is readable and trends do

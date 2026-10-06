@@ -208,6 +208,7 @@ export function decompose(store, { existingArchive = null } = {}){
     // deletion is recoverable locally; consumers filter on deletedAt, and
     // tombstones carry the deletion to other devices at sync time.
     templates: store.customTemplates || [],
+    experiments: (store.experiments || []).filter(e => e?.id),
     tombstones,
     archive: portable.archivedHistory,
   };
@@ -253,7 +254,7 @@ export async function persistStore(store, { baseStore = null, collectionMode = '
   // silently produced a half-saved world (history without its programme,
   // ledger rows split across two stores).
   await idbTransaction(
-    ['profile','sessions','sets','programme','adaptations','recommendations','outcomes','events','readiness','templates','tombstones','archive'],
+    ['profile','sessions','sets','programme','adaptations','recommendations','outcomes','events','readiness','templates','experiments','tombstones','archive'],
     (ops)=> {
       ops.put('profile', d.profile);
       ops.clearStore('sessions');
@@ -272,6 +273,8 @@ export async function persistStore(store, { baseStore = null, collectionMode = '
       ops.put('readiness', d.readiness);
       ops.clearStore('templates');
       for(const t of d.templates) ops.put('templates', t);
+      ops.clearStore('experiments');
+      for(const e of d.experiments) ops.put('experiments', e);
       ops.clearStore('tombstones');
       for(const t of d.tombstones) ops.put('tombstones', t);
       ops.clearStore('archive');
@@ -298,7 +301,7 @@ export async function persistStore(store, { baseStore = null, collectionMode = '
 }
 
 export async function loadStoreFromIdb(){
-  const [profile, sessions, programme, adaptations, recs, outs, events, readiness, templates, tombstones, archiveRows] = await Promise.all([
+  const [profile, sessions, programme, adaptations, recs, outs, events, readiness, templates, experiments, tombstones, archiveRows] = await Promise.all([
     idbGet('profile', PROFILE_ID),
     idbGetAll('sessions'),
     idbGet('programme', PROGRAMME_ID),
@@ -308,6 +311,7 @@ export async function loadStoreFromIdb(){
     idbGetAll('events'),
     idbGet('readiness', READINESS_ID),
     idbGetAll('templates'),
+    idbGetAll('experiments'),
     idbGetAll('tombstones'),
     idbGetAll('archive'),
   ]);
@@ -344,6 +348,7 @@ export async function loadStoreFromIdb(){
     eventHistory: events || [],
     readinessLog: readiness?.log || [],
     customTemplates: templates || [],
+    experiments: experiments || [],
     tombstones: tombstones || [],
     evaluationLedger: [...ledgerMap.values()],
   };

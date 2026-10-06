@@ -54,7 +54,7 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
   const weekPhase = useMemo(()=> weekPhaseFor(sched, isoToday()), [sched]);
   const nba = useMemo(()=> nextBestAction({ store, today: isoToday(), todaySession: today, nextSess: nxt, recovery }), [store, today, nxt, recovery]);
   const changes = useMemo(()=> whatChangedSummary({ schedule: sched, history: store.history || [] }), [sched, store.history]);
-  const explanations = useMemo(()=> heroSession ? heroSession.blocks.map(block=> progressionExplanation({ exerciseId: block.exerciseId, targetReps: block.reps, asOfDateISO: heroSession.dateISO, history: store.history || [], plateConfig })) : [], [heroSession, store.history, plateConfig]);
+  const explanations = useMemo(()=> heroSession ? heroSession.blocks.map(block=> progressionExplanation({ exerciseId: block.exerciseId, targetReps: block.reps, asOfDateISO: heroSession.dateISO, history: store.history || [], plateConfig, block })) : [], [heroSession, store.history, plateConfig]);
 
   const applyReplan = ()=>{
     const result = replanSchedule(sched, store.history || [], { today: isoToday() });
@@ -132,6 +132,22 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
               );
             })}
           </ul>
+
+          {/* ── Why today looks like this: the visible face of adaptive
+              programming. Rendered ONLY when the engine actually adjusted a
+              block in the hero — never as filler. ── */}
+          {explanations.some(ex => ex?.adapted) && (
+            <div className="rounded-xl border border-review/30 bg-reviewsoft px-3 py-2" role="status" data-testid="today-adaptation-reasons">
+              <p className="text-xs font-bold text-review">⚡ Adjusted from your training</p>
+              <ul className="mt-1 space-y-1">
+                {explanations.filter(ex => ex?.adapted).map((ex, i) => (
+                  <li key={i} className="text-[11px] text-ink2 leading-snug">
+                    <span className="font-bold text-ink">{ex.exerciseName}</span> — {ex.adapted.summary}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <details className="rounded-xl border border-line bg-surface px-3 py-2">
             <summary className="text-xs font-bold cursor-pointer">Why these prescriptions?</summary>

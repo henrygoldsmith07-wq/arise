@@ -180,7 +180,14 @@ if(!fs.existsSync(dist)){
 
 const BOOT_BUDGET_KB = 120;
 const CHUNK_BUDGET_KB = 34;
-const TOTAL_BUDGET_KB = 351;
+// total 351 → 354 kB with the adaptive-programming product pass: the training
+// experiment engine (trainingExperiments.js, lazy via ProgressView), the
+// cross-exercise plateau investigation (plateauInvestigation.js, lazy), the
+// post-workout quality debrief (workoutQualityReport.js riding the lazy
+// workoutService chunk), and the why-changed explanation trail on the Today
+// hero. All lazy-route logic — boot 114.0 and largest-lazy 26.4 unchanged;
+// measured total 353.4.
+const TOTAL_BUDGET_KB = 354;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

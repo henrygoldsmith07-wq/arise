@@ -56,6 +56,10 @@ and there is no account to delete. See the [privacy guide](docs/PRIVACY.md).
 19. **Long-break recovery and duplicate-safe history** — conservative restarts after a six-week gap; upsert-by-ID with newest-wins edits.
 20. **Profile-to-programme generation** — `programmeGenerator.js` turns the captured profile into a dated, equipment-honest schedule with every reason and swap returned.
 21. **Plate-aware loadability** — `plates.js` rounds barbell targets to your actual inventory and explains under/overshoot.
+21a. **Programme adaptation, explained** — every engine change to a scheduled block carries its reason, and the Today hero surfaces an "Adjusted from your training" card with the evidence trail (`buildAdaptationTrail`; see [methodology](docs/METHODOLOGY.md)).
+21b. **Post-workout debrief** — a 0–100 quality rating against the session's actual target (not just the average day), with what went well, what limited you, and what to change next (`workoutQualityReport.js`; also rides the save toast).
+21c. **Plateau investigation** — when a movement is genuinely stalled, five cross-exercise checks (volume, effort drift, frequency, recovery, neighbouring movements) point at the cause and ONE next change, evidence attached (`plateauInvestigation.js`, rendered in Progress under the flagged exercise).
+21d. **Training experiments** — run a question against your own data ("does 16 weekly chest sets beat 12?"): baseline → intervention → conclusion with confidence, including a plain "inconclusive". Experiments live in their own IndexedDB store and travel in backups/sync (`trainingExperiments.js`).
 22. **Durable measurements & consent** — consent-gated local event history (logging time, abandonment, acceptance), exportable and clearable independently.
 23. **Health adapters** — optional minimised health-summary adapter; no platform SDK, no raw history.
 24. **Real longitudinal validation (`longitudinal.js`)** — with consent, recommendations are frozen before the workout and scored against outcomes; segment conclusions are sample-size-gated; the ledger never feeds back. See [`docs/EVIDENCE.md`](docs/EVIDENCE.md).
@@ -144,7 +148,7 @@ This app shares the Le Studio monochrome design system and has no franchise, her
 src/lib/data.js        single source of truth + schedule helpers + programme/template versioning
 src/lib/attributes.js  history-derived attributes + level
 src/lib/storage.js     IndexedDB persistence + integrity gate + snapshots + recovery
-src/lib/idb.js         IndexedDB wrapper (14 object stores, transactional writes)
+src/lib/idb.js         IndexedDB wrapper (15 object stores, transactional writes)
 src/lib/export.js      versioned backup (+ exportPolicy.js: contract, adapters, dangerous-field policy)
 src/lib/fieldStudy.js   real-world study aggregator + pooled assigned-arm comparison (+ cohortOps.js, productSuccess.js, participation.js, studyIdentity.js)
 src/lib/telemetry.js   consent-gated durable events + abandonment/acceptance/logging metrics
@@ -158,6 +162,9 @@ src/lib/programmeGenerator.js profile → dated schedule generation with prefere
 src/lib/backtesting.js point-in-time replay validation of recommendations against later outcomes
 src/lib/longitudinal.js consent-gated prospective recommendation→outcome ledger + segmented validation (+ longitudinalCore.js)
 src/lib/plates.js      nearest achievable barbell load + per-side plate stack
+src/lib/trainingExperiments.js  user-run training experiments: phases, honest conclusions, merge
+src/lib/plateauInvestigation.js  five cross-exercise checks that explain a stall + one recommendation
+src/lib/workoutQualityReport.js  post-workout debrief: quality vs target + what to change next
 src/lib/analytics.js   weekly volume + frequency + strength series + volume-balance advice
 src/lib/warmup.js      warm-ups + rest/duration + supersets + fatigue-aware ordering + weak points
 src/lib/sessionGenerator.js equipment-aware, history-aware session builder + superset hints

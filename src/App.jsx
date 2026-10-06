@@ -696,7 +696,7 @@ export default function App(){
         <Suspense fallback={<TabFallback label="Exercises" />}><ExerciseBrowser availableEquipment={store.onboarding?.equipment || []} onboarding={store.onboarding} /></Suspense>
       )}
 
-      {tab==='progress' && <Suspense fallback={<TabFallback label="Progress" />}><ProgressView store={store} /></Suspense>}
+      {tab==='progress' && <Suspense fallback={<TabFallback label="Progress" />}><ProgressView store={store} setStore={setStore} /></Suspense>}
       {tab==='more' && <Suspense fallback={<TabFallback label="More" />}><MoreView store={store} setStore={setStore} onboardingOpen={onboardingOpen} setOnboardingOpen={setOnboardingOpen} onLoadDemo={loadDemo} /></Suspense>}
 
       {activeSession && activeSession.mode === 'guided' && (

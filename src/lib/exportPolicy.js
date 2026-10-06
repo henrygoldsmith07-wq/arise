@@ -194,7 +194,7 @@ export const DENY_FIELDS = [
 export const IMPORT_ALLOW_KEYS = [
   'onboarding', 'activeSchedule', 'activeWorkout', 'history', 'archivedHistory', 'preferences', 'gymPrefs',
   'readinessLog', 'programHistory', 'evaluationLedger', 'customTemplates',
-  'eventHistory', 'studyEnrollment', 'tombstones',
+  'experiments', 'eventHistory', 'studyEnrollment', 'tombstones',
   'studyParticipantId', 'healthSummary',
   'studyStatus', 'studyStatusChangedAtISO', // participation lifecycle (participation.js)
 ];
@@ -284,6 +284,7 @@ export function buildImportPreview(rawData, currentStore){
     events: Array.isArray(data?.eventHistory) ? data.eventHistory.length : 0,
     ledger: Array.isArray(data?.evaluationLedger) ? data.evaluationLedger.length : 0,
     templates: Array.isArray(data?.customTemplates) ? data.customTemplates.length : 0,
+    experiments: Array.isArray(data?.experiments) ? data.experiments.length : 0,
     readiness: Array.isArray(data?.readinessLog) ? data.readinessLog.length : 0,
     additions,
     updates: conflicts.length,
