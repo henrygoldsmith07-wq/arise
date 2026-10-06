@@ -42,7 +42,7 @@
       "script": "Onboard → start guided session → two steps (fill load/reps only if empty, Done, skip rest) → save.",
       "metrics": {
         "inputFocus": { "baseline": 2, "current": 1, "deltaAbs": -1, "deltaPct": -50, "direction": "improvement", "maxAllowed": 1 },
-        "focusin": { "baseline": 7, "current": 6, "deltaAbs": -1, "deltaPct": -14, "direction": "improvement", "maxAllowed": 6 },
+        "focusin": { "baseline": 7, "current": 8, "deltaAbs": 1, "deltaPct": 14, "direction": "regression", "maxAllowed": 8, "note": "Re-measured after the native window.confirm for 'save with unfinished sets' became the accessible in-app dialog: +2 page-focus events vs the old flow (focus into the dialog at open, focus on confirm) minus 1 removed by dialog focus-waste fixes. The baseline stays at 7 so the accessibility cost stays visible." },
         "loadCommits": { "baseline": 2, "current": 1, "deltaAbs": -1, "deltaPct": -50, "direction": "improvement", "maxAllowed": 1 },
         "rirCommits": { "baseline": 0, "current": 0, "deltaAbs": 0, "deltaPct": null, "direction": "held", "maxAllowed": 0 },
         "completes": { "baseline": 2, "current": 2, "deltaAbs": 0, "deltaPct": 0, "direction": "held", "minAllowed": 2 }

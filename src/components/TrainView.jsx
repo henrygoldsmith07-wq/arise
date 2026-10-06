@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useDialogA11y } from '../lib/a11y.js';
+import { useDialogs } from './Dialog.jsx';
 import { PROGRAMS, PROGRAM_BY_ID, PROGRAM_TEMPLATES, programHistory as programVersionHistory, availablePrograms, EXERCISE_BY_ID, EXERCISES, plannedVsCompleted, GOALS, LEVELS } from '../lib/data.js';
 import { encodeShareCode } from '../lib/shareCodes.js';
 import { adaptScheduleForEquipment, programAdherence, userProgramHistory } from '../lib/programming.js';
 import { trainRecommendation } from '../lib/trainRecommendation.js';
+import { whyChoseBullets } from '../lib/trainSurface.js';
 import { buildEditorTemplate, moveItem, editorSubstitutionPreview } from '../lib/templateEditor.js';
 import { applyEquipmentAdaptation, duplicateCustomTemplate, fallbackProgrammeId, generateProgrammeFromProfile, installSharedTemplate, restoreCustomTemplate, saveCustomTemplate, softDeleteCustomTemplate, startProgramme } from '../services/programmeService.js';
 
@@ -21,6 +23,7 @@ function currentWeek(adherence){
 export default function TrainView({ store, setStore, onStartSession, availableEquipment }){
   const [programId,setProgramId]=useState(store.activeSchedule?.programId || PROGRAMS[0].id);
   const [builderOpen,setBuilderOpen]=useState(false);
+  const dialogs = useDialogs();
   // Modal focus capture/trap/restore for the template builder.
   const builderA11y = useDialogA11y({ active: builderOpen });
   const [editingId,setEditingId]=useState(null);
@@ -110,9 +113,16 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
   // Deletion is soft: the row stays recoverable (undo below), analytics and
   // the UI filter on deletedAt, and a tombstone records the deletion so a
   // future sync can propagate it instead of resurrecting the template.
-  const deleteCustom = (id)=>{
+  const deleteCustom = async (id)=>{
     if(!(store.customTemplates || []).some(t=> t.id === id)) return;
-    if(!confirm('Delete this template? Schedules already started from it are not affected. You can undo right after.')) return;
+    const ok = await dialogs.confirm({
+      title:'Delete this template?',
+      description:'Schedules already started from it are not affected. You can undo right after.',
+      confirmLabel:'Delete template',
+      cancelLabel:'Keep template',
+      destructive:true,
+    });
+    if(!ok) return;
     setStore(softDeleteCustomTemplate(store, id));
     if(programId === id) setProgramId(fallbackProgrammeId());
   };
@@ -169,9 +179,10 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
 
   return (
     <div className="px-4 py-5 space-y-4">
+      {dialogs.node}
       <div>
         <h2 className="text-lg font-extrabold tracking-tight">Train</h2>
-        <p className="text-xs text-ink3">Programs are scheduled training — picking one creates dated sessions you can run from Today. Templates are reusable blueprints; mesocycles periodise load across weeks.</p>
+        <p className="text-xs text-ink3">Start with the programme picked for you — or browse and build your own when you want more control.</p>
       </div>
 
       {/* ── Active programme first: never encourage replacing it ── */}
@@ -211,20 +222,26 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
         <section className="rounded-3xl border border-line bg-surface p-4 sm:p-5 space-y-3" aria-label="Recommended for you">
           <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Recommended for you</p>
           <div>
-            <h3 className="text-2xl font-black tracking-tight">{recommendation.name} — {recommendation.daysPerWeek || '?'} days</h3>
-            <p className="text-xs text-ink3">Best fit for your goal, equipment and schedule.</p>
+            <h3 className="text-2xl font-black tracking-tight">{recommendation.name}</h3>
+            <p className="text-xs font-semibold text-ink2 tabular-nums">
+              {recommendation.estimatedMinutes != null ? `≈${recommendation.estimatedMinutes} min` : ''}{recommendation.cappedByPreference ? ` (fits your ${recommendation.preferredLengthLabel} preference)` : ''}{recommendation.estimatedMinutes != null ? ' · ' : ''}{recommendation.daysPerWeek ? `${recommendation.daysPerWeek} days/week` : 'Flexible days'}
+            </p>
+            <p className="text-xs text-ink3">Built around your equipment and goal</p>
           </div>
-              <p className="text-xs font-semibold text-ink2 tabular-nums">
-                {recommendation.estimatedMinutes != null ? `≈${recommendation.estimatedMinutes} min` : ''}{recommendation.cappedByPreference ? ` (fits your ${recommendation.preferredLengthLabel} preference)` : ''}{(recommendation.estimatedMinutes != null ? ' · ' : '')}{recommendation.level}
-              </p>
-              {(recommendation.substitutionCount > 0 || recommendation.warningCount > 0) && (
-                <p className="text-[11px] text-ink3">
-                  {recommendation.substitutionCount > 0 ? `${recommendation.substitutionCount} swap${recommendation.substitutionCount === 1 ? '' : 's'} for your kit` : ''}
-                  {recommendation.substitutionCount > 0 && recommendation.warningCount > 0 ? ' · ' : ''}
-                  {recommendation.warningCount > 0 ? `${recommendation.warningCount} constraint${recommendation.warningCount === 1 ? '' : 's'} to review` : ''}
-                  {' '}— previewed from the real schedule.
-                </p>
-              )}
+          {(recommendation.substitutionCount > 0 || recommendation.warningCount > 0) && (
+            <p className="text-[11px] text-ink3">
+              {recommendation.substitutionCount > 0 ? `${recommendation.substitutionCount} swap${recommendation.substitutionCount === 1 ? '' : 's'} for your kit` : ''}
+              {recommendation.substitutionCount > 0 && recommendation.warningCount > 0 ? ' · ' : ''}
+              {recommendation.warningCount > 0 ? `${recommendation.warningCount} constraint${recommendation.warningCount === 1 ? '' : 's'} to review` : ''}
+              {' '}— previewed from the real schedule.
+            </p>
+          )}
+          <div>
+            <p className="text-xs font-bold">Why Arise chose it</p>
+            <ul className="mt-1 space-y-1">
+              {whyChoseBullets(recommendation, store.history?.length || 0).map((bullet, i)=> <li key={`why-${i}`} className="text-[11px] text-ink3">• {bullet}</li>)}
+            </ul>
+          </div>
           <div className="space-y-1.5">
             <button onClick={startRecommendation} className="btn btn-primary w-full min-h-14 rounded-xl text-base font-extrabold uppercase tracking-wide">Start programme</button>
             <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
@@ -511,10 +528,10 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
       )}
 
       {!!userHistory.length && (
-        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
-          <h3 className="text-sm font-bold">Your programme history</h3>
-          <p className="text-xs text-ink3">Starts and completions are kept separately from the built-in programme version changelog.</p>
-          <ul className="space-y-1.5">
+        <details className="rounded-2xl border border-line bg-surface p-4">
+          <summary className="text-sm font-bold cursor-pointer">Programme history</summary>
+          <p className="text-xs text-ink3 mt-2">Starts and completions are kept separately from the built-in programme version changelog.</p>
+          <ul className="space-y-1.5 mt-2">
             {userHistory.slice(0, 8).map((entry, index)=> (
               <li key={`${entry.programId}-${entry.startDateISO}-${index}`} className="flex items-center gap-2 text-xs border border-line rounded-xl px-3 py-2 bg-surface2">
                 <span className="font-bold">{PROGRAM_BY_ID[entry.programId]?.name || entry.programId}</span>
@@ -523,7 +540,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
               </li>
             ))}
           </ul>
-        </section>
+        </details>
       )}
     </div>
   );

@@ -16,10 +16,14 @@ import {
 import { recordEvent, trackFieldFocus, fieldCommitted } from '../lib/telemetry.js';
 import { POLICY_ORDER } from '../lib/progressionPolicies.js';
 import { buildRunnerRecommendationMeta, recordProspectiveRecommendation, runnerStudy } from '../lib/runnerRecommendations.js';
-import { restStartCue, restTickCue, restCompleteCue } from '../lib/audioCues.js';
+import { restStartCue } from '../lib/audioCues.js';
 import { speak, cancelSpeech, voiceSupported } from '../lib/voiceCoach.js';
 import { haptic } from '../lib/haptics.js';
 import { announce, useDialogA11y } from '../lib/a11y.js';
+import { runnerHasLoggedWork, useWorkoutExit } from '../hooks/useWorkoutExit.js';
+import { useRestTimer } from '../hooks/useRestTimer.js';
+import WorkoutDiscardDialog from './WorkoutDiscardDialog.jsx';
+import { ConfirmDialog } from './Dialog.jsx';
 import { restPresetFor } from '../lib/gymMode.js';
 import { useWorkoutClock, useWorkoutDraftPersistence, useWorkoutWakeLock } from '../hooks/useWorkoutRuntime.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
@@ -44,15 +48,18 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   const [blocks,setBlocks]=useState(()=> initGuidedBlocks(session, history, draft?.blocks));
   const [note,setNote]=useState(()=> draft?.note || '');
   const [noteTags,setNoteTags]=useState(()=> draft?.noteTags || []);
-  const [restEndsAt,setRestEndsAt]=useState(()=> draft?.restEndsAt || null);
-  const [restLabel,setRestLabel]=useState(()=> draft?.restLabel || '');
-  const [restExerciseId,setRestExerciseId]=useState(()=> draft?.restExerciseId || null);
+
   const [clock,setClock]=useWorkoutClock(true);
   const [celebrate,setCelebrate]=useState(false);
   const [soundOn,setSoundOn]=useState(soundCues);
   const [voiceOn,setVoiceOn]=useState(voiceCoach);
-  const [announcement,setAnnouncement]=useState('');
-  const restTickRef=useRef(null);
+  const [saveUnfinishedOpen,setSaveUnfinishedOpen]=useState(false);
+  // Real user work, not plan prefill (guided sets arrive prefilled from the
+  // schedule/history): only completed/skipped steps, typed edits and notes
+  // make an exit lossy. Seeded from a restored draft so a crash resume never
+  // loses the flag.
+  const userEditedRef=useRef(Boolean(draft?.userEdited));
+  const markUserEdited = ()=>{ userEditedRef.current = true; };
   const spokenStepRef=useRef(null);
   const { rootRef, closeRef, trapTab } = useDialogA11y();
   // Randomised field study: the SAME frozen arm assignment the standard
@@ -78,43 +85,37 @@ export default function GuidedRunner({ session, history = [], availableEquipment
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
-  // Escape exits only via the guarded cancel path — never silently destroys
-  // a workout with logged sets.
+  // Exit is one shared contract with the Standard runner: ✕, Cancel and
+  // Escape all funnel through a single in-app confirmation whenever any step
+  // is logged — never a native dialog, never a silent destroy. Declared before
+  // the Escape effect below that drives it.
+  const { discardConfirmOpen, requestExit, keepEditing, confirmDiscard } = useWorkoutExit({
+    hasLoggedWork: runnerHasLoggedWork(blocks, userEditedRef.current),
+    onCancel,
+  });
   useEffect(()=>{
     const onKey = (e)=>{
       if(e.key!=='Escape') return;
-      onCancel();
+      if(discardConfirmOpen){ keepEditing(); return; }
+      requestExit();
     };
     window.addEventListener('keydown', onKey);
     return ()=> window.removeEventListener('keydown', onKey);
-  }, [onCancel]);
+  }, [requestExit, discardConfirmOpen, keepEditing]);
 
 
   useWorkoutWakeLock(wakeLock);
 
-  const restLeft = restEndsAt ? Math.max(0, Math.ceil((restEndsAt-clock)/1000)) : null;
-
-  // 3-2-1 ticks: one cue per remaining second, never repeated for the same second.
-  useEffect(()=>{
-    if(!restEndsAt){ restTickRef.current = null; return; }
-    const left = Math.ceil((restEndsAt - Date.now())/1000);
-    if(left >= 1 && left <= 3 && restTickRef.current !== left){
-      restTickRef.current = left;
-      if(soundOn) restTickCue();
-      haptic('guidedStep');
-    }
-  },[clock, restEndsAt, soundOn]);
-
-  // Rest expiry — clears the countdown, fires the completion cue and a
-  // distinct triple-pulse haptic so the next set is unmissable.
-  useEffect(()=>{
-    if(restEndsAt && restEndsAt <= Date.now()){
-      setRestEndsAt(null);
-      setAnnouncement('Rest complete — next set.');
-      if(soundOn) restCompleteCue();
-      haptic('guidedFinish');
-    }
-  },[restEndsAt, clock, soundOn]);
+  // Shared rest-timer contract (same behaviour as the standard runner, with
+  // guided-specific expiry haptic and its own live-region announcement).
+  const { restEndsAt, setRestEndsAt, restLabel, restExerciseId, restLeft, announcement, setAnnouncement, startRest } = useRestTimer({
+    clock,
+    initial: draft,
+    soundOn,
+    spoken: voiceOn,
+    expiryHaptic: 'guidedFinish',
+    appAnnounce: false,
+  });
 
   // Sound-cue toggle: flips the persisted preference when a callback is wired.
   const toggleSound = ()=>{
@@ -169,6 +170,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
       restLabel,
       restExerciseId,
       startedAt: startedAtRef.current,
+      userEdited: userEditedRef.current,
       // Which exercises' prospective evidence was already recorded — a resume
       // after crash/reload re-seeds shownRecommendationRef from this.
       recordedExercises: [...shownRecommendationRef.current],
@@ -257,14 +259,14 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   const currentSet = currentBlock && step ? currentBlock.sets[step.setIndex] : null;
   const currentExercise = currentBlock ? EXERCISE_BY_ID[currentBlock.exerciseId] : null;
 
-  const updateSet = (bi, si, patch)=> setBlocks(prev=> prev.map((b,i)=> i!==bi? b : { ...b, sets: b.sets.map((s,j)=> j!==si? s : { ...s, ...patch }) }));
+  const updateSet = (bi, si, patch, { userEdit = true } = {})=>{
+    if(userEdit) markUserEdited();
+    setBlocks(prev=> prev.map((b,i)=> i!==bi? b : { ...b, sets: b.sets.map((s,j)=> j!==si? s : { ...s, ...patch }) }));
+  };
 
-  const startRest=(seconds,label,exerciseId=null)=>{
-    const sec=Number(seconds)||0;
-    if(sec<=0){ setRestEndsAt(null); return; }
-    setRestLabel(label);
-    setRestExerciseId(exerciseId);
-    setRestEndsAt(Date.now() + sec*1000);
+  // Rest start cue + haptic accompany the shared timer start.
+  const startRestWithCues=(seconds,label,exerciseId=null)=>{
+    startRest(seconds,label,exerciseId);
     setClock(Date.now());
     if(soundOn) restStartCue();
     haptic('setComplete');
@@ -295,7 +297,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
         const carry = {};
         if(ns && String(ns.reps ?? '').trim()==='' && String(set.reps ?? '').trim()!=='') carry.reps = set.reps;
         if(ns && String(ns.weightKg ?? '').trim()==='' && String(set.weightKg ?? '').trim()!=='') carry.weightKg = set.weightKg;
-        if(Object.keys(carry).length) updateSet(nxt.blockIndex, nxt.setIndex, carry);
+        if(Object.keys(carry).length) updateSet(nxt.blockIndex, nxt.setIndex, carry, { userEdit:false });
       }
       const now=Date.now();
       try {
@@ -313,14 +315,18 @@ export default function GuidedRunner({ session, history = [], availableEquipment
       } catch {}
       lastStepAtRef.current = new Date(now).toISOString();
     }
-    if(!skipped && block.restSec && nextGuidedStep(blocks)) startRest(restPresetFor(gymPrefs, block.exerciseId, block.restSec) || block.restSec, EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId, block.exerciseId);
+    if(!skipped && block.restSec && nextGuidedStep(blocks)) startRestWithCues(restPresetFor(gymPrefs, block.exerciseId, block.restSec) || block.restSec, EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId, block.exerciseId);
     haptic(skipped ? 'failedSet' : 'restComplete');
   };
 
-  const toggleNoteTag=(id)=> setNoteTags(prev=> prev.includes(id) ? prev.filter(x=>x!==id) : [...prev,id]);
+  const toggleNoteTag=(id)=>{ markUserEdited(); setNoteTags(prev=> prev.includes(id) ? prev.filter(x=>x!==id) : [...prev,id]); };
 
   const finish = ()=>{
-    if(progress.pending > 0 && !window.confirm(`${progress.pending} set${progress.pending===1?'':'s'} not done yet. Save anyway? Unfinished sets are logged as skipped.`)) return;
+    if(progress.pending > 0){ setSaveUnfinishedOpen(true); return; }
+    commitFinish();
+  };
+
+  const commitFinish = ()=>{
     const labels=noteTags.map(id=> NOTE_PROMPTS.find(t=> t.id===id)?.label).filter(Boolean);
     const finalNote=[labels.join(', '), note.trim()].filter(Boolean).join(' · ');
     const payload = buildGuidedPayload({
@@ -356,7 +362,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
 
       {/* Header: session identity + live elapsed timer + overall progress bar */}
       <div className="relative shrink-0 flex items-center gap-3 px-4 py-3 border-b border-line bg-surface">
-        <button ref={closeRef} onClick={onCancel} className="w-11 h-11 grid place-items-center rounded-full border border-line bg-surface2" aria-label="Close guided session">✕</button>
+        <button ref={closeRef} onClick={requestExit} className="w-11 h-11 grid place-items-center rounded-full border border-line bg-surface2" aria-label="Close guided session">✕</button>
         <div className="min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Guided session</p>
           <p className="font-bold truncate">{session.title} • {session.dateISO}</p>
@@ -392,7 +398,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
                   <button key={prompt.id} onClick={()=> toggleNoteTag(prompt.id)} aria-pressed={noteTags.includes(prompt.id)} className={`text-xs font-semibold px-2.5 py-1.5 rounded-full border ${noteTags.includes(prompt.id)?'bg-ink text-bg border-ink':'bg-surface2 border-line'}`}>{prompt.label}</button>
                 ))}
               </div>
-              <textarea value={note} onChange={e=> setNote(e.target.value)} rows={2} placeholder="How did it go? Sleep, pain, technique, ROM, load…" className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm" />
+              <textarea value={note} onChange={e=>{ markUserEdited(); setNote(e.target.value); }} rows={2} placeholder="How did it go? Sleep, pain, technique, ROM, load…" className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm" />
             </section>
           </section>
         ) : (
@@ -487,11 +493,34 @@ export default function GuidedRunner({ session, history = [], availableEquipment
             />
           )}
           <div className="flex gap-2">
-            <button onClick={onCancel} className="btn btn-secondary min-h-11 rounded-xl px-4">Cancel</button>
+            <button onClick={requestExit} className="btn btn-secondary min-h-11 rounded-xl px-4">Cancel</button>
             <button onClick={finish} disabled={!canFinish} className="btn btn-primary flex-1 min-h-11 rounded-xl disabled:opacity-40">Save session</button>
           </div>
         </div>
       </div>
+
+      {discardConfirmOpen && (
+        <WorkoutDiscardDialog
+          completedSets={progress.completed + progress.skipped}
+          totalSets={progress.total}
+          onKeepEditing={keepEditing}
+          onDiscard={confirmDiscard}
+        />
+      )}
+      {saveUnfinishedOpen && (
+        <ConfirmDialog
+          title="Save with unfinished sets?"
+          description={`${progress.pending} set${progress.pending===1?'':'s'} not done yet. Unfinished sets are logged as skipped.`}
+          confirmLabel="Save anyway"
+          cancelLabel="Keep going"
+          // Confirming saves and dismisses the whole runner, whose own dialog
+          // lifecycle restores focus — a restore to the now-gone Save button
+          // would be a second, competing focus move.
+          restoreFocus={false}
+          onConfirm={()=>{ setSaveUnfinishedOpen(false); commitFinish(); }}
+          onCancel={()=> setSaveUnfinishedOpen(false)}
+        />
+      )}
     </div>
   );
 }

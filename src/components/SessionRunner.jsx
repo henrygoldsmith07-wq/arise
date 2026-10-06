@@ -13,7 +13,7 @@ import { SESSION_QUALITY_OPTIONS, sessionQualityLabel } from '../lib/gymMode.js'
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
 import { announce, useDialogA11y } from '../lib/a11y.js';
 import { useWorkoutClock, useWorkoutDraftPersistence, useWorkoutWakeLock } from '../hooks/useWorkoutRuntime.js';
-import { restStartCue, restCompleteCue } from '../lib/audioCues.js';
+import { restStartCue } from '../lib/audioCues.js';
 import { speak, cancelSpeech } from '../lib/voiceCoach.js';
 import { LoadNumpad, RestDock, WeightInput, swipeRowHandlers } from './GymModePanel.jsx';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
@@ -21,6 +21,10 @@ import ExerciseIllustration from './ExerciseIllustration.jsx';
 // ride their own lazy chunk — boot logging weight is untouched.
 const TeachingPanel = lazy(() => import('./TeachingPanel.jsx'));
 import StepperButton from './StepperButton.jsx';
+import WorkoutDiscardDialog from './WorkoutDiscardDialog.jsx';
+import { runnerHasLoggedWork, useWorkoutExit } from '../hooks/useWorkoutExit.js';
+import { useRestTimer } from '../hooks/useRestTimer.js';
+import { confidenceLanguage } from '../lib/performance.js';
 import { tracePhase, traceStart, traceEnd } from '../lib/perfTrace.js';
 import { haptic } from '../lib/haptics.js';
 import { painAftercareFor, techniquePromptFor, maxEffortWarning } from '../lib/safety.js';
@@ -56,14 +60,15 @@ import {
 
 export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, appPrefs = null, gymPrefs = null, onSetRestPreset = null, studyEnrollment = null, participantId = null, onDraftChange, onSave, onCancel }){
   const unit = asUnit(appPrefs?.units);
+  // Explanation verbosity comes from the training-policy preference; the
+  // reference was previously undefined (a latent crash when explanations
+  // exist on a recommendation).
+  const explanationMode = appPrefs?.explanationMode || 'standard';
   const [blocks,setBlocks]=useState(()=> session.blocks.map((b,i)=> normaliseRunnerBlock(b, history, draft?.blocks?.[i], i)));
   // Transient confirmation for the one-tap "apply all" fast-log path.
   const [applyAllNote,setApplyAllNote]=useState(null);
   const [note,setNote]=useState(()=> draft?.note || '');
   const [noteTags,setNoteTags]=useState(()=> draft?.noteTags || []);
-  const [restEndsAt,setRestEndsAt]=useState(()=> draft?.restEndsAt || null);
-  const [restLabel,setRestLabel]=useState(()=> draft?.restLabel || '');
-  const [restExerciseId,setRestExerciseId]=useState(()=> draft?.restExerciseId || null);
   const [clock,setClock]=useWorkoutClock(true);
   const [swapOpen,setSwapOpen]=useState(null);
   // RIR suggestion (never a silent observation): { bi, si, value, exerciseId }
@@ -71,8 +76,13 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   // The suggestion writes NOTHING until the user confirms (Same/stepper) or
   // types in the field — Done alone never confirms it.
   const [rirSuggest,setRirSuggest]=useState(null);
-  const [discardConfirmOpen,setDiscardConfirmOpen]=useState(false);
-  const [restAnnouncement,setRestAnnouncement]=useState('');
+  // Real user work, not plan prefill: both runners prefill reps/load from the
+  // schedule, so "work would be lost" must count only what the user actually
+  // did (completed/failed sets, typed edits, notes). Seeded from a restored
+  // draft so a crash resume never loses the flag, and carried in the draft so
+  // reload keeps it.
+  const userEditedRef=useRef(Boolean(draft?.userEdited));
+  const markUserEdited = ()=>{ userEditedRef.current = true; };
   const [qualityRating,setQualityRating]=useState(()=> draft?.quality || null);
   const [skipQuery,setSkipQuery]=useState('');
   // ── Gym Mode state ──
@@ -134,7 +144,6 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   const [keypadOpen,setKeypadOpen]=useState(null);
   const announcedRestRef=useRef(null);
   const { rootRef, closeRef, trapTab } = useDialogA11y();
-  const keepEditingRef=useRef(null);
   const startedAtRef=useRef(draft?.startedAt || new Date().toISOString());
   const lastSetAtRef=useRef(draft?.lastSetAt || startedAtRef.current);
   const shownRecommendationRef=useRef(new Set());
@@ -178,42 +187,49 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     }
   };
 
+  // Shared Standard/Guided exit contract: ✕, Cancel and Escape all funnel
+  // through one in-app confirmation when real work is logged. Declared before
+  // the Escape effect below that drives it. Plan prefill never counts as work.
+  const hasLoggedWork = runnerHasLoggedWork(blocks, userEditedRef.current);
+  const { discardConfirmOpen, requestExit, keepEditing, confirmDiscard } = useWorkoutExit({
+    hasLoggedWork,
+    onCancel,
+  });
   // Escape dismisses only the topmost layer — a stray Esc must never silently
   // destroy a workout with logged sets (a11y baseline: dialogs confirm before
-  // destructive action).
+  // destructive action). Exit and discard are one shared contract across
+  // Standard and Guided: requestExit asks exactly once, then onCancel runs the
+  // already-confirmed discard.
   useEffect(()=>{
     const onKey = (e)=>{
       if(e.key!=='Escape') return;
       if(swapOpen!==null){ setSwapOpen(null); return; }
-      if(discardConfirmOpen){ setDiscardConfirmOpen(false); return; }
-      const progressed = blocks.some(b=> b.sets.some(s=> s.completed || String(s.reps).trim()!==''));
-      if(progressed){ setDiscardConfirmOpen(true); return; }
-      onCancel();
+      if(discardConfirmOpen){ keepEditing(); return; }
+      requestExit();
     };
     window.addEventListener('keydown', onKey);
     return ()=> window.removeEventListener('keydown', onKey);
-  }, [onCancel, swapOpen, discardConfirmOpen, blocks]);
+  }, [requestExit, swapOpen, discardConfirmOpen, keepEditing]);
 
   // Leaving the runner stops any queued speech.
   useEffect(()=> ()=> { try{ cancelSpeech(); }catch{} }, []);
 
   useEffect(()=>{ tracePhase('session-runner:open', ()=> {}, 'mount'); },[]);
-  useEffect(()=>{
-    if(discardConfirmOpen) keepEditingRef.current?.focus();
-  },[discardConfirmOpen]);
 
   useWorkoutWakeLock(appPrefs?.wakeLock === true);
 
-  const restLeft = restEndsAt ? Math.max(0, Math.ceil((restEndsAt-clock)/1000)) : null;
-  useEffect(()=>{
-    if(restEndsAt && restEndsAt <= Date.now()){
-      setRestEndsAt(null);
-      setRestAnnouncement('Rest complete — next set.');
-      announce('Rest complete — next set.', { key: 'rest-timer', spoken: preferences?.voiceCoach === true });
-      haptic('restComplete');
-      if(appPrefs?.soundCues !== false) restCompleteCue();
-    }
-  }, [restEndsAt, clock, appPrefs?.soundCues]);
+  // Shared rest-timer contract (same behaviour Guided gets, minus the 3-2-1
+  // tick cues the standard runner never had; the spoken rest prompt below is
+  // the standard runner's own voice-coach contract).
+  const { restEndsAt, setRestEndsAt, restLabel, restExerciseId, restLeft, announcement: restAnnouncement, setAnnouncement: setRestAnnouncement, startRest: startRestCore } = useRestTimer({
+    clock,
+    initial: draft,
+    soundOn: appPrefs?.soundCues !== false,
+    spoken: preferences?.voiceCoach === true,
+    expiryHaptic: 'restComplete',
+    appAnnounce: true,
+    tickCues: false,
+  });
 
   const draftSnapshot = useMemo(()=> ({
       version: 1,
@@ -227,6 +243,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       restExerciseId,
       startedAt:startedAtRef.current,
       lastSetAt:lastSetAtRef.current,
+      userEdited: userEditedRef.current,
       quality: qualityRating || undefined,
   }), [blocks, note, noteTags, gymMode, restEndsAt, restLabel, restExerciseId, qualityRating, session]);
   useWorkoutDraftPersistence(draftSnapshot, onDraftChange);
@@ -237,10 +254,8 @@ export default function SessionRunner({ session, history = [], availableEquipmen
 
   const startRest=(seconds,label,exerciseId=null)=>{
     const sec=Number(seconds)||0;
-    if(sec<=0){ setRestEndsAt(null); return; }
-    setRestLabel(label);
-    setRestExerciseId(exerciseId);
-    setRestEndsAt(Date.now() + sec*1000);
+    startRestCore(seconds,label,exerciseId);
+    if(sec<=0) return;
     setClock(Date.now());
     // Announce once, politely — the ticking countdown itself must not flood
     // screen readers (a11y baseline: live regions announce without flooding).
@@ -385,6 +400,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   }), [blocks, blockMeta]);
 
   const updateSet = (bi, si, patch, { userEdit = true } = {})=>{
+    if(userEdit) markUserEdited();
     // Guard against the rare stale-closure path (gesture completion after a
     // reorder): a set row that no longer exists must not resurrect as an edit
     // of the wrong row.
@@ -509,6 +525,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     }
   };
   const addSet = (bi)=>{
+    markUserEdited();
     try{ recordEvent('add-set', { sessionId:session.id, exerciseId:blocks[bi]?.exerciseId, mode: gymMode ? 'gym' : 'standard' }); }catch{}
     setBlocks(prev=> prev.map((b,i)=> i!==bi ? b : addUserSetToBlock(b, makeSetId)));
   };
@@ -519,12 +536,14 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     updateSet(bi, si, { reps: String(Math.max(0, current + delta)) });
   };
   const duplicateUnilateral = (bi)=>{
+    markUserEdited();
     try{ recordEvent('add-set', { sessionId:session.id, exerciseId:blocks[bi]?.exerciseId, mode: gymMode ? 'gym' : 'standard' }); }catch{}
     setBlocks(prev=> prev.map((b,i)=> i!==bi ? b : duplicateUnilateralSetInBlock(b, makeSetId)));
   };
   const removeSet = (bi,si)=>{
     const set = blocks[bi]?.sets?.[si];
     if(!set) return;
+    markUserEdited();
     // A removed row is a correction too — record which kind vanished so the
     // friction stats can count deletions without inspecting content (which the
     // sanitizer would strip anyway).
@@ -555,6 +574,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   }, [gymMode, focusIdx, blocks]);
 
   const swapBlock = (bi, option)=>{
+    markUserEdited();
     const startedChoosing = swapOpenedAtRef.current;
     swapOpenedAtRef.current = null;
     const fromExerciseId = blocks[bi]?.exerciseId || null;
@@ -643,7 +663,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     }
   };
 
-  const toggleNoteTag=(id)=> setNoteTags(prev=> prev.includes(id) ? prev.filter(x=>x!==id) : [...prev,id]);
+  const toggleNoteTag=(id)=>{ markUserEdited(); setNoteTags(prev=> prev.includes(id) ? prev.filter(x=>x!==id) : [...prev,id]); };
 
   const save = ()=>{
     if(!canSave) return;
@@ -671,7 +691,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           span keeps the in-runner completion notice. Rest minute marks are
           routed through the throttled announcer instead of per-second state. */}
       <div className="relative shrink-0 flex items-center gap-3 px-4 py-3 border-b border-line bg-surface">
-        <button ref={closeRef} onClick={onCancel} className="w-11 h-11 grid place-items-center rounded-full border border-line bg-surface2" aria-label="Close session">✕</button>
+        <button ref={closeRef} onClick={requestExit} className="w-11 h-11 grid place-items-center rounded-full border border-line bg-surface2" aria-label="Close session">✕</button>
         <div className="min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">{session.mode === 'short' ? 'Short session' : 'Session'}</p>
           <p className="font-bold truncate">{session.title} • {session.dateISO}</p>
@@ -789,11 +809,6 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                       {recommendation ? <span className="text-ink2">{changeChip ? ' — ' : ''}{recommendation.explanation?.[explanationMode] || recommendation.reason}</span> : null}
                     </p>
                   )}
-                  {recommendation?.confidence && (
-                    <p className="text-[10px] mt-0.5 text-ink3">
-                      Confidence {recommendation.confidence.band} ({Math.round((recommendation.confidence.score || 0) * 100)}%) · uncertainty {recommendation.uncertainty?.label || '—'} · {recommendation.evidence?.sessions ?? 0} logged sessions{recommendation.guard ? ` · ${recommendation.guard} guard active` : ''}
-                    </p>
-                  )}
                   {safetyMeta.aftercare.get(b.exerciseId) && (
                     <p role="status" className="text-[11px] mt-1 rounded-lg border border-review/40 bg-reviewsoft px-2 py-1.5 text-ink2 leading-snug">
                       ⚠️ {safetyMeta.aftercare.get(b.exerciseId).message}
@@ -822,6 +837,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                       {b.warmups?.length ? <p>Warm-ups: {b.warmups.map(w=> `${w.reps}×${w.weightKg||'bw'}${w.note?` (${w.note})`:''}`).join(' • ')}</p> : null}
                     {b.restSec ? <p>Rest {formatRest(b.restSec)} · load hint: {b.loadHint || '—'}</p> : null}
                       {b.why && <p className="italic">Prescribed: {b.why}</p>}
+                      {recommendation?.confidence && <p>{confidenceLanguage(recommendation.confidence.band, recommendation.confidence.band === 'high' ? 'repeated performance at this load supports the prescription' : recommendation.confidence.band === 'medium' ? 'your recent sessions show a consistent pattern' : 'few comparable sessions so far — this is a cautious estimate')}</p>}
                       {recommendation?.plateLoad && <p>Plate check · {recommendation.plateLoad.exact ? `${fmtWeight(recommendation.plateLoad.loadKg, unit)} exact` : `${fmtWeight(recommendation.plateLoad.targetKg, unit)} → ${fmtWeight(recommendation.plateLoad.loadKg, unit)} ${recommendation.plateLoad.direction}`} · per side: {formatPlateStack(recommendation.plateLoad.platesPerSide)}</p>}
                       {b.substitutionReason && <p className="italic">Swap rationale: {b.substitutionReason}</p>}
                     </div>
@@ -991,13 +1007,13 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           <div role="group" aria-label="How did the session feel?" className="flex flex-wrap gap-1.5">
             <span className="text-[11px] text-ink3 self-center mr-1">Session quality:</span>
             {SESSION_QUALITY_OPTIONS.map(opt=> (
-              <button key={opt.id} onClick={()=> setQualityRating(q=> q===opt.id ? null : opt.id)} aria-pressed={qualityRating===opt.id}
+              <button key={opt.id} onClick={()=>{ markUserEdited(); setQualityRating(q=> q===opt.id ? null : opt.id); }} aria-pressed={qualityRating===opt.id}
                 className={`text-xs font-semibold px-2.5 py-1.5 rounded-full border ${qualityRating===opt.id?'bg-ink text-bg border-ink':'bg-surface2 border-line'}`}>
                 {opt.emoji} {opt.label}
               </button>
             ))}
           </div>
-          <textarea value={note} onChange={e=> setNote(e.target.value)} rows={2} placeholder="What should change next time? Mention sleep, pain, technique, ROM, time or load." className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm" />
+          <textarea value={note} onChange={e=>{ markUserEdited(); setNote(e.target.value); }} rows={2} placeholder="What should change next time? Mention sleep, pain, technique, ROM, time or load." className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm" />
         </section>
 
       </div>
@@ -1023,26 +1039,22 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           )}
           {saveBlocker && <p className="text-xs text-review bg-reviewsoft border border-review/30 rounded-xl px-3 py-2">{saveBlocker}</p>}
           <div className="flex gap-2">
-            {/* Cancel routes through the in-app discard confirm once any set is
-                logged — window.confirm is a jarring dead-end on mobile and the
-                dialog below already exists for the Escape path. */}
-            <button onClick={()=> blocks.some(b=> b.sets.some(s=> s.completed || String(s.reps).trim()!=='')) ? setDiscardConfirmOpen(true) : onCancel()} className="btn btn-secondary min-h-11 rounded-xl px-4">Cancel</button>
+            {/* Exit is one shared contract across Standard and Guided: any
+                logged work asks exactly once (the in-app alertdialog below),
+                and confirming runs the already-confirmed discard in App. */}
+            <button onClick={requestExit} className="btn btn-secondary min-h-11 rounded-xl px-4">Cancel</button>
             <button onClick={save} disabled={!canSave} className="btn btn-primary flex-1 min-h-11 rounded-xl disabled:opacity-40">Save session</button>
           </div>
         </div>
       </div>
 
       {discardConfirmOpen && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="alertdialog" aria-modal="true" aria-labelledby="discard-title" aria-describedby="discard-desc">
-          <div className="w-full max-w-sm rounded-3xl bg-surface border border-line p-4 space-y-3">
-            <p id="discard-title" className="text-base font-bold">Discard this workout?</p>
-            <p id="discard-desc" className="text-xs text-ink3">{completedSets}/{totalSets} sets logged. Discarding cannot be undone.</p>
-            <div className="flex gap-2">
-              <button ref={keepEditingRef} onClick={()=> setDiscardConfirmOpen(false)} className="btn btn-primary flex-1 min-h-11 rounded-xl">Keep editing</button>
-              <button onClick={onCancel} className="btn btn-secondary flex-1 min-h-11 rounded-xl text-danger">Discard</button>
-            </div>
-          </div>
-        </div>
+        <WorkoutDiscardDialog
+          completedSets={completedSets}
+          totalSets={totalSets}
+          onKeepEditing={keepEditing}
+          onDiscard={confirmDiscard}
+        />
       )}
     </div>
   );

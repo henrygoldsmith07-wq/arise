@@ -52,6 +52,7 @@ import DemoBanner from './components/DemoBanner.jsx';
 const InstallCard = lazy(() => import('./components/InstallCard.jsx'));
 import { setRestPreset } from './lib/gymMode.js';
 import { cancellationPlan } from './services/workoutCancellationService.js';
+import { setTelemetryConsent } from './services/settingsService.js';
 
 // Suspense fallback for lazy tabs: same chrome height as a view header so
 // the tab bar doesn't jump when the chunk resolves.
@@ -394,6 +395,17 @@ export default function App(){
     setStore(next);
   };
 
+  // Progress's empty-state CTA: start the scheduled session if one is due,
+  // otherwise jump to Train to pick one. Never a dead button.
+  const startFromProgress = ()=>{
+    if(!store.activeSchedule){ setTab('train'); return; }
+    import('./lib/schedule.js').then(({ sessionForToday, nextSession })=>{
+      const session = sessionForToday(store.activeSchedule) || nextSession(store.activeSchedule);
+      if(session) handleStartSession(session);
+      else setTab('train');
+    }).catch(()=> setTab('train'));
+  };
+
   const handleStartSession = (session)=>{
     if(store.activeWorkout && store.activeWorkout.session?.id !== session.id){
       setRecoveryOpen(true);
@@ -409,7 +421,7 @@ export default function App(){
   };
 
   const chooseMeasurementConsent=(enabled)=>{
-    setStore({ ...store, preferences:{ ...(store.preferences||{}), telemetryEnabled:enabled } });
+    setStore(setTelemetryConsent(store, enabled));
     recordEvent('consent:local-measurements', { enabled }, { essential:true });
     setConsentOpen(false);
   };
@@ -507,9 +519,13 @@ export default function App(){
     }
   };
 
+  // Durable workout discard. Presentation (SessionRunner/GuidedRunner) owns
+  // its confirmation UI and calls this only after the user confirmed once —
+  // there is no second confirmation here. Telemetry (session:abandon) and the
+  // durable draft removal still happen exactly as before, and the crash-draft
+  // / cross-tab protections are released only after the removal is committed.
   const handleCancelSession = async()=>{
     const plan = cancellationPlan({ store:storeRef.current, activeSession:activeSessionRef.current });
-    if(plan.requiresConfirmation && !window.confirm(`Discard this workout? ${plan.completedSets} completed set${plan.completedSets===1?'':'s'} will be lost.`)) return;
     if(plan.event) try{ recordEvent(plan.event.type, plan.event.payload); }catch{}
     try{
       if(!saveStore(plan.nextStore)) throw new Error('Could not queue draft removal for storage.');
@@ -693,10 +709,10 @@ export default function App(){
         /></Suspense>
       )}
       {tab==='exercises' && (
-        <Suspense fallback={<TabFallback label="Exercises" />}><ExerciseBrowser availableEquipment={store.onboarding?.equipment || []} onboarding={store.onboarding} /></Suspense>
+        <Suspense fallback={<TabFallback label="Exercises" />}><ExerciseBrowser store={store} availableEquipment={store.onboarding?.equipment || []} onboarding={store.onboarding} /></Suspense>
       )}
 
-      {tab==='progress' && <Suspense fallback={<TabFallback label="Progress" />}><ProgressView store={store} setStore={setStore} /></Suspense>}
+      {tab==='progress' && <Suspense fallback={<TabFallback label="Progress" />}><ProgressView store={store} setStore={setStore} onStart={startFromProgress} /></Suspense>}
       {tab==='more' && <Suspense fallback={<TabFallback label="More" />}><MoreView store={store} setStore={setStore} onboardingOpen={onboardingOpen} setOnboardingOpen={setOnboardingOpen} onLoadDemo={loadDemo} /></Suspense>}
 
       {activeSession && activeSession.mode === 'guided' && (

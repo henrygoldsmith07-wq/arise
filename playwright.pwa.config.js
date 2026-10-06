@@ -20,8 +20,11 @@ export default defineConfig({
   webServer: {
     command: 'npx vite preview --port 4187 --strictPort --host 127.0.0.1',
     url: 'http://127.0.0.1:4187',
+    // Never reuse an arbitrary process on the test port (same rule as the dev
+    // suite). Startup allowance matches the main config's 120s: a cold prod
+    // preview on a loaded machine can exceed 60s without anything being wrong.
     reuseExistingServer: false,
-    timeout: 60_000,
+    timeout: 120_000,
   },
   projects: [
     {

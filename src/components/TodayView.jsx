@@ -14,7 +14,9 @@ import {
 } from '../lib/programming.js';
 import { weekPhaseFor } from '../lib/mesocycle.js';
 import { backupRecency as computeBackupRecency, backupRecencyLabel, readBackupState } from '../lib/backupState.js';
-import { nextBestAction, whatChangedSummary } from '../lib/product.js';
+import { nextBestAction, whatChangedSummary, typicalDurationFor } from '../lib/product.js';
+import { confidenceLanguage } from '../lib/performance.js';
+import WhatChangedPanel from './WhatChangedPanel.jsx';
 import { isSimpleView } from '../lib/experienceMode.js';
 import { safetyPanel } from '../lib/safety.js';
 import { storedWorkoutMode, workoutModePatch, workoutModeLabel } from '../lib/workoutMode.js';
@@ -55,10 +57,28 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
   const nba = useMemo(()=> nextBestAction({ store, today: isoToday(), todaySession: today, nextSess: nxt, recovery }), [store, today, nxt, recovery]);
   const changes = useMemo(()=> whatChangedSummary({ schedule: sched, history: store.history || [] }), [sched, store.history]);
   const explanations = useMemo(()=> heroSession ? heroSession.blocks.map(block=> progressionExplanation({ exerciseId: block.exerciseId, targetReps: block.reps, asOfDateISO: heroSession.dateISO, history: store.history || [], plateConfig, block })) : [], [heroSession, store.history, plateConfig]);
+  const typical = useMemo(()=> heroSession ? typicalDurationFor({ history: store.history||[], title: heroSession.title }) : null, [heroSession, store.history]);
 
   const applyReplan = ()=>{
     const result = replanSchedule(sched, store.history || [], { today: isoToday() });
     if(result.changed) setStore({ ...store, activeSchedule: result.schedule });
+  };
+
+  // "Skip and continue": mark overdue rows done-with-skip so the programme
+  // moves on. Explicit and reversible through a backup — never a silent
+  // rearrangement, and the skipped rows keep their history link if one exists.
+  const skipMissed = ()=>{
+    if(!sched || !recovery.missedSessions.length) return;
+    const skippedIds = new Set(recovery.missedSessions.map(s=> s.id));
+    setStore({
+      ...store,
+      activeSchedule: {
+        ...sched,
+        sessions: sched.sessions.map(s=> skippedIds.has(s.id) ? { ...s, status: 'done', skipped: true } : s),
+        rev: (Number(sched.rev) >= 0 ? Number(sched.rev) : 0) + 1,
+        updatedAt: new Date().toISOString(),
+      },
+    });
   };
 
   // ── Hero start actions ────────────────────────────────────────────────
@@ -105,6 +125,7 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
               <p className="text-xs text-ink3">{heroSession.dateISO}{sched ? ` · Week ${sched.sessions.find(s=> s.status!=='done')?.week || '?'}` : ''}</p>
             </div>
             <span className="shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-full bg-surface2 border border-line tabular-nums">≈{estimatedMinutes(heroSession)} min</span>
+          {typical && <p className="text-[11px] text-ink3">Based on your last {typical.samples} sessions, you finish this workout in {typical.lo}–{typical.hi} minutes.</p>}
           </div>
 
           {/* Deload as a first-class state: when the week's prescriptions are
@@ -155,7 +176,7 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
               {explanations.map((explanation, index) => (
                 <li key={`${explanation.exerciseId}-${index}`} className="text-[11px] text-ink3">
                   <span className="font-bold text-ink">{explanation.exerciseName}</span> — {explanation.summary}
-                  <span className="block mt-0.5">{explanation.rule} <span className="font-semibold">{explanation.confidence} confidence</span></span>
+                  <span className="block mt-0.5">{explanation.rule} <span className="font-semibold">{confidenceLanguage(explanation.confidence, explanation.confidence === 'low' ? 'Arise only has a couple of comparable sessions here, so this is a cautious estimate.' : explanation.confidence === 'medium' ? 'Your recent sessions show a consistent pattern.' : 'Repeated performance supports this number.')}</span></span>
                 </li>
               ))}
             </ul>
@@ -215,13 +236,23 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
     )}
 
     <div className="px-4 py-5 space-y-4">
-      {/* ── Actionable recovery notice stays near the top ── */}
+      {/* ── Missed workout recovery: three clear choices, brief consequences,
+          no guilt. "Do it today" simply surfaces the session to start now;
+          "Skip" marks the row done-with-skip so the programme moves on;
+          "Replan" folds missed sessions forward in order. Nothing silently
+          rearranges the programme. ── */}
       {recovery.needed && (
         <div className="rounded-2xl border border-review/30 bg-reviewsoft px-3 py-3 space-y-2">
-          <p className="text-xs font-bold text-review">Life happened — the schedule adapts</p>
-          <p className="text-xs text-ink2">{recovery.recommendation}</p>
-          <p className="text-[11px] text-ink3">Missing sessions is data, not failure. Re-planning folds them forward in order — nothing doubles up, nothing is “made up” with a brutal workout.</p>
-          <button onClick={applyReplan} className="btn btn-primary min-h-10 rounded-xl px-3 text-xs">Re-plan schedule</button>
+          <p className="text-xs font-bold text-review">{recovery.missedSessions.length === 1 ? `You missed ${recovery.missedSessions[0].title}${recovery.missedSessions[0].dateISO ? ` (${recovery.missedSessions[0].dateISO})` : ''}.` : `${recovery.missedSessions.length} sessions are overdue.`}</p>
+          <p className="text-[11px] text-ink3">Missing sessions is data, not failure. Choose how to move on — nothing doubles up and nothing is “made up” with a brutal workout.</p>
+          <div className="flex flex-wrap gap-2">
+            {recovery.missedSessions.length === 1 && (
+              <button onClick={()=> onStartSession(recovery.missedSessions[0])} className="btn btn-primary min-h-10 rounded-xl px-3 text-xs">Do it today</button>
+            )}
+            <button onClick={applyReplan} className="btn btn-secondary min-h-10 rounded-xl px-3 text-xs">Replan this week</button>
+            <button onClick={skipMissed} className="btn btn-secondary min-h-10 rounded-xl px-3 text-xs">Skip and continue</button>
+          </div>
+          <p className="text-[11px] text-ink3">{recovery.recommendation}</p>
         </div>
       )}
 
@@ -281,43 +312,23 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
           <span className="shrink-0 text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums">{progProgress.done}/{progProgress.total} • {progProgress.pct}%</span>
         </summary>
         <div className="px-4 pb-4 space-y-3">
-          {/* ── What changed and why: the audit trail, in plain language ── */}
-          {!simple && !!changes.length && changes.map((c) => (
-            <details key={`${c.kind}-${c.when}`} className="rounded-xl border border-line bg-surface2 px-3 py-2">
-              <summary className="text-xs font-bold cursor-pointer">What changed &amp; why — {c.when} ({c.kind})</summary>
-              <ul className="mt-2 space-y-1">
-                {c.lines.map((line, i) => <li key={i} className="text-[11px] text-ink3">• {line}</li>)}
-              </ul>
-            </details>
-          ))}
-          {sched?.lastAdaptation?.changes?.length ? (
-            <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
-              <summary className="text-xs font-bold cursor-pointer">Programme adjusted from your last session ({sched.lastAdaptation.changes.length})</summary>
-              <p className="text-[11px] text-ink3 mt-1">{sched.lastAdaptation.dateISO} · deterministic rules, based on repeated performance evidence</p>
-              <ul className="mt-2 space-y-1.5">
-                {sched.lastAdaptation.changes.slice(0, 4).map((change, index)=> (
-                  <li key={`${change.sessionId}-${change.exerciseId}-${index}`} className="text-[11px] text-ink3">
-                    <span className="font-bold text-ink">{change.exerciseId}</span> · {change.reason}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          ) : null}
+          {/* ── What changed and why: one shared, inspectable audit trail ── */}
+          <WhatChangedPanel schedule={sched} history={store.history || []} compact />
         </div>
       </details>
 
-      {/* ── Secondary: attributes one tap back — the full breakdown lives in Progress. */}
+      {/* ── Secondary: level + performance one tap back — full breakdown in Progress. */}
       <section className="rounded-2xl border border-line bg-surface p-4 flex items-center gap-4">
         <button onClick={onOpenProgress} className="flex items-center gap-4 text-left flex-1 min-w-0" aria-label="View attributes and level in Progress">
           <span aria-hidden className="text-xl">📊</span>
           <span className="min-w-0">
-            <span className="block text-[11px] font-bold uppercase tracking-widest text-ink3">Attributes</span>
-            <span className="block text-sm font-semibold">Strength · Conditioning · Mobility · Consistency</span>
-            <span className="block text-[11px] text-ink3">See your levels and how they move — one tap away in Progress.</span>
+            <span className="block text-[11px] font-bold uppercase tracking-widest text-ink3">Arise Level & performance</span>
+            <span className="block text-sm font-semibold">XP from training habits · evidence-based strength trends</span>
+            <span className="block text-[11px] text-ink3">See what's improving, what's steady, and why — one tap away in Progress.</span>
           </span>
         </button>
       </section>
-      <p className="text-[11px] text-ink3 px-1">Attributes are derived from your logged history — volume, loads, variety and consistency — not from program names.</p>
+      <p className="text-[11px] text-ink3 px-1">Level and XP reward the habits Arise can see — showing up, doing planned work, logging well. Strength and capacity trends are separate and only claim improvement when your sessions support it.</p>
     </div>
     </>
   );

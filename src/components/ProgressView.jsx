@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { deriveAttributes, levelFromAttributes } from '../lib/attributes.js';
+import { deriveXp } from '../lib/xp.js';
+import WhatChangedPanel from './WhatChangedPanel.jsx';
+import { strengthTrends, workCapacity, consistencyReport, confidenceLanguage, personalBests } from '../lib/performance.js';
 import { totalVolumeKg } from '../lib/store.js';
 import { fmtWeight } from '../lib/units.ts';
 import { EXERCISE_BY_ID } from '../lib/data.js';
@@ -18,9 +20,22 @@ import { milestoneState, trainingAgeDisplay, consistencyInsights, healthyStreak,
 import { todayISO, sessionForToday, nextSession } from '../lib/schedule.js';
 import { missedWorkoutRecovery } from '../lib/programming.js';
 
-export default function ProgressView({ store, setStore = null }){
-  const attrs = useMemo(()=> deriveAttributes(store.history), [store.history]);
-  const lvl = useMemo(()=> levelFromAttributes(attrs), [attrs]);
+export default function ProgressView({ store, setStore = null, onStart = null }){
+  // Gamified motivation (XP from observable behaviours) and honest
+  // performance metrics are strictly separate: XP is habits, performance is
+  // evidence. Nothing here claims fitness from logging volume.
+  const today = todayISO();
+  const xp = useMemo(()=> deriveXp({ history: store.history, schedule: store.activeSchedule, milestones: milestoneState(store.history || []) }), [store.history, store.activeSchedule]);
+  const perf = useMemo(()=>{
+    const history = store.history || [];
+    const recentExercises = [...new Set(history.slice(-6).flatMap(s=> (s.blocks||[]).map(b=> b.exerciseId)))];
+    return {
+      strength: strengthTrends({ history, exerciseIds: recentExercises }),
+      capacity: workCapacity({ history }),
+      consistency: consistencyReport({ history, schedule: store.activeSchedule, today }),
+      pbs: personalBests({ history }),
+    };
+  }, [store.history, store.activeSchedule, today]);
   const history = store.history || [];
   // Display-unit preference (kg|lb). Storage/engine stay kg — see units.js.
   const unitsPref = store.preferences?.units === 'lb' ? 'lb' : 'kg';
@@ -29,7 +44,6 @@ export default function ProgressView({ store, setStore = null }){
   // reveals them; the data underneath is identical and always exportable.
   const simple = isSimpleView(store.preferences);
   const expert = isExpertView(store.preferences);
-  const today = todayISO();
   const milestones = useMemo(()=> milestoneState(history), [history]);
   const age = useMemo(()=> trainingAgeDisplay(history, { today }), [history, today]);
   const consistency = useMemo(()=> consistencyInsights(history, { today }), [history, today]);
@@ -144,10 +158,9 @@ export default function ProgressView({ store, setStore = null }){
       .slice(0,5);
   }, [history, store.readinessLog]);
 
-  // ── Post-workout debrief: the last session's quality vs its target, with
-  // what went well / what limited you / what to change next. Derived from the
-  // SAME saved history the rest of this screen reads — no separate state, so
-  // it can never disagree with the export.
+  // ── Post-workout debrief: what went well / what limited you / next session,
+  // computed on demand from the last session (the save-time report lives in the
+  // toast; this card makes it persistent and inspectable).
   const lastQuality = useMemo(()=> {
     const last = history[history.length - 1];
     if(!last) return null;
@@ -202,13 +215,21 @@ export default function ProgressView({ store, setStore = null }){
     setStore(result.store);
   };
   const doDeleteExperiment = (id)=>{
-    if(!confirm('Remove this concluded experiment from Progress? It is recoverable only via backup/undo-free sync — the row is tombstoned.')) return;
+    if(!confirm('Remove this concluded experiment from Progress? It is recoverable via backup, or undo-free sync. The row is tombstoned.')) return;
     const result = deleteExperiment(store, id);
     setStore(result.store);
   };
 
   return (
     <div className="px-4 py-5 space-y-4">
+      {/* ── Empty state teaches and leads somewhere — never an empty dashboard ── */}
+      {!history.length && (
+        <section className="rounded-2xl border border-line bg-surface p-5 space-y-2" aria-label="Getting started">
+          <p className="text-lg font-black tracking-tight">Complete your first workout to start measuring progress.</p>
+          <p className="text-xs text-ink3">Arise measures what you actually do: strength trends need a few comparable sessions, consistency compares against your own programme, and every claim comes with its evidence. Nothing here scores you against anyone else.</p>
+          {onStart && <button onClick={onStart} className="btn btn-primary min-h-11 rounded-xl px-4">Start workout</button>}
+        </section>
+      )}
       <div>
         <h2 className="text-lg font-extrabold tracking-tight">Progress</h2>
         <p className="text-xs text-ink3">
@@ -220,11 +241,12 @@ export default function ProgressView({ store, setStore = null }){
       </div>
 
       <div className="rounded-2xl border border-line bg-surface p-4 flex items-center gap-4">
-        <div className="w-14 h-14 rounded-2xl bg-ink text-bg grid place-items-center font-black text-lg shrink-0">{lvl.level}</div>
+        <div className="w-14 h-14 rounded-2xl bg-ink text-bg grid place-items-center font-black text-lg shrink-0">{xp.level}</div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold truncate">Level {lvl.level} — {lvl.title}</p>
-          <p className="text-xs text-ink3">Avg {lvl.avg}/100 • {history.length} sessions {adherence.total ? `• ${adherence.done}/${adherence.total} planned done` : ''}</p>
-          <div className="mt-2 h-1.5 rounded-full bg-surface2 max-w-48 overflow-hidden"><div className="h-full bg-ink transition-all" style={{width:`${lvl.avg}%`}} /></div>
+          <p className="text-sm font-bold truncate">Arise Level {xp.level} — {xp.title}</p>
+          <p className="text-xs text-ink3">{xp.xpIntoLevel}/{xp.xpForNext} XP to level {xp.level + 1} • {history.length} sessions {adherence.total ? `• ${adherence.done}/${adherence.total} planned done` : ''}</p>
+          <div className="mt-2 h-1.5 rounded-full bg-surface2 max-w-48 overflow-hidden"><div className="h-full bg-ink transition-all" style={{width:`${xp.progressPct}%`}} /></div>
+          <p className="text-[11px] text-ink3 mt-1">{xp.framing}</p>
         </div>
         <div className="ml-auto shrink-0 flex gap-4 text-xs">
           <div>
@@ -275,18 +297,10 @@ export default function ProgressView({ store, setStore = null }){
         </section>
       )}
 
-      {/* ── What changed? Programme adaptations, newest first ── */}
+      {/* ── What changed: one shared, inspectable audit trail ── */}
       {changes.length > 0 && (
         <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="What changed">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">What changed?</p>
-          {changes.map((c) => (
-            <details key={`${c.kind}-${c.when}`} className="rounded-xl border border-line bg-surface2 px-3 py-2">
-              <summary className="text-xs font-bold cursor-pointer">{c.when} ({c.kind})</summary>
-              <ul className="mt-2 space-y-1">
-                {c.lines.map((line, i) => <li key={i} className="text-[11px] text-ink3">• {line}</li>)}
-              </ul>
-            </details>
-          ))}
+          <WhatChangedPanel schedule={store.activeSchedule} history={history} />
           <p className="text-[11px] text-ink3">Every change is a deterministic rule applied to your logged sessions — the reasons are verbatim from the decision that made it.</p>
         </section>
       )}
@@ -359,16 +373,62 @@ export default function ProgressView({ store, setStore = null }){
         </section>
       )}
 
-      <div className="grid grid-cols-2 gap-2">
-        {attrs.map(a=> (
-          <div key={a.id} className="rounded-2xl border border-line bg-surface p-3">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">{a.label}</p>
-            <p className="text-lg font-black tabular-nums">{a.value}<span className="text-xs text-ink3">/100</span></p>
-            <div className="mt-1 h-1 rounded-full bg-surface2 overflow-hidden"><div className="h-full bg-ink" style={{width:`${a.value}%`}} /></div>
-            <p className="text-[11px] text-ink3 mt-1.5">{a.blurb}</p>
+      {/* ── Recent XP: why each point was earned ── */}
+      {!!xp.recent.length && (
+        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="Recent XP">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Recent XP</p>
+          <ul className="space-y-1">
+            {xp.recent.map((award, i)=> (
+              <li key={i} className="text-xs flex items-baseline gap-2">
+                <span className="font-bold tabular-nums shrink-0">+{award.xp}</span>
+                <span className="min-w-0"><span className="font-semibold text-ink">{award.label}</span> — <span className="text-ink3">{award.why}</span></span>
+                <span className="ml-auto text-[11px] text-ink3 shrink-0">{award.dateISO}</span>
+              </li>
+            ))}
+          </ul>
+          {xp.nextMilestone && <p className="text-[11px] text-ink3">Next milestone: {xp.nextMilestone.emoji} {xp.nextMilestone.label}.</p>}
+        </section>
+      )}
+
+      {/* ── Performance: evidence-based, with human-readable confidence ── */}
+      <section className="rounded-2xl border border-line bg-surface p-4 space-y-3" aria-label="Performance">
+        <div>
+          <h3 className="text-sm font-bold">Performance</h3>
+          <p className="text-xs text-ink3">Evidence-based trends — improvement is only claimed when comparable sessions support it.</p>
+        </div>
+        {!!perf.pbs.length && (
+          <div className="rounded-xl border border-line bg-surface2 px-3 py-2">
+            <p className="text-xs font-bold">Personal bests</p>
+            <ul className="mt-1 space-y-1">
+              {perf.pbs.map((pr, i)=> (
+                <li key={i} className="text-[11px] text-ink3">
+                  <span className="font-bold text-ink">{EXERCISE_BY_ID[pr.exerciseId]?.name || pr.exerciseId}</span> — {pr.kind} · {pr.dateISO}
+                  <span className="block">{pr.why} (est. 1RM {pr.priorE1rmKg} → {pr.e1rmKg} kg)</span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-[11px] text-ink3 mt-1">Only counts when the gain beats noise (2%+) and the set was like-for-like — a changed technique or ROM is never a PR.</p>
+          </div>
+        )}
+        {perf.strength.filter(t=> t.status !== 'insufficient').map(t=> (
+          <div key={t.exerciseId} className="rounded-xl border border-line bg-surface2 px-3 py-2">
+            <p className="text-xs font-bold">{EXERCISE_BY_ID[t.exerciseId]?.name || t.exerciseId} <span className={`ml-1 text-[11px] font-bold ${t.status === 'improving' ? 'text-success' : t.status === 'declining' ? 'text-review' : 'text-ink3'}`}>{t.status === 'improving' ? '↑ improving' : t.status === 'declining' ? '↓ slipping' : '→ steady'}</span></p>
+            <p className="text-[11px] text-ink3 mt-0.5">{t.explanation}</p>
+            <p className="text-[11px] text-ink3">{confidenceLanguage(t.confidence)}</p>
           </div>
         ))}
-      </div>
+        {!perf.strength.some(t=> t.status !== 'insufficient') && (
+          <p className="text-xs text-ink3">Arise needs at least 3 comparable sessions per exercise before calling a trend. Keep logging — the evidence builds fast.</p>
+        )}
+        <div className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <p className="text-xs font-bold">Work capacity</p>
+          <p className="text-[11px] text-ink3 mt-0.5">{perf.capacity.explanation}</p>
+        </div>
+        <div className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <p className="text-xs font-bold">Consistency</p>
+          <p className="text-[11px] text-ink3 mt-0.5">{perf.consistency.explanation}{perf.consistency.returnedAfterMiss ? ' You came back within a week of a miss — that matters more than never missing.' : ''}</p>
+        </div>
+      </section>
 
       <section className="rounded-2xl border border-line bg-surface p-4">
         <h3 className="text-sm font-bold">Weekly volume</h3>
@@ -387,13 +447,13 @@ export default function ProgressView({ store, setStore = null }){
         </div>
         {expert ? (
         <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5">
-          <p className="text-xs font-bold">Recent session attribution <span className="font-normal text-ink3">({badAttribution.confidence} confidence)</span></p>
+          <p className="text-xs font-bold">Recent session attribution <span className="font-normal text-ink3">— {confidenceLanguage(badAttribution.confidence, badAttribution.confidence === 'high' ? 'repeated signals support this read' : badAttribution.confidence === 'medium' ? 'a consistent pattern points this way' : 'one session alone can’t say much')}</span></p>
           <p className="text-xs mt-1">{badAttribution.reason}</p>
           {!!badAttribution.evidence?.length && <p className="text-[11px] text-ink3 mt-1">Evidence: {badAttribution.evidence.join(' · ')}</p>}
           <p className="text-[11px] text-ink3 mt-1">Next: {badAttribution.action}</p>
         </div>
         ) : (
-          <p className="text-xs text-ink3">{badAttribution.reason} <span className="text-ink3">({badAttribution.confidence} confidence)</span></p>
+          <p className="text-xs text-ink3">{badAttribution.reason} <span className="text-ink3">({confidenceLanguage(badAttribution.confidence, 'based on how many sessions it can compare')})</span></p>
         )}
         {!!plateauRows.length && <div className="space-y-2">
           {plateauRows.map(row=> {
@@ -476,29 +536,6 @@ export default function ProgressView({ store, setStore = null }){
               <span className={plateau?.detected ? 'font-bold text-review' : ''}>{plateau?.detected ? 'Plateau detected' : plateau?.status === 'fatigue' ? 'Fatigue signal' : 'No plateau'}</span>
             </div>
             <p className="text-xs text-ink3">{plateau?.reason || 'Keep logging consistent sets before judging a plateau.'}</p>
-            {investigation && investigation.status === 'investigated' && (
-              <div className="mt-2 rounded-xl border border-line bg-surface2 px-3 py-2" data-testid="plateau-investigation">
-                <p className="text-xs font-bold">Why is this stalled?</p>
-                <p className="text-[11px] text-ink2 mt-0.5">{investigation.diagnosis}</p>
-                <ul className="mt-1.5 space-y-0.5">
-                  {investigation.checks.map(check=> (
-                    <li key={check.id} className="text-[11px] text-ink3">
-                      <span className={`font-semibold ${check.verdict === 'cause' ? 'text-review' : check.verdict === 'clear' ? 'text-success' : 'text-ink3'}`}>{check.label}:</span> {check.finding}
-                      {check.evidence.map((line, i)=> <span key={i} className="block pl-3">— {line}</span>)}
-                    </li>
-                  ))}
-                </ul>
-                {investigation.recommendation && (
-                  <div className="mt-2 rounded-lg border border-line bg-surface px-2.5 py-2">
-                    <p className="text-[11px] font-bold text-ink">Try: {investigation.recommendation.headline}</p>
-                    <p className="text-[11px] text-ink3 mt-0.5">{investigation.recommendation.detail}</p>
-                  </div>
-                )}
-              </div>
-            )}
-            {investigation && investigation.status === 'insufficient' && (
-              <p className="text-[11px] text-ink3 mt-1">{investigation.reason}</p>
-            )}
             {trendBand && (
               <figure className="rounded-xl border border-line bg-surface2 px-3 py-2">
                 <svg viewBox="0 0 320 84" className="w-full h-20" role="img" aria-hidden="true" focusable="false">
@@ -548,6 +585,21 @@ export default function ProgressView({ store, setStore = null }){
                 </li>
               ))}
             </ul>
+            {investigation && (
+              <div className="rounded-xl border border-review/40 bg-reviewsoft px-3 py-2 space-y-1.5" data-testid="plateau-investigation">
+                <p className="text-xs font-bold text-review">🔎 Why is this stalled? — {investigation.diagnosis}</p>
+                <ul className="space-y-1">
+                  {investigation.checks.map((check)=> (
+                    <li key={check.id} className="text-[11px] leading-snug">
+                      <span className={`font-bold ${check.verdict === 'cause' ? 'text-review' : check.verdict === 'clear' ? 'text-success' : 'text-ink3'}`}>{check.verdict === 'cause' ? '⚠' : check.verdict === 'clear' ? '✓' : '?'} {check.label}:</span>{' '}
+                      <span className="text-ink2">{check.finding}</span>
+                      {check.evidence.length ? <span className="block text-ink3">{check.evidence.join(' · ')}</span> : null}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-[11px] text-ink"><span className="font-bold">Try one change:</span> {investigation.recommendation.action}</p>
+              </div>
+            )}
           </>
         )}
       </section>
@@ -715,48 +767,30 @@ export default function ProgressView({ store, setStore = null }){
         </section>
       )}
 
-      {history.length ? (
-        <section className="rounded-2xl border border-line bg-surface p-4">
-          <h3 className="text-sm font-bold">Last session summary</h3>
-          {(() => {
-            const last = [...history].slice().reverse()[0];
-            const vol = (last.blocks || []).reduce((acc,b)=> acc + b.sets.reduce((a,s)=> a + (Number(s.reps)||0) * Math.max(0,(Number(s.weightKg)||0)-(Number(s.assistedKg)||0)), 0), 0);
-            const sets = (last.blocks || []).reduce((a,b)=> a + b.sets.length, 0);
-            return (
-              <div className="mt-2 rounded-xl border border-line bg-surface2 px-3 py-3">
-                <p className="text-sm font-bold">{last.title} <span className="text-xs text-ink3">• {last.dateISO}</span></p>
-                <p className="text-xs text-ink3 mt-1">{sets} sets • {fmtWeight(Math.round(vol), unitsPref)} volume • {last.blocks.length} exercises</p>
-                <p className="text-xs text-ink3 mt-1">{last.blocks.map(b=> `${EXERCISE_BY_ID[b.exerciseId]?.name || b.exerciseId}: ${b.sets.map(s=> `${s.reps}${s.weightKg?`@${fmtWeight(s.weightKg, unitsPref)}`:''}${s.side?` ${s.side}`:''}`).join(', ')}`).join(' • ')}</p>
-                {last.note && <p className="text-xs mt-2 italic">“{last.note}”</p>}
+      {history.length && lastQuality ? (
+        <section className="rounded-2xl border border-line bg-surface p-4" data-testid="last-quality-report">
+          <div className="flex items-baseline gap-2">
+            <h3 className="text-sm font-bold">Last session summary</h3>
+            <span className={`ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full border ${lastQuality.beatsPrevious ? 'border-success text-success' : 'border-line text-ink3'}`}>{lastQuality.band}</span>
+          </div>
+          <div className="mt-2 rounded-xl border border-line bg-surface2 px-3 py-3">
+            <p className="text-xs text-ink3">{lastQuality.target ? `${lastQuality.target.hit ? '✓' : '△'} ${lastQuality.target.detail} · ` : ''}{lastQuality.lowReadiness ? 'low-readiness day — judged gently' : ''}{lastQuality.sustainableEffort ? ' · effort kept sustainable' : ''}</p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-success">What went well</p>
+                <ul className="mt-1 space-y-0.5">{lastQuality.whatWentWell.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}</ul>
               </div>
-            );
-          })()}
-          {lastQuality && (
-            <div className="mt-3 rounded-xl border border-line bg-surface2 px-3 py-3" data-testid="last-quality-report">
-              <div className="flex items-baseline gap-2">
-                <p className="text-xs font-bold">Workout quality</p>
-                <p className="ml-auto text-sm font-black tabular-nums" data-testid="quality-score">{lastQuality.quality}/100</p>
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border border-line bg-surface">{lastQuality.band}</span>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-review">What limited you</p>
+                <ul className="mt-1 space-y-0.5">{lastQuality.whatLimitedYou.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}</ul>
               </div>
-              {lastQuality.target && (
-                <p className="text-[11px] text-ink3 mt-1">{lastQuality.target.hit ? '✓' : '△'} {lastQuality.target.detail}</p>
-              )}
-              <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-success">What went well</p>
-                  <ul className="mt-1 space-y-0.5">{lastQuality.whatWentWell.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}</ul>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-review">What limited you</p>
-                  <ul className="mt-1 space-y-0.5">{lastQuality.whatLimitedYou.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}</ul>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-ink3">Next session</p>
-                  <ul className="mt-1 space-y-0.5">{lastQuality.whatToChangeNext.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}</ul>
-                </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-ink3">Next session</p>
+                <ul className="mt-1 space-y-0.5">{lastQuality.whatToChangeNext.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}</ul>
               </div>
             </div>
-          )}
+            <p className="mt-2 text-right text-sm font-black tabular-nums" data-testid="quality-score">{lastQuality.quality}/100</p>
+          </div>
         </section>
       ) : null}
 
@@ -828,10 +862,40 @@ export default function ProgressView({ store, setStore = null }){
 
       <section className="rounded-2xl border border-line bg-surface p-4">
         <h3 className="text-sm font-bold">History</h3>
-        {!history.length ? <p className="text-sm text-ink3 mt-2">No sessions yet — schedule a program and run it from Today.</p> : (
+        {!history.length ? <p className="text-sm text-ink3 mt-2">Your logged sessions land here — newest first, with sets, notes and the prescriptions you were given. Schedule a program in Train and run it from Today to fill this in.</p> : (
           <SessionHistoryList history={history} unitsPref={unitsPref} />
         )}
       </section>
+    </div>
+  );
+}
+
+// History, newest first, paginated: render HISTORY_PAGE sessions at a time and
+// append on demand. A year of training is 150+ sessions whose set summaries
+// are expensive JSX; mounting all of them up front stalls the Progress tab
+// exactly when it already runs its evaluation. (max-h-80 scroll kept.)
+const HISTORY_PAGE = 15;
+
+function SessionHistoryList({ history, unitsPref = 'kg' }){
+  const [visibleCount, setVisibleCount] = useState(HISTORY_PAGE);
+  const visible = useMemo(()=> [...history].slice(-visibleCount).reverse(), [history, visibleCount]);
+  const remaining = Math.max(0, history.length - visibleCount);
+  return (
+    <div>
+      <p className="text-[11px] text-ink3 mt-1" role="status">Showing {visible.length} of {history.length} sessions</p>
+      <ul className="mt-2 space-y-2 max-h-80 overflow-auto pr-1">
+        {visible.map(h=> (
+          <li key={h.id} className="rounded-xl border border-line bg-surface2 px-3 py-2">
+            <p className="text-sm font-bold">{h.title} <span className="text-xs text-ink3">• {h.dateISO} • W{h.week} D{h.day}</span></p>
+            <p className="text-xs text-ink3">{h.blocks.map(b=> `${EXERCISE_BY_ID[b.exerciseId]?.name || b.exerciseId}: ${b.sets.map(s=> `${s.reps}${s.weightKg?`@${fmtWeight(s.weightKg, unitsPref)}`:''}${s.side?` ${s.side}`:''}${s.rom?` ${s.rom}`:''}`).join(', ')}`).join(' • ')}</p>
+          </li>
+        ))}
+      </ul>
+      {remaining > 0 && (
+        <button onClick={()=> setVisibleCount(c=> c + HISTORY_PAGE)} className="mt-2 w-full btn btn-secondary min-h-10 rounded-xl text-xs font-bold">
+          Load {Math.min(HISTORY_PAGE, remaining)} older sessions ({remaining} hidden)
+        </button>
+      )}
     </div>
   );
 }
@@ -892,36 +956,6 @@ function ExperimentForm({ history = [], exerciseOptions = [], initial = null, on
         <button type="button" onClick={onCancel} className="text-[11px] font-bold underline underline-offset-2">Never mind</button>
       </div>
     </form>
-  );
-}
-
-// History, newest first, paginated: render HISTORY_PAGE sessions at a time and
-// append on demand. A year of training is 150+ sessions whose set summaries
-// are expensive JSX; mounting all of them up front stalls the Progress tab
-// exactly when it already runs its evaluation. (max-h-80 scroll kept.)
-const HISTORY_PAGE = 15;
-
-function SessionHistoryList({ history, unitsPref = 'kg' }){
-  const [visibleCount, setVisibleCount] = useState(HISTORY_PAGE);
-  const visible = useMemo(()=> [...history].slice(-visibleCount).reverse(), [history, visibleCount]);
-  const remaining = Math.max(0, history.length - visibleCount);
-  return (
-    <div>
-      <p className="text-[11px] text-ink3 mt-1" role="status">Showing {visible.length} of {history.length} sessions</p>
-      <ul className="mt-2 space-y-2 max-h-80 overflow-auto pr-1">
-        {visible.map(h=> (
-          <li key={h.id} className="rounded-xl border border-line bg-surface2 px-3 py-2">
-            <p className="text-sm font-bold">{h.title} <span className="text-xs text-ink3">• {h.dateISO} • W{h.week} D{h.day}</span></p>
-            <p className="text-xs text-ink3">{h.blocks.map(b=> `${EXERCISE_BY_ID[b.exerciseId]?.name || b.exerciseId}: ${b.sets.map(s=> `${s.reps}${s.weightKg?`@${fmtWeight(s.weightKg, unitsPref)}`:''}${s.side?` ${s.side}`:''}${s.rom?` ${s.rom}`:''}`).join(', ')}`).join(' • ')}</p>
-          </li>
-        ))}
-      </ul>
-      {remaining > 0 && (
-        <button onClick={()=> setVisibleCount(c=> c + HISTORY_PAGE)} className="mt-2 w-full btn btn-secondary min-h-10 rounded-xl text-xs font-bold">
-          Load {Math.min(HISTORY_PAGE, remaining)} older sessions ({remaining} hidden)
-        </button>
-      )}
-    </div>
   );
 }
 

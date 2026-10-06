@@ -157,7 +157,8 @@ test.describe('cross-tab safety', () => {
     await page2.goto('/');
     await expect(page2.getByRole('dialog', { name:'Onboarding' })).toBeHidden({ timeout:10_000 });
     await page2.getByRole('button', { name:'Progress', exact:true }).click();
-    await expect(page2.getByText(/No sessions yet/i)).toBeVisible({ timeout:10_000 });
+    // Empty state teaches and leads somewhere (product brief: no empty dashboards).
+    await expect(page2.getByText(/Complete your first workout/i)).toBeVisible({ timeout:10_000 });
 
     const runner = await openRunner(page);
     const doneButtons = runner.getByRole('button', { name:'Done' });

@@ -1,6 +1,7 @@
 ﻿// data.js — single source of truth for Arise.
 // Franchise-adjacent terminology has been removed; neutral fitness language only.
-// All game attributes derive from logged history (see attributes.js).
+// Level and XP derive from observable training behaviour (see xp.js);
+// evidence-based metrics live in performance.js.
 
 export const EQUIPMENT = [
   { id: 'bodyweight', label: 'Bodyweight only', icon: '🤸' },
