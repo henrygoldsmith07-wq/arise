@@ -197,7 +197,21 @@ const CHUNK_BUDGET_KB = 34;
 // preview (progressionPreview.js + lazy ProgressionPreview). TrainView's own
 // chunk grows (shelf cards); boot 108.8 and largest-lazy 26.4 unchanged;
 // measured total 366.4.
-const TOTAL_BUDGET_KB = 369;
+//
+// total 369 → 381 kB with the adaptive-coach product pass: the unified
+// coaching orchestration layer (lib/coach/coachingState.js) feeding Today's
+// What's different / Why / After-the-workout sections and the time-budget
+// fit strip, the progressive-disclosure WhyExplainer, the programme-lifecycle
+// timeline (ProgrammeLifecycle), the personal training-model card
+// (lib/coach/trainingProfile.js + TrainingProfileCard), weekly-review
+// learnings + per-row confidence, post-workout debrief confidence, the
+// question-first experiment entry and the first-plan auto-start on onboarding
+// completion. All of it lives in lazy routes (Today/Progress chunks) — boot
+// 109.1 (≤120) and largest-lazy 26.4 unchanged; no new dependencies;
+// measured total 378.7. The paired bundle-diff allowance moves 10 → 15 kB in
+// the workflow with the same rationale (advisory gate, consciously overridden
+// for requested product logic).
+const TOTAL_BUDGET_KB = 381;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

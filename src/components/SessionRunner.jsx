@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { lastExerciseSets } from '../lib/store.js';
+import { strengthSeries } from '../lib/analytics.js';
 import { POLICY_ORDER } from '../lib/progressionPolicies.js';
 import { formatPlateStack } from '../lib/plates.js';
 import { substitutionOptions } from '../lib/substitutions.js';
@@ -289,6 +290,35 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     policy:appPolicy,
     previousForExercise:(exerciseId)=> lastExerciseSets(history, exerciseId),
   }),[blocks,history,session.dateISO,plateConfig,study,studyEnrollment,appPolicy]);
+
+  // Exercise intelligence (P3.11): the progression trend for each lift in
+  // this session — best e1RM per exposure, last four exposures, direction
+  // only (no unit conversion needed at this boundary). Computed once per
+  // history/blocks change, never per keystroke. Presentation over
+  // analytics.strengthSeries; it never feeds a prescription.
+  const exerciseTrends = useMemo(()=>{
+    const map = new Map();
+    for(const b of blocks){
+      if(map.has(b.exerciseId)) continue;
+      const pts = strengthSeries(history, b.exerciseId);
+      if(!pts.length){ map.set(b.exerciseId, null); continue; }
+      const byDate = new Map();
+      for(const p of pts){
+        const cur = byDate.get(p.dateISO) || 0;
+        if(p.e1rm > cur) byDate.set(p.dateISO, p.e1rm);
+      }
+      const bests = [...byDate.entries()]
+        .sort((a, c)=> String(a[0]).localeCompare(String(c[0])))
+        .map(([, v])=> v)
+        .slice(-4);
+      if(bests.length < 2){ map.set(b.exerciseId, null); continue; }
+      const delta = bests[bests.length - 1] - bests[0];
+      const dir = delta > 1 ? '↑' : delta < -1 ? '↓' : '→';
+      const word = dir === '↑' ? 'improving' : dir === '↓' ? 'down on earlier exposures' : 'steady';
+      map.set(b.exerciseId, `${dir} ${word} across ${bests.length} exposures`);
+    }
+    return map;
+  }, [blocks, history]);
 
   // Prospective evaluation record: persist the EXACT recommendation the user is
   // shown — the same blockMeta.recs value rendered on screen, carrying its
@@ -853,6 +883,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                   <p className="text-[11px] text-ink3 mt-1.5">
                     Previous: {prevSummary ? `${prevSummary.summary}` : 'none logged'}
                     {prevSummary ? <span> · {prev.dateISO}</span> : ' — start light and record a baseline'}
+                    {exerciseTrends.get(b.exerciseId) ? <span> · trend: {exerciseTrends.get(b.exerciseId)}</span> : null}
                   </p>
                   <p className="text-[11px]"><span className="font-bold text-ink">Goal:</span> {goalText}</p>
 

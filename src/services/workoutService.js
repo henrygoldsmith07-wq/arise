@@ -110,8 +110,14 @@ export function completeWorkoutWorkflow({ store, payload, saveStartedAt = null, 
         `${summary.savedSets} set${summary.savedSets===1?'':'s'}`,
         `${payload.durationMinutes} min`,
         qualityReport ? `quality ${qualityReport.quality}/100 (${qualityReport.band})` : null,
+        // Time-budget fit (P2.5): the adaptation is recorded and explained.
+        payload.timeAdaptation ? `fitted to your ${payload.timeAdaptation.targetMinutes} min` : null,
       ].filter(Boolean).join(' · '),
-      note:adaptation?.changed ? 'Your next sessions were adjusted from this result.' : (qualityReport ? qualityReport.whatToChangeNext[0] : null),
+      note:adaptation?.changed
+        ? 'Your next sessions were adjusted from this result.'
+        : payload.timeAdaptation
+          ? payload.timeAdaptation.reason
+          : (qualityReport ? qualityReport.whatToChangeNext[0] : null),
     },
   };
 }

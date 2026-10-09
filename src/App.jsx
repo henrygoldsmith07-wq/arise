@@ -390,8 +390,56 @@ export default function App(){
     };
   },[]);
 
-  const handleCompleteOnboarding = (payload)=>{
-    const next = { ...store, onboarding: payload };
+  const handleCompleteOnboarding = async (payload)=>{
+    let next = { ...store, onboarding: payload };
+    // First-value (P2.9): GOAL → KIT → EXPERIENCE → SCHEDULE → FIRST PLAN.
+    // On the FIRST completion (no profile yet, no programme yet), generate
+    // and start the recommended programme so Today opens on a real session
+    // with a "Why this programme" provenance line — instead of an empty state
+    // that sends the user hunting. Re-editing onboarding never restarts a
+    // programme. The generator is imported lazily (same pattern as the save
+    // workflow) so it never joins the boot chunk. Failures fall back to the
+    // old flow: pick a programme in Train.
+    if(!store.onboarding && !store.activeSchedule){
+      try{
+        const [{ trainRecommendation }, { startProgramme }] = await Promise.all([
+          import('./lib/trainRecommendation.js'),
+          import('./services/programmeService.js'),
+        ]);
+        const recommendation = trainRecommendation({
+          onboarding: payload,
+          customTemplates: store.customTemplates || [],
+          history: [],
+        });
+        if(recommendation?.programId){
+          const started = startProgramme({
+            store: next,
+            programId: recommendation.programId,
+            availableEquipment: payload.equipment || [],
+          });
+          if(started.started){
+            next = {
+              ...started.store,
+              onboarding: {
+                ...payload,
+                // Stored provenance: TODAY renders the scorer's verbatim
+                // reasons so the plan explains itself on day one.
+                firstPlan: {
+                  programId: recommendation.programId,
+                  name: recommendation.name || null,
+                  reasons: recommendation.reasons || [],
+                  selectionInputs: recommendation.selectionInputs || [],
+                  pickedAt: new Date().toISOString().slice(0, 10),
+                },
+              },
+            };
+          }
+        }
+      }catch{
+        // Auto-start is best-effort: onboarding still completes and Train
+        // remains the programme picker exactly as before.
+      }
+    }
     setStore(next);
   };
 

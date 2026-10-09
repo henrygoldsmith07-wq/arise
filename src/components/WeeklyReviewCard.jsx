@@ -55,7 +55,7 @@ export default function WeeklyReviewCard({ store, setStore }){
         const name = exName(id);
         if(before <= 0 || exposures < 2){ insufficient.push(name); continue; }
         const delta = (cur-before)/before;
-        if(delta >= 0.02) improved.push({ name, deltaPct: Math.round(delta*100) });
+        if(delta >= 0.02) improved.push({ name, deltaPct: Math.round(delta*100), conf: exposures >= 6 ? 'high' : exposures >= 4 ? 'medium' : 'low' });
         else if(delta <= -0.02) steady.push({ name, note:'a little down on last time' });
         else steady.push({ name, note:'level with last time' });
       }
@@ -95,13 +95,26 @@ export default function WeeklyReviewCard({ store, setStore }){
         if(!seen.has(b.exerciseId) && v > 0 && v > (prevBest.get(b.exerciseId)||0) && (exposuresBefore.get(b.exerciseId)||0) >= 1){ prs++; seen.add(b.exerciseId); }
       }
 
+      // ── What did Arise learn? Only conclusions with real evidential force:
+      //    the user's own concluded experiments (result + confidence, verbatim
+      //    from evaluateExperiment). A single bad session is never a learning. ──
+      const learned = (store.experiments || [])
+        .filter(e=> e?.id && !e.deletedAt && e.status === 'completed')
+        .slice(0, 2)
+        .map(e=> ({
+          question: e.question || e.name || 'Training experiment',
+          result: e.result || 'inconclusive',
+          confidence: e.confidence || 'low',
+          note: e.conclusionNote || null,
+        }));
+
       return {
         review, ackKey,
         weekNumber: review.targetWeekNumber ? review.targetWeekNumber-1 : null,
         completion: { done: review.completedSessionCount ?? wkSessions.length, total: review.reviewedSessionCount ?? wkSessions.length },
         volumeKg: volW,
         volumeDelta,
-        improved, steady, insufficient, noticed, prs,
+        improved, steady, insufficient, noticed, prs, learned,
       };
     }catch{ return null; }
   },[store]);
@@ -143,8 +156,9 @@ export default function WeeklyReviewCard({ store, setStore }){
       {/* 2. Did I improve? */}
       <div className="rounded-xl border border-line bg-surface2 px-3 py-2 space-y-1">
         <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Did I improve?</p>
+        <p className="text-[10px] text-ink3">Confidence is per-row — Arise only calls a change strong when several comparable sessions agree.</p>
         {data.improved.map((row)=> (
-          <p key={row.name} className="text-xs"><span className="font-semibold">{row.name}</span> <span className="text-success font-bold">↑ {row.deltaPct}%</span> <span className="text-ink3">estimated 1RM vs your last comparable session</span></p>
+          <p key={row.name} className="text-xs"><span className="font-semibold">{row.name}</span> <span className="text-success font-bold">↑ {row.deltaPct}%</span> <span className="text-ink3">estimated 1RM vs your last comparable session{row.conf ? ` · ${row.conf} confidence` : ''}</span></p>
         ))}
         {data.steady.map((row)=> (
           <p key={row.name} className="text-xs"><span className="font-semibold">{row.name}</span> <span className="text-ink3">— {row.note}</span></p>
@@ -165,6 +179,24 @@ export default function WeeklyReviewCard({ store, setStore }){
           {data.noticed.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}
         </ul>
       </div>
+
+      {/* 3b. What did Arise learn? Concluded experiments only — with the
+          confidence level the engine assigned, never upgraded for morale.
+          "Inconclusive" is shown as the valid result it is. */}
+      {data.learned && data.learned.length > 0 && (
+        <div className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">What Arise learned</p>
+          <ul className="mt-1 space-y-1.5">
+            {data.learned.map((l, i)=> (
+              <li key={i} className="text-[11px] text-ink2 leading-snug">
+                “{l.question}” → <span className="font-bold text-ink">{l.result}</span>
+                <span className={`ml-1 text-[10px] font-bold ${l.confidence === 'high' ? 'text-success' : l.confidence === 'low' ? 'text-review' : 'text-ink3'}`}>{l.confidence} confidence</span>
+                {l.note && <span className="block text-ink3">{l.note}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* 4. What changes next week? */}
       {structural.length > 0 && (
