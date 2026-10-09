@@ -471,6 +471,9 @@ export function buildSessionHistoryPayload({
     mode:session.mode || 'standard',
     targetMinutes:session.targetMinutes || null,
     originalDurationMin:session.originalDurationMin || null,
+    // Time-budget adaptation (P2.5): why this session differs from the plan
+    // — target minutes, what was set aside, the engine's own reason.
+    timeAdaptation:session.timeAdaptation || null,
     rescheduledFrom:session.rescheduledFrom || null,
     durationMinutes,
     startedAt,

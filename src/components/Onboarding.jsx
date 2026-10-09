@@ -187,52 +187,10 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
             ))}
           </div>
           {!equipment.length && <p className="text-xs text-review bg-reviewsoft border border-review/30 rounded-xl px-3 py-2">Pick at least one — bodyweight is always an option.</p>}
-          {/* Barbell plate setup is essential: it decides the plate loads
-              Arise prescribes. Dumbbell weights and machine increments only
-              refine rounding for unusual kit, so they wait behind a disclosure
-              and never interrupt the 60-second path to a first workout. */}
-          {equipment.includes('barbell') && (
-            <div className="rounded-xl border border-line bg-surface2 p-3 space-y-2">
-              <div>
-                <p className="text-xs font-bold">Barbell load setup</p>
-                <p className="text-[11px] text-ink3">Used to round barbell recommendations to loads you can actually build.</p>
-              </div>
-              <div className="flex gap-2">
-                {[20,15,0].map(weight=> (
-                  <button key={weight} onClick={()=> setBarWeightKg(weight)} className={`flex-1 min-h-9 rounded-lg border text-xs font-bold ${barWeightKg===weight ? 'bg-ink text-bg border-ink' : 'bg-surface border-line'}`}>{weight ? `${weightInputValue(weight, unit)} ${unit} bar` : 'No fixed bar'}</button>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {DEFAULT_PLATE_DENOMINATIONS_KG.map(kg=> (
-                  <button key={kg} onClick={()=> togglePlate(kg)} aria-pressed={plateDenominationsKg.includes(kg)} className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${plateDenominationsKg.includes(kg) ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink3'}`}>{weightInputValue(kg, unit)} {unit}</button>
-                ))}
-              </div>
-            </div>
-          )}
-          {(equipment.includes('dumbbells') || equipment.includes('machine') || equipment.includes('cable')) && (
-            <details className="rounded-xl border border-line bg-surface2 p-3">
-              <summary className="text-xs font-bold cursor-pointer">Tune load rounding (optional)</summary>
-              <p className="text-[11px] text-ink3 mt-1">Only needed if your weights are unusual — targets round to loads you can actually build.</p>
-              <div className="space-y-2 mt-2">
-          {equipment.includes('dumbbells') && (
-            <div className="rounded-xl border border-line bg-surface2 p-3 space-y-1.5">
-              <label htmlFor="onboarding-dumbbells" className="text-xs font-bold">Your dumbbell weights ({unit})</label>
-              <input id="onboarding-dumbbells" value={dumbbellsInput} onChange={e=> setDumbbellsInput(e.target.value)} inputMode="decimal" placeholder={unit === 'lb' ? 'e.g. 10, 20, 30' : 'e.g. 5, 10, 15'}
-                className="w-full min-h-10 rounded-lg border border-line bg-surface px-3 text-sm" />
-              <p className="text-[11px] text-ink3">Comma-separated pairs. Dumbbell targets get rounded to weights you actually own.</p>
-            </div>
-          )}
-          {(equipment.includes('machine') || equipment.includes('cable')) && (
-            <div className="rounded-xl border border-line bg-surface2 p-3 space-y-1.5">
-              <label htmlFor="onboarding-machine-increment" className="text-xs font-bold">Machine / cable increment ({unit})</label>
-              <input id="onboarding-machine-increment" type="number" min="0.25" step="0.5" inputMode="decimal" value={machineIncrementInput} onChange={e=> setMachineIncrementInput(e.target.value)} placeholder={unit === 'lb' ? '5' : '2.5'}
-                className="w-full min-h-10 rounded-lg border border-line bg-surface px-3 text-sm" />
-              <p className="text-[11px] text-ink3">Enter the smallest stack jump on your machine — targets snap to real pin positions.</p>
-            </div>
-          )}
-              </div>
-            </details>
-          )}
+          {/* Load rounding lives behind Fine-tune (P2.6): the first-run path
+              stays goal → place → kit → level → plan; barbell plates and
+              machine increments refine targets but never decide them, and the
+              deterministic defaults (20 kg bar, standard plates) are safe. */}
         </div>
       )
     },
@@ -278,10 +236,65 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
       )
     },
     {
-      title: 'Preferences (optional)',
+      title: 'Fine-tune preferences (optional)',
       body: (
         <div className="space-y-3">
           <p className="text-xs text-ink3">Tell us which movements you like or want to avoid. These choices only influence generated programmes; they never erase logged history.</p>
+          {/* First-value (P2.9): set the expectation that saving BUILDS the
+              first plan immediately — Today opens on a real workout with its
+              provenance line, not an empty state. Only on first run. */}
+          {!initial && (
+            <p className="text-[11px] text-ink2 bg-surface2 border border-line rounded-xl px-3 py-2">
+              <span className="font-bold">What happens next:</span> save and Arise builds your first programme from these answers — Today opens on today’s workout with why it was generated.
+            </p>
+          )}
+          {/* Load rounding (moved from the kit step, P2.6): refinement, not a
+              first-run decision — shown only for kit that can actually round. */}
+          {(equipment.includes('barbell') || equipment.includes('dumbbells') || equipment.includes('machine') || equipment.includes('cable')) && (
+            <p className="text-xs font-bold uppercase tracking-widest text-ink3 pt-1">Load rounding</p>
+          )}
+          {equipment.includes('barbell') && (
+            <div className="rounded-xl border border-line bg-surface2 p-3 space-y-2">
+              <div>
+                <p className="text-xs font-bold">Barbell load setup</p>
+                <p className="text-[11px] text-ink3">Used to round barbell recommendations to loads you can actually build.</p>
+              </div>
+              <div className="flex gap-2">
+                {[20,15,0].map(weight=> (
+                  <button key={weight} onClick={()=> setBarWeightKg(weight)} className={`flex-1 min-h-9 rounded-lg border text-xs font-bold ${barWeightKg===weight ? 'bg-ink text-bg border-ink' : 'bg-surface border-line'}`}>{weight ? `${weightInputValue(weight, unit)} ${unit} bar` : 'No fixed bar'}</button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {DEFAULT_PLATE_DENOMINATIONS_KG.map(kg=> (
+                  <button key={kg} onClick={()=> togglePlate(kg)} aria-pressed={plateDenominationsKg.includes(kg)} className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${plateDenominationsKg.includes(kg) ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink3'}`}>{weightInputValue(kg, unit)} {unit}</button>
+                ))}
+              </div>
+            </div>
+          )}
+          {(equipment.includes('dumbbells') || equipment.includes('machine') || equipment.includes('cable')) && (
+            <details className="rounded-xl border border-line bg-surface2 p-3">
+              <summary className="text-xs font-bold cursor-pointer">Tune load rounding (optional)</summary>
+              <p className="text-[11px] text-ink3 mt-1">Only needed if your weights are unusual — targets round to loads you can actually build.</p>
+              <div className="space-y-2 mt-2">
+          {equipment.includes('dumbbells') && (
+            <div className="rounded-xl border border-line bg-surface2 p-3 space-y-1.5">
+              <label htmlFor="onboarding-dumbbells" className="text-xs font-bold">Your dumbbell weights ({unit})</label>
+              <input id="onboarding-dumbbells" value={dumbbellsInput} onChange={e=> setDumbbellsInput(e.target.value)} inputMode="decimal" placeholder={unit === 'lb' ? 'e.g. 10, 20, 30' : 'e.g. 5, 10, 15'}
+                className="w-full min-h-10 rounded-lg border border-line bg-surface px-3 text-sm" />
+              <p className="text-[11px] text-ink3">Comma-separated pairs. Dumbbell targets get rounded to weights you actually own.</p>
+            </div>
+          )}
+          {(equipment.includes('machine') || equipment.includes('cable')) && (
+            <div className="rounded-xl border border-line bg-surface2 p-3 space-y-1.5">
+              <label htmlFor="onboarding-machine-increment" className="text-xs font-bold">Machine / cable increment ({unit})</label>
+              <input id="onboarding-machine-increment" type="number" min="0.25" step="0.5" inputMode="decimal" value={machineIncrementInput} onChange={e=> setMachineIncrementInput(e.target.value)} placeholder={unit === 'lb' ? '5' : '2.5'}
+                className="w-full min-h-10 rounded-lg border border-line bg-surface px-3 text-sm" />
+              <p className="text-[11px] text-ink3">Enter the smallest stack jump on your machine — targets snap to real pin positions.</p>
+            </div>
+          )}
+              </div>
+            </details>
+          )}
           <div className="flex gap-2 text-[11px] text-ink3">
             <span className="rounded-full border border-success/40 bg-success/10 px-2 py-1">Like = prefer when substituting</span>
             <span className="rounded-full border border-review/40 bg-reviewsoft px-2 py-1">Avoid = do not prescribe</span>

@@ -1,48 +1,39 @@
 import WeeklyReviewCard from './WeeklyReviewCard.jsx';
+import ReadinessCheckIn from './ReadinessCheckIn.jsx';
+import ProgrammeLifecycle from './ProgrammeLifecycle.jsx';
+import WhyExplainer from './WhyExplainer.jsx';
 import { useMemo, useRef, useState } from 'react';
-import { PROGRAM_BY_ID } from '../lib/data.js';
-import { sessionForToday, nextSession, progress } from '../lib/schedule.js';
-import { EXERCISE_BY_ID } from '../lib/data.js';
-import {
-  blockDurationMinutes,
-  isoToday,
-  missedWorkoutRecovery,
-  programAdherence,
-  progressionExplanation,
-  replanSchedule,
-  shortWorkoutMode,
-} from '../lib/programming.js';
-import { weekPhaseFor } from '../lib/mesocycle.js';
+import { PROGRAM_BY_ID, EXERCISE_BY_ID, LOCATIONS, EQUIPMENT } from '../lib/data.js';
+import { isoToday, replanSchedule, shortWorkoutMode } from '../lib/programming.js';
 import { backupRecency as computeBackupRecency, backupRecencyLabel, readBackupState } from '../lib/backupState.js';
-import { nextBestAction, whatChangedSummary, typicalDurationFor } from '../lib/product.js';
-import { confidenceLanguage } from '../lib/performance.js';
 import WhatChangedPanel from './WhatChangedPanel.jsx';
 import { isSimpleView } from '../lib/experienceMode.js';
-import { safetyPanel } from '../lib/safety.js';
+import { buildCoachingState } from '../lib/coach/coachingState.js';
 import { storedWorkoutMode, workoutModePatch, workoutModeLabel } from '../lib/workoutMode.js';
-
-function estimatedMinutes(session, config = null){
-  if(session?.estimatedDurationMin != null) return session.estimatedDurationMin;
-  const total = (session?.blocks || []).reduce((sum, b)=> sum + blockDurationMinutes(b, config), 0);
-  return Math.max(1, Math.ceil(total));
-}
 
 export default function TodayView({ store, setStore, onStartSession, onOpenTrain, onOpenProgress, plateConfig = null }){
   const sched = store.activeSchedule;
-  const prog = sched ? PROGRAM_BY_ID[sched.programId] : null;
-  const today = sessionForToday(sched);
-  const nxt = nextSession(sched);
-  const heroSession = today || nxt || null;
-  const progProgress = progress(sched, store.history);
-  const adherence = useMemo(()=> programAdherence(sched, store.history || [], { today: isoToday() }), [sched, store.history]);
-  const recovery = useMemo(()=> missedWorkoutRecovery(sched, store.history || [], { today: isoToday() }), [sched, store.history]);
-  // Safety signals: pain trends, volume/load jumps, implausible PRs, failed-rep
-  // patterns, recovery deficit, fatigue stacking. Cautious mode lowers the
-  // thresholds so cautious users see signals earlier (see safety.js).
-  const safety = useMemo(
-    ()=> safetyPanel(store.history || [], store.readinessLog || [], { today: isoToday(), cautious: store.preferences?.cautiousMode === true }),
-    [store.history, store.readinessLog, store.preferences?.cautiousMode]
+  // ── The Adaptive Coach layer (P1): ONE structured coaching state computed
+  //    from the deterministic engines (progression, scheduling, safety,
+  //    adherence, product insights). Every decision surface below renders
+  //    from this object — the view never re-derives engine output itself. ──
+  const coach = useMemo(
+    ()=> buildCoachingState({ store, today: isoToday(), plateConfig }),
+    [store, plateConfig]
   );
+  const prog = sched ? PROGRAM_BY_ID[sched.programId] : null;
+  const heroSession = coach.nextSession?.session || null;
+  const today = coach.nextSession?.isToday ? coach.nextSession.session : null;
+  const prescriptions = coach.nextSession?.prescriptions || [];
+  const progProgress = coach.currentState.programme?.progress || { done: 0, total: 0, pct: 0 };
+  const adherence = coach.adherence;
+  const recovery = coach.recovery;
+  // Safety signals (pain trends, volume/load jumps, implausible PRs, failed
+  // reps, recovery deficit) — normalised by the coach from safety.safetyPanel;
+  // cautious mode lowers the thresholds (see safety.js).
+  const safety = coach.safety;
+  const weekPhase = coach.currentState.weekPhase;
+  const nba = coach.nextBestAction;
   const simple = isSimpleView(store.preferences);
   // Backup recency — local-only nudge source. Read fresh each render so a
   // successful export in More clears it without needing a subscription.
@@ -50,14 +41,6 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
     ()=> computeBackupRecency({ history:store.history || [], lastBackupAt:readBackupState().lastBackupAt }),
     [store.history]
   );
-  // Week phase (ADR: deload as a first-class state). Derived from the schedule's
-  // own adaptation stamps — no new persisted state. Week 1 of a fresh program is
-  // naturally a 'build' week.
-  const weekPhase = useMemo(()=> weekPhaseFor(sched, isoToday()), [sched]);
-  const nba = useMemo(()=> nextBestAction({ store, today: isoToday(), todaySession: today, nextSess: nxt, recovery }), [store, today, nxt, recovery]);
-  const changes = useMemo(()=> whatChangedSummary({ schedule: sched, history: store.history || [] }), [sched, store.history]);
-  const explanations = useMemo(()=> heroSession ? heroSession.blocks.map(block=> progressionExplanation({ exerciseId: block.exerciseId, targetReps: block.reps, asOfDateISO: heroSession.dateISO, history: store.history || [], plateConfig, block })) : [], [heroSession, store.history, plateConfig]);
-  const typical = useMemo(()=> heroSession ? typicalDurationFor({ history: store.history||[], title: heroSession.title }) : null, [heroSession, store.history]);
 
   const applyReplan = ()=>{
     const result = replanSchedule(sched, store.history || [], { today: isoToday() });
@@ -89,14 +72,84 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
   const [optionsOpen, setOptionsOpen] = useState(false);
   const lastMode = storedWorkoutMode(store.preferences);
 
+  // ── Time budget (P2.5): "I have 25 minutes." Compression runs through the
+  //    existing shortWorkoutMode engine — blocks ranked by the programme's own
+  //    priority, volume scaled to fit, timed work trimmed instead of dropped
+  //    (never "delete the last exercises"). The preview and the started
+  //    session come from the same engine result, and the adaptation is
+  //    recorded on the session it starts — explained before you commit. ──
+  const [timeBudget, setTimeBudget] = useState(null);
+  const timePlan = useMemo(
+    ()=> (timeBudget && heroSession ? shortWorkoutMode(heroSession, { minutes: timeBudget }) : null),
+    [timeBudget, heroSession]
+  );
+  const shownSession = timePlan?.session || heroSession;
+  const shownIds = new Set((shownSession?.blocks || []).map(b=> b.exerciseId));
+  const shownPrescriptions = prescriptions.filter(p=> shownIds.has(p.block.exerciseId));
+  const fullMinutes = coach.nextSession?.estimatedDurationMin ?? null;
+  const budgetChoices = fullMinutes ? [45, 30, 25, 20, 15].filter(m=> m < fullMinutes) : [];
+
+  // ── Section derivations (presentation grouping only — all engine output
+  //    already lives in `coach`; nothing is recomputed here) ──
+  const blockAdapted = coach.changes.filter(c=> c.kind === 'block');
+  const otherChanges = coach.changes.filter(c=> c.kind !== 'block' && c.kind !== 'recovery');
+  const rxById = new Map(
+    coach.recommendations.filter(r=> r.kind === 'prescription').map(r=> [r.exerciseId, r])
+  );
+  // Simple mode shows only the decisions that actually adapted (plus plateau
+  // guards); standard shows every prescription's reasoning. Same engine data,
+  // different depth — disclosure, not removal.
+  const whyRows = simple
+    ? shownPrescriptions.filter(p=> p.explanation.adapted?.length || p.explanation.plateau?.isPlateau)
+    : shownPrescriptions;
+
+  // ── Built for you (P2.7): the first plan's provenance as one scannable
+  //    line — where/when/how long/level plus the kit restriction that shaped
+  //    it. Same onboarding answers the scorer consumed; no new derivation.
+  const ob = store.onboarding || null;
+  const builtForYou = ob && coach.programmeWhy ? {
+    line: [
+      ob.location && (LOCATIONS.find(l=> l.id === ob.location)?.label || ob.location),
+      ob.daysPerWeek ? `${ob.daysPerWeek} days/week` : null,
+      ob.availableMinutes ? `${ob.availableMinutes}-minute sessions` : null,
+      ob.level || null,
+    ].filter(Boolean).join(' · '),
+    kit: (()=> {
+      const kit = ob.equipment || [];
+      if(!kit.length) return 'Equipment restrictions have already been applied.';
+      if(kit.length === 1 && kit[0] === 'bodyweight') return 'No equipment needed — bodyweight only.';
+      // "Bodyweight only" reads as a standalone phrase — drop it from the
+      // list when real kit is present, since the exclusions already imply it.
+      const named = kit.filter(id=> id !== 'bodyweight');
+      const shown = (named.length ? named : kit).map(id=> EQUIPMENT.find(e=> e.id === id)?.label || id).join(', ');
+      return `Equipment restrictions have already been applied — ${shown}.`;
+    })(),
+  } : null;
+
   const rememberMode = (mode)=>{
     setStore(prev=> ({ ...prev, preferences: workoutModePatch(prev.preferences, mode) }));
   };
 
   const startStandard = ()=>{
     if(!heroSession) return;
-    rememberMode('standard');
-    onStartSession(heroSession);
+    const target = timePlan?.session || heroSession;
+    // A compressed start records WHY the session differs from the plan — the
+    // adaptation travels with the session and its history entry, so a
+    // shortened workout is never a silent truncation.
+    const session = timePlan?.changed
+      ? {
+          ...target,
+          timeAdaptation: {
+            targetMinutes: timeBudget,
+            originalDurationMin: timePlan.originalDurationMin,
+            estimatedDurationMin: timePlan.estimatedDurationMin,
+            omittedExerciseIds: timePlan.omittedExerciseIds,
+            reason: timePlan.reason,
+          },
+        }
+      : target;
+    rememberMode(timePlan?.changed ? 'short' : 'standard');
+    onStartSession(session);
   };
 
   const startShort = ()=>{
@@ -123,10 +176,23 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
               <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">{today ? 'Today' : 'Up next'}{prog ? ` — ${prog.name}` : ''}</p>
               <h2 className="text-2xl font-black tracking-tight truncate">{heroSession.title}</h2>
               <p className="text-xs text-ink3">{heroSession.dateISO}{sched ? ` · Week ${sched.sessions.find(s=> s.status!=='done')?.week || '?'}` : ''}</p>
+              <p className="text-[11px] text-ink2 mt-0.5">{coach.nextSession.objective}</p>
             </div>
-            <span className="shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-full bg-surface2 border border-line tabular-nums">≈{estimatedMinutes(heroSession)} min</span>
-          {typical && <p className="text-[11px] text-ink3">Based on your last {typical.samples} sessions, you finish this workout in {typical.lo}–{typical.hi} minutes.</p>}
+            <span className="shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-full bg-surface2 border border-line tabular-nums">≈{timePlan?.changed ? timePlan.estimatedDurationMin : coach.nextSession.estimatedDurationMin} min</span>
           </div>
+          {coach.nextSession.typicalDuration && (
+            <p className="text-[11px] text-ink3 -mt-1">Based on your last {coach.nextSession.typicalDuration.samples} sessions, you finish this workout in {coach.nextSession.typicalDuration.lo}–{coach.nextSession.typicalDuration.hi} minutes.</p>
+          )}
+
+          {/* First-plan provenance (P2.7): the five onboarding answers, one
+              glance — so the first session feels chosen, not generated. */}
+          {builtForYou && (
+            <div className="rounded-xl border border-line bg-surface2 px-3 py-2 space-y-0.5" data-testid="today-built-for-you">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Built for you</p>
+              <p className="text-xs font-semibold">{builtForYou.line}</p>
+              <p className="text-[11px] text-ink3">{builtForYou.kit}</p>
+            </div>
+          )}
 
           {/* Deload as a first-class state: when the week's prescriptions are
               cuts, the whole week is named as one — no guessing from block
@@ -141,8 +207,58 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
             </div>
           )}
 
+          {/* ── Time budget (P2.5): state the time you have; the compression
+              engine does the rest, with the reason shown before you start. ── */}
+          {today && budgetChoices.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Time available today">
+              <span className="text-[11px] text-ink3 mr-0.5">Time today:</span>
+              <button
+                onClick={()=> setTimeBudget(null)}
+                aria-pressed={timeBudget === null}
+                className={`min-h-11 px-3 rounded-full border text-xs font-bold ${timeBudget === null ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink3'}`}
+              >Plan</button>
+              {budgetChoices.map(minutes=> (
+                <button
+                  key={minutes}
+                  onClick={()=> setTimeBudget(minutes)}
+                  aria-pressed={timeBudget === minutes}
+                  className={`min-h-11 px-3 rounded-full border text-xs font-bold tabular-nums ${timeBudget === minutes ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink3'}`}
+                >{minutes} min</button>
+              ))}
+            </div>
+          )}
+          {timePlan?.changed && (
+            <div className="rounded-xl border border-line bg-surface2 px-3 py-2 space-y-1" role="status" data-testid="today-time-fit">
+              <p className="text-xs font-bold">⏱ Fitted to {timeBudget} minutes — {timePlan.reason}</p>
+              <p className="text-[11px] text-ink3 leading-snug">
+                {timePlan.originalDurationMin} min planned → {timePlan.estimatedDurationMin} min now.
+                {timePlan.omittedExerciseIds.length > 0 && <> Set aside: {timePlan.omittedExerciseIds.map(id=> EXERCISE_BY_ID[id]?.name || id).join(', ')}.</>}
+              </p>
+              <WhyExplainer
+                item={{
+                  reason: timePlan.reason,
+                  expectedOutcome: `About ${timePlan.estimatedDurationMin} minutes of the highest-value work within the time you gave.`,
+                  evidence: [
+                    `Planned duration: ${timePlan.originalDurationMin} min.`,
+                    `Kept ${timePlan.session.blocks.length} of ${heroSession.blocks.length} blocks.`,
+                    ...(timePlan.omittedExerciseIds.length ? [`Set aside: ${timePlan.omittedExerciseIds.map(id=> EXERCISE_BY_ID[id]?.name || id).join(', ')}.`] : []),
+                  ],
+                  expert: {
+                    inputs: [
+                      { label: 'Target', value: `${timeBudget} min` },
+                      { label: 'Kept', value: `${timePlan.session.blocks.length}/${heroSession.blocks.length} blocks` },
+                    ],
+                    policy: 'programming.shortWorkoutMode — blockPriority ranking, then per-block volume scaling',
+                    source: 'programming.shortWorkoutMode',
+                  },
+                }}
+                label="Why keep these?"
+              />
+            </div>
+          )}
+
           <ul className="divide-y divide-line/60 rounded-xl border border-line bg-surface2 overflow-hidden">
-            {heroSession.blocks.map((b,i)=>{
+            {shownSession.blocks.slice(0, 4).map((b,i)=>{
               const ex = EXERCISE_BY_ID[b.exerciseId];
               return (
                 <li key={i} className="flex items-center gap-2 px-3 py-2 text-sm">
@@ -153,34 +269,25 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
               );
             })}
           </ul>
-
-          {/* ── Why today looks like this: the visible face of adaptive
-              programming. Rendered ONLY when the engine actually adjusted a
-              block in the hero — never as filler. ── */}
-          {explanations.some(ex => ex?.adapted) && (
-            <div className="rounded-xl border border-review/30 bg-reviewsoft px-3 py-2" role="status" data-testid="today-adaptation-reasons">
-              <p className="text-xs font-bold text-review">⚡ Adjusted from your training</p>
-              <ul className="mt-1 space-y-1">
-                {explanations.filter(ex => ex?.adapted).map((ex, i) => (
-                  <li key={i} className="text-[11px] text-ink2 leading-snug">
-                    <span className="font-bold text-ink">{ex.exerciseName}</span> — {ex.adapted.summary}
-                  </li>
-                ))}
+          {/* Long plans stay scannable: the first four lifts answer "what is
+              this session?"; the rest are one tap deep, never lost. */}
+          {shownSession.blocks.length > 4 && (
+            <details className="rounded-xl border border-line bg-surface2">
+              <summary className="px-3 py-2.5 text-xs font-bold cursor-pointer min-h-11 flex items-center">All {shownSession.blocks.length} lifts</summary>
+              <ul className="divide-y divide-line/60 border-t border-line">
+                {shownSession.blocks.slice(4).map((b,i)=>{
+                  const ex = EXERCISE_BY_ID[b.exerciseId];
+                  return (
+                    <li key={`rest-${i}`} className="flex items-center gap-2 px-3 py-2 text-sm">
+                      <span className="text-ink3 tabular-nums w-14 shrink-0 text-xs">{b.sets}× {b.reps}</span>
+                      <span className="font-medium truncate">{ex?.name || b.exerciseId}</span>
+                      <span className="ml-auto text-xs text-ink3 shrink-0">{b.loadHint}</span>
+                    </li>
+                  );
+                })}
               </ul>
-            </div>
+            </details>
           )}
-
-          <details className="rounded-xl border border-line bg-surface px-3 py-2">
-            <summary className="text-xs font-bold cursor-pointer">Why these prescriptions?</summary>
-            <ul className="mt-2 space-y-2">
-              {explanations.map((explanation, index) => (
-                <li key={`${explanation.exerciseId}-${index}`} className="text-[11px] text-ink3">
-                  <span className="font-bold text-ink">{explanation.exerciseName}</span> — {explanation.summary}
-                  <span className="block mt-0.5">{explanation.rule} <span className="font-semibold">{confidenceLanguage(explanation.confidence, explanation.confidence === 'low' ? 'Arise only has a couple of comparable sessions here, so this is a cautious estimate.' : explanation.confidence === 'medium' ? 'Your recent sessions show a consistent pattern.' : 'Repeated performance supports this number.')}</span></span>
-                </li>
-              ))}
-            </ul>
-          </details>
 
           {/* One dominant CTA. The standard session is the default action —
               short and guided stay one interaction away under Options. */}
@@ -236,6 +343,11 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
     )}
 
     <div className="px-4 py-5 space-y-4">
+      {/* Recovery input. Collapsed it is one line, so it costs nothing on the
+          days the user skips it — which is the property that decides whether a
+          daily check-in gets collected at all. */}
+      <ReadinessCheckIn store={store} setStore={setStore} todayISO={isoToday()} />
+
       {/* ── Missed workout recovery: three clear choices, brief consequences,
           no guilt. "Do it today" simply surfaces the session to start now;
           "Skip" marks the row done-with-skip so the programme moves on;
@@ -254,6 +366,128 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
           </div>
           <p className="text-[11px] text-ink3">{recovery.recommendation}</p>
         </div>
+      )}
+
+      {/* ── What's different / Why / After the workout: the coaching
+          decision, in the order the spec asks for — what changed, why, and
+          what happens next. Everything below renders `coach`; no new engine
+          calls, no invented reasons. ── */}
+      {heroSession && (
+        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="What's different">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">What's different</p>
+          {blockAdapted.length > 0 && (
+            <div className="rounded-xl border border-review/30 bg-reviewsoft px-3 py-2" role="status" data-testid="today-adaptation-reasons">
+              <p className="text-xs font-bold text-review">⚡ Adjusted from your training</p>
+              <ul className="mt-1 space-y-1">
+                {blockAdapted.map((c, i) => (
+                  <li key={`${c.id}-${i}`} className="text-[11px] text-ink2 leading-snug">
+                    <span className="font-bold text-ink">{c.title}</span> — {c.detail}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {otherChanges.length > 0 && (
+            <ul className="space-y-1.5">
+              {otherChanges.map(c=> (
+                <li key={c.id} className="text-xs text-ink2 leading-snug">
+                  {c.title && <span className="font-bold text-ink">{c.title} — </span>}{c.detail}
+                  {c.when && <span className="block text-[10px] text-ink3">{c.when}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+          {/* Stable state (P1.3): an unchanged plan must read as a decision,
+              not an absence — but never claim "stable performance" with zero
+              history to support it. */}
+          {(blockAdapted.length === 0 && otherChanges.length === 0) && (
+            <p className="text-xs text-ink3">
+              {(store.history || []).length
+                ? 'Your plan is staying the same because your recent performance is stable — no rule has fired to change it.'
+                : 'This is your starting plan — Arise adapts it once your sessions give it evidence.'}
+            </p>
+          )}
+        </section>
+      )}
+
+      {heroSession && (
+        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="Why">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Why</p>
+          {/* First-run provenance: why THIS programme exists at all — the
+              scorer's verbatim reasons, stored when the plan was generated. */}
+          {coach.programmeWhy && (
+            <div className="rounded-xl border border-line bg-surface2 px-3 py-2 space-y-1">
+              <p className="text-xs font-bold">Why this programme</p>
+              <p className="text-[11px] text-ink3 leading-snug">Arise generated “{coach.currentState.programme?.name}” from your answers — goal, kit, level and schedule:</p>
+              <ul className="space-y-0.5">
+                {(coach.programmeWhy.reasons || []).map((r, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">• {r}</li>)}
+              </ul>
+              <WhyExplainer
+                item={{
+                  evidence: (coach.programmeWhy.selectionInputs || []).map(l=> `${l.label}: ${l.value}`),
+                  expert: {
+                    inputs: (coach.programmeWhy.selectionInputs || []).map(l=> ({ label: l.label, value: l.value })),
+                    policy: 'Ranking uses only goal, equipment, level and days — history never ranks, it only shapes sessions.',
+                    source: 'templates.recommendTemplate (deterministic scorer)',
+                  },
+                }}
+                label="Which answers chose it"
+              />
+            </div>
+          )}
+          {whyRows.length === 0 ? (
+            <p className="text-xs text-ink3">The plan matches the programme as generated — no adjustments to explain yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {whyRows.map(p=> {
+                const rx = rxById.get(p.block.exerciseId);
+                return (
+                  <li key={`${p.block.exerciseId}-${p.index}`} className="space-y-1">
+                    <p className="text-[11px] text-ink2 leading-snug">{rx?.reason || p.explanation.summary}</p>
+                    {/* Cold-start honesty (P2.12): no personalised signal yet
+                        means deterministic priors — say so, and say when it
+                        stops being an estimate. */}
+                    {!p.explanation.personalised && (
+                      <p className="text-[10px] text-ink3">Initial estimate — set from programme defaults; it calibrates to your own logged sets as evidence accumulates.</p>
+                    )}
+                    <WhyExplainer item={rx || null} label="Evidence, inputs & policy" />
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {/* ── Today's focus (P1.1): at most two cues, prioritised from the same
+          prescriptions the Why section shows — guards first, else today's
+          success condition. Nothing new is computed here. ── */}
+      {heroSession && !!coach.focus?.length && (
+        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="Today's focus">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">{today ? 'Today’s focus' : 'Next session’s focus'}</p>
+          <ul className="space-y-2">
+            {coach.focus.map(f=> (
+              <li key={f.id} className="rounded-xl border border-line bg-surface2 px-3 py-2">
+                <p className="text-xs font-bold">{f.title}</p>
+                <p className="text-[11px] text-ink3 mt-0.5 leading-snug">{f.detail}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {heroSession && (
+        <section className="rounded-2xl border border-line bg-surface p-4 space-y-1.5" aria-label="After your workout">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">After the workout</p>
+          <p className="text-xs text-ink2">When you save, Arise will:</p>
+          <ul className="space-y-1">
+            {coach.postWorkout.map(row=> (
+              <li key={row.label} className="text-[11px] text-ink3 leading-snug">
+                <span className="font-semibold text-ink2">{row.label}</span> — {row.detail}
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {/* ── Next best action: ONLY when the cards above haven't answered it.
@@ -312,12 +546,20 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
           <span className="shrink-0 text-xs font-bold px-2.5 py-1 rounded-full bg-surface2 border border-line tabular-nums">{progProgress.done}/{progProgress.total} • {progProgress.pct}%</span>
         </summary>
         <div className="px-4 pb-4 space-y-3">
+          {/* ── Programme as an adaptive object (P2.6): the START → TRAIN →
+              ADAPT → REVIEW → COMPLETE → NEXT BLOCK loop, narrated from the
+              records the schedule already keeps — one tap from Today instead
+              of reconstructed across screens. */}
+          <ProgrammeLifecycle schedule={sched} history={store.history || []} lastReviewAck={store.lastWeeklyReviewAck || null} />
           {/* ── What changed and why: one shared, inspectable audit trail ── */}
           <WhatChangedPanel schedule={sched} history={store.history || []} compact />
         </div>
       </details>
 
-      {/* ── Secondary: level + performance one tap back — full breakdown in Progress. */}
+      {/* ── Secondary: level + performance one tap back — full breakdown in
+          Progress. Hidden in simple mode (essentials-first display gate). */}
+      {!simple && (
+        <>
       <section className="rounded-2xl border border-line bg-surface p-4 flex items-center gap-4">
         <button onClick={onOpenProgress} className="flex items-center gap-4 text-left flex-1 min-w-0" aria-label="View attributes and level in Progress">
           <span aria-hidden className="text-xl">📊</span>
@@ -329,6 +571,8 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
         </button>
       </section>
       <p className="text-[11px] text-ink3 px-1">Level and XP reward the habits Arise can see — showing up, doing planned work, logging well. Strength and capacity trends are separate and only claim improvement when your sessions support it.</p>
+        </>
+      )}
     </div>
     </>
   );

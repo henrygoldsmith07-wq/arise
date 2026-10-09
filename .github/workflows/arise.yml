@@ -84,11 +84,13 @@ jobs:
       - name: Smoke gate - logging-time metric
         run: npm run benchmark:logging
       # -- Bundle size diff reporting -----------------------------------------
-      # Advisory (10 kB allowance): posts the per-chunk gzip delta vs main as
-      # a PR comment so growth is a conversation, not a surprise.
+      # Advisory (15 kB allowance): posts the per-chunk gzip delta vs main as
+      # a PR comment so growth is a conversation, not a surprise. Raised from
+      # 10 kB with the adaptive-coach round — rationale in bundle-budget.cjs
+      # (requested product logic in lazy routes, no new dependencies).
       - name: Bundle size diff vs main
         if: github.event_name == 'pull_request'
-        run: node scripts/bundle-diff.cjs --check 10 | tee bundle-diff.md
+        run: node scripts/bundle-diff.cjs --check 15 | tee bundle-diff.md
       - name: Comment bundle diff on the PR
         if: github.event_name == 'pull_request'
         uses: marocchino/sticky-pull-request-comment@v3

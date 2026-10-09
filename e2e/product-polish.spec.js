@@ -117,11 +117,13 @@ test('pound preference makes equipment setup imperial while storage stays kg', a
   await dialog.getByRole('button', { name: 'Next' }).click();
   await dialog.getByRole('button', { name: 'Next' }).click();
   await dialog.getByLabel(/Barbell/i).click();
+  // Barbell load setup moved to the final "Fine-tune preferences" step: the
+  // kit step only declares what you own, rounding config is optional polish.
+  await dialog.getByRole('button', { name: 'Next' }).click();
+  await dialog.getByRole('button', { name: 'Next' }).click();
   await expect(dialog.getByRole('button', { name: '44.09 lb bar', exact: true })).toBeVisible();
   await expect(dialog.getByRole('button', { name: '44.09 lb', exact: true })).toBeVisible();
   await dialog.getByRole('button', { name: '44.09 lb bar', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Next' }).click();
-  await dialog.getByRole('button', { name: 'Next' }).click();
   await dialog.getByRole('button', { name: 'Save & continue' }).click();
 
   const stored = await page.evaluate(async () => {

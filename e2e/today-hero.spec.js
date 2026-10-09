@@ -40,9 +40,16 @@ async function dismissConsent(page){
 
 async function scheduleProgram(page){
   await page.getByRole('button', { name: 'Train', exact: true }).click();
+  // First-value onboarding auto-starts the recommended programme, so a fresh
+  // profile may already carry a current programme — in which case there is
+  // nothing left to pick. Wait for the Train view to settle before branching.
+  const current = page.locator('[aria-label="Current programme"]');
   // Recommendation-first: one tap starts the recommended programme.
   const recCard = page.locator('[aria-label="Recommended for you"]');
-  if (await recCard.getByRole('button', { name: 'Start programme' }).isVisible().catch(() => false)) {
+  await expect(current.or(recCard)).toBeVisible({ timeout: 8_000 });
+  if (await current.isVisible().catch(() => false)) {
+    // Already scheduled by the first-plan auto-start.
+  } else if (await recCard.getByRole('button', { name: 'Start programme' }).isVisible().catch(() => false)) {
     await recCard.getByRole('button', { name: 'Start programme' }).click();
   } else {
     await page.getByRole('button', { name: 'Browse programmes' }).click();

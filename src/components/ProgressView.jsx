@@ -12,8 +12,9 @@ import { exerciseHistorySummary, plateauDetection, programAdherence, recommendat
 import { badSessionAttribution, plateauAttribution } from '../lib/sessionQuality.js';
 import { workoutQualityReport } from '../lib/workoutQualityReport.js';
 import { investigatePlateau } from '../lib/plateauInvestigation.js';
-import { evaluateExperiment, experimentDaysRemaining } from '../lib/trainingExperiments.js';
+import { evaluateExperiment, experimentDaysRemaining, EXPERIMENT_PRESETS } from '../lib/trainingExperiments.js';
 import { suggestNextExperiment, startExperiment, concludeExperimentById, cancelExperimentById, deleteExperiment } from '../services/experimentService.js';
+import TrainingProfileCard from './TrainingProfileCard.jsx';
 import { longitudinalSummaryAsync } from '../lib/analyticsWorker.js';
 import { isSimpleView, isExpertView } from '../lib/experienceMode.js';
 import { milestoneState, trainingAgeDisplay, consistencyInsights, healthyStreak, monthlyDigest, nextBestAction, progressAssessment, whatChangedSummary, coachingCalibration, coachingEvidence, shadowAgreement } from '../lib/product.js';
@@ -158,6 +159,20 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       .slice(0,5);
   }, [history, store.readinessLog]);
 
+  // ── Question-first interpretation (P2.9): which lifts are actually
+  //    improving — the same evidence-gated trends Performance shows below,
+  //    surfaced as an answer instead of a chart. ──
+  const improvingTrends = perf.strength.filter(t=> t.status === 'improving');
+  const stallKindLabel = kind=> kind === 'genuine' ? 'likely stalled' : kind === 'mixed' ? 'mixed signals' : 'fatigue-driven';
+  // The five cross-exercise checks for the top genuine stall — the same engine
+  // Exercise history uses, surfaced where the stall is named ("We checked…")
+  // and collapsed until asked for (spec #13). Runs only when a real stall exists.
+  const topStallCheck = useMemo(()=> {
+    const top = plateauRows.find(row=> row.result.kind === 'genuine');
+    if(!top) return null;
+    return investigatePlateau(history, top.exerciseId, { readinessLog: store.readinessLog || [] });
+  }, [plateauRows, history, store.readinessLog]);
+
   // ── Post-workout debrief: what went well / what limited you / next session,
   // computed on demand from the last session (the save-time report lives in the
   // toast; this card makes it persistent and inspectable).
@@ -169,6 +184,19 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       schedule: store.activeSchedule || null,
     });
   }, [history, store.readinessLog, store.activeSchedule]);
+
+  // ── Post-workout debrief confidence (P3.12): framed from the report's own
+  //    two independent signals — target met vs beat your last comparable
+  //    session. Both agreeing is strong; one is some; neither is one session
+  //    proving little. No new math, no invented certainty.
+  const debriefConfidence = useMemo(()=> {
+    if(!lastQuality) return null;
+    const hit = lastQuality.target?.hit === true;
+    const beat = lastQuality.beatsPrevious === true;
+    if(hit && beat) return { label: 'High confidence:', detail: 'the target was met AND you beat your last comparable session — two independent signals agree.' };
+    if(hit || beat) return { label: 'Medium confidence:', detail: hit ? 'the target was met; your last comparable session was similar.' : 'you beat your last comparable session, though some targets were missed.' };
+    return { label: 'Low confidence:', detail: 'one session proves little on its own — Arise watches the next exposure before calling a trend.' };
+  }, [lastQuality]);
 
   // ── Plateau investigation: when the selected exercise's plateau is real,
   // run the five cross-exercise checks and attach the recommendation.
@@ -240,26 +268,6 @@ export default function ProgressView({ store, setStore = null, onStart = null })
         </p>
       </div>
 
-      <div className="rounded-2xl border border-line bg-surface p-4 flex items-center gap-4">
-        <div className="w-14 h-14 rounded-2xl bg-ink text-bg grid place-items-center font-black text-lg shrink-0">{xp.level}</div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold truncate">Arise Level {xp.level} — {xp.title}</p>
-          <p className="text-xs text-ink3">{xp.xpIntoLevel}/{xp.xpForNext} XP to level {xp.level + 1} • {history.length} sessions {adherence.total ? `• ${adherence.done}/${adherence.total} planned done` : ''}</p>
-          <div className="mt-2 h-1.5 rounded-full bg-surface2 max-w-48 overflow-hidden"><div className="h-full bg-ink transition-all" style={{width:`${xp.progressPct}%`}} /></div>
-          <p className="text-[11px] text-ink3 mt-1">{xp.framing}</p>
-        </div>
-        <div className="ml-auto shrink-0 flex gap-4 text-xs">
-          <div>
-            <p className="font-bold tabular-nums">{fmtWeight(vol, unitsPref)}</p>
-            <p className="text-ink3">volume</p>
-          </div>
-          <div className="pl-4 border-l border-line">
-            <p className="font-bold">{hs.framing}</p>
-            <p className="text-ink3">training run{hs.lapsed ? ' — fresh start' : ''}</p>
-          </div>
-        </div>
-      </div>
-
       {/* ── Am I improving? Evidence-gated verdict, not volume alone ── */}
       {assessment && (
         <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="Am I improving">
@@ -297,6 +305,93 @@ export default function ProgressView({ store, setStore = null, onStart = null })
         </section>
       )}
 
+      {/* ── The five questions (P2.9): interpretation before any chart ──
+          What improved / What stalled / Why might it be happening — answered
+          from the same trends, attribution and plateau engines that Performance
+          and Exercise history use below. This block interprets; detail charts
+          stay underneath. ── */}
+      {history.length > 0 && (
+        <section className="rounded-2xl border border-line bg-surface p-4 space-y-3" aria-label="What improved, what stalled">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">What improved?</p>
+            {improvingTrends.length ? (
+              <ul className="mt-1.5 space-y-1.5">
+                {improvingTrends.slice(0, 3).map(t=> (
+                  <li key={t.exerciseId} className="text-xs">
+                    <span className="font-bold text-ink">{EXERCISE_BY_ID[t.exerciseId]?.name || t.exerciseId}</span>{' '}
+                    <span className="font-bold text-success">↑ improving</span>
+                    <span className="block text-[11px] text-ink3">{t.explanation} · {confidenceLanguage(t.confidence)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-ink3 mt-1">No clear trend yet — Arise needs at least 3 comparable sessions per exercise before calling one. Personal bests still count when they beat noise (see PRs below).</p>
+            )}
+          </div>
+
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">What stalled?</p>
+            {plateauRows.length ? (
+              <ul className="mt-1.5 space-y-1.5">
+                {plateauRows.map(row=> (
+                  <li key={row.exerciseId} className="flex items-baseline gap-2 text-xs">
+                    <span className="font-bold text-ink truncate">{EXERCISE_BY_ID[row.exerciseId]?.name || row.exerciseId}</span>
+                    <span className={`ml-auto shrink-0 text-[10px] font-bold uppercase tracking-wide ${row.result.kind === 'genuine' ? 'text-review' : 'text-ink3'}`}>{stallKindLabel(row.result.kind)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-ink3 mt-1">Nothing has stalled — recent performance on your tracked lifts is stable, or too new to call.</p>
+            )}
+          </div>
+
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Why might it be happening?</p>
+            <div className="mt-1.5 space-y-2">
+              {/* Recent-session attribution: fatigue vs an isolated bad day —
+                  the read the old Training-feedback section carried, kept. */}
+              {expert ? (
+                <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5">
+                  <p className="text-xs font-bold">Recent session attribution <span className="font-normal text-ink3">— {confidenceLanguage(badAttribution.confidence, badAttribution.confidence === 'high' ? 'repeated signals support this read' : badAttribution.confidence === 'medium' ? 'a consistent pattern points this way' : 'one session alone can’t say much')}</span></p>
+                  <p className="text-xs mt-1">{badAttribution.reason}</p>
+                  {!!badAttribution.evidence?.length && <p className="text-[11px] text-ink3 mt-1">Evidence: {badAttribution.evidence.join(' · ')}</p>}
+                  <p className="text-[11px] text-ink3 mt-1">Next: {badAttribution.action}</p>
+                </div>
+              ) : (
+                <p className="text-xs text-ink3">{badAttribution.reason} <span className="text-ink3">({confidenceLanguage(badAttribution.confidence, 'based on how many sessions it can compare')})</span></p>
+              )}
+              {plateauRows.slice(0, 2).map((row, index)=> {
+                const ex = EXERCISE_BY_ID[row.exerciseId];
+                const isTop = index === 0 && row.result.kind === 'genuine';
+                return (
+                  <div key={row.exerciseId} className="rounded-xl border border-line bg-surface2 px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-bold truncate">{ex?.name || row.exerciseId}</p>
+                      <span className={`ml-auto text-[10px] font-bold uppercase tracking-wide ${row.result.kind === 'genuine' ? 'text-review' : 'text-ink3'}`}>{stallKindLabel(row.result.kind)}</span>
+                    </div>
+                    <p className="text-[11px] mt-1">{row.result.reason}</p>
+                    <p className="text-[11px] text-ink3 mt-1">Next: {row.result.action}</p>
+                    {isTop && topStallCheck && (
+                      <details className="mt-1.5">
+                        <summary className="text-[11px] font-semibold cursor-pointer">We checked</summary>
+                        <ul className="mt-1 space-y-0.5">
+                          {topStallCheck.checks.map(check=> (
+                            <li key={check.id} className="text-[11px] leading-snug">
+                              <span className={`font-bold ${check.verdict === 'cause' ? 'text-review' : check.verdict === 'clear' ? 'text-success' : 'text-ink2'}`}>{check.label}</span>{' — '}
+                              <span className="text-ink3">{check.finding}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* ── What changed: one shared, inspectable audit trail ── */}
       {changes.length > 0 && (
         <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="What changed">
@@ -304,6 +399,39 @@ export default function ProgressView({ store, setStore = null, onStart = null })
           <p className="text-[11px] text-ink3">Every change is a deterministic rule applied to your logged sessions — the reasons are verbatim from the decision that made it.</p>
         </section>
       )}
+
+      {/* ── What happened: the post-workout debrief sits inside the loop —
+          observed outcome here, so Next best action below reads as the next
+          decision rather than generic advice (P1.4/P1.5). ── */}
+      {history.length && lastQuality ? (
+        <section className="rounded-2xl border border-line bg-surface p-4" data-testid="last-quality-report">
+          <div className="flex items-baseline gap-2">
+            <h3 className="text-sm font-bold">Last session summary</h3>
+            <span className={`ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full border ${lastQuality.beatsPrevious ? 'border-success text-success' : 'border-line text-ink3'}`}>{lastQuality.band}</span>
+          </div>
+          <div className="mt-2 rounded-xl border border-line bg-surface2 px-3 py-3">
+            <p className="text-xs text-ink3">{lastQuality.target ? `${lastQuality.target.hit ? '✓' : '△'} ${lastQuality.target.detail} · ` : ''}{lastQuality.lowReadiness ? 'low-readiness day — judged gently' : ''}{lastQuality.sustainableEffort ? ' · effort kept sustainable' : ''}</p>
+            {debriefConfidence && (
+              <p className="text-[11px] text-ink2 mt-1"><span className="font-semibold">{debriefConfidence.label}</span> {debriefConfidence.detail}</p>
+            )}
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-success">What went well</p>
+                <ul className="mt-1 space-y-0.5">{lastQuality.whatWentWell.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}</ul>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-review">What limited you</p>
+                <ul className="mt-1 space-y-0.5">{lastQuality.whatLimitedYou.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}</ul>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-ink3">Next session</p>
+                <ul className="mt-1 space-y-0.5">{lastQuality.whatToChangeNext.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}</ul>
+              </div>
+            </div>
+            <p className="mt-2 text-right text-sm font-black tabular-nums" data-testid="quality-score">{lastQuality.quality}/100</p>
+          </div>
+        </section>
+      ) : null}
 
       {/* ── Next best action: one piece of guidance, never a nag ── */}
       <section className="rounded-2xl border border-line bg-surface p-4 flex items-center gap-3" aria-label="Suggested next step">
@@ -373,6 +501,28 @@ export default function ProgressView({ store, setStore = null, onStart = null })
         </section>
       )}
 
+      {/* ── Arise Level: the habit layer, grouped with the rest of the XP UI.
+          P2.9 keeps Progress opening on interpretation, not a level badge. ── */}
+      <div className="rounded-2xl border border-line bg-surface p-4 flex items-center gap-4">
+        <div className="w-14 h-14 rounded-2xl bg-ink text-bg grid place-items-center font-black text-lg shrink-0">{xp.level}</div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold truncate">Arise Level {xp.level} — {xp.title}</p>
+          <p className="text-xs text-ink3">{xp.xpIntoLevel}/{xp.xpForNext} XP to level {xp.level + 1} • {history.length} sessions {adherence.total ? `• ${adherence.done}/${adherence.total} planned done` : ''}</p>
+          <div className="mt-2 h-1.5 rounded-full bg-surface2 max-w-48 overflow-hidden"><div className="h-full bg-ink transition-all" style={{width:`${xp.progressPct}%`}} /></div>
+          <p className="text-[11px] text-ink3 mt-1">{xp.framing}</p>
+        </div>
+        <div className="ml-auto shrink-0 flex gap-4 text-xs">
+          <div>
+            <p className="font-bold tabular-nums">{fmtWeight(vol, unitsPref)}</p>
+            <p className="text-ink3">volume</p>
+          </div>
+          <div className="pl-4 border-l border-line">
+            <p className="font-bold">{hs.framing}</p>
+            <p className="text-ink3">training run{hs.lapsed ? ' — fresh start' : ''}</p>
+          </div>
+        </div>
+      </div>
+
       {/* ── Recent XP: why each point was earned ── */}
       {!!xp.recent.length && (
         <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="Recent XP">
@@ -440,33 +590,9 @@ export default function ProgressView({ store, setStore = null, onStart = null })
         {!!wv.length && <p className="text-xs text-ink3 mt-2">{wv[wv.length-1]?.vol> (wv[wv.length-2]?.vol||0)*1.2 ? `Volume up ${Math.round((wv[wv.length-1].vol/(wv[wv.length-2]?.vol||1)-1)*100)}% vs last week — hold steady or deload if RPE was high.` : wv[wv.length-1]?.vol < (wv[wv.length-2]?.vol||0)*0.8 ? 'Volume dipped — good if planned deload, otherwise add a session.' : 'Trends look steady — keep progressing where RIR ≥2.'}</p>}
       </section>
 
-      <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
-        <div>
-          <h3 className="text-sm font-bold">Training feedback</h3>
-          <p className="text-xs text-ink3">Separates a genuine plateau from fatigue or an isolated bad session.</p>
-        </div>
-        {expert ? (
-        <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5">
-          <p className="text-xs font-bold">Recent session attribution <span className="font-normal text-ink3">— {confidenceLanguage(badAttribution.confidence, badAttribution.confidence === 'high' ? 'repeated signals support this read' : badAttribution.confidence === 'medium' ? 'a consistent pattern points this way' : 'one session alone can’t say much')}</span></p>
-          <p className="text-xs mt-1">{badAttribution.reason}</p>
-          {!!badAttribution.evidence?.length && <p className="text-[11px] text-ink3 mt-1">Evidence: {badAttribution.evidence.join(' · ')}</p>}
-          <p className="text-[11px] text-ink3 mt-1">Next: {badAttribution.action}</p>
-        </div>
-        ) : (
-          <p className="text-xs text-ink3">{badAttribution.reason} <span className="text-ink3">({confidenceLanguage(badAttribution.confidence, 'based on how many sessions it can compare')})</span></p>
-        )}
-        {!!plateauRows.length && <div className="space-y-2">
-          {plateauRows.map(row=> {
-            const ex=EXERCISE_BY_ID[row.exerciseId];
-            const kind=row.result.kind==='bad-sessions' ? 'fatigue-driven' : row.result.kind;
-            return <div key={row.exerciseId} className="rounded-xl border border-line bg-surface2 px-3 py-2.5">
-              <div className="flex items-center gap-2"><p className="text-xs font-bold truncate">{ex?.name || row.exerciseId}</p><span className="ml-auto text-[10px] font-bold uppercase tracking-wide text-ink3">{kind}</span></div>
-              <p className="text-[11px] mt-1">{row.result.reason}</p>
-              <p className="text-[11px] text-ink3 mt-1">Next: {row.result.action}</p>
-            </div>;
-          })}
-        </div>}
-      </section>
+      {/* The former "Training feedback" section now lives above as the
+          What improved / What stalled / Why questions (P2.9) — same
+          attribution and plateau output, one home, no duplicate. */}
 
       {expert && !!Object.keys(landmarks).length && (
         <section className="rounded-2xl border border-line bg-surface p-4">
@@ -767,32 +893,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
         </section>
       )}
 
-      {history.length && lastQuality ? (
-        <section className="rounded-2xl border border-line bg-surface p-4" data-testid="last-quality-report">
-          <div className="flex items-baseline gap-2">
-            <h3 className="text-sm font-bold">Last session summary</h3>
-            <span className={`ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full border ${lastQuality.beatsPrevious ? 'border-success text-success' : 'border-line text-ink3'}`}>{lastQuality.band}</span>
-          </div>
-          <div className="mt-2 rounded-xl border border-line bg-surface2 px-3 py-3">
-            <p className="text-xs text-ink3">{lastQuality.target ? `${lastQuality.target.hit ? '✓' : '△'} ${lastQuality.target.detail} · ` : ''}{lastQuality.lowReadiness ? 'low-readiness day — judged gently' : ''}{lastQuality.sustainableEffort ? ' · effort kept sustainable' : ''}</p>
-            <div className="mt-2 grid gap-2 sm:grid-cols-3">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-success">What went well</p>
-                <ul className="mt-1 space-y-0.5">{lastQuality.whatWentWell.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}</ul>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-review">What limited you</p>
-                <ul className="mt-1 space-y-0.5">{lastQuality.whatLimitedYou.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}</ul>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-ink3">Next session</p>
-                <ul className="mt-1 space-y-0.5">{lastQuality.whatToChangeNext.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}</ul>
-              </div>
-            </div>
-            <p className="mt-2 text-right text-sm font-black tabular-nums" data-testid="quality-score">{lastQuality.quality}/100</p>
-          </div>
-        </section>
-      ) : null}
+      <TrainingProfileCard store={store} />
 
       <section className="rounded-2xl border border-line bg-surface p-4" aria-label="Training experiments">
         <div className="flex items-baseline gap-2">
@@ -845,6 +946,11 @@ export default function ProgressView({ store, setStore = null, onStart = null })
                     {evaluation.baselineMean != null ? `Baseline ~${evaluation.baselineMean}` : 'Baseline —'} → {evaluation.interventionMean != null ? `intervention ~${evaluation.interventionMean}` : 'intervention —'} · confidence {evaluation.confidence}
                     {experiment.conclusionNote ? ` · ${experiment.conclusionNote}` : ''}
                   </p>
+                  {/* Honest limitations (P2.8): a concluded experiment with
+                      thin data says so — "inconclusive" is a valid result. */}
+                  {experiment.status === 'completed' && evaluation.confidence === 'low' ? (
+                    <p className="text-[10px] text-ink3 mt-0.5">Limitations: not enough comparable data for a firm call — treat this as indicative, not proven.</p>
+                  ) : null}
                   {canManageExperiments && experiment.status === 'active' ? (
                     <div className="mt-1.5 flex gap-3">
                       <button type="button" onClick={()=> doConclude(experiment.id)} className="text-[11px] font-bold underline underline-offset-2" data-testid="experiment-conclude">Conclude now</button>
@@ -908,14 +1014,32 @@ function ExperimentForm({ history = [], exerciseOptions = [], initial = null, on
   const [question, setQuestion] = useState(initial?.question || '');
   const [exerciseId, setExerciseId] = useState(initial?.exerciseId || '');
   const [interventionNote, setInterventionNote] = useState('');
+  const [metric, setMetric] = useState(initial?.metric || 'strength');
   const hasHistory = history.length > 0;
-  const canSubmit = hasHistory && name.trim() && (exerciseId || initial?.metric === 'session-quality');
+  const canSubmit = hasHistory && name.trim() && (exerciseId || metric === 'session-quality');
   return (
     <form
       className="mt-2 rounded-xl border border-line bg-surface2 px-3 py-2 space-y-2"
-      onSubmit={(e)=> { e.preventDefault(); if(canSubmit) onSubmit({ name, question, exerciseId: exerciseId || null, interventionNote: interventionNote || null, metric: 'strength' }); }}
+      onSubmit={(e)=> { e.preventDefault(); if(canSubmit) onSubmit({ name, question, exerciseId: exerciseId || null, interventionNote: interventionNote || null, metric }); }}
       data-testid="experiment-form"
     >
+      {/* Productised flow (P2.8): ordinary users start from a QUESTION, not a
+          form. Presets are the engine's own EXPERIMENT_PRESETS — the baseline
+          still comes from history that already exists. */}
+      <div>
+        <span className="block text-[10px] font-bold uppercase tracking-widest text-ink3">Ask a question</span>
+        <div className="mt-1 flex flex-wrap gap-1">
+          {EXPERIMENT_PRESETS.map(preset=> (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={()=> { setName(preset.label); setQuestion(preset.question); setMetric(preset.metric || 'strength'); }}
+              className="rounded-full border border-line bg-surface px-2.5 py-1.5 text-[10px] font-bold text-ink2 hover:border-ink3 min-h-8"
+            >{preset.label}</button>
+          ))}
+        </div>
+        <p className="text-[10px] text-ink3 mt-1">Tap a question or write your own — Arise builds the baseline from your logged history automatically.</p>
+      </div>
       <div>
         <label className="block text-[10px] font-bold uppercase tracking-widest text-ink3" htmlFor="experiment-name">What are you testing?</label>
         <input
