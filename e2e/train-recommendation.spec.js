@@ -30,6 +30,21 @@ async function completeOnboarding(page){
   if(await consent.isVisible().catch(() => false)){
     await consent.getByRole('button', { name: 'No thanks' }).click();
   }
+  // First-value onboarding auto-starts the recommended programme, but these
+  // tests study the recommendation surface itself, which renders only when no
+  // programme is active. Clear the auto-started plan through the product's own
+  // affordance to reach that precondition; tests that need an active programme
+  // (priority) start one from the card below.
+  await page.getByRole('button', { name: 'Train', exact: true }).click();
+  const current = page.locator('[aria-label="Current programme"]');
+  const recCard = page.locator('[aria-label="Recommended for you"]');
+  // Wait for the Train view to settle before branching — on a slow runner the
+  // tab switch can lag well behind the click.
+  await expect(current.or(recCard)).toBeVisible({ timeout: 8_000 });
+  if(await current.isVisible().catch(() => false)){
+    await page.getByRole('button', { name: 'Clear schedule' }).click();
+    await expect(current).toBeHidden();
+  }
 }
 
 test.describe('Train — recommendation first', () => {

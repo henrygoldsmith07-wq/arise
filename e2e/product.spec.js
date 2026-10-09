@@ -67,13 +67,13 @@ test.describe('Demo mode', () => {
     // scheduled session and Progress shows real derived numbers.
     await expect(page.getByRole('dialog', { name: 'Onboarding' })).toBeHidden();
     await expect(page.getByText(/Today|Up next/).first()).toBeVisible();
-    await page.getByRole('button', { name: 'Progress', exact: true }).click();
+    await tapTab(page, 'Progress');
     await expect(page.getByText(/Training age/).first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/Milestones/)).toBeVisible();
 
     // Export is disabled while demo data is loaded (sample data never
     // masquerades as the user's own backup).
-    await page.getByRole('button', { name: 'More' }).click();
+    await tapTab(page, 'More');
     await expect(page.getByRole('button', { name: 'Export JSON' })).toBeDisabled();
 
     // One-tap exit wipes back to a genuinely empty app. The confirmation is
