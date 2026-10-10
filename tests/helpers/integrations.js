@@ -1,5 +1,5 @@
-// Tests that exercise the optional cloud integrations (NVIDIA coach,
-// classifier.dev, Pulse) only make sense in a build that contains them.
+// Tests that exercise the optional cloud integrations (classifier.dev, Pulse) only
+// make sense in a build that contains them.
 //
 // The shipped default compiles those out — see src/lib/integrations.js — so
 // under a plain `npm test` these suites skip rather than fail, and say exactly

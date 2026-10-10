@@ -2,7 +2,7 @@
 // server that actually contains the optional cloud integrations.
 //
 // `npm run e2e` runs with VITE_ARISE_INTEGRATIONS unset, which is the shipped
-// default: specs that drive the NVIDIA coach or classifier.dev correctly skip
+// default: specs that drive the classifier.dev integration correctly skip
 // themselves rather than passing vacuously. This pass re-runs them for real.
 //
 // The env var reaches BOTH the Playwright runner (so it decides which specs

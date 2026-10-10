@@ -48,8 +48,8 @@ describe('content security policy', ()=>{
     const external = connectSrc.replace('connect-src', '').trim().split(/\s+/).filter(o=> o !== "'self'");
     assert.deepEqual(
       external,
-      ['https://bryllim.github.io'],
-      'with integrations compiled out, the illustration CDN is the only external connect target',
+      ['https://bryllim.github.io', 'http://127.0.0.1:11434', 'http://localhost:11434', 'http://[::1]:11434'],
+      'with integrations compiled out, the illustration CDN and loopback origins are the only external connect targets',
     );
   });
 
@@ -60,7 +60,7 @@ describe('content security policy', ()=>{
 
   it('keeps the integration origins out of the default build', ()=>{
     const policy = cspFromIndex();
-    assert.ok(!policy.includes('integrate.api.nvidia.com'), 'NVIDIA must not be reachable in the default build');
+    assert.ok(!policy.includes('integrate.api.nvidia.com'), 'the old NVIDIA endpoint must not be allowlisted');
     assert.ok(!policy.includes('classifier.dev'), 'classifier.dev must not be reachable in the default build');
   });
 
@@ -95,9 +95,11 @@ describe('integration build flag', ()=>{
     const on = buildCsp(true);
     assert.ok(!off.includes('integrate.api.nvidia.com'));
     assert.ok(!off.includes('classifier.dev'));
+    // Loopback is always permitted (local-first coach default).
+    assert.ok(off.includes('http://127.0.0.1:11434'));
     // The flag must actually change the policy, or "off" is meaningless.
-    assert.ok(on.includes('https://integrate.api.nvidia.com'));
     assert.ok(on.includes('https://classifier.dev'));
+    assert.ok(!on.includes('integrate.api.nvidia.com'));
   });
 
   it('is a compile-time constant, not a runtime setting', ()=>{

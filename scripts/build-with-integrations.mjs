@@ -2,8 +2,9 @@
 // integrations compiled in.
 //
 // The default `npm run build` (and therefore every hosted deploy) leaves
-// VITE_ARISE_INTEGRATIONS unset, which compiles the NVIDIA coach,
-// classifier.dev and Pulse paths out and strips their origins from the CSP.
+// VITE_ARISE_INTEGRATIONS unset, which compiles the classifier.dev and Pulse
+// paths out and strips their origins from the CSP. The AI coach defaults to a
+// local loopback endpoint instead.
 //
 // This wrapper exists so the integrations can still be built, reviewed and
 // tested without a new dependency: it sets the env var for the child process

@@ -1,10 +1,12 @@
 import { aiCoachRoute, buildTrainingContext, COACH_FEEDBACK_URL, requestCoachInsight, saveAiSettings } from '../lib/aiCoach.js';
 
-export async function runCoachRequest({ question, store, apiKey, model, persistKey = false }){
+export async function runCoachRequest({ question, store, apiKey, baseUrl, model, persistKey = false }){
   const prompt = String(question || '').trim();
   if(!prompt) return { ok:false, error:'Ask a question first.' };
   const key = String(apiKey || '').trim();
-  saveAiSettings({ apiKey:key, model, enabled:true, persistKey });
+  const ep = String(baseUrl || '').trim();
+  if(ep) saveAiSettings({ apiKey:key, baseUrl:ep, model, enabled:true, persistKey });
+  else saveAiSettings({ apiKey:key, model, enabled:true, persistKey });
   const route = await aiCoachRoute(prompt);
   if(route.lane === 'feedback-pipeline'){
     return { ok:true, text:`That sounds like something to report. Please open an issue and include your support bundle (More → Data → Export support bundle).\n\n${COACH_FEEDBACK_URL}` };
@@ -21,5 +23,5 @@ export async function runCoachRequest({ question, store, apiKey, model, persistK
     readinessLog: store?.readinessLog || [],
     customTemplates: store?.customTemplates || [],
   });
-  return requestCoachInsight({ context, apiKey:key, model });
+  return requestCoachInsight({ context, apiKey:key, baseUrl:ep || undefined, model });
 }

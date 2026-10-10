@@ -24,8 +24,16 @@ const path = require('node:path');
 const ROOT = path.join(__dirname, '..');
 const ILLUSTRATION_HOST = 'https://bryllim.github.io';
 
+// Loopback origins are always permitted for connect-src: the out-of-box AI
+// coach runs against a local endpoint (Ollama / llama.cpp) on 127.0.0.1, and
+// WebDAV sync is a user-configured option. Loopback HTTP is safe under CSP
+// because no third party ever receives the traffic; the threat CSP mitigates is
+// exfiltration to foreign origins, and localhost/loopback are by definition
+// "this device".
+const LOOPBACK_ORIGINS = ['http://127.0.0.1:11434', 'http://localhost:11434', 'http://[::1]:11434'];
+
 // Hosts each optional integration needs. Emitted only when compiled in.
-const INTEGRATION_ORIGINS = ['https://integrate.api.nvidia.com', 'https://classifier.dev'];
+const INTEGRATION_ORIGINS = ['https://classifier.dev'];
 
 // Pure: the tests call this with both values so they can assert on a build
 // configuration they are not currently running.
@@ -33,6 +41,7 @@ function buildCsp(integrationsOn){
   const connectSrc = [
     "'self'",
     ILLUSTRATION_HOST,
+    ...LOOPBACK_ORIGINS,
     ...(integrationsOn ? INTEGRATION_ORIGINS : []),
   ];
   return [
@@ -54,7 +63,7 @@ function buildCsp(integrationsOn){
 const INTEGRATIONS_ON = String(process.env.VITE_ARISE_INTEGRATIONS || 'off').toLowerCase() === 'on';
 const CSP = buildCsp(INTEGRATIONS_ON);
 
-module.exports = { buildCsp, CSP, INTEGRATIONS_ON, ILLUSTRATION_HOST, INTEGRATION_ORIGINS };
+module.exports = { buildCsp, CSP, INTEGRATIONS_ON, ILLUSTRATION_HOST, INTEGRATION_ORIGINS, LOOPBACK_ORIGINS };
 
 // Rewriting the files is a BUILD step, not a module side effect. Without this
 // guard the test suite — which imports this file to check the policy — silently

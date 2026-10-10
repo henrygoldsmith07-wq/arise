@@ -58,7 +58,7 @@ describe('More surface: intent-grouped layout', ()=>{
   });
 
   it('keeps the e2e-asserted text and form labels', ()=>{
-    for(const text of ['Time for a backup','Cross-device sync merges deterministically','Feedback & issue triage','Take part in the real-world study','Insufficient real-user evidence','Ask the coach','NVIDIA API key','Describe the issue or request','Cloud-assisted feedback categorisation','Cloud-assisted coach request routing']){
+    for(const text of ['Time for a backup','Cross-device sync merges deterministically','Feedback & issue triage','Take part in the real-world study','Insufficient real-user evidence','Ask the coach','Endpoint URL','Describe the issue or request','Cloud-assisted feedback categorisation','Cloud-assisted coach request routing']){
       assert.ok(shows(text), `e2e text missing: ${text}`);
     }
     // feedback-triage asserts the coach result inside #sec-ai — that section

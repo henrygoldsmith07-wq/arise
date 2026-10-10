@@ -100,6 +100,7 @@ function tx(db, store, mode, fn){
 }
 
 let sharedFallback = null;
+let fallbackError = null;
 function fallback(){
   // One shared in-memory instance whenever a real DB is unavailable or fails
   // to open — per-call construction silently loses every write.
@@ -130,9 +131,21 @@ async function backend(){
         clearStore: (store)=> tx(db, store, 'readwrite', os => os.clear()),
       };
     }
-  }catch{}
-  return fallback();
+    // indexedDB is undefined (e.g. node tests / very old browsers) — fall back.
+    return fallback();
+  }catch(err){
+    // indexedDB EXISTS but open failed: this is a real persistence failure.
+    // Record the reason so storage.js can surface a clear message instead of
+    // silently operating in throwaway memory mode (where every write is lost
+    // on reload and the user has no idea).
+    fallbackError = err;
+    return fallback();
+  }
 }
+
+// Exposed so storage.js can detect "IDB exists but failed to open" and surface
+// a clear, recoverable error instead of silently falling back to memory.
+export function getFallbackError(){ return fallbackError; }
 
 // In environments without IndexedDB every operation routes through the
 // shared in-memory fallback; otherwise we go straight to the real backend.

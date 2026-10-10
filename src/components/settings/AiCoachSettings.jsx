@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import ToggleRow from './ToggleRow.jsx';
-import { DEFAULT_MODEL, clearAiSettings, getAiSettings } from '../../lib/aiCoach.js';
+import { DEFAULT_MODEL, DEFAULT_BASE_URL, clearAiSettings, getAiSettings, isValidEndpointUrl } from '../../lib/aiCoach.js';
 import { getCoachRoutingSettings, saveCoachRoutingSettings } from '../../lib/feedbackClassifier.js';
 import { runCoachRequest } from '../../services/coachService.js';
 import { INTEGRATIONS_COMPILED_IN } from '../../lib/integrations.js';
@@ -10,6 +10,7 @@ export default function AiCoachSettings({ store }){
   const initial = useMemo(()=> getAiSettings(), []);
   const [apiKeyInput,setApiKeyInput]=useState('');
   const [prompt,setPrompt]=useState('');
+  const [baseUrl,setBaseUrl]=useState(initial.baseUrl || DEFAULT_BASE_URL);
   const [model,setModel]=useState(initial.model || DEFAULT_MODEL);
   const [persistKey,setPersistKey]=useState(initial.persistKey === true);
   const [routingEnabled,setRoutingEnabled]=useState(()=> getCoachRoutingSettings().enabled);
@@ -35,6 +36,7 @@ export default function AiCoachSettings({ store }){
         question:prompt,
         store,
         apiKey:apiKeyInput.trim() || current.apiKey,
+        baseUrl: baseUrl.trim() || current.baseUrl,
         model,
         persistKey,
       });
@@ -54,19 +56,21 @@ export default function AiCoachSettings({ store }){
     flash('AI key cleared from this browser.');
   };
 
+  const endpointValid = baseUrl.trim() ? isValidEndpointUrl(baseUrl) : true;
+
   return (
     <section id="sec-ai" className="rounded-2xl border border-line bg-surface p-4 space-y-2">
       <h3 className="text-sm font-bold">AI coach (optional)</h3>
       {!INTEGRATIONS_COMPILED_IN && (
         <p role="note" className="text-xs text-ink2 bg-surface2 border border-line rounded-xl px-3 py-2">
           <strong>Not available in this build.</strong> This copy of Arise was built
-          without the optional integrations, so it cannot contact NVIDIA or
-          classifier.dev at all — pasting a key below will not change that. The
+          without the optional integrations, so it cannot contact any cloud
+          endpoint at all — pasting a key below will not change that. The
           coach is an explanation layer; your prescriptions come from the local
           deterministic engine either way.
         </p>
       )}
-      <p className="text-xs text-ink3">NVIDIA gets <span className="font-semibold text-ink">aggregated training data and engine findings only</span>. Keys default to session-only and never enter exports, sync, diagnostics or backups.</p>
+      <p className="text-xs text-ink3">The endpoint gets <span className="font-semibold text-ink">aggregated training data and engine findings only</span>. Keys default to session-only and never enter exports, sync, diagnostics or backups. Point it at a local model (loopback) or any OpenAI-compatible API.</p>
       <ToggleRow
         label="Cloud-assisted coach request routing"
         checked={routingEnabled}
@@ -76,8 +80,13 @@ export default function AiCoachSettings({ store }){
       <p className="text-xs text-ink3">Ask the coach routes your request invisibly: deterministic intent rules choose the local engine, the explanation path, or the local feedback queue. Training prescriptions always come from the deterministic engine — the cloud coach only explains.</p>
       <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
         <label className="block">
-          <span className="text-[11px] font-bold">NVIDIA API key</span>
-          <input type="password" value={apiKeyInput} onChange={e=> setApiKeyInput(e.target.value)} placeholder={current.apiKey ? '•••• saved — paste to replace' : 'nvapi-…'} autoComplete="off" className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm" />
+          <span className="text-[11px] font-bold">Endpoint URL</span>
+          <input value={baseUrl} onChange={e=> setBaseUrl(e.target.value)} placeholder="http://127.0.0.1:11434/v1/chat/completions" autoComplete="off" className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-xs font-mono" />
+          <p className="text-[10px] text-ink3 mt-1">Local loopback (http://) or any https OpenAI-compatible endpoint. Defaults to a local model.</p>
+        </label>
+        <label className="block">
+          <span className="text-[11px] font-bold">API key</span>
+          <input type="password" value={apiKeyInput} onChange={e=> setApiKeyInput(e.target.value)} placeholder={current.apiKey ? '•••• saved — paste to replace' : 'sk-…'} autoComplete="off" className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm" />
         </label>
         <label className="block">
           <span className="text-[11px] font-semibold text-ink3">Model</span>
@@ -90,7 +99,7 @@ export default function AiCoachSettings({ store }){
             className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm resize-none" rows={3} maxLength={500} />
         </label>
         <div className="flex flex-wrap gap-2">
-          <button onClick={ask} disabled={busy || !prompt.trim()} className="btn btn-primary min-h-9 rounded-xl px-3 text-xs disabled:opacity-40">{busy ? 'Routing…' : 'Ask'}</button>
+          <button onClick={ask} disabled={busy || !prompt.trim() || !endpointValid} className="btn btn-primary min-h-9 rounded-xl px-3 text-xs disabled:opacity-40">{busy ? 'Routing…' : 'Ask'}</button>
           {current.apiKey && <button onClick={clearKey} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Clear key</button>}
         </div>
         {result && (

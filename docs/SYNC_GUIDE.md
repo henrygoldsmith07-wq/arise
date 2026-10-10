@@ -45,8 +45,10 @@ device last touched what.
 
 - Your storage, your credentials, your file. No third party is introduced
   by syncing — syncing itself only ever talks to your own WebDAV host. The
-  separate, opt-in NVIDIA AI-coach and classifier.dev integrations described
+  separate, opt-in AI-coach and classifier.dev integrations described
   in `docs/PRIVACY.md` are not sync channels and never travel over it.
+  The AI coach defaults to a local loopback endpoint; see
+  `docs/NETWORK_BOUNDARY.md` for the CSP allowlist.
 - With encryption on, the host stores ciphertext only; it cannot read your
   training data.
 - Credentials, passphrase and consent choices stay device-local —

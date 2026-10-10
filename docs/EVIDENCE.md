@@ -40,7 +40,7 @@ the identical prior-only slice.
 - "No significant difference vs double progression" is not equivalence.
 - Transitions are not independent observations: uncertainty in pooled
   analyses comes from participant-clustered bootstrap
-  (`clusteredBootstrapWinRate` in longitudinal.js — deterministic,
+  (`clusteredBootstrapDifference` in evaluation.js — deterministic,
   participant-level resampling), and participant counts are reported beside
   transition counts everywhere.
 - Subgroup slices (by equipment, rep range, frequency, readiness) are
