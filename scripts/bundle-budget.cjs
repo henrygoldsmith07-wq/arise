@@ -211,7 +211,16 @@ const CHUNK_BUDGET_KB = 34;
 // measured total 378.7. The paired bundle-diff allowance moves 10 → 15 kB in
 // the workflow with the same rationale (advisory gate, consciously overridden
 // for requested product logic).
-const TOTAL_BUDGET_KB = 381;
+// total 381 → 386 kB with the local-first AI coach: coachingState.js +
+// trainingProfile.js land in the AiCoachSettings chunk (it already imported
+// both transitively), adding the localCoach.js answerer which composes prose
+// from their outputs. The exercise-name lookup previously pulled the full
+// catalogue into that chunk; it now resolves through coaching state, keeping
+// the delta to the prose template itself. No new dependencies. Boot (109.7
+// ≤ 120) and largest-lazy (26.4 ≤ 34) budgets UNCHANGED; measured total 385.8.
+// NOTE: the pre-existing baseline on Node 22 (CI) measured ~385.5 kB — this
+// re-baseline reconciles local (Node 24) and CI measurements.
+const TOTAL_BUDGET_KB = 386;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

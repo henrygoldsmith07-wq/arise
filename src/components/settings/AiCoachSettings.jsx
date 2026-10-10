@@ -103,8 +103,20 @@ export default function AiCoachSettings({ store }){
           {current.apiKey && <button onClick={clearKey} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Clear key</button>}
         </div>
         {result && (
-          <div role="status" aria-live="polite" className={`rounded-xl border px-3 py-2 text-xs whitespace-pre-wrap ${result.ok ? 'border-line bg-surface' : 'border-amber-300 bg-amber-50 text-amber-900'}`}>
+          <div role="status" aria-live="polite" className={`rounded-xl border px-3 py-2 text-xs whitespace-pre-wrap ${result.ok ? 'border-line bg-surface' : 'border-review/40 bg-reviewsoft text-ink'}`}>
             {result.ok ? result.text : `AI request unavailable: ${result.error}`}
+            {result.ok && (
+              <p className="mt-2 pt-2 border-t border-line text-[10px] text-ink3">
+                {result.offline
+                  ? `Answered on device from the deterministic engine${result.confidence ? ` · confidence ${result.confidence}` : ''}${result.note ? ` · ${result.note}` : ''}. No training data leaves this device.`
+                  : 'Answered by your configured endpoint using the engine\'s findings.'}
+                {result.evidence?.length > 0 && (
+                  <>
+                    {' '}Based on {result.evidence.length} engine finding{result.evidence.length === 1 ? '' : 's'}.
+                  </>
+                )}
+              </p>
+            )}
           </div>
         )}
         {message && <p aria-live="polite" className="text-[11px] text-ink3">{message}</p>}
