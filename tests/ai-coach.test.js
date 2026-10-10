@@ -83,6 +83,7 @@ describe('ai settings storage', ()=>{
       assert.equal(s.baseUrl, 'https://oai.example.com/v1/chat/completions');
       assert.equal(JSON.parse(localMem['arise.ai.settings.v1']).baseUrl, 'https://oai.example.com/v1/chat/completions');
     });
+  });
 
   it('rejects an invalid endpoint URL and falls back to the default', ()=>{
     withStorage(()=>{
@@ -119,7 +120,6 @@ describe('ai settings storage', ()=>{
     assert.equal(isValidEndpointUrl('http://api.example.com/v1'), false);
     assert.equal(isValidEndpointUrl('ftp://127.0.0.1:11434'), false);
   });
-});
 });
 
 describe('training context builder', ()=>{
