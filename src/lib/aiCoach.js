@@ -185,7 +185,7 @@ export function clearAiSettings(){
 
 // ── Context builder: engine findings + aggregated numbers only ─────────
 
-export function buildTrainingContext({ history = [], schedule = null, readinessLog = [], customTemplates = [], config = null } = {}){
+export function buildTrainingContext({ history = [], schedule = null, readinessLog = [], customTemplates = [], config = null, coachState = null } = {}){
   const byWeek = new Map(); // monday -> {sessions, sets, volumeKg}
   for(const h of history || []){
     const d = new Date(`${h?.dateISO || ''}T00:00:00Z`);
@@ -240,8 +240,15 @@ export function buildTrainingContext({ history = [], schedule = null, readinessL
   const recentReadiness = readinessScores.slice(-8);
   void resolveArisePriors; // priors flow through reviewCompletedWeek; kept for future gates
 
+  // The structured coaching state, passed through when a local pass produced it.
+  // This gives a configured endpoint the SAME per-decision evidence the on-device
+  // answer is built from — instead of six weekly aggregates and a directive
+  // list, which is why a model asked to "explain my week" had nothing to say.
+  // Capped: it is a context window, not a dump.
+  const decisions = Array.isArray(coachState) ? coachState.slice(0, 12) : null;
+
   return {
-    contextVersion: 2,
+    contextVersion: 3,
     totals: {
       sessionsLogged: (history || []).length,
       totalSets,
@@ -254,6 +261,7 @@ export function buildTrainingContext({ history = [], schedule = null, readinessL
       ? Math.round(recentReadiness.reduce((a, b)=> a + b, 0) / recentReadiness.length)
       : null,
     engineFindings,
+    ...(decisions?.length ? { engineDecisions: decisions } : {}),
   };
 }
 

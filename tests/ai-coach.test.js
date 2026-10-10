@@ -165,7 +165,7 @@ describe('training context builder', ()=>{
       ],
     };
     const ctx = buildTrainingContext({ history, schedule });
-    assert.equal(ctx.contextVersion, 2);
+    assert.equal(ctx.contextVersion, 3);
     assert.equal(ctx.engineFindings.weeklyReviewReady, true);
     const d = ctx.engineFindings.directives.find(x => x.exerciseId === 'bench-press-dumbbell');
     assert.ok(d, 'expected an engine directive');
