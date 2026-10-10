@@ -54,14 +54,14 @@ export function getInitialTab(){
 
 /**
  * Synchronize a tab change to the URL bar.
- * - On first call (initialTabSeen === false), replaces the current history
- *   entry so the URL is clean without adding a spurious back step.
+ * - On the first call, replaces the current history entry so the URL is clean
+ *   without adding a spurious back step.
  * - On subsequent calls, pushes a new history entry so the back button
  *   cycles through visited tabs.
  *
  * @param {string} tab - the new active tab
  * @param {object} [options]
- * @param {function} [options.replace] - if true, replaceState instead of pushState
+ * @param {boolean} [options.replace] - if true, replaceState instead of pushState
  */
 let initialTabSeen = false;
 export function syncTabToUrl(tab, { replace = false } = {}){
@@ -70,10 +70,8 @@ export function syncTabToUrl(tab, { replace = false } = {}){
   try{
     const params = new URLSearchParams(window.location.search);
     params.set('tab', tab);
-    const newUrl = `${window.location.pathname}${window.location.hash}?${params.toString()}`;
-    // Preserve hash position: if the page uses #main, keep it after search params.
-    const hash = window.location.hash || '';
-    const finalUrl = `${window.location.pathname}?${params.toString()}${hash}`;
+    // Hash goes after the query string so the #main skip-link anchor survives.
+    const finalUrl = `${window.location.pathname}?${params.toString()}${window.location.hash || ''}`;
     if(replace || !initialTabSeen){
       window.history.replaceState({ tab }, '', finalUrl);
     }else{

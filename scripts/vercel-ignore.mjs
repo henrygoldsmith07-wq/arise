@@ -23,24 +23,11 @@ if(!project){
   process.exit(1);
 }
 
-let commitRange = '';
-let changed = true;
-try{
-  // `git rev-parse --show-toplevel` is evaluated server-side by Vercel's shell
-  // expansion before our script runs, but we also need the commit range.
-  const range = execSync('git rev-parse --show-toplevel 2>/dev/null; git log -1 --format=%H 2>/dev/null', { encoding:'utf8' }).trim();
-  void range; // used by the shell expansion in vercel.json
-  // Vercel sets VERCEL_GIT_CHANGEPED_PATHS when ignoreCommand runs? No — it
-  // sets VERCEL_GIT_COMMIT_AUTHOR, VERCEL_GIT_COMMIT_REF, etc. We use git diff
-  // --name-only against the Vercel-provided before/after SHA.
-  const before = process.env.VERCEL_GIT_PREV_COMMIT_SHA || '';
-  const after = process.env.VERCEL_GIT_COMMIT_SHA || '';
-  if(before && after){
-    commitRange = `${before}..${after}`;
-  }
-}catch{
-  // git not available or not a repo — let Vercel build by default
-}
+// Vercel provides the before/after commit. Without both there is nothing to
+// diff, so we cannot prove this project is unchanged — build.
+const before = process.env.VERCEL_GIT_PREV_COMMIT_SHA || '';
+const after = process.env.VERCEL_GIT_COMMIT_SHA || '';
+const commitRange = before && after ? `${before}..${after}` : '';
 
 try{
   const paths = execSync(`git diff --name-only ${commitRange} 2>/dev/null`, { encoding:'utf8' })

@@ -110,7 +110,9 @@ export default function App(){
   const isDemo = Boolean(store.demo);
   // Surface a hard IDB failure (open failed) with a clear message, rather than
   // silently operating in memory mode where every write is lost on reload.
-  const [idbError] = useState(() => getPersistenceError());
+  // Re-read (not latched) after each successful retry so the banner never
+  // outlives the failure it reports.
+  const [idbError,setIdbError]=useState(()=> getPersistenceError());
   const prepareDestructiveTransition = useCallback(async (reason)=>{
     // Snapshot is best-effort; the wipe is not. If clearing canonical storage
     // fails we must never proceed into demo/fresh state and risk mixing worlds.
@@ -573,6 +575,9 @@ export default function App(){
       durableSnapshotRef.current = committedStore;
       setStoreState(committedStore);
       setPersistFailed(false);
+      // Only clear the storage-unavailable banner if IndexedDB is actually
+      // durable again — a retry that only reached memory must keep warning.
+      if(!getPersistenceError()) setIdbError(false);
       setToast({ title:'Storage retry succeeded', detail:'Your latest app state is durable on this device.' });
     }catch(err){
       setPersistFailed(true);

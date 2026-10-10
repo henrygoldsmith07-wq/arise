@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { SKIP_WHEN_OFF, SKIP_WHEN_ON } from './helpers/integrations.js';
 import {
   getAiSettings, saveAiSettings, clearAiSettings,
-  buildTrainingContext, requestCoachInsight, DEFAULT_MODEL, DEFAULT_BASE_URL,
+  buildTrainingContext, requestCoachInsight, DEFAULT_MODEL, DEFAULT_BASE_URL, LOCAL_BASE_URL,
+  isValidEndpointUrl, parseableEndpoint,
 } from '../src/lib/aiCoach.js';
 
 function withStorage(fn){
@@ -82,7 +83,6 @@ describe('ai settings storage', ()=>{
       assert.equal(s.baseUrl, 'https://oai.example.com/v1/chat/completions');
       assert.equal(JSON.parse(localMem['arise.ai.settings.v1']).baseUrl, 'https://oai.example.com/v1/chat/completions');
     });
-  });
 
   it('rejects an invalid endpoint URL and falls back to the default', ()=>{
     withStorage(()=>{
@@ -91,6 +91,35 @@ describe('ai settings storage', ()=>{
       assert.equal(s.baseUrl, DEFAULT_BASE_URL);
     });
   });
+
+  it('an omitted baseUrl does not overwrite a stored endpoint', ()=>{
+    // coachService persists every call; a question asked without touching the
+    // endpoint field must not silently reset a user-configured host.
+    withStorage(()=>{
+      saveAiSettings({ apiKey:'k', enabled:true, baseUrl:'https://oai.example.com/v1/chat/completions' });
+      saveAiSettings({ apiKey:'k', enabled:true });
+      assert.equal(getAiSettings().baseUrl, 'https://oai.example.com/v1/chat/completions');
+    });
+  });
+
+  it('classifies endpoints for the local-first migration', ()=>{
+    assert.equal(parseableEndpoint(LOCAL_BASE_URL), 'loopback');
+    assert.equal(parseableEndpoint('http://localhost:11434/v1/chat/completions'), 'loopback');
+    assert.equal(parseableEndpoint('http://[::1]:11434/v1/chat/completions'), 'loopback');
+    assert.equal(parseableEndpoint('https://api.example.com/v1/chat/completions'), 'remote-valid');
+    assert.equal(parseableEndpoint('https://integrate.api.nvidia.com/v1/chat/completions'), 'remote-nvidia');
+    assert.equal(parseableEndpoint(''), 'invalid');
+    assert.equal(parseableEndpoint(null), 'invalid');
+    assert.equal(parseableEndpoint('http://evil.example.com/chat'), 'invalid');
+  });
+
+  it('accepts loopback http but requires https for remote hosts', ()=>{
+    assert.equal(isValidEndpointUrl(LOCAL_BASE_URL), true);
+    assert.equal(isValidEndpointUrl('https://api.example.com/v1'), true);
+    assert.equal(isValidEndpointUrl('http://api.example.com/v1'), false);
+    assert.equal(isValidEndpointUrl('ftp://127.0.0.1:11434'), false);
+  });
+});
 });
 
 describe('training context builder', ()=>{

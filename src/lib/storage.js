@@ -19,7 +19,7 @@
 // ({ __ariseIdb: true }) plus a minimal preferences copy so index.html can
 // still theme before first paint. Rollback = delete DB; old data pointer kept.
 
-import { idbGet, idbGetAll, idbPut, idbDelete, idbClearStore, STORES, getFallbackError } from './idb.js';
+import { idbGet, idbGetAll, idbPut, idbDelete, idbClearStore, STORES, getFallbackError, isMemoryBackendActive } from './idb.js';
 import { idbTransaction } from './idb-tx.js';
 import { enforceIntegrity, quarantineBrokenStore } from './integrity.js';
 import { normalizeHistoryForWrite, makeTombstone, rowTimestamp } from './domain.js';
@@ -579,7 +579,10 @@ function enqueueWrite(fn){
     if(cleared) return undefined;
     try{
       const result = await fn();
-      persistenceError = null;
+      // A write that only reached the in-memory fallback RESOLVES but is not
+      // durable. Clearing the failure here would hide the "storage unavailable"
+      // banner after a save that leaves no trace once the tab closes.
+      if(!isMemoryBackendActive()) persistenceError = null;
       return result;
     }catch(err){
       persistenceError = err instanceof Error ? err : new Error(String(err || 'Storage write failed.'));
@@ -695,5 +698,7 @@ if(typeof window !== 'undefined' && typeof window.addEventListener === 'function
 
 // Exposed for the UI to surface a clear, recoverable message when IndexedDB
 // exists but fails to open — instead of silently operating in memory mode
-// where every write would be lost on reload.
+// where every write would be lost on reload. Cleared by a successful durable
+// write (see enqueueWrite) or an explicit resetHydratedCache, so a banner never
+// outlives the failure it reports.
 export function getPersistenceError(){ return persistenceError || getFallbackError() || null; }

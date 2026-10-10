@@ -46,6 +46,14 @@ function memoryBackend(){
   };
 }
 
+// Why indexedDB.open failed, if it did. Recorded the moment it happens, so it
+// is available to callers before the first read/write settles. Deliberately
+// never cleared: dbPromise is cached, so within one page session a failed open
+// cannot become a successful one — the recovery is a reload, which resets this
+// module. Environments with no indexedDB at all are NOT failures (see
+// getFallbackError).
+let openError = null;
+
 function openDb(){
   if(dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject)=>{
@@ -80,8 +88,8 @@ function openDb(){
         idx('events', 'by_at', 'at');
       };
       req.onsuccess = ()=> resolve(req.result);
-      req.onerror = ()=> reject(req.error);
-    }catch(err){ reject(err); }
+      req.onerror = ()=> { openError = req.error; reject(req.error); };
+    }catch(err){ openError = err; reject(err); }
   });
   return dbPromise;
 }
@@ -100,7 +108,12 @@ function tx(db, store, mode, fn){
 }
 
 let sharedFallback = null;
-let fallbackError = null;
+// Whether the most recent backend() resolution was the in-memory fallback.
+// Distinct from usingFallback() (which asks whether indexedDB exists): this
+// says whether writes are genuinely durable. Used by storage.js so a write
+// that only reached memory cannot clear the failure banner — the promise
+// resolves, but the data dies with the tab.
+let memoryBackendActive = false;
 function fallback(){
   // One shared in-memory instance whenever a real DB is unavailable or fails
   // to open — per-call construction silently loses every write.
@@ -111,6 +124,7 @@ async function backend(){
   try{
     const db = await openDb();
     if(db){
+      memoryBackendActive = false;
       return {
         get: (store, key)=> tx(db, store, 'readonly', os => {
           const req = os.get(key);
@@ -131,21 +145,39 @@ async function backend(){
         clearStore: (store)=> tx(db, store, 'readwrite', os => os.clear()),
       };
     }
-    // indexedDB is undefined (e.g. node tests / very old browsers) — fall back.
+    // indexedDB is undefined (e.g. node tests / very old browsers) — a legitimate
+    // environment, not a failure, and every store is memory by design.
+    memoryBackendActive = false;
     return fallback();
   }catch(err){
     // indexedDB EXISTS but open failed: this is a real persistence failure.
     // Record the reason so storage.js can surface a clear message instead of
     // silently operating in throwaway memory mode (where every write is lost
     // on reload and the user has no idea).
-    fallbackError = err;
+    openError = openError || err;
+    memoryBackendActive = true;
     return fallback();
   }
 }
 
+// True when this process has no indexedDB at all (node tests, ancient browsers)
+// — in which case memory mode is the intended contract, not a failure.
+export function isStorageEnvironmentBroken(){
+  if(typeof indexedDB === 'undefined') return false;
+  return Boolean(openError);
+}
+
 // Exposed so storage.js can detect "IDB exists but failed to open" and surface
 // a clear, recoverable error instead of silently falling back to memory.
-export function getFallbackError(){ return fallbackError; }
+// Page-lifetime latched by design: dbPromise is cached, so a failed open cannot
+// recover within this session. Recovery is a reload, which resets this module.
+export function getFallbackError(){
+  if(typeof indexedDB === 'undefined') return null;
+  return openError || null;
+}
+
+// True when the most recent write only reached the in-memory fallback.
+export function isMemoryBackendActive(){ return memoryBackendActive; }
 
 // In environments without IndexedDB every operation routes through the
 // shared in-memory fallback; otherwise we go straight to the real backend.

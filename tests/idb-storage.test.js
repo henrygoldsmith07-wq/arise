@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { clearAllStoredData, getCachedStore, hydrateStorage, loadStoreFromIdb, persistStore, setCachedStore, whenPersisted } from '../src/lib/storage.js';
-import { idbGetAll } from '../src/lib/idb.js';
+import { idbGetAll, getFallbackError, isStorageEnvironmentBroken, isMemoryBackendActive } from '../src/lib/idb.js';
 import { loadStore, saveStore, STORE_SCHEMA_VERSION } from '../src/lib/store.js';
 import { loadEvaluationLedger, saveEvaluationLedger } from '../src/lib/longitudinal.js';
 import { clearTelemetry, getEventHistory, recordEvent } from '../src/lib/telemetry.js';
@@ -308,5 +308,15 @@ describe('indexeddb canonical storage', ()=>{
       /Could not verify.*not empty: sessions/,
     );
     delete globalThis.localStorage;
+  });
+
+  it('a broken idb environment is not a memory-fallback environment', ()=>{
+    // These two must stay distinct: "no indexedDB at all" is node/ancient-browser
+    // and memory mode is the intended contract; "indexedDB exists but failed to
+    // open" is a real durability failure the app must report.
+    assert.equal(isStorageEnvironmentBroken(), false);
+    assert.equal(getFallbackError(), null);
+    // The write path is not memory-backed when there is simply no idb.
+    assert.equal(isMemoryBackendActive(), false);
   });
 });

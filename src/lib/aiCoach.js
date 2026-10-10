@@ -38,26 +38,36 @@ export const DEFAULT_BASE_URL = LOCAL_BASE_URL;
 export const DEFAULT_MODEL = 'meta/llama-3.1-8b-instruct';
 export const COACH_FEEDBACK_URL = 'https://github.com/henrygoldsmith07-wq/arise/issues/new?template=feedback.md';
 
-// Validate a user-configured endpoint URL. Loopback (HTTP) and https are both
-// accepted; loopback is explicitly allowed so local inference is first-class.
+// Loopback hostnames for which plain http:// is acceptable. A loopback request
+// never leaves the device, so the "credentials travel over plaintext" argument
+// that forces https elsewhere does not apply.
+const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+function isLoopbackHostname(hostname){
+  return LOOPBACK_HOSTNAMES.has(hostname) || hostname.endsWith('.localhost');
+}
+
+// Validate a user-configured endpoint URL: loopback http/https, otherwise https
+// only.
 export function isValidEndpointUrl(url){
   if(!url || typeof url !== 'string') return false;
   let u;
   try{ u = new URL(url.trim()); }catch{ return false; }
-  const isLoopback = u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '[::1]' || u.hostname.endsWith('.localhost');
-  return isLoopback ? u.protocol === 'http:' || u.protocol === 'https:' : u.protocol === 'https:';
+  if(isLoopbackHostname(u.hostname)) return u.protocol === 'http:' || u.protocol === 'https:';
+  return u.protocol === 'https:';
 }
 
-// Classify a stored endpoint URL for legacy migration purposes. Returns 'loopback',
-// 'remote-nvidia' (the old hardcoded endpoint), 'remote-valid', or 'invalid'.
+// Classify a stored endpoint URL for legacy migration purposes. Returns:
+//   'loopback'      - same-device inference, the local-first default
+//   'remote-nvidia' - the retired hardcoded vendor endpoint (migrated away)
+//   'remote-valid'  - any other https origin the user configured
+//   'invalid'       - anything else; callers fall back to DEFAULT_BASE_URL
 export function parseableEndpoint(url){
   if(!isValidEndpointUrl(url)) return 'invalid';
-  try{
-    const u = new URL(url.trim());
-    if(u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '[::1]' || u.hostname.endsWith('.localhost')) return 'loopback';
-    if(u.hostname === 'integrate.api.nvidia.com') return 'remote-nvidia';
-    return 'remote-valid';
-  }catch{ return 'invalid'; }
+  let u;
+  try{ u = new URL(url.trim()); }catch{ return 'invalid'; }
+  if(isLoopbackHostname(u.hostname)) return 'loopback';
+  if(u.hostname === 'integrate.api.nvidia.com') return 'remote-nvidia';
+  return 'remote-valid';
 }
 
 // Thin orchestration wrapper around the classifier-owned route. It returns a
@@ -119,15 +129,16 @@ export function getAiSettings(){
       setSessionKey(parsed.apiKey);
       const migrated = { ...parsed, persistKey:false };
       delete migrated.apiKey;
-      // Migrate legacy NVIDIA endpoint to the new local-first default.
-      if(parseableEndpoint(parsed.baseUrl) === 'remote-nvidia' || !isValidEndpointUrl(parsed.baseUrl)){
-        migrated.baseUrl = DEFAULT_BASE_URL;
-      }
+      // Legacy migration: a stored endpoint that is invalid, or that points at
+      // the retired hardcoded vendor, moves to the local-first default. A URL
+      // the user deliberately configured on a remote host is kept.
+      const kind = parseableEndpoint(parsed.baseUrl);
+      if(kind === 'invalid' || kind === 'remote-nvidia') migrated.baseUrl = DEFAULT_BASE_URL;
       s.setItem(SETTINGS_KEY, JSON.stringify(migrated));
       return {
         enabled: migrated.enabled === true,
         apiKey: sessionKey(),
-        baseUrl: isValidEndpointUrl(migrated.baseUrl) ? migrated.baseUrl : DEFAULT_BASE_URL,
+        baseUrl: migrated.baseUrl,
         model: typeof migrated.model === 'string' && migrated.model ? migrated.model : DEFAULT_MODEL,
         persistKey: false,
       };

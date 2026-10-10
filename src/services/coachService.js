@@ -5,8 +5,16 @@ export async function runCoachRequest({ question, store, apiKey, baseUrl, model,
   if(!prompt) return { ok:false, error:'Ask a question first.' };
   const key = String(apiKey || '').trim();
   const ep = String(baseUrl || '').trim();
-  if(ep) saveAiSettings({ apiKey:key, baseUrl:ep, model, enabled:true, persistKey });
-  else saveAiSettings({ apiKey:key, model, enabled:true, persistKey });
+  // Persist any settings the caller supplied, and nothing it did not: an
+  // omitted baseUrl must not overwrite a stored endpoint. saveAiSettings
+  // already defaults every omitted field to the current stored value.
+  saveAiSettings({
+    apiKey: key,
+    model,
+    enabled: true,
+    persistKey,
+    ...(ep ? { baseUrl: ep } : {}),
+  });
   const route = await aiCoachRoute(prompt);
   if(route.lane === 'feedback-pipeline'){
     return { ok:true, text:`That sounds like something to report. Please open an issue and include your support bundle (More → Data → Export support bundle).\n\n${COACH_FEEDBACK_URL}` };
