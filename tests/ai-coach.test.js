@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { SKIP_WHEN_OFF, SKIP_WHEN_ON } from './helpers/integrations.js';
 import {
   getAiSettings, saveAiSettings, clearAiSettings,
-  buildTrainingContext, requestCoachInsight, DEFAULT_MODEL,
+  buildTrainingContext, requestCoachInsight, DEFAULT_MODEL, DEFAULT_BASE_URL, LOCAL_BASE_URL,
+  isValidEndpointUrl, parseableEndpoint,
 } from '../src/lib/aiCoach.js';
 
 function withStorage(fn){
@@ -47,7 +48,7 @@ describe('ai settings storage', ()=>{
       clearAiSettings();
       assert.equal(localMem['arise.ai.settings.v1'], undefined);
       assert.equal(sessionMem['arise.ai.session-key.v1'], undefined);
-      assert.deepEqual(getAiSettings(), { enabled:false, apiKey:'', model: DEFAULT_MODEL, persistKey:false });
+      assert.deepEqual(getAiSettings(), { enabled:false, apiKey:'', baseUrl: DEFAULT_BASE_URL, model: DEFAULT_MODEL, persistKey:false });
     });
   });
 
@@ -64,13 +65,60 @@ describe('ai settings storage', ()=>{
 
   it('migrates legacy persisted keys into session-only storage', ()=>{
     withStorage(({ localMem, sessionMem })=>{
-      localMem['arise.ai.settings.v1'] = JSON.stringify({ enabled:true, apiKey:'nvapi-legacy', model:DEFAULT_MODEL });
+      localMem['arise.ai.settings.v1'] = JSON.stringify({ enabled:true, apiKey:'nvapi-legacy', baseUrl:'https://integrate.api.nvidia.com/v1/chat/completions', model:DEFAULT_MODEL });
       const settings = getAiSettings();
       assert.equal(settings.apiKey, 'nvapi-legacy');
       assert.equal(settings.persistKey, false);
       assert.equal(JSON.parse(localMem['arise.ai.settings.v1']).apiKey, undefined);
       assert.equal(sessionMem['arise.ai.session-key.v1'], 'nvapi-legacy');
+      // Legacy NVIDIA endpoint migrated to local-first default.
+      assert.equal(settings.baseUrl, DEFAULT_BASE_URL);
     });
+  });
+
+  it('accepts a user-configured endpoint URL', ()=>{
+    withStorage(({ localMem })=>{
+      saveAiSettings({ apiKey:'k', enabled:true, baseUrl:'https://oai.example.com/v1/chat/completions' });
+      const s = getAiSettings();
+      assert.equal(s.baseUrl, 'https://oai.example.com/v1/chat/completions');
+      assert.equal(JSON.parse(localMem['arise.ai.settings.v1']).baseUrl, 'https://oai.example.com/v1/chat/completions');
+    });
+  });
+
+  it('rejects an invalid endpoint URL and falls back to the default', ()=>{
+    withStorage(()=>{
+      saveAiSettings({ apiKey:'k', enabled:true, baseUrl:'http://evil.example.com/chat' });
+      const s = getAiSettings();
+      assert.equal(s.baseUrl, DEFAULT_BASE_URL);
+    });
+  });
+
+  it('an omitted baseUrl does not overwrite a stored endpoint', ()=>{
+    // coachService persists every call; a question asked without touching the
+    // endpoint field must not silently reset a user-configured host.
+    withStorage(()=>{
+      saveAiSettings({ apiKey:'k', enabled:true, baseUrl:'https://oai.example.com/v1/chat/completions' });
+      saveAiSettings({ apiKey:'k', enabled:true });
+      assert.equal(getAiSettings().baseUrl, 'https://oai.example.com/v1/chat/completions');
+    });
+  });
+
+  it('classifies endpoints for the local-first migration', ()=>{
+    assert.equal(parseableEndpoint(LOCAL_BASE_URL), 'loopback');
+    assert.equal(parseableEndpoint('http://localhost:11434/v1/chat/completions'), 'loopback');
+    assert.equal(parseableEndpoint('http://[::1]:11434/v1/chat/completions'), 'loopback');
+    assert.equal(parseableEndpoint('https://api.example.com/v1/chat/completions'), 'remote-valid');
+    assert.equal(parseableEndpoint('https://integrate.api.nvidia.com/v1/chat/completions'), 'remote-nvidia');
+    assert.equal(parseableEndpoint(''), 'invalid');
+    assert.equal(parseableEndpoint(null), 'invalid');
+    assert.equal(parseableEndpoint('http://evil.example.com/chat'), 'invalid');
+  });
+
+  it('accepts loopback http but requires https for remote hosts', ()=>{
+    assert.equal(isValidEndpointUrl(LOCAL_BASE_URL), true);
+    assert.equal(isValidEndpointUrl('https://api.example.com/v1'), true);
+    assert.equal(isValidEndpointUrl('http://api.example.com/v1'), false);
+    assert.equal(isValidEndpointUrl('ftp://127.0.0.1:11434'), false);
   });
 });
 
@@ -139,10 +187,10 @@ describe('requestCoachInsight', SKIP_WHEN_OFF, ()=>{
     withStorage(async ()=>{
       const ctx = buildTrainingContext({ history:[], schedule:null });
       const { fake, get } = capture();
-      const r = await requestCoachInsight({ context: ctx, apiKey:'k', fetchImpl: fake });
+      const r = await requestCoachInsight({ context: ctx, apiKey:'k', baseUrl:'http://127.0.0.1:11434/v1/chat/completions', fetchImpl: fake });
       assert.equal(r.ok, true);
       const sent = get();
-      assert.match(sent.url, /integrate\.api\.nvidia\.com/);
+      assert.match(sent.url, /127\.0\.0\.1:11434/);
       assert.match(sent.body.messages[0].content, /NEVER invent/i);
       assert.match(JSON.stringify(sent.body.messages[1].content), /engineFindings/);
       assert.equal(sent.body.temperature, 0.3);
@@ -181,7 +229,7 @@ describe('the shipped default cannot reach the coach', SKIP_WHEN_ON, ()=>{
 
     assert.equal(noKey.ok, false);
     assert.equal(withKey.ok, false);
-    assert.equal(called, false, 'the NVIDIA endpoint must never be contacted in the default build');
+    assert.equal(called, false, 'the coach endpoint must never be contacted in the default build');
     assert.equal(withKey.notAvailable, true);
     assert.equal(noKey.notAvailable, true);
   });

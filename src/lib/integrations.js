@@ -1,11 +1,11 @@
 // integrations.js — the hosted build's network boundary, expressed once.
 //
 // Arise's charter is local-first: no account, no server, no sync you did not
-// start. Three optional integrations could still leave the device — the NVIDIA
-// coach, classifier.dev routing/feedback, and the Pulse connector. Each was
-// previously gated only by per-user consent stored in localStorage, which means
-// a hosted build *could* make outbound requests for anyone who had ever opted
-// in, and nothing in the build said so.
+// start. Three optional integrations could still leave the device — the
+// user-configured AI coach endpoint, classifier.dev routing/feedback, and the
+// Pulse connector. Each was previously gated only by per-user consent stored
+// in localStorage, which means a hosted build *could* make outbound requests
+// for anyone who had ever opted in, and nothing in the build said so.
 //
 // This module turns that into a BUILD-TIME decision:
 //

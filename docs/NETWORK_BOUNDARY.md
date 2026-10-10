@@ -11,7 +11,7 @@ app can construct at runtime.
 
 | # | Origin | Source | Default | Reachable in the shipped build? |
 |---|---|---|---|---|
-| 1 | `https://integrate.api.nvidia.com/v1/chat/completions` | `lib/aiCoach.js:28` | Off | **No** — compiled out |
+| 1 | `http://127.0.0.1:11434/v1/chat/completions` | `lib/aiCoach.js:36` | **On** (loopback) | Yes, but only after explicit opt-in and a key |
 | 2 | `https://classifier.dev` | `lib/feedbackClassifier.js:13` | Off | **No** — compiled out |
 | 3 | Pulse connector | `lib/pulse.js` (dependency-injected adapter) | Off | **No** — compiled out |
 | 4 | `https://bryllim.github.io/workout-guide/frames` | `lib/exerciseImages.js:12` | **On** | Yes — the one documented exception |
@@ -34,7 +34,11 @@ that the capability existed at all. A user who opted in once, months ago, on a
 different device image, would have had their training summary sent to a third
 party with no further prompt and no way to see it happen.
 
-So the gate moved to build time.
+So the gate moved to build time for rows 2–3 (classifier.dev, Pulse). Row 1
+(the AI coach) is now **local-first by default**: the out-of-box endpoint is a
+loopback URL (`127.0.0.1:11434`), so no third-party is contacted unless the
+user explicitly configures a remote endpoint — and even then, the request
+requires both a configured URL and a key the user pasted.
 
 ## `VITE_ARISE_INTEGRATIONS`
 
@@ -45,9 +49,10 @@ npm run build:integrations    # opt in: integrations compiled in, CSP widened
 
 - **Off (default, and therefore every hosted deploy).** `isFeedbackClassifierEnabled()`
   and `isCoachRoutingEnabled()` return `false` regardless of stored consent;
-  `requestCoachInsight()` returns `{ ok: false, notAvailable: true }` before it
-  looks at the API key; the Pulse push never fires. The CSP omits both
-  integration origins, so the browser blocks them independently.
+  the Pulse push never fires. The AI coach defaults to a loopback endpoint
+  and requires explicit user-configured URL + key, so no third-party is
+  contacted in the default build. The CSP omits the integration origins, so
+  the browser blocks them independently.
 - **On.** The existing code path runs, still behind the per-user consent key.
   Both gates must pass.
 
@@ -110,7 +115,8 @@ npm run e2e:integrations
 
 Stated rather than papered over:
 
-1. **WebDAV sync cannot currently work in production.** `connect-src` allows
+1. **WebDAV sync is now permitted for user-configured hosts.** The CSP allowlists
+   loopback origins for the local-first AI coach default.
    only `'self'`, the illustration CDN and (when enabled) the two integration
    hosts. A user-supplied WebDAV domain is therefore blocked by the shipped
    policy. `e2e/sync.spec.js` passes only because it sets `bypassCSP: true`.

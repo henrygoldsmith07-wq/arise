@@ -97,10 +97,11 @@ local-first by default: no training data leaves the device automatically.
 Cross-device sync is optional and user-owned (WebDAV, E2E-encrypted) —
 offline-first is preserved either way. Explicit, user-initiated integrations
 may send a deliberately minimised payload to a named third party: the
-optional **NVIDIA AI coach** (aggregated training numbers + deterministic
-engine findings only — it explains the engine's decisions and never creates
-training prescriptions; the BYOK API key travels as the request credential
-and is session-only by default), **classifier.dev** (a redacted feedback
+optional **AI coach** (defaults to a local loopback endpoint — zero cloud
+required; or any OpenAI-compatible API the user configures — aggregated
+training numbers + deterministic engine findings only — it explains the
+engine's decisions and never creates training prescriptions; the BYOK API
+key travels as the request credential and is session-only by default), **classifier.dev** (a redacted feedback
 text, or a redacted ambiguous coach question for lane selection — both off
 by default), and **Pulse** (a completed-workout summary via your own
 adapter). No cloud AI is required for any training functionality. Full

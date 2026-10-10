@@ -1,8 +1,8 @@
 // e2e/helpers/integrations.js — mark specs that need the optional cloud
 // integrations to be compiled in.
 //
-// The shipped default compiles the NVIDIA coach, classifier.dev and Pulse out
-// of the build, so a spec that drives those code paths cannot pass against the
+// The shipped default compiles the classifier.dev and Pulse integrations out
+// of the build (the AI coach defaults to a local loopback endpoint), so a spec that drives those code paths cannot pass against the
 // default `npm run e2e` — the app correctly refuses to make the request.
 //
 // Those specs therefore:

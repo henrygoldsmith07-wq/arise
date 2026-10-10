@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test';
 // password never doubles as the end-to-end passphrase.
 //
 // bypassCSP: the production Content-Security-Policy only allowlists the
-// illustration host + NVIDIA endpoint; the mocked dav host exists only in the
+// illustration host and loopback origins; the mocked dav host exists only in the
 // test, so the page must be allowed to fetch it.
 
 test.describe.configure({ mode: 'serial' });

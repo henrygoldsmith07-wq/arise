@@ -147,7 +147,7 @@ test('the real Ask the coach flow routes locally first and keeps cloud consent i
       body: JSON.stringify({ results: [{ label: 'a question about how to train or use the local training coach', confidence: 0.72 }] }),
     });
   });
-  await page.route('**integrate.api.nvidia.com/**', async (route) => {
+  await page.route('**127.0.0.1:11434**', async (route) => {
     coachCalls += 1;
     await route.fulfill({
       status: 200,
@@ -193,7 +193,8 @@ test('the real Ask the coach flow routes locally first and keeps cloud consent i
   expect(requestBody.inputs).toEqual(['maybe this is a training question']);
   expect(requestBody.labels).not.toContain('training-question');
 
-  await page.getByLabel('NVIDIA API key').fill('nvapi-test');
+  await page.getByLabel('API key').fill('sk-test-key');
+  await page.getByLabel('Endpoint URL').fill('http://127.0.0.1:11434/v1/chat/completions');
   await ask.fill('Could you summarise my last week?');
   await askButton.click();
   await expect(aiResult).toContainText('A concise weekly explanation');

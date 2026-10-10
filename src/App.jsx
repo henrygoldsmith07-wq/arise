@@ -43,7 +43,8 @@ function warmLazyViews(){
   });
 }
 import { loadStore, saveStore } from './lib/store.js';
-import { clearAllStoredData, hydrateStorage, refreshCachedStoreFromIdb, subscribeStoreCommits, whenPersisted } from './lib/storage.js';
+import { clearAllStoredData, hydrateStorage, refreshCachedStoreFromIdb, subscribeStoreCommits, whenPersisted, getPersistenceError } from './lib/storage.js';
+import { getInitialTab, syncTabToUrl, subscribeToPopState } from './lib/router.js';
 import { recordEvent, recordErrorEvent } from './lib/telemetry.js';
 import { watchStandaloneBodyClass, consumeShortcut } from './lib/pwa.js';
 import { setHapticsSource } from './lib/haptics.js';
@@ -68,7 +69,7 @@ function TabFallback({ label }){
 
 export default function App(){
   const [store,setStoreState]=useState(()=> loadStore());
-  const [tab,setTab]=useState('today');
+  const [tab,setTab]=useState(()=> getInitialTab());
   const [activeSession,setActiveSession]=useState(null);
   const [recoveryOpen,setRecoveryOpen]=useState(()=> Boolean(loadStore().activeWorkout));
   const [consentOpen,setConsentOpen]=useState(()=> !loadStore().demo && loadStore().preferences?.telemetryEnabled == null);
@@ -107,6 +108,11 @@ export default function App(){
   // back to a true empty start. Demo data never mingles with real data
   // because demo mode only ever starts from a wiped slate.
   const isDemo = Boolean(store.demo);
+  // Surface a hard IDB failure (open failed) with a clear message, rather than
+  // silently operating in memory mode where every write is lost on reload.
+  // Re-read (not latched) after each successful retry so the banner never
+  // outlives the failure it reports.
+  const [idbError,setIdbError]=useState(()=> getPersistenceError());
   const prepareDestructiveTransition = useCallback(async (reason)=>{
     // Snapshot is best-effort; the wipe is not. If clearing canonical storage
     // fails we must never proceed into demo/fresh state and risk mixing worlds.
@@ -286,6 +292,15 @@ export default function App(){
     const next = theme === null ? 'light' : theme === 'light' ? 'dark' : null;
     setStore(prev=> ({ ...prev, preferences:{ ...(prev.preferences||{}), theme: next } }));
   };
+
+  // Deep-link routing: mirror the active tab in the URL so bookmarks,
+  // home-screen shortcuts, and back/forward work. The initial load reads the
+  // tab from the URL (via getInitialTab above); subsequent changes keep the
+  // URL in sync and respond to browser navigation.
+  useEffect(()=>{
+    syncTabToUrl(tab, { replace: true });
+  }, [tab]);
+  useEffect(() => subscribeToPopState(setTab), []);
 
   // PWA lifecycle: listen for SW update
   useEffect(()=>{
@@ -560,6 +575,9 @@ export default function App(){
       durableSnapshotRef.current = committedStore;
       setStoreState(committedStore);
       setPersistFailed(false);
+      // Only clear the storage-unavailable banner if IndexedDB is actually
+      // durable again — a retry that only reached memory must keep warning.
+      if(!getPersistenceError()) setIdbError(false);
       setToast({ title:'Storage retry succeeded', detail:'Your latest app state is durable on this device.' });
     }catch(err){
       setPersistFailed(true);
@@ -680,6 +698,13 @@ export default function App(){
           <span className="font-bold text-review">Update available</span>
           <span className="text-ink2">{updateDeferred ? 'Update will apply after this workout — no rush.' : 'New version cached — reload to apply.'}</span>
           <button onClick={applyUpdate} className="ml-auto btn btn-primary min-h-8 rounded-xl px-3 text-xs">Update</button>
+        </div>
+      )}
+      {idbError && !persistFailed && (
+        <div className="mx-4 mt-2 rounded-xl border border-review/40 bg-reviewsoft px-3 py-2 flex flex-wrap items-center gap-2 text-xs" role="alert">
+          <span className="font-bold text-review">Storage unavailable</span>
+          <span className="text-ink2 flex-1 min-w-40">IndexedDB could not be opened on this device. Your data is being held in memory only and will be lost when you close this tab.</span>
+          <button onClick={()=> setTab('more')} className="btn btn-primary min-h-8 rounded-xl px-3 text-xs">Back up now</button>
         </div>
       )}
       {persistFailed && (
