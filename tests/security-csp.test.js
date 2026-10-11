@@ -48,7 +48,7 @@ describe('content security policy', ()=>{
     const external = connectSrc.replace('connect-src', '').trim().split(/\s+/).filter(o=> o !== "'self'");
     assert.deepEqual(
       external,
-      ['https://bryllim.github.io', 'http://127.0.0.1:11434', 'http://localhost:11434', 'http://[::1]:11434'],
+      ['https://bryllim.github.io', 'http://127.0.0.1:11434', 'http://localhost:11434'],
       'with integrations compiled out, the illustration CDN and loopback origins are the only external connect targets',
     );
   });

@@ -220,7 +220,17 @@ const CHUNK_BUDGET_KB = 34;
 // ≤ 120) and largest-lazy (26.4 ≤ 34) budgets UNCHANGED; measured total 385.8.
 // NOTE: the pre-existing baseline on Node 22 (CI) measured ~385.5 kB — this
 // re-baseline reconciles local (Node 24) and CI measurements.
-const TOTAL_BUDGET_KB = 386;
+// total 387 → 389 kB with the correctness + surfaced-intelligence pass: the
+// prescription reference set now comes from the best working set of the last
+// session instead of its last set (progression.js + sessionBestSummaries), and
+// ProgressView finally renders two engine outputs that were computed and
+// unit-tested for years but never imported by a component — volume balance per
+// goal-priority muscle (volumeBalanceAdvice) and pooled left/right imbalance
+// (sideImbalance + isUnilateralExercise). These are lazy-route/Progress chunks,
+// not boot: boot (109.9 ≤ 120) and largest-lazy (26.4 ≤ 34) are UNCHANGED,
+// which is what user-perceived load actually depends on. Measured total 387.5,
+// so ~1.5 kB of binding headroom is retained above it.
+const TOTAL_BUDGET_KB = 389;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

@@ -30,7 +30,15 @@ const ILLUSTRATION_HOST = 'https://bryllim.github.io';
 // because no third party ever receives the traffic; the threat CSP mitigates is
 // exfiltration to foreign origins, and localhost/loopback are by definition
 // "this device".
-const LOOPBACK_ORIGINS = ['http://127.0.0.1:11434', 'http://localhost:11434', 'http://[::1]:11434'];
+//
+// IPv6 is deliberately NOT expressed here. Chromium's CSP host grammar rejects
+// a port-numbered bracketed literal (`http://[::1]:11434`) with "contains an
+// invalid source ... It will be ignored", so emitting it was console noise
+// implying an allowance the browser never granted. `localhost` resolves to ::1
+// on the platforms where that matters, so the two forms below cover the real
+// cases with a policy the browser actually parses. (http://[::1]:11434 is still
+// a perfectly valid endpoint URL for the coach - CSP source expressions only.)
+const LOOPBACK_ORIGINS = ['http://127.0.0.1:11434', 'http://localhost:11434'];
 
 // Hosts each optional integration needs. Emitted only when compiled in.
 const INTEGRATION_ORIGINS = ['https://classifier.dev'];
