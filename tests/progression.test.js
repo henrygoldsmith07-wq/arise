@@ -19,6 +19,52 @@ describe("progression", ()=>{
     const r=recommendNext({ exerciseId:"push-up", history: hist, targetReps:"8–12"});
     assert.equal(r.reps, 11);
   });
+  it("recommendNext prescribes from the best set of the last session, not the last set", ()=>{
+    // A 3-set session where the working set is first and the last set is a
+    // backoff at a lower load. The prescription must reference the working
+    // set: prescribing off the backoff would tell the user to add load to the
+    // backoff number, which undoes the hard set they actually did.
+    const hist=[{ dateISO:"2026-01-01", blocks:[{ exerciseId:"bench-press-dumbbell",
+      sets:[
+        { reps:"12", weightKg:30 },
+        { reps:"10", weightKg:30 },
+        { reps:"8",  weightKg:25 },
+      ]}]}];
+    const r=recommendNext({ exerciseId:"bench-press-dumbbell", history: hist, targetReps:"8–12"});
+    assert.equal(r.load, 30, "reference load must be the 30kg working set, not the 25kg backoff");
+  });
+  it("recommendNext ignores a failed final set", ()=>{
+    // Last set failed at a HEAVIER load than it earned. e1RM selection picks
+    // the set that was actually completed, not the failed attempt.
+    const hist=[{ dateISO:"2026-01-01", blocks:[{ exerciseId:"bench-press-dumbbell",
+      sets:[
+        { reps:"12", weightKg:30 },
+        { reps:"8",  weightKg:30, failed:true },
+      ]}]}];
+    const r=recommendNext({ exerciseId:"bench-press-dumbbell", history: hist, targetReps:"8–12"});
+    assert.ok(r.load === null || r.load >= 30, "must not prescribe below the completed working set");
+  });
+  it("recommendNext carries assist through the session-best reference", ()=>{
+    const hist=[{ dateISO:"2026-01-01", blocks:[{ exerciseId:"pull-up",
+      sets:[
+        { reps:"10", weightKg:"", assistedKg:20 },
+        { reps:"8",  weightKg:"", assistedKg:25 },
+      ]}]}];
+    const r=recommendNext({ exerciseId:"pull-up", history: hist, targetReps:"8–12"});
+    // reference set is the 10-rep set, so assistKg must come from it
+    assert.equal(r.assistKg, 20, "assist must be read from the reference set, not the last set");
+  });
+  it("session-best reference is stable regardless of set order within a session", ()=>{
+    // Same sets, different order. The reference (best working set) must not
+    // change just because the lifter logged the backoff last vs first.
+    const a=[{ dateISO:"2026-01-01", blocks:[{ exerciseId:"bench-press-dumbbell",
+      sets:[ { reps:"12", weightKg:30 }, { reps:"8", weightKg:25 } ]}]}];
+    const b=[{ dateISO:"2026-01-01", blocks:[{ exerciseId:"bench-press-dumbbell",
+      sets:[ { reps:"8", weightKg:25 }, { reps:"12", weightKg:30 } ]}]}];
+    const ra=recommendNext({ exerciseId:"bench-press-dumbbell", history: a, targetReps:"8–12"});
+    const rb=recommendNext({ exerciseId:"bench-press-dumbbell", history: b, targetReps:"8–12"});
+    assert.equal(ra.load, rb.load, "set order within a session must not change the prescription");
+  });
   it("isPlateau false for rising, true for flat", ()=>{
     assert.equal(isPlateau([{reps:8,weightKg:20},{reps:9,weightKg:20},{reps:10,weightKg:20}]), false);
     assert.equal(isPlateau([{reps:8,weightKg:20},{reps:8,weightKg:20},{reps:8,weightKg:20}]), true);

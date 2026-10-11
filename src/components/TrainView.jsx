@@ -29,7 +29,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
   const [builderOpen,setBuilderOpen]=useState(false);
   const dialogs = useDialogs();
   // Modal focus capture/trap/restore for the template builder.
-  const builderA11y = useDialogA11y({ active: builderOpen });
+  const builderA11y = useDialogA11y({ active: builderOpen, onClose: ()=> setBuilderOpen(false) });
   const [editingId,setEditingId]=useState(null);
   const [form,setForm]=useState({ name:'', description:'', level:'Beginner', goal:'general', days:[{ ...EMPTY_DAY }] });
   const customTemplates = useMemo(

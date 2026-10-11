@@ -5,9 +5,9 @@ import { strengthTrends, workCapacity, consistencyReport, confidenceLanguage, pe
 import { totalVolumeKg } from '../lib/store.js';
 import { fmtWeight } from '../lib/units.ts';
 import { EXERCISE_BY_ID } from '../lib/data.js';
-import { weeklyVolume, frequencyByMuscleSync, volumeLandmarks, volumeDistribution, strengthSeries, extractNoteRecommendations, plannedVsCompletedStats } from '../lib/analytics.js';
+import { weeklyVolume, frequencyByMuscleSync, volumeLandmarks, volumeDistribution, strengthSeries, extractNoteRecommendations, plannedVsCompletedStats, volumeBalanceAdvice } from '../lib/analytics.js';
 import { linearRegressionIntervals } from '../lib/statistics.js';
-import { strengthTrendWithConfidence, classifyPR } from '../lib/progression.js';
+import { strengthTrendWithConfidence, classifyPR, isUnilateralExercise, sideImbalance } from '../lib/progression.js';
 import { exerciseHistorySummary, plateauDetection, programAdherence, recommendationCalibration, validateDeloadLogic } from '../lib/programming.js';
 import { badSessionAttribution, plateauAttribution } from '../lib/sessionQuality.js';
 import { workoutQualityReport } from '../lib/workoutQualityReport.js';
@@ -66,6 +66,35 @@ export default function ProgressView({ store, setStore = null, onStart = null })
   const freq = useMemo(()=> frequencyByMuscleSync(history, EXERCISE_BY_ID), [history]);
   const landmarks = useMemo(()=> volumeLandmarks(history, EXERCISE_BY_ID), [history]);
   const dist = useMemo(()=> volumeDistribution(history, EXERCISE_BY_ID), [history]);
+  // Volume balance: relative share per goal-priority muscle, judged against an
+  // even share rather than absolute landmarks, so the verdict stays honest when
+  // two people train very different totals.
+  const goal = store.onboarding?.goal || 'general';
+  const balance = useMemo(()=> volumeBalanceAdvice(history, EXERCISE_BY_ID, { goal, weeks: 4 }), [history, goal]);
+  // Left/right reps across all logged unilateral work, pooled. Only meaningful
+  // when the user actually tags sides, so it renders only with data.
+  const imbalance = useMemo(()=>{
+    const rows = [];
+    for(const h of history || []){
+      for(const b of h.blocks || []){
+        if(!isUnilateralExercise(b.exerciseId)) continue;
+        for(const s of b.sets || []) rows.push(s);
+      }
+    }
+    if(!rows.length) return null;
+    const pooled = sideImbalance(rows);
+    if(!pooled || pooled.imbalancePct < 10) return null;
+    // Per-lift detail for the worst row, so the user knows which movement.
+    const perLift = new Map();
+    for(const h of history || []){
+      for(const b of h.blocks || []){
+        if(!isUnilateralExercise(b.exerciseId)) continue;
+        const v = sideImbalance(b.sets || []);
+        if(v && v.weaker) perLift.set(EXERCISE_BY_ID[b.exerciseId]?.name || b.exerciseId, v);
+      }
+    }
+    return { ...pooled, lifts: [...perLift.entries()] };
+  }, [history]);
   const noteRecs = useMemo(()=> extractNoteRecommendations(history), [history]);
   const adherence = useMemo(()=> plannedVsCompletedStats(store.activeSchedule, history), [store.activeSchedule, history]);
   const programmeAdherence = useMemo(()=> programAdherence(store.activeSchedule, history), [store.activeSchedule, history]);
@@ -589,6 +618,51 @@ export default function ProgressView({ store, setStore = null, onStart = null })
         )}
         {!!wv.length && <p className="text-xs text-ink3 mt-2">{wv[wv.length-1]?.vol> (wv[wv.length-2]?.vol||0)*1.2 ? `Volume up ${Math.round((wv[wv.length-1].vol/(wv[wv.length-2]?.vol||1)-1)*100)}% vs last week — hold steady or deload if RPE was high.` : wv[wv.length-1]?.vol < (wv[wv.length-2]?.vol||0)*0.8 ? 'Volume dipped — good if planned deload, otherwise add a session.' : 'Trends look steady — keep progressing where RIR ≥2.'}</p>}
       </section>
+
+      {/* Advanced analytics, gated exactly like "Volume landmarks" above:
+          standard users get the headline signals, expert users get the
+          per-muscle and per-side detail. This is also the existing product IA
+          for computed-but-advanced insight, so the two new cards follow it
+          rather than inventing a third convention. */}
+      {expert && balance.n >= 2 && (
+        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+          <h3 className="text-sm font-bold">Volume balance</h3>
+          <p className="text-xs text-ink2">{balance.advice}</p>
+          <ul className="mt-1 space-y-1.5">
+            {balance.entries.filter(e=> e.verdict !== 'balanced').slice(0, 4).map(e=> (
+              <li key={e.muscle} className="flex items-center gap-2 text-xs">
+                <span className="font-bold w-20">{e.muscle}</span>
+                <span className="tabular-nums text-ink2">{e.avgWeeklySets} sets/wk</span>
+                <span className="ml-auto text-ink3">{e.share}% vs {e.expectedPct}% expected</span>
+                <span className={`ml-2 rounded-full border px-2 py-0.5 text-[10px] font-bold ${e.verdict === 'under' ? 'border-review bg-reviewsoft text-ink' : 'border-line bg-surface2 text-ink2'}`}>{e.verdict === 'under' ? 'Low' : 'High'}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] text-ink3">Relative to your <strong>{balance.goal}</strong> goal over {balance.weeks} weeks. Context, not a prescription — the engine still decides your loads.</p>
+        </section>
+      )}
+
+      {imbalance && (
+        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+          <h3 className="text-sm font-bold">Left/right balance</h3>
+          <p className="text-xs text-ink2">
+            {imbalance.weaker === 'L' ? 'Left' : 'Right'} side is about {imbalance.imbalancePct}% behind across your unilateral work
+            ({imbalance.left} vs {imbalance.right} reps logged). Start each set with the weaker side and let it set the rep target.
+          </p>
+          {imbalance.lifts.length > 1 && (
+            <ul className="mt-1 space-y-1">
+              {imbalance.lifts.slice(0, 4).map(([name, v])=> (
+                <li key={name} className="flex items-center gap-2 text-xs">
+                  <span className="w-24 font-semibold truncate">{name}</span>
+                  <span className="tabular-nums text-ink2">{v.left} L / {v.right} R</span>
+                  <span className="ml-auto text-ink3">{v.imbalancePct}% — weak {v.weaker}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-[11px] text-ink3">Counts tagged L/R sets only — tag sides in the runner to make this real.</p>
+        </section>
+      )}
 
       {/* The former "Training feedback" section now lives above as the
           What improved / What stalled / Why questions (P2.9) — same

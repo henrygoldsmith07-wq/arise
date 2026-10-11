@@ -88,7 +88,7 @@ export function focusTrapDecision(focusables, activeElement, shiftKey){
   return null;
 }
 
-export function useDialogA11y({ active = true } = {}){
+export function useDialogA11y({ active = true, onClose = null } = {}){
   const rootRef = useRef(null);
   const closeRef = useRef(null);
   const restoreRef = useRef(null);
@@ -104,6 +104,23 @@ export function useDialogA11y({ active = true } = {}){
       }
     };
   }, [active]);
+
+  // Escape dismissal. The shared Dialog.jsx primitives have always closed on
+  // Escape; this hook (used by TeachingPanel, the TrainView template builder
+  // and any caller mounting its own modal) did not, so a keyboard user could
+  // reach a dialog but not leave it. Escape only ever CANCELS — it never
+  // invokes the caller's primary action.
+  useEffect(()=>{
+    if(!active || typeof onClose !== 'function') return undefined;
+    const onKey = (e)=>{
+      if(e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return ()=> window.removeEventListener('keydown', onKey, true);
+  }, [active, onClose]);
 
   const trapTab = (e)=>{
     if(e.key !== 'Tab' || !rootRef.current) return;

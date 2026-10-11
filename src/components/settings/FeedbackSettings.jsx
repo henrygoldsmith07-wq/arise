@@ -93,9 +93,9 @@ export default function FeedbackSettings(){
         </div>
         <p className="text-[11px] text-ink3">This device-only queue is not a developer inbox. Saving or categorising feedback never sends it to the Arise developer. Only redacted issue text and triage metadata are stored.</p>
         {sharePreview && (
-          <div data-testid="feedback-share-preview" className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 space-y-2">
-            <p className="text-[11px] font-bold text-amber-950">Exactly this redacted report will leave the device only if you confirm sharing:</p>
-            <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-amber-200 bg-white px-2 py-1.5 text-[10px] text-amber-950">{sharePreview.text}</pre>
+          <div data-testid="feedback-share-preview" className="rounded-lg border border-review bg-reviewsoft px-2.5 py-2 space-y-2">
+            <p className="text-[11px] font-bold text-ink">Exactly this redacted report will leave the device only if you confirm sharing:</p>
+            <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-review bg-surface px-2 py-1.5 text-[10px] text-ink2">{sharePreview.text}</pre>
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={share} className="btn btn-primary min-h-8 rounded-lg px-2.5 text-[11px]">Share externally</button>
               <button type="button" onClick={()=> setSharePreview(null)} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px]">Cancel</button>

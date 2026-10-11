@@ -398,7 +398,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
                   <button key={prompt.id} onClick={()=> toggleNoteTag(prompt.id)} aria-pressed={noteTags.includes(prompt.id)} className={`text-xs font-semibold px-2.5 py-1.5 rounded-full border ${noteTags.includes(prompt.id)?'bg-ink text-bg border-ink':'bg-surface2 border-line'}`}>{prompt.label}</button>
                 ))}
               </div>
-              <textarea value={note} onChange={e=>{ markUserEdited(); setNote(e.target.value); }} rows={2} placeholder="How did it go? Sleep, pain, technique, ROM, load…" className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm" />
+              <textarea value={note} onChange={e=>{ markUserEdited(); setNote(e.target.value); }} rows={2} aria-label="Session notes" placeholder="How did it go? Sleep, pain, technique, ROM, load…" className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm" />
             </section>
           </section>
         ) : (

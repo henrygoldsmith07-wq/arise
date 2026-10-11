@@ -10,7 +10,7 @@ import ExerciseIllustration from './ExerciseIllustration.jsx';
 
 export default function TeachingPanel({ exerciseId, variant = 'dialog' }){
   const [open, setOpen] = useState(false);
-  const a11y = useDialogA11y({ active: open && variant !== 'inline' });
+  const a11y = useDialogA11y({ active: open && variant !== 'inline', onClose: ()=> setOpen(false) });
   const t = teachingFor(exerciseId);
   if(!t) return null;
   const trigger = (

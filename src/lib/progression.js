@@ -106,6 +106,21 @@ export function validateProgression(history, { config = null } = {}){
   };
 }
 
+// The reference set a NEXT prescription is built from: the best working set of
+// the most recent session, e1RM-selected by sessionBestSummaries. That is the
+// same exposure the plateau checks, the learned rate and the progression model
+// read, so all four now agree on "what my last session proved I can do".
+//
+// Falls back to the last set-level log only when no session has a usable set
+// (e.g. history rows that carry reps but no matching blocks), so a degenerate
+// history still produces a prescription rather than a hard stop.
+function lastWorkingSet(history, exerciseId, asOfDateISO){
+  const best = sessionBestSummaries(history, exerciseId, asOfDateISO);
+  if(best.length) return best[best.length - 1];
+  const logs = logsFor(history, exerciseId, asOfDateISO);
+  return logs.length ? logs[logs.length - 1] : null;
+}
+
 // Recommend next load/reps from last N sessions for an exercise.
 // Conservative double-progression: first add reps, then add load.
 // Now strategy-aware + personalised + plateau-aware.
@@ -114,12 +129,20 @@ export function recommendNext({ exerciseId, history, targetReps = null, conserva
   targetReps = targetReps || cfg.progression.defaultTargetReps;
   // PRIOR-ONLY INVARIANT: with asOfDateISO set, every decision input is sliced
   // to sessions on or before that date. The engine never sees the future.
-  const logs = logsFor(history, exerciseId, asOfDateISO).slice(-cfg.progression.historyWindow);
-  if(!logs.length) {
+  //
+  // PRESCRIPTION REFERENCE SET — session-level, not set-level.
+  // This used to read `logsFor(...)[last]`, i.e. the LAST SET of the last
+  // session: a 4-set squat that ends in a backoff set, or a final set that
+  // failed, would set tomorrow's load from that smaller/failed exposure. Every
+  // other input in this function already reads SESSION-LEVEL best sets — the
+  // plateau v2 check below states it outright ("set-level logs mistake two sets
+  // of one workout for two exposures"), as do the learned rate and the
+  // progression model. Align the prescription with them.
+  const last = lastWorkingSet(history, exerciseId, asOfDateISO);
+  if(!last) {
     const strat = strategy || strategyForExercise(exerciseId, { config: cfg });
     return { load: null, reps: parseLow(targetReps, cfg), reason: "No history — use program prescription.", strategy: strat, trainingAge: trainingAgeInfo(history, { asOfDateISO, config: cfg }), priorsVersion: cfg.version };
   }
-  const last = logs[logs.length-1];
   const reps = last.reps, load = last.weightKg || 0;
   const [lo, hi] = parseRange(targetReps);
   const strat = strategy || strategyForExercise(exerciseId, { config: cfg });
@@ -537,9 +560,12 @@ export function sessionBestSummaries(history, exerciseId, asOfDateISO = null){
       for(const set of (block.sets||[])){
         const reps = Number(String(set.reps).match(/\d+/)?.[0] || set.reps)||0;
         const weightKg = Number(set.weightKg)||0;
-        if(!reps && !weightKg) continue;
-        const value = e1rm(weightKg, reps)||reps;
-        if(!best || value>best.value) best = { reps, weightKg, rpe: set.rpe ?? null, dateISO: session.dateISO, value };
+        // Same impossibility filter logsFor applies, so a boot-time-repaired
+        // negative can never become the reference set a prescription is built on.
+        if(reps && weightKg >= 0){
+          const value = e1rm(weightKg, reps)||reps;
+          if(!best || value>best.value) best = { reps, weightKg, rpe: set.rpe ?? null, dateISO: session.dateISO, value, assistedKg: set.assistedKg ?? null };
+        }
       }
     }
     if(best) out.push(best);
