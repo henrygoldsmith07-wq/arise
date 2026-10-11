@@ -564,10 +564,10 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
               <input type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={onPickAppCsv} />
             </label>
           </div>
-          <div className="flex gap-2 text-xs">
-            <label className="flex items-center gap-1.5"><input type="radio" name="strategy" checked={importStrategy==='merge'} onChange={()=> setImportStrategy('merge')} /> Merge</label>
-            <label className="flex items-center gap-1.5"><input type="radio" name="strategy" checked={importStrategy==='replace'} onChange={()=> setImportStrategy('replace')} /> Replace</label>
-            <span className="text-ink3 ml-auto">Merge de-dupes by session id; Replace overwrites.</span>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+            <label className="check-control flex min-h-11 items-center gap-1.5"><input type="radio" name="strategy" checked={importStrategy==='merge'} onChange={()=> setImportStrategy('merge')} /><span aria-hidden className="check-mark check-mark--radio" /> Merge</label>
+            <label className="check-control flex min-h-11 items-center gap-1.5"><input type="radio" name="strategy" checked={importStrategy==='replace'} onChange={()=> setImportStrategy('replace')} /><span aria-hidden className="check-mark check-mark--radio" /> Replace</label>
+            <span className="text-ink3">Merge de-dupes by session id; Replace overwrites.</span>
           </div>
           {importPreview && (
             <div role="dialog" aria-label="Import preview" className="rounded-xl border border-line bg-surface2 p-3 text-xs space-y-2">

@@ -180,8 +180,16 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
           </div>
           <div className="grid grid-cols-2 gap-2">
             {EQUIPMENT.map(eq=> (
-              <label key={eq.id} className={`flex items-center gap-2 rounded-2xl border p-3 cursor-pointer ${equipment.includes(eq.id) ? 'bg-ink text-bg border-ink' : 'bg-surface border-line'}`}>
-                <input type="checkbox" checked={equipment.includes(eq.id)} onChange={()=> toggleEq(eq.id)} className="accent-ink" />
+              // The whole tile is the hit target: the real checkbox is
+              // absolutely positioned over it at opacity 0 (still focusable,
+              // still labelled by this <label>), and the visible box is a
+              // sibling whose checked/focus state comes from `peer-`.
+              // Previously the input was a bare 13x13 box, so a user (and any
+              // automation) tapping the checkbox itself had a target an order
+              // of magnitude below the app's own 44px standard.
+              <label key={eq.id} className={`check-control relative flex items-center gap-2 rounded-2xl border p-3 cursor-pointer ${equipment.includes(eq.id) ? 'bg-ink text-bg border-ink' : 'bg-surface border-line'}`}>
+                <input type="checkbox" checked={equipment.includes(eq.id)} onChange={()=> toggleEq(eq.id)} />
+                <span aria-hidden className="check-mark" />
                 <span className="text-sm font-semibold"><span aria-hidden>{eq.icon}</span> {eq.label}</span>
               </label>
             ))}

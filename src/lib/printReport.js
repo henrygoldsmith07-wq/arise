@@ -16,16 +16,17 @@ import { milestoneState, trainingAgeDisplay, consistencyInsights, healthyStreak,
 import { EXERCISE_BY_ID } from './data.js';
 import { fmtWeight } from './units.ts';
 import { localDateISO } from './dateOnly.js';
+import { parseReps, e1rm } from './trainingMath.js';
 
 /** Best e1RM per exercise (technique-flagged notes excluded), Progress-view parity. */
 function computePRs(history){
   const best = new Map();
   for(const h of history) for(const b of h.blocks || []) for(const s of b.sets || []){
-    const w = Number(s.weightKg), r = Number(String(s.reps).match(/\d+/)?.[0] || s.reps);
+    const w = Number(s.weightKg), r = parseReps(s.reps);
     if(!(w > 0 && r > 0)) continue;
-    const e1rm = w * (1 + r / 30);
+    const est = e1rm(w, r);
     const prev = best.get(b.exerciseId);
-    if(!prev || e1rm > prev.e1rm) best.set(b.exerciseId, { exerciseId: b.exerciseId, e1rm, dateISO: h.dateISO, note: h.note || '' });
+    if(!prev || est > prev.e1rm) best.set(b.exerciseId, { exerciseId: b.exerciseId, e1rm: est, dateISO: h.dateISO, note: h.note || '' });
   }
   return [...best.values()]
     .filter(v => !/rom|depth|technique|assisted|partial/.test((v.note || '').toLowerCase()))

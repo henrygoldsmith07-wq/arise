@@ -245,6 +245,57 @@ html { -webkit-text-size-adjust: 100%; }
   padding: 0.2rem 0.6rem;
 }
 
+/* ---- check controls ----
+   A native checkbox or radio inside a <label> has a default ~13px hit area,
+   which fails the app's own 44px touch-target gate (e2e/hit-target.js) and is
+   a genuinely missed tap on a phone. `.check-control` makes the whole labelled
+   surface the target: the input covers it at opacity 0 — still a real
+   checkbox, still focusable, still named by the wrapping <label> — and the
+   visible marker is a sibling whose checked state comes from `:checked ~`, so
+   keyboard, pointer, switch-control and screen-reader behaviour all stay
+   native. Add the class to any <label> wrapping a checkbox or radio. */
+.check-control { position: relative; cursor: pointer; }
+.check-control > input[type="checkbox"],
+.check-control > input[type="radio"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.check-mark {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 0.375rem;
+  border: 2px solid var(--line);
+  background: var(--bg);
+  display: grid;
+  place-items: center;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+.check-mark--radio { border-radius: 9999px; }
+.check-control > input:checked ~ .check-mark { background: var(--ink); border-color: var(--ink); }
+.check-control > input:checked ~ .check-mark::after {
+  content: "";
+  width: 0.7rem;
+  height: 0.375rem;
+  border-left: 2px solid var(--bg);
+  border-bottom: 2px solid var(--bg);
+  transform: translateY(-1px) rotate(-45deg);
+}
+.check-control > input:checked ~ .check-mark--radio::after {
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--bg);
+  transform: none;
+}
+.check-control > input:focus-visible ~ .check-mark { outline: 2px solid var(--ink); outline-offset: 2px; }
+
 /* ---- press feedback, focus, motion ---- */
 button { -webkit-tap-highlight-color: transparent; }
 .btn:active, button:active { transform: scale(0.985); }

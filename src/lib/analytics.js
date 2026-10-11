@@ -3,6 +3,7 @@
 
 import { recommendNext, activePrescriptionOutcomes } from "./progression.js";
 import { EXERCISE_BY_ID } from "./data.js";
+import { parseReps, e1rm } from "./trainingMath.js";
 
 export function weeklyVolume(history){
   const byWeek = {};
@@ -32,7 +33,7 @@ export function frequencyByMuscleSync(history, byId){
 export function strengthSeries(history, exerciseId){
   const pts=[];
   for(const h of history||[]) for(const b of h.blocks||[]) if(b.exerciseId===exerciseId) for(const s of b.sets||[]){
-    const w=Number(s.weightKg)||0, r=Number(String(s.reps).match(/\d+/)?.[0]||s.reps)||0; if(w&&r){ const e1rm=w*(1+r/30); pts.push({ dateISO:h.dateISO, e1rm: Math.round(e1rm), w, r }); }
+    const w=Number(s.weightKg)||0, r=parseReps(s.reps); if(w&&r){ const est=e1rm(w,r); pts.push({ dateISO:h.dateISO, e1rm: Math.round(est), w, r }); }
   }
   return pts;
 }

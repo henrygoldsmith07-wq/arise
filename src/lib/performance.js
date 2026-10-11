@@ -12,16 +12,17 @@
 // 'low' | 'medium' | 'high' with a plain-English reason.
 
 import { classifyPR } from './progression.js';
+import { parseReps } from './trainingMath.js';
 
 const E1RM_MIN_COMPARABLE = 3;
 
-function parseReps(value){
-  const n = Number(String(value ?? '').match(/\d+/)?.[0]);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
+// Epley through the shared trainingMath formula, but returning null (not 0)
+// so callers can detect an unusable value with `== null`. The 0 sentinel is
+// the shared implementation's; this wrapper is where this file's null
+// contract is applied.
 function e1rm(weightKg, reps){
-  const w = Number(weightKg), r = parseReps(reps);
+  const w = Number(weightKg);
+  const r = parseReps(reps);
   return w > 0 && r > 0 ? w * (1 + r / 30) : null;
 }
 

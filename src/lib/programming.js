@@ -21,6 +21,7 @@ import { plateauAttribution, deloadReadinessAssessment } from './sessionQuality.
 import { weeklyVolume, deloadOutcomes, recommendationFollowThrough } from './analytics.js';
 import { resolveArisePriors } from './priors.js';
 import { backtestHistory } from './backtesting.js';
+import { parseReps } from './trainingMath.js';
 
 const DAY_MS = 86400000;
 
@@ -41,11 +42,6 @@ function addDays(iso, days){
   const date = dateAt(iso);
   date.setUTCDate(date.getUTCDate() + days);
   return toISO(date);
-}
-
-function parseReps(value){
-  const match = String(value ?? '').match(/\d+/);
-  return match ? Number(match[0]) : 0;
 }
 
 function parseTimeMinutes(value){

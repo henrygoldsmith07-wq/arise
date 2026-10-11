@@ -148,7 +148,7 @@ export default function SyncPanel({ store, setStore, setMsg }){
       <div className="flex items-center gap-2">
         <p className="text-xs font-bold">Cross-device sync</p>
         {status && <StatusPill label={status} />}
-        <label className="ml-auto flex items-center gap-1.5 text-xs">
+        <label className="check-control ml-auto flex min-h-11 items-center gap-1.5 text-xs">
           <input
             type="checkbox"
             checked={enabled}
@@ -161,6 +161,7 @@ export default function SyncPanel({ store, setStore, setMsg }){
               setTimeout(() => setMsg(null), 5000);
             }}
           />
+          <span aria-hidden className="check-mark" />
           Enabled
         </label>
       </div>
@@ -188,8 +189,9 @@ export default function SyncPanel({ store, setStore, setMsg }){
           <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder={sanitized?.passwordSet ? '•••• saved' : 'app password'} autoComplete="new-password"
             className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm" />
         </label>
-        <label className="flex items-center gap-2 text-xs">
+        <label className="check-control flex min-h-11 items-center gap-2 text-xs">
           <input type="checkbox" checked={form.encryption} onChange={(e) => setForm({ ...form, encryption: e.target.checked })} />
+          <span aria-hidden className="check-mark" />
           End-to-end encrypt the synced file (recommended)
         </label>
         {form.encryption && (
