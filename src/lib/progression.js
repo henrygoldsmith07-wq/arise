@@ -7,11 +7,13 @@ import { DEFAULT_ARISE_PRIORS, resolveArisePriors, clamp } from './priors.js';
 import { nearestLoadToPlates, nearestAchievableLoad } from './plates.js';
 import { EXERCISE_BY_ID } from './data.js';
 import { trainingAgeInfo, trainingBreakInfo, shortBreakInfo } from './progressionTrainingAge.js';
+import { e1rm, epleyToLoad, parseReps } from './trainingMath.js';
 
 export * from './progressionTrainingAge.js';
-
-export function e1rm(weightKg, reps){ if(!(weightKg>0 && reps>0)) return 0; return weightKg * (1 + reps/30); }
-export function epleyToLoad(e1rmVal, reps){ return e1rmVal / (1 + reps/30); }
+// The Epley pair and rep parsing live in trainingMath.js so every module reads
+// the same formula; these re-exports keep the engine's public surface (and its
+// tests) unchanged. Callers should prefer importing from trainingMath directly.
+export { e1rm, epleyToLoad, parseReps };
 
 // These aliases are kept for existing consumers. The values now come from the
 // explicit, versioned priors object rather than a decision-local constant.
@@ -356,6 +358,12 @@ export function classifyPR({ priorBestE1rm, newE1rm, note, priorNote, config = n
 }
 
 // RIR from RPE; single source of truth
+// NOTE — this is NOT the same function as sessionRunnerModel.rirFromRpe, and
+// must not be consolidated with it. This is the ENGINE layer: callers do
+// numeric comparisons on the result (`rir < 2` in progressionPolicies) and use
+// null as their "no RPE logged" sentinel. The runner layer returns a rounded
+// STRING because it fills a text field. Same input, two contracts, one per
+// layer — see sessionRunnerModel.js for that half.
 export function rirFromRpe(rpe){ if(rpe==null || rpe==="") return null; const n=Number(rpe); if(!Number.isFinite(n)) return null; return Math.max(0, Math.min(10, 10 - n)); }
 export function proximityLabel(rir){
   if(rir==null) return "";

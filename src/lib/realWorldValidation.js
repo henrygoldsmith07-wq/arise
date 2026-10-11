@@ -12,6 +12,7 @@ import { rankedSubstitutions, MOVEMENT_PATTERNS } from './substitutions.js';
 import { EXERCISE_BY_ID } from './data.js';
 import { nearestLoadToPlates, DEFAULT_PLATE_DENOMINATIONS_KG } from './plates.js';
 import { mesocycleComparison } from './analytics.js';
+import { parseReps } from './trainingMath.js';
 
 const DAY_MS = 86400000;
 const OUTCOME_CLASSES = ['success', 'failure', 'stagnation', 'regression'];
@@ -19,13 +20,6 @@ const OUTCOME_CLASSES = ['success', 'failure', 'stagnation', 'regression'];
 function number(value){
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
-}
-
-function parseReps(value){
-  if(value == null) return 0;
-  if(typeof value === 'number') return Number.isFinite(value) ? value : 0;
-  const match = String(value).match(/\d+/);
-  return match ? Number(match[0]) : 0;
 }
 
 function round(value, digits = 3){

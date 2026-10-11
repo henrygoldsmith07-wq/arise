@@ -1,5 +1,6 @@
 import { getCachedStore, setCachedStore, isCleared, isStorageHydrated, resetHydratedCache } from './storage.js';
 import { ensureStudyParticipantId, generateStudyParticipantId } from './studyIdentity.js';
+import { parseReps, e1rm } from './trainingMath.js';
 
 const KEY = 'arise.store.v1';
 const CORRUPT_KEY = 'arise.store.v1.corrupt';
@@ -358,24 +359,24 @@ export function lastExerciseSets(history, exerciseId){
 export function prsHitBySession(session, priorHistory){
   const priorBest = new Map(); // exerciseId -> { e1rm, note }
   for(const h of priorHistory) for(const b of h.blocks || []) for(const s of b.sets || []){
-    const w = Number(s.weightKg), r = Number(String(s.reps).match(/\d+/)?.[0] || s.reps);
+    const w = Number(s.weightKg), r = parseReps(s.reps);
     if(!(w > 0 && r > 0)) continue;
-    const e1rm = w * (1 + r / 30);
+    const est = e1rm(w, r);
     const prev = priorBest.get(b.exerciseId);
-    if(!prev || e1rm > prev.e1rm) priorBest.set(b.exerciseId, { e1rm, note: h.note||'' });
+    if(!prev || est > prev.e1rm) priorBest.set(b.exerciseId, { e1rm: est, note: h.note||'' });
   }
   const hits = [];
   for(const b of session.blocks || []) for(const s of b.sets || []){
-    const w = Number(s.weightKg), r = Number(String(s.reps).match(/\d+/)?.[0] || s.reps);
+    const w = Number(s.weightKg), r = parseReps(s.reps);
     if(!(w > 0 && r > 0)) continue;
-    const e1rm = w * (1 + r / 30);
+    const est = e1rm(w, r);
     const prev = priorBest.get(b.exerciseId);
     const priorE1 = prev?.e1rm || 0;
     // ROM/technique guard: if either prior or new note mentions rom/depth/technique, skip
     const combined = `${prev?.note||''} ${session.note||''} ${s.rom||''}`.toLowerCase();
     const techniqueChange = /rom|depth|range|technique|form|paused|tempo|assisted|band|partial/.test(combined);
     if(techniqueChange) continue;
-    if(e1rm > priorE1 * 1.02 && e1rm > priorE1 + 0.5) hits.push({ exerciseId: b.exerciseId, e1rm: Math.round(e1rm), weight: w, reps: r, techniqueChange: false });
+    if(est > priorE1 * 1.02 && est > priorE1 + 0.5) hits.push({ exerciseId: b.exerciseId, e1rm: Math.round(est), weight: w, reps: r, techniqueChange: false });
   }
   const best = new Map();
   for(const h of hits){

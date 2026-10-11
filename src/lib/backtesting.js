@@ -21,17 +21,13 @@ import {
 } from './sessionQuality.js';
 import { empiricalOrPrior, resolveArisePriors, clamp } from './priors.js';
 import { EXERCISE_BY_ID } from './data.js';
+import { parseReps } from './trainingMath.js';
 
 export const BENCHMARK_FORMAT_VERSION = 1;
 
 function number(value, fallback = 0){
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
-}
-
-function parseReps(value){
-  const match = String(value ?? '').match(/\d+(?:\.\d+)?/);
-  return match ? Number(match[0]) : 0;
 }
 
 function dateMs(dateISO){

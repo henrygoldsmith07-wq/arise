@@ -15,6 +15,7 @@ import { resolveArisePriors, clamp } from './priors.js';
 import { personalisedRate, e1rm, strategyForExercise, recommendNext } from './progression.js';
 import { movementPatternFor } from './substitutions.js';
 import { classifyReadiness, READINESS_RECOMMENDATIONS } from './readinessClassifier.js';
+import { parseReps } from './trainingMath.js';
 
 // ── Small shared helpers ────────────────────────────────────────────────
 
@@ -25,10 +26,6 @@ function round(value, digits = 3){
   if(!Number.isFinite(Number(value))) return null;
   const p = 10 ** digits;
   return Math.round(Number(value) * p) / p;
-}
-function parseReps(value){
-  const match = String(value ?? '').match(/\d+(?:\.\d+)?/);
-  return match ? Number(match[0]) : 0;
 }
 function dayDiff(fromISO, toISO){
   const a = Date.parse(`${fromISO}T00:00:00Z`), b = Date.parse(`${toISO}T00:00:00Z`);

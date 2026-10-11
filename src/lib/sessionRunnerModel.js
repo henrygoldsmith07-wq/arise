@@ -29,6 +29,12 @@ export function parseRunnerNumber(value){
   return Number.isFinite(number) ? number : 0;
 }
 
+// NOTE — deliberately NOT sessionRunnerModel/engine's rirFromRpe. This is the
+// RUNNER layer: the result fills a text field, so it is a STRING (callers call
+// .trim() on it) and is rounded to the nearest half step, which is what the RIR
+// suggestion picker offers. The engine's copy returns a NUMBER with a null
+// sentinel because progressionPolicies compares it numerically. Merging the two
+// would break one of them; see progression.js for its half.
 export function rirFromRpe(rpe){
   const text = String(rpe ?? '').trim();
   if(text === '') return '';

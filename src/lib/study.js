@@ -26,17 +26,13 @@ import { STUDY_DESIGN } from './studyDesign.js';
 export { STUDY_DESIGN } from './studyDesign.js';
 import { DAY_MS, daysBetweenDateOnly, parseDateOnlyUTC } from './dateOnly.js';
 import { EXERCISE_BY_ID, equipmentClassFor } from './data.js';
+import { parseReps } from './trainingMath.js';
 
 export const STUDY_ARMS = ['arise', 'double-progression', 'linear-progression', 'fixed-rules', 'flat'];
 
 const LINEAR_STEP_KG = 2.5;
 
 // ── Exposure extraction ─────────────────────────────────────────────────
-
-function parseReps(value){
-  const match = String(value ?? '').match(/\d+(?:\.\d+)?/);
-  return match ? Number(match[0]) : 0;
-}
 
 function bestSetOfBlock(block){
   let best = null;

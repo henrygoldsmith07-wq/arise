@@ -2,7 +2,11 @@
 // ledger (ADR 0007). Split from longitudinal.js so the pure aggregation in
 // evaluation.js can import these without touching storage or consent logic.
 
+import { parseReps, e1rm } from './trainingMath.js';
 export const EVALUATION_SCHEMA_VERSION = 2;
+
+// Rep parsing and Epley now live in trainingMath.js so the evaluation ledger, the engine and every report share one formula. The import above gives this module its own bindings; the re-export keeps evaluation.js and fieldStudy.js importing them from here unchanged.
+export { parseReps, e1rm } from './trainingMath.js';
 
 // ── Statistics helpers ──────────────────────────────────────────────────
 // Wilson score interval: honest uncertainty for proportion estimates even at
@@ -74,17 +78,6 @@ export function round(value, digits = 3){
   if(!Number.isFinite(Number(value))) return null;
   const p = 10 ** digits;
   return Math.round(Number(value) * p) / p;
-}
-
-export function parseReps(value){
-  const match = String(value ?? '').match(/\d+(?:\.\d+)?/);
-  return match ? Number(match[0]) : 0;
-}
-
-export function e1rm(weightKg, reps){
-  const w = Number(weightKg) || 0;
-  const r = parseReps(reps);
-  return w > 0 && r > 0 ? w * (1 + r / 30) : 0;
 }
 
 export function hasConsent(preferences){

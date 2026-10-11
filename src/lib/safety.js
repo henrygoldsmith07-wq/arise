@@ -13,6 +13,7 @@
 // tuning adjusts one object. Weeks are calendar buckets by dateISO.
 
 import { localDateISO } from './dateOnly.js';
+import { e1rm } from './trainingMath.js';
 
 // ── Tunables ──────────────────────────────────────────────────────────────
 export const SAFETY_CONFIG = {
@@ -91,7 +92,7 @@ export function sessionBestE1rm(h){
   for(const { set: s } of setsOf(h)){
     const w = parseNum(s.weightKg) - parseNum(s.assistedKg);
     const r = parseNum(s.reps);
-    if(w > 0 && r > 0) best = Math.max(best, w * (1 + r / 30));
+    if(w > 0 && r > 0) best = Math.max(best, e1rm(w, r));
   }
   return best;
 }
@@ -227,7 +228,7 @@ export function unrealisticPrWarnings(history, { today = null, config = SAFETY_C
       const r = parseNum(s.reps);
       if(w <= 0 || r <= 0) continue;
       const list = byExercise.get(exerciseId) || [];
-      list.push({ date: sessionDate(h), e1rm: w * (1 + r / 30) });
+      list.push({ date: sessionDate(h), e1rm: e1rm(w, r) });
       byExercise.set(exerciseId, list);
     }
   }
