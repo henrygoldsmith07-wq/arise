@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { dismissConsent } from './helpers.js';
 
 // Guided workout mode end-to-end: the More-view settings section and a full
 // guided workout from Today through to a saved session in Progress.
@@ -38,14 +39,6 @@ async function completeOnboarding(page){
   // Step 5: optional preferences → save
   await page.getByRole('button', { name: /Save & continue/i }).click();
   await expect(page.getByRole('dialog', { name: 'Onboarding' })).toBeHidden();
-}
-
-async function dismissConsent(page){
-  const consent = page.getByRole('dialog', { name: 'Local measurement consent' });
-  if(await consent.isVisible().catch(() => false)){
-    await consent.getByRole('button', { name: 'No thanks' }).click();
-  }
-  await expect(consent).toBeHidden();
 }
 
 async function scheduleProgram(page){

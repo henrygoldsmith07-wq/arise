@@ -130,6 +130,12 @@ async function readUserFacingState(page){
 }
 
 test('export → wipe IndexedDB → restore reproduces history, attributes and level exactly', async ({ page })=>{
+  // The full cycle is export → IndexedDB wipe (deleteDatabase) → app rehydrate
+  // from an empty store (onboarding + consent re-shown, dismissed here) →
+  // import → merge → reload → read-back: well over 15s end to end, so the 30s
+  // default is too tight once the deterministic wait for onboarding is in
+  // place. Give it room without making the test itself lazy.
+  test.setTimeout(90000);
   await completeOnboarding(page);
   await logSessions(page);
 
@@ -165,8 +171,14 @@ test('export → wipe IndexedDB → restore reproduces history, attributes and l
   // A wiped device is a first-run device: onboarding and consent are back.
   // Complete them again so the import path is reachable — the point of the
   // test is that the BACKUP carries the training, not the onboarding profile.
+  // WAIT for onboarding rather than sampling it once. After the wipe the app
+  // rehydrates from an empty store, and an isVisible() snapshot taken before
+  // hydration resolves reads "not visible" — which then lets onboarding open on
+  // top of the import preview and swallow the Apply Merge click. That race is
+  // what made this test fail intermittently.
   const dialog = page.getByRole('dialog', { name:'Onboarding' });
-  if(await dialog.isVisible().catch(()=> false)) await completeOnboarding(page);
+  await expect(dialog).toBeVisible({ timeout:15_000 });
+  await completeOnboarding(page);
   await page.getByRole('button', { name:'More', exact:true }).click();
   // "Import backup" is a styled <label> wrapping the real input, so drive the
   // input directly rather than clicking the label.
