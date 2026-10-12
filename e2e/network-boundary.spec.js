@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { dismissConsent } from './helpers.js';
 import { INTEGRATIONS_ON, NEEDS_DEFAULT_BUILD } from './helpers/integrations.js';
 
 // The network-boundary guarantee, proven rather than asserted.
@@ -86,12 +87,7 @@ async function completeOnboarding(page){
   await page.getByRole('button', { name:'Next', exact:true }).click();
   await page.getByRole('button', { name:/Save & continue/i }).click();
   await expect(page.getByRole('dialog', { name:'Onboarding' })).toBeHidden();
-
-  const consent = page.getByRole('dialog', { name:'Local measurement consent' });
-  if(await consent.isVisible().catch(()=> false)){
-    await consent.getByRole('button', { name:'No thanks' }).click();
-    await expect(consent).toBeHidden();
-  }
+  await dismissConsent(page);
 }
 
 async function logARealSession(page){

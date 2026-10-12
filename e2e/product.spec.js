@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { dismissConsent } from './helpers.js';
 
 // Product-strategy e2e: the demo mode lifecycle (load → labeled exploration →
 // one-tap exit to a genuinely empty app) and the experience-level gate
@@ -282,16 +283,6 @@ test.describe('Progress assessment', () => {
 test.describe('Prospective prescription capture', () => {
   test.beforeEach(async ({ page }) => completeOnboarding(page));
 
-  // The undecided-consent card appears inline and shifts layout mid-flow;
-  // dismiss it up front so taps land where aimed (same as guided-mode.spec).
-  async function dismissConsentCard(page){
-    const consent = page.getByRole('dialog', { name: 'Local measurement consent' });
-    if(await consent.isVisible().catch(() => false)){
-      await consent.getByRole('button', { name: 'No thanks' }).click();
-    }
-    await expect(consent).toBeHidden();
-  }
-
   test('freezes the shown prescription at display time, persists it to the draft, and copies it at save', async ({ page }) => {
     await page.getByRole('button', { name: 'Train' }).click();
     const recCard = page.locator('[aria-label="Recommended for you"]');
@@ -429,7 +420,7 @@ test.describe('Prospective prescription capture', () => {
   });
 
   test('a swap after completed work splits the block instead of relabelling it', async ({ page }) => {
-    await dismissConsentCard(page);
+    await dismissConsent(page);
     await page.getByRole('button', { name: 'Train' }).click();
     const recCard = page.locator('[aria-label="Recommended for you"]');
     if (await recCard.getByRole('button', { name: 'Start programme' }).isVisible().catch(() => false)) {

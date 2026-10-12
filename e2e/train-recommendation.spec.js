@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { dismissConsent } from './helpers.js';
 
 // Train recommendation-first e2e: the profile recommendation is the primary
 // experience, an active programme takes priority over it, and the management
@@ -26,10 +27,7 @@ async function completeOnboarding(page){
   await page.getByRole('button', { name: 'Next' }).click();
   await page.getByRole('button', { name: /Save & continue/i }).click();
   await expect(page.getByRole('dialog', { name: 'Onboarding' })).toBeHidden();
-  const consent = page.getByRole('dialog', { name: 'Local measurement consent' });
-  if(await consent.isVisible().catch(() => false)){
-    await consent.getByRole('button', { name: 'No thanks' }).click();
-  }
+  await dismissConsent(page);
   // First-value onboarding auto-starts the recommended programme, but these
   // tests study the recommendation surface itself, which renders only when no
   // programme is active. Clear the auto-started plan through the product's own
