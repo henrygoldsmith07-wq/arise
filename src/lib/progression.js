@@ -210,6 +210,14 @@ export function recommendNext({ exerciseId, history, targetReps = null, conserva
   }
   if(load === 0 && isBodyweight(exerciseId, cfg)){
     if(reps < hi) return { load: null, reps: reps + 1, reason: `Bodyweight: add a rep (${reps}→${reps+1}).`, strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version };
+    // Top of range: name the exercise's own harder variant instead of a generic hint.
+    const bwLadder = bodyweightVariantLadder(exerciseId, cfg, history);
+    if(bwLadder.next){
+      const ladderMeta = bwLadder.ladder
+        ? { variantLadder: { from: exerciseId, to: bwLadder.next.id, ...bwLadder.ladder } }
+        : {};
+      return { load: null, reps: lo, variant: bwLadder.next.id, ...ladderMeta, reason: bwLadder.reason, strategy: strat, personalised: prate, suggestWeighted: true, trainingAge, priorsVersion: cfg.version };
+    }
     return { load: null, reps, reason: "Top of range — try harder variant (decline/weighted/tempo).", strategy: strat, personalised: prate, suggestWeighted: true, trainingAge, priorsVersion: cfg.version };
   }
   const rpe = last.rpe != null && String(last.rpe).trim()!=='' ? Number(last.rpe) : null;
@@ -699,6 +707,82 @@ function plateAware(result, plateConfig, exerciseId = null){
 function isBodyweight(id, config = null){
   const pattern = resolveArisePriors(config).progression.bodyweightPattern;
   return new RegExp(`(?:^|-)(${pattern})(?:-|$)`, 'i').test(id || '') || id === 'bodyweight-squat';
+}
+
+// Bodyweight variant ladders (priors: progression.bodyweightVariants).
+//
+// A bodyweight lift at the top of its rep range with no load cannot add kg —
+// the honest next step is a harder variant of the SAME movement. The declared
+// ladder resolves which one, honouring two constraints that make the
+// recommendation trustworthy:
+//
+//   kit      — the variant may need no kit beyond the head exercise's own, so a
+//              bodyweight-only user is never prescribed a barbell or a bench.
+//   level    — a STEP-UP must be harder than the head, not merely different.
+//              The library's own level field is the objective claim available
+//              here. Without it the ladder's first entry is usually an on-ramp
+//              or a regression (knee-push-up under push-up, negative-pull-up
+//              under pull-up), and "step up" tells an intermediate to go
+//              backwards.
+//
+// A declared ladder can legitimately hold both on-ramps and step-ups; the level
+// filter is what makes only the step-ups reachable here.
+//
+// When no ladder covers the head, the declared `fallback` key reuses the head's
+// own substitution list (still kit- and level-filtered), so an uncovered
+// exercise recommends something specific rather than a generic hint.
+
+const LEVEL_RANK = { Beginner: 0, Novice: 0, Intermediate: 1, Advanced: 2, Expert: 3 };
+const levelRank = (level) => LEVEL_RANK[level] ?? 0;
+
+function bodyweightVariantLadder(exerciseId, cfg, history = []){
+  const vCfg = cfg.progression.bodyweightVariants || {};
+  const head = EXERCISE_BY_ID[exerciseId];
+  if(!head) return {};
+
+  let ladder = Array.isArray(vCfg[exerciseId]) ? vCfg[exerciseId] : null;
+  let source = 'ladder';
+  if(!ladder && vCfg.fallback){
+    ladder = Array.isArray(head.substitution) ? head.substitution.slice() : [];
+    source = 'declared';
+  }
+  if(!ladder.length) return {};
+
+  const headKit = new Set(head.equipment || ['bodyweight']);
+  const headRank = levelRank(head.level);
+
+  // Everything the user has already logged as an exercise id, so the ladder can
+  // advance past rungs they have demonstrated rather than repeating one.
+  const demonstrated = new Set(
+    (Array.isArray(history) ? history : [])
+      .flatMap((s) => (s.blocks || []).map((b) => b.exerciseId))
+      .filter(Boolean)
+  );
+
+  // Kit, self and level filters, then smallest honest step first. Array#sort is
+  // stable, so step-ups of equal level keep the declared order (the data file's
+  // ordering is deliberate — closest match first).
+  const candidates = ladder
+    .map((id) => EXERCISE_BY_ID[id])
+    .filter(Boolean)
+    .filter((ex) => ex.id !== exerciseId)
+    .filter((ex) => (ex.equipment || []).every((e) => headKit.has(e)))
+    .filter((ex) => levelRank(ex.level) > headRank)
+    .sort((a, b) => levelRank(a.level) - levelRank(b.level));
+  if(!candidates.length) return {};
+
+  // First rung not yet demonstrated. If every rung has been logged, hold at the
+  // hardest rather than inventing something outside the declared knowledge.
+  const next = candidates.find((c) => !demonstrated.has(c.id)) || candidates[candidates.length - 1];
+  const name = next.name || next.id;
+  const kitNote = source === 'declared' ? ` (listed alternative for ${head.name})` : '';
+  return {
+    next,
+    reason: `Top of ${head.name} range — step up to ${name}${kitNote}.`,
+    // Where the step sits in the honest set of achievable rungs, so a UI (and
+    // the coach) can show the whole remaining path, not just the next rung.
+    ladder: { total: candidates.length, step: candidates.indexOf(next) + 1 },
+  };
 }
 
 // Stable chronology is part of the backtest contract. Dates are the only

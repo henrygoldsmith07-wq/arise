@@ -19,6 +19,7 @@
 // recommendations and verdicts come out. No React, no storage, no I/O.
 
 import { resolveArisePriors } from './priors.js';
+import { EXERCISE_BY_ID } from './data.js';
 import {
   e1rm,
   strengthTrendWithConfidence,
@@ -327,6 +328,15 @@ export function plateauConfidence(sessions, { config = null } = {}){
 export function buildExplanation({ rec, policy, confidence, uncertainty, evidence, trends, exerciseName }){
   const name = exerciseName || 'this lift';
   const loadPart = rec.load != null && rec.load > 0 ? `${rec.load} kg` : 'bodyweight';
+  // A variant step-up replaces the load number as the actionable target: the
+  // row must carry the variant by name or the user never sees it. When the
+  // engine also resolved where that rung sits in the exercise's own ladder,
+  // surface the whole remaining path — a step is less motivating when it looks
+  // like a one-off suggestion rather than a route.
+  const variantStep = rec?.variantLadder && rec.variantLadder.total > 0
+    ? ` (ladder step ${rec.variantLadder.step} of ${rec.variantLadder.total})`
+    : '';
+  const variantPart = rec.variant && EXERCISE_BY_ID[rec.variant] ? ` → ${EXERCISE_BY_ID[rec.variant].name}${variantStep}` : '';
   const repsPart = rec.reps != null ? ` × ${rec.reps}` : '';
   const guardText = {
     'maintenance-hold': 'maintenance',
@@ -341,7 +351,7 @@ export function buildExplanation({ rec, policy, confidence, uncertainty, evidenc
     // Simple = the action. Standard = the why. Advanced = the whole ledger.
     simple: rec.guard
       ? `${name}: hold${rec.load != null && rec.load > 0 ? ` ${rec.load} kg` : ''}${repsPart} — ${guardText}.`
-      : `${name}: ${loadPart}${repsPart}.`,
+      : `${name}: ${loadPart}${repsPart}${variantPart}.`,
     standard: rec.reason,
     advanced: `${rec.reason} | ${policy.label} policy v${policy.version}: load scale ×${policy.loadScale}, jump cap ${Math.round(policy.maxLoadJumpPct * 100)}%. Confidence ${confidence.band} (${confidence.score}) from ${evidence.sessions} sessions, spread ${Math.round((confidence.factors.spread||0) * 100)}%, 6wk r² ${confidence.factors.r2}. Uncertainty ${uncertainty.label}. Trends: ${trendLine}. Evidence: ${evidence.trendWindows}/4 windows populated.`,
   };

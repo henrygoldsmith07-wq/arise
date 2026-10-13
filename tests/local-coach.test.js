@@ -8,7 +8,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { localCoachAnswer, classifyCoachQuestion } from '../src/lib/coach/localCoach.js';
+import { localCoachAnswer, classifyCoachQuestion, resolveFollowUp } from '../src/lib/coach/localCoach.js';
 import { makeDemoStore } from '../src/lib/demoData.js';
 
 const store = makeDemoStore();
@@ -26,6 +26,10 @@ describe('coach intent classification', ()=>{
       ['I missed my session yesterday', 'missed'],
       ['am I improving?', 'progress'],
       ['why this programme?', 'programme'],
+      ['how do I progress my push ups?', 'progression'],
+      ['what weight should I add to glute bridge?', 'progression'],
+      ['should I go up a kg on rows?', 'progression'],
+      ['make my squats harder', 'progression'],
       ['what is the capital of France', 'general'],
     ];
     for(const [q, expected] of cases){
@@ -113,5 +117,99 @@ describe('localCoachAnswer', ()=>{
     const r = localCoachAnswer('explain my week', { store: { history: 'not-an-array', activeSchedule: 7 } });
     assert.equal(r.ok, false);
     assert.equal(typeof r.error, 'string');
+  });
+});
+
+// Added in the bodyweight/progression coach pass: "how do I progress X" routes
+// to the engine's prescriptions quoted verbatim — never a generic pep talk.
+describe('coach progression intent answers with engine prescriptions', ()=>{
+  it('answers a progression question with the engine\'s actual prescription and reason', ()=>{
+    const r = localCoachAnswer('how do I progress my push ups?', { store });
+    assert.equal(r.ok, true);
+    // The demo programme includes push-up prescriptions from the engine — the
+    // answer must quote engine content (an action with lifts × reps), not
+    // invent one.
+    assert.match(r.text, /(Why:|×|\d) /, 'answer carries engine content');
+    assert.equal(r.source, 'local-coach');
+  });
+
+  it('falls back honestly when no plan exists', ()=>{
+    const empty = { history: [], activeSchedule: null, readinessLog: [] };
+    const r = localCoachAnswer('how do I progress my push ups?', { store: empty });
+    // Either the honest "plan holds the decisions" pointer (no recommendations)
+    // or the not-enough-data refusal.
+    if(r.ok){
+      assert.match(r.text, /plan|Progress|Today/i);
+    }else{
+      assert.match(r.error, /enough logged|not enough/i);
+    }
+  });
+});
+
+// Follow-up memory: "and for rows?" after a progression question must resolve
+// against the lift universe the engine already knows, without a full re-type.
+// The memory is pure and caller-owned: localCoachAnswer returns what the NEXT
+// turn may use, and no storage happens inside the coach.
+describe('coach follow-up memory', ()=>{
+  const KNOWN = ['push-up', 'dumbbell-row', 'goblet-squat', 'bench-press-dumbbell'];
+
+  it('resolveFollowUp rewrites a named follow-up grounded in a known lift', ()=>{
+    const r = resolveFollowUp('and for rows?', { last: { intent: 'progression', question: 'how do I progress my push ups?', actions: ['push-up — 3×8'] }, knownLifts: KNOWN });
+    assert.equal(r.followUp, true);
+    assert.equal(r.rewritten, 'how do I progress my rows');
+    assert.equal(classifyCoachQuestion(r.rewritten).id, 'progression');
+  });
+
+  it('resolveFollowUp never rewrites a capture that matches no known lift', ()=>{
+    const r = resolveFollowUp('and also I felt tired', { last: { intent: 'progression', question: 'how do I progress my push ups?', actions: [] }, knownLifts: KNOWN });
+    assert.equal(r.followUp, false, 'an unmatched capture must not become an exercise question');
+  });
+
+  it('resolveFollowUp never overrides a question that stands on its own', ()=>{
+    const r = resolveFollowUp('am I improving?', { last: { intent: 'progression', question: 'how do I progress my push ups?', actions: [] }, knownLifts: KNOWN });
+    assert.equal(r.followUp, false);
+  });
+
+  it('answers "and for rows?" with the ROWS prescription, not the quoted lift', ()=>{
+    const first = localCoachAnswer('how do I progress my push ups?', { store });
+    assert.equal(first.ok, true);
+    const second = localCoachAnswer('and for rows?', { store, last: first.remember });
+    assert.equal(second.ok, true);
+    assert.match(second.text, /row/i, 'the follow-up must be about rows');
+    assert.doesNotMatch(second.text, /push up/i, 'the quoted lift must not leak into the follow-up answer');
+    assert.equal(second.followUp?.exercise, 'rows');
+    // The remembered antecedent is whichever row prescription the engine
+    // actually quoted — assert the shape, not the demo lineup, which may
+    // legitimately change.
+    assert.match(second.remember?.exerciseId || '', /(^|\-)row$/);
+  });
+
+  it('a bare "and?" after a progression turn lists the remaining named engine decisions', ()=>{
+    const first = localCoachAnswer('how do I progress my push ups?', { store });
+    assert.equal(first.ok, true);
+    const second = localCoachAnswer('and?', { store, last: first.remember });
+    assert.equal(second.ok, true);
+    assert.equal(second.followUp?.more, true);
+    assert.ok(second.text.length > 20);
+    for(const action of first.remember.actions){
+      assert.ok(!second.text.includes(action), 'already-quoted decisions must not repeat');
+    }
+  });
+
+  it('the memory object is plain serialisable data and never invents a prescription', ()=>{
+    const first = localCoachAnswer('how do I progress my push ups?', { store });
+    assert.equal(first.ok, true);
+    assert.equal(typeof first.remember.intent, 'string');
+    assert.ok(Array.isArray(first.remember.actions));
+    assert.deepEqual(JSON.parse(JSON.stringify(first.remember)), first.remember);
+    // reuse the no-fabrication contract on the follow-up answer
+    const second = localCoachAnswer('and for rows?', { store, last: first.remember });
+    const forbidden = [
+      /increase (?:your )?(?:load|weight) .* to \d+/i,
+      /you should (?:add|do) \d+\s*(?:kg|lb|sets?)/i,
+    ];
+    for(const re of forbidden){
+      assert.doesNotMatch(second.text, re, 'follow-up answers stay under the no-fabrication contract');
+    }
   });
 });

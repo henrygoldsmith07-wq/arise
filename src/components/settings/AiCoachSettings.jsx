@@ -16,6 +16,10 @@ export default function AiCoachSettings({ store }){
   const [routingEnabled,setRoutingEnabled]=useState(()=> getCoachRoutingSettings().enabled);
   const [busy,setBusy]=useState(false);
   const [result,setResult]=useState(null);
+  // Follow-up memory: the previous local turn's `remember` object, held only
+  // for this component session. It lets "and for rows?" ("the rest?") resolve
+  // against the lift just discussed — nothing is stored on disk or synced.
+  const [lastTurn,setLastTurn]=useState(null);
   const { message, flash } = useTransientMessage();
   const current = getAiSettings();
 
@@ -39,8 +43,12 @@ export default function AiCoachSettings({ store }){
         baseUrl: baseUrl.trim() || current.baseUrl,
         model,
         persistKey,
+        last: lastTurn,
       });
       setResult(response);
+      // Only a successful local turn updates the antecedent; a failed ask
+      // never poisons the thread.
+      if(response?.ok && response.remember) setLastTurn(response.remember);
     }catch(err){
       setResult({ ok:false, error:String(err?.message || err).slice(0, 140) });
     }finally{
@@ -52,6 +60,7 @@ export default function AiCoachSettings({ store }){
     clearAiSettings();
     setPersistKey(false);
     setResult(null);
+    setLastTurn(null);
     setApiKeyInput('');
     flash('AI key cleared from this browser.');
   };
@@ -104,6 +113,12 @@ export default function AiCoachSettings({ store }){
         </div>
         {result && (
           <div role="status" aria-live="polite" className={`rounded-xl border px-3 py-2 text-xs whitespace-pre-wrap ${result.ok ? 'border-line bg-surface' : 'border-review/40 bg-reviewsoft text-ink'}`}>
+            {result.ok && result.followUp?.more && (
+              <p className="text-[10px] font-semibold text-ink2">Continuing your last question — the engine's other decisions:</p>
+            )}
+            {result.ok && result.followUp?.exercise && (
+              <p className="text-[10px] font-semibold text-ink2">Same question, applied to {result.followUp.exercise}.</p>
+            )}
             {result.ok ? result.text : `AI request unavailable: ${result.error}`}
             {result.ok && (
               <p className="mt-2 pt-2 border-t border-line text-[10px] text-ink3">

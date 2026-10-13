@@ -230,7 +230,15 @@ const CHUNK_BUDGET_KB = 34;
 // not boot: boot (109.9 ≤ 120) and largest-lazy (26.4 ≤ 34) are UNCHANGED,
 // which is what user-perceived load actually depends on. Measured total 387.5,
 // so ~1.5 kB of binding headroom is retained above it.
-const TOTAL_BUDGET_KB = 389;
+// total 389 → 391 kB with the coach follow-up memory round: antecedent
+// resolution ("and for rows?" / "and?") in localCoach + coachService, the
+// lift-token matcher shared by intent builders, the variant-ladder step/total
+// metadata in progression.js and its rendering in the policy Simple explanation,
+// and the two follow-up labels in the settings panel. All requested product
+// logic in lazy/settings chunks; boot (110.5 ≤ 120) and largest-lazy (26.4 ≤ 34)
+// budgets are UNCHANGED, which is what user-perceived load depends on. Measured
+// total 389.9, ~1.1 kB of binding headroom retained above it.
+const TOTAL_BUDGET_KB = 391;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

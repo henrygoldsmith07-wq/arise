@@ -24,6 +24,11 @@
 //     used to receive, still under the "engine is authoritative" prompt;
 //   * no silent network — nothing leaves the device unless the user configured
 //     a host.
+//
+// Follow-up memory: the caller may pass `last` — the previous turn's
+// `remember` object returned by localCoachAnswer. Nothing is stored here or
+// in the coach itself; the memory is session-scoped component state, so it
+// never persists beyond the window where it was typed and never travels.
 
 import { aiCoachRoute, buildTrainingContext, COACH_FEEDBACK_URL, requestCoachInsight, saveAiSettings, DEFAULT_BASE_URL, isValidEndpointUrl } from '../lib/aiCoach.js';
 import { localCoachAnswer, classifyCoachQuestion } from '../lib/coach/localCoach.js';
@@ -31,7 +36,7 @@ import { integrationEnabledByBuild } from '../lib/integrations.js';
 
 const RECOMMENDATION_LANES = new Set(['coach-cloud']);
 
-export async function runCoachRequest({ question, store, apiKey, baseUrl, model, persistKey = false }){
+export async function runCoachRequest({ question, store, apiKey, baseUrl, model, persistKey = false, last = null }){
   const prompt = String(question || '').trim();
   if(!prompt) return { ok:false, error:'Ask a question first.' };
   const key = String(apiKey || '').trim();
@@ -63,7 +68,7 @@ export async function runCoachRequest({ question, store, apiKey, baseUrl, model,
   // returns ok:false only when the engines genuinely have nothing to say, in
   // which case escalating to a model would produce invented numbers — the one
   // thing the whole architecture exists to prevent.
-  const local = localCoachAnswer(prompt, { store: store || {} });
+  const local = localCoachAnswer(prompt, { store: store || {}, last });
   if(local.ok){
     // A configured, compiled-in endpoint is still allowed to expand on this,
     // but only when the user set one up. Without it, the local answer is the
@@ -77,6 +82,8 @@ export async function runCoachRequest({ question, store, apiKey, baseUrl, model,
         intent: local.intent,
         confidence: local.confidence,
         evidence: local.evidence,
+        remember: local.remember,
+        followUp: local.followUp,
         offline: true,
       };
     }
@@ -98,6 +105,8 @@ export async function runCoachRequest({ question, store, apiKey, baseUrl, model,
       intent: local.intent,
       confidence: local.confidence,
       evidence: local.evidence,
+      remember: local.remember,
+      followUp: local.followUp,
       offline: true,
       note: `Your configured endpoint was unreachable (${cloud.error}), so this is the on-device answer.`,
     };

@@ -137,6 +137,28 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
       pushPattern: 'push-up|press|dip',
     },
     bodyweightPattern: 'bodyweight|push-up|plank|dead-bug|glute-bridge|lunge|burpee|pull-up|pike-push-up|incline-push-up',
+    // Bodyweight progression ladders (progression.js bodyweightVariantLadder).
+    // When a bodyweight lift tops out on reps at zero load, the honest overload
+    // is a harder variant of the SAME movement — so each head lists its own
+    // ordered ladder. Entries must (a) exist in EXERCISE_BY_ID and (b) be no
+    // harder to kit than the head exercise; both are asserted in
+    // tests/bodyweight-progression.test.js. The `fallback` key arms whatever the
+    // head's own substitution list offers when no ladder covers it.
+    //
+    // A ladder may list on-ramps AND step-ups: only entries whose level field
+    // is above the head's are ever recommended, so an on-ramp listed here (for
+    // scaling DOWN) can never surface as a step-up.
+    bodyweightVariants: {
+      'push-up': ['knee-push-up', 'wide-push-up', 'diamond-push-up', 'decline-push-up', 'archer-push-up', 'weighted-push-up'],
+      'incline-push-up': ['push-up'],
+      'bodyweight-squat': ['banded-squat', 'jump-squat', 'split-squat', 'bulgarian-split-squat', 'pistol-squat'],
+      'glute-bridge': ['single-leg-glute-bridge', 'hip-thrust', 'barbell-glute-bridge'],
+      'pull-up': ['negative-pull-up', 'scapular-pull-up', 'chin-up', 'weighted-pull-up'],
+      'plank': ['side-plank'],
+      'pike-push-up': ['wall-walk', 'wall-handstand-push-up', 'handstand-push-up'],
+      'lunge': ['bulgarian-split-squat', 'pistol-squat'],
+      fallback: true,
+    },
   },
   sessionQuality: {
     readiness: {

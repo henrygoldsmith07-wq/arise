@@ -40,6 +40,81 @@ function exerciseName(id){
   return id ? id.replace(/-/g, ' ') : id;
 }
 
+// ── Lift-name matching ──────────────────────────────────────────────────
+// Users say "squats" for "squat", "rows" for "barbell-row". The matchers
+// tokenise (lowercase, punctuation out, articles out), singularise the tokens,
+// then accept a match when either side contains the other. Without this the
+// follow-up path would demand the exact ID the store uses — a fidelity the
+// stated contract ("how do I progress my push ups?") never had.
+function singular(word){
+  return word.length > 3 && /s$/.test(word) && !/(ss|us|x|z|ch|sh)$/.test(word) ? word.slice(0, -1) : word;
+}
+function liftTokens(text){
+  const norm = String(text || '').toLowerCase().replace(/-/g, ' ')
+    .replace(/[?!.]/g, '')
+    .replace(/\b(?:my|the|a|an)\b/g, '')
+    .replace(/\s+/g, ' ').trim();
+  return norm ? norm.split(' ').map(singular).join(' ') : '';
+}
+function matchesAnyLift(asked, candidates){
+  const a = liftTokens(asked);
+  if(!a) return false;
+  return (Array.isArray(candidates) ? candidates : []).some(c => {
+    const t = liftTokens(c);
+    return t ? (t.includes(a) || a.includes(t)) : false;
+  });
+}
+
+// ── Follow-up memory (pure — the caller owns the storage) ────────────────
+// A coach that forgets the lift it just discussed forces the user to re-type
+// a full question every turn. The caller keeps the previous turn's `remember`
+// object (returned by localCoachAnswer) in local state and passes it back as
+// `last`; nothing is stored here, so the function stays pure and the memory
+// stays session-scoped by construction.
+const FOLLOW_INTENTS = new Set(['exercise', 'progression']);
+const NAMED_FOLLOWUP_RE = /^(?:(?:and|also|or)\s+(?:for\s+|with\s+)?|(?:what|how)\s+about\s+|same\s+(?:for|with)\s+)(?:my\s+|the\s+|that\s+)?([a-z][a-z0-9\-\s]{2,40}?)[\?.!]*$/i;
+const BARE_FOLLOWUP_RE = /^(?:and|also|or|more|the rest|anything else|what else|go on|continue|\?)\s*\??$/i;
+
+/**
+ * Resolve a potential follow-up against the previous turn.
+ *
+ * @param {string} question
+ * @param {object} ctx  { last: {intent, question, actions}|null, knownLifts: string[] }
+ * @returns {{question: string, rewritten?: string, followUp: boolean, exercise?: string, more?: boolean}}
+ *   `question` is the question to actually answer (possibly rewritten); the
+ *   extra fields describe WHY a rewrite happened so the caller can label it.
+ */
+export function resolveFollowUp(question, { last = null, knownLifts = [] } = {}){
+  const text = String(question || '').trim();
+  if(!last || !FOLLOW_INTENTS.has(last.intent) || !text) return { question: text, followUp: false };
+  // A question that would stand on its own is never rewritten — memory only
+  // fills gaps ("and for rows?"), it never overrides an explicit ask, and a
+  // bare "also …" question that already carries its own intent is classified
+  // normally rather than hijacked by the previous turn.
+  if(classifyCoachQuestion(text).id !== 'general') return { question: text, followUp: false };
+  const named = text.match(NAMED_FOLLOWUP_RE);
+  const ex = named?.[1];
+  if(ex && matchesAnyLift(ex, knownLifts)){
+    // Ground the rewrite in lifts the engine actually knows about — a capture
+    // that matches no known lift ("and also I feel tired?") must never become
+    // a fabricated exercise question.
+    const rewritten = last.intent === 'exercise'
+      ? `why did my ${ex} stall`
+      : `how do I progress my ${ex}`;
+    return { question: rewritten, rewritten, followUp: true, exercise: ex };
+  }
+  // Bare continuation ("and?", "the rest?") after a progression question asks
+  // for the other engine decisions of the day, minus what was already quoted.
+  // Short, self-contained continuations only — "explain my week" is three words
+  // and is NOT one.
+  const isBare = text.split(/\s+/).length <= 3
+    && /^(?:and|also|or|more|the rest|anything else|what else|go on|continue|\?)[\s?!]*$/i.test(text);
+  if(isBare && last?.intent === 'progression' && Array.isArray(last.actions)){
+    return { question: text, followUp: true, more: true };
+  }
+  return { question: text, followUp: false };
+}
+
 // ── Intent classification ────────────────────────────────────────────────
 // Deliberately conservative and explicit: a question that matches no intent
 // gets a "here is what I can tell you" answer rather than a guessed one.
@@ -53,6 +128,10 @@ const INTENTS = [
   {
     id: 'exercise',
     re: /\b(my|the)\s+([a-z][a-z0-9\-\s]{2,40}?)\s+(stall|stalled|plateau|stuck|regress|lose|losing|drop|falling|not (?:going|moving|improving))/i,
+  },
+  {
+    id: 'progression',
+    re: /\b(how do i (get stronger|progress|continue)|progress (my|the|that) |make (my |the |that )?[a-z\- ]*(harder|tougher|more challenging)|what(?:'| i)s? my next.{0,24}(target|goal|reps?|weight)|\b(add|going|go) [a-z ]{0,12}\bup\b.{0,8}\b(weight|load|reps?|kg|lb)|\bin (weight|load|kg|lbs?)\b|\b(weight|load|reps?)\b.{0,24}\b(add|increase|go|went)\b|\b(add|increase|more)\b.{0,18}\b(weight|load|reps?|kg)\b|heavier (on|for)|(my|the) (next|target) (reps?|set|load|weight))/i,
   },
   {
     id: 'plateau',
@@ -100,15 +179,28 @@ function exerciseFromText(text){
   return m ? m[1].trim() : null;
 }
 
+// A progression question names its lift loosely ("my push ups", "rows",
+// "squats harder"): the tail after the last my/the/that, with verb tokens
+// trimmed from the END until a plausible lift phrase remains. The caller's
+// lift filter decides whether a phrase actually matches a known lift; when
+// nothing matches, every prescription is quoted rather than guessing one.
+function progressionLiftName(question){
+  const tail = (String(question || '').match(/\b(?:my|the|that)\s+([a-z][a-z0-9\-\s]{2,40}?)[\?!.]*$/i) || [])[1];
+  if(!tail) return null;
+  const words = tail.replace(/[?!.]+$/, '').trim().split(/\s+/);
+  while(words.length){
+    const cand = words.join(' ');
+    if(cand.length >= 3) return cand;
+    words.pop();
+  }
+  return null;
+}
+
 function answerExercise(question, state){
   const asked = exerciseFromText(question);
   if(!asked) return null;
   const rec = (state.recommendations || []).find(r =>
-    r.exerciseId && (
-      r.exerciseId.replace(/-/g, ' ').includes(asked.replace(/-/g, ' ')) ||
-      asked.replace(/-/g, ' ').includes(r.exerciseId.replace(/-/g, ' ')) ||
-      String(r.action || '').toLowerCase().includes(asked.toLowerCase())
-    )
+    r.exerciseId && matchesAnyLift(asked, [r.exerciseId, r.action])
   );
   if(!rec){
     // No prescription-level finding for that lift. Say so honestly rather than
@@ -247,6 +339,53 @@ function answerProgramme(state){
   return out;
 }
 
+function answerProgression(question, state){
+  // The engine's own prescription for the next exposure IS the answer to a
+  // progression question: load, reps, or a variant step-up. Quoted verbatim,
+  // with the reasoning — this is exactly the "a coach that shows its work"
+  // contract. If today's plan has no prescriptions yet, the honest answer is
+  // where the engine's decisions live.
+  const rx = (state.recommendations || []).filter(r => r.kind === 'prescription');
+  if(!rx.length) return [
+    'Your plan holds the progression decisions — each lift on Today states what to do next with its reason, and Progress shows how each decision turned out.' +
+    (state.summary ? ` Current state: ${state.summary}.` : ''),
+  ];
+  const asked = progressionLiftName(question) || exerciseFromText(question);
+  let rows = rx;
+  if(asked){
+    const named = rx.filter(r => r.exerciseId && matchesAnyLift(asked, [r.exerciseId, r.action]));
+    if(named.length) rows = named;
+  }
+  const out = [];
+  for(const r of rows.slice(0, 5)){
+    out.push(`${r.action}.`);
+    if(r.reason) out.push(`Why: ${r.reason}`);
+    if(r.expectedOutcome) out.push(`What it should achieve: ${r.expectedOutcome}.`);
+    if(r.basis === 'initial') out.push('This is still on the initial estimate — it calibrates to your logged sets as they accumulate.');
+  }
+  const guardKinds = new Set(['plateau', 'recovery', 'deload']);
+  const guards = (state.recommendations || []).filter(r => guardKinds.has(r.kind));
+  if(guards.length){
+    out.push(`Held: ${guards.slice(0, 2).map(g => g.reason || g.action).join(' ')}`);
+  }
+  return out;
+}
+
+function answerProgressionMore(state, excludeActions = []){
+  const rx = (state.recommendations || [])
+    .filter(r => r.kind === 'prescription')
+    .filter(r => !excludeActions.includes(r.action));
+  if(!rx.length) return [
+    'Everything the engine is changing on today\'s plan has already been quoted — nothing else moves today.',
+  ];
+  const out = ['On the lifts not covered just now:'];
+  for(const r of rx.slice(0, 5)){
+    out.push(`${r.action}.`);
+    if(r.reason) out.push(`Why: ${r.reason}`);
+  }
+  return out;
+}
+
 function answerGeneral(state, profile){
   // The honest fallback: what the engines can actually tell this user right
   // now, plus where to go. Better than a confident answer about nothing.
@@ -256,7 +395,7 @@ function answerGeneral(state, profile){
   const rx = (state.recommendations || []).filter(r => r.kind === 'prescription').slice(0, 3);
   if(rx.length) out.push(`What the engine is deciding today: ${rx.map(r => r.action).join('; ')}.`);
   if(profile?.rows?.length) out.push(`What Arise uses to decide what to change: ${profile.rows.length} measured pattern${profile.rows.length === 1 ? '' : 's'} about your training.`);
-  out.push('Ask me about your week, a lift that has stalled, whether you are improving, a plateau, or a missed session.');
+  out.push('Ask me about your week, how to progress a lift, a lift that has stalled, whether you are improving, a plateau, or a missed session.');
   return out;
 }
 
@@ -270,10 +409,13 @@ function answerGeneral(state, profile){
  * @returns {{ok:true, text:string, intent:string, confidence:string|null, source:'local-coach', evidence:string[]}
  *          |{ok:false, error:string}}
  */
-export function localCoachAnswer(question, { store = {}, today = null, plateConfig = null } = {}){
-  const { id } = classifyCoachQuestion(question);
-  if(id === 'empty') return { ok: false, error: 'Ask a question first.' };
+export function localCoachAnswer(question, { store = {}, today = null, plateConfig = null, last = null } = {}){
+  const rawQuestion = String(question || '').trim();
+  if(!rawQuestion) return { ok: false, error: 'Ask a question first.' };
 
+  // Follow-up resolution needs today's lift universe, so the state is built
+  // BEFORE the question is rewritten — a malformed store still fails softly,
+  // and a rewrite is always grounded in a lift the engine actually knows.
   let state;
   try{
     state = buildCoachingState({ store, today, plateConfig });
@@ -283,9 +425,28 @@ export function localCoachAnswer(question, { store = {}, today = null, plateConf
   let profile = null;
   try{ profile = buildTrainingProfile({ store, today }); }catch{ profile = null; }
 
+  const knownLifts = [
+    ...(state.recommendations || []).filter(r => r.kind === 'prescription' && r.exerciseId).map(r => r.exerciseId),
+    ...(store.history || []).flatMap(h => (h?.blocks || []).map(b => b?.exerciseId)).filter(Boolean),
+  ].filter((v, i, arr) => arr.indexOf(v) === i);
+  const fu = resolveFollowUp(rawQuestion, { last, knownLifts });
+  const effectiveQuestion = fu.rewritten || rawQuestion;
+
+  const { id: classifiedId } = classifyCoachQuestion(effectiveQuestion);
+  // A bare continuation ("and?", "more?") borrows the previous turn's intent
+  // and answers with the engine's remaining decisions; an explicit new question
+  // never does.
+  let id = classifiedId;
+  if(fu.more && id === 'general' && last?.intent === 'progression' && Array.isArray(last.actions)) id = 'progression';
+
   let paragraphs = null;
   switch(id){
-    case 'exercise': paragraphs = answerExercise(question, state); break;
+    case 'exercise': paragraphs = answerExercise(effectiveQuestion, state); break;
+    case 'progression':
+      paragraphs = (fu.more && Array.isArray(last?.actions))
+        ? answerProgressionMore(state, last.actions)
+        : answerProgression(effectiveQuestion, state);
+      break;
     case 'plateau': paragraphs = answerPlateau(state); break;
     case 'deload': paragraphs = answerDeload(state); break;
     case 'missed': paragraphs = answerMissed(state); break;
@@ -300,14 +461,14 @@ export function localCoachAnswer(question, { store = {}, today = null, plateConf
     return { ok: false, error: 'Not enough logged yet for me to answer that honestly — log a session or two and ask again.' };
   }
 
-  const text = paragraphs.filter(Boolean).join(' ');
-  // Evidence travels with the answer so the UI can show provenance, and so a
-  // remote model can be held to the same standard if one is configured later.
-  // Match recommendations whose action text is quoted in a paragraph — a
-  // recommendation without an action contributes its raw evidence instead.
-  const evidence = (state.recommendations || [])
-    .filter(r => r.action && paragraphs.some(p => p.includes(r.action)))
-    .flatMap(r => (r.evidence || []).slice(0, 2));
+  // Which recommendations the answer actually quoted — this drives BOTH the
+  // evidence trail of this turn and the memory the next turn may need to know
+  // what has already been covered by a bare "and?".
+  const paragraphsOut = paragraphs.filter(Boolean);
+  const text = paragraphsOut.join(' ');
+  const quoted = (state.recommendations || [])
+    .filter(r => r.action && paragraphsOut.some(p => p.includes(r.action)));
+  const evidence = quoted.flatMap(r => (r.evidence || []).slice(0, 2));
 
   return {
     ok: true,
@@ -316,5 +477,23 @@ export function localCoachAnswer(question, { store = {}, today = null, plateConf
     confidence: state.confidence || null,
     source: 'local-coach',
     evidence,
+    // What the NEXT turn may use to resolve a follow-up. The CALLer stores it
+    // (component state or session storage); this function stays pure and
+    // nothing here is ever persisted or networked.
+    remember: {
+      intent: id,
+      question: effectiveQuestion,
+      exerciseId: quoted.length === 1 ? quoted[0].exerciseId : null,
+      actions: quoted.map(r => r.action),
+    },
+    // Set only when this turn CONTINUED the previous one, so the UI can label
+    // the thread honestly ("continuing from your last question").
+    followUp: fu.followUp
+      ? {
+          more: !!fu.more,
+          ...(fu.exercise ? { exercise: fu.exercise } : {}),
+          basedOn: (last && last.question) || null,
+        }
+      : null,
   };
 }
