@@ -44,7 +44,7 @@ function warmLazyViews(){
 }
 import { loadStore, saveStore } from './lib/store.js';
 import { clearAllStoredData, hydrateStorage, refreshCachedStoreFromIdb, subscribeStoreCommits, whenPersisted, getPersistenceError } from './lib/storage.js';
-import { getInitialTab, syncTabToUrl, subscribeToPopState } from './lib/router.js';
+import { getInitialTab, parseTabFromUrl, syncTabToUrl, subscribeToPopState } from './lib/router.js';
 import { recordEvent, recordErrorEvent } from './lib/telemetry.js';
 import { watchStandaloneBodyClass, consumeShortcut } from './lib/pwa.js';
 import { setHapticsSource } from './lib/haptics.js';
@@ -297,8 +297,18 @@ export default function App(){
   // home-screen shortcuts, and back/forward work. The initial load reads the
   // tab from the URL (via getInitialTab above); subsequent changes keep the
   // URL in sync and respond to browser navigation.
+  //
+  // Only EXPLICIT tab changes get a pushed history entry. When the URL already
+  // names this tab — the initial deep link, a missing param, or a popstate-
+  // driven change — history is already where it needs to be, so the sync
+  // replaces instead. Pushing there would give the back button a doubled trail
+  // and make the first back press land on the content the user is already
+  // looking at. `replace: true` on EVERY sync (as this once did) silently
+  // disabled back/forward entirely: the router's pushState branch was
+  // unreachable.
   useEffect(()=>{
-    syncTabToUrl(tab, { replace: true });
+    const urlTab = parseTabFromUrl(new URLSearchParams(window.location.search));
+    syncTabToUrl(tab, { replace: urlTab === tab || urlTab === null });
   }, [tab]);
   useEffect(() => subscribeToPopState(setTab), []);
 

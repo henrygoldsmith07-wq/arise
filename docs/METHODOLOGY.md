@@ -25,14 +25,32 @@ and deterministic (same inputs → same outputs, byte-identical in tests):
 4. **Double progression.** Reps first, then load, using the rep range of the
    exercise's goal. Bodyweight, assisted-bodyweight, unilateral, tempo and
    ROM variants each have their own progression rules.
-5. **Equipment honesty.** Barbell targets are rounded to your actual plate
+5. **Bodyweight variant ladders.** A bodyweight lift topped out on reps
+   has no kg to add — so each laddered exercise names its own harder rung
+   (push-up → wide → diamond → archer → weighted, filtering out rungs whose
+   kit you don't have; glute-bridge → single-leg; bodyweight-squat → jump →
+   pistol). Three constraints keep the recommendation trustworthy: the
+   variant may need no kit beyond the exercise's own, it must be *harder*
+   than the head rather than merely different (an on-ramp like knee-push-up
+   is never a step-up), and it advances past rungs you have already logged.
+   The recommendation carries the variant by name and resets the rep ladder
+   to the bottom of the range. An exercise whose ladder holds no harder
+   rung (plank, pike-push-up) declines rather than inventing one and falls
+   back to the generic hint; a ladderless bodyweight exercise uses the data
+   file's declared alternatives instead. `progression.bodyweightVariants`
+   holds the ladders (versioned priors), `bodyweightVariantLadder()`
+   resolves them, the policy layer surfaces the variant in Simple mode (with
+   the rung's position — "ladder step 1 of 5" — so the whole remaining path
+   is visible, not just the next rung), and
+   the session generator writes it into the block's load hint.
+6. **Equipment honesty.** Barbell targets are rounded to your actual plate
    inventory (`plates.js`); dumbbell targets to your pairs; machine targets
    to the stack increment. If a target is not achievable as written, the
    nearest achievable load is prescribed and the gap is explained.
-6. **Guardrails.** Repeated-failure holds, overshoot caps on aggressive
+7. **Guardrails.** Repeated-failure holds, overshoot caps on aggressive
    settings, pain-tag suppression, injury/return-from-break restarts, and
    sustained-trend deloads. Each guardrail fires with a stated reason.
-7. **Explanation.** Every output carries its evidence count, confidence,
+8. **Explanation.** Every output carries its evidence count, confidence,
    uncertainty, and a plain-language reason string. Simplified and advanced
    explanation modes render the same underlying audit trail.
 

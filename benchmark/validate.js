@@ -11,7 +11,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { validateProgression, recommendSets, romProgression, trainingAgeInfo } from "../src/lib/progression.js";
+import { validateProgression, recommendSets, romProgression, trainingAgeInfo, recommendNext } from "../src/lib/progression.js";
 import {
   readinessPerformanceCorrelation, deloadOutcomes, mesocycleComparison,
   recommendationFollowThrough, volumeBalanceAdvice,
@@ -175,6 +175,28 @@ const sustainedAssessment = deloadReadinessAssessment({
   logs: [{ reps:8, weightKg:40, rpe:"9" },{ reps:8, weightKg:40, rpe:"9" },{ reps:8, weightKg:40, rpe:"9" },{ reps:8, weightKg:40, rpe:"9" }],
 });
 
+// ── Bodyweight progression honesty ────────────────────────────────────────
+// A bodyweight lift at the top of its range is the engine's hardest honesty
+// case: there is no kg to add. The ladder must (a) name a REAL harder variant
+// of the same movement family, (b) never prescribe kit the head exercise does
+// not enable, and (c) reset reps to the bottom of the range when it steps up.
+const bwPushHist = [
+  mkSess("2026-05-25", "push-up", [{ reps:"8", weightKg:"", rpe:"6" }]),
+  mkSess("2026-06-01", "push-up", [{ reps:"10", weightKg:"", rpe:"6" }]),
+  mkSess("2026-06-08", "push-up", [{ reps:"12", weightKg:"", rpe:"6" }]),
+];
+const bwPushRec = recommendNext({ exerciseId: "push-up", history: bwPushHist, targetReps: "8–12" });
+const bwVariantExists = !!bwPushRec.variant && !!EXERCISE_BY_ID[bwPushRec.variant];
+const bwVariantName = bwVariantExists ? EXERCISE_BY_ID[bwPushRec.variant].name : "";
+// A bodyweight-only user (push-up's kit is just bodyweight) must never receive
+// a variant that needs more:
+const bwVariantKitHonest = !bwVariantExists || EXERCISE_BY_ID[bwPushRec.variant].equipment.every(e => EXERCISE_BY_ID["push-up"].equipment.includes(e));
+const bwVariantResetsReps = bwPushRec.reps === 8;
+// Bodyweight squat (not in the legacy regex but laddered): banded/jump → split → pistol → goblet.
+const bwSquatHist = [mkSess("2026-06-01", "bodyweight-squat", [{ reps:"20", weightKg:"", rpe:"6" }]), mkSess("2026-06-08", "bodyweight-squat", [{ reps:"22", weightKg:"", rpe:"6" }])];
+const bwSquatRec = recommendNext({ exerciseId: "bodyweight-squat", history: bwSquatHist, targetReps: "12–20" });
+const bwSquatHasVariant = !!bwSquatRec.variant && !!EXERCISE_BY_ID[bwSquatRec.variant];
+
 // PR scan: a genuine PR, a technique-changed PR, and a sub-2% jitter record.
 const prHist = [
   mkSess("2026-06-01", "bench-press-dumbbell", [{ reps:"8", weightKg:"20" }]),
@@ -208,6 +230,8 @@ const checks = [
   { name: "plateau attribution separates fatigue from genuine plateau", pass: genuineAttribution.kind === "genuine" && badAttribution.kind === "bad-sessions", detail: `good-readiness flat stretch → ${genuineAttribution.kind}; low-readiness flat stretch → ${badAttribution.kind}` },
   { name: "deload assessment ignores one-day readiness dips", pass: !dipAssessment.yes && dipAssessment.oneDayDip && sustainedAssessment.yes, detail: `single-day dip → deload ${dipAssessment.yes} (${dipAssessment.reason}); sustained low + high RPE + plateau → deload ${sustainedAssessment.yes}` },
   { name: "PR scan flags technique-changed and jitter records", pass: prScan.n === 3 && prScan.flagged === 2 && prScan.prs[0].meaningful && !prScan.prs[1].meaningful, detail: `${prScan.flagged}/${prScan.n} not like-for-like — ${prScan.prs.map(p=> p.exerciseId + " " + p.e1rm + "kg meaningful=" + p.meaningful).join(", ")}` },
+  { name: "bodyweight top-of-range names a real variant, kit-honest", pass: bwVariantExists && bwVariantKitHonest && bwVariantResetsReps, detail: `push-up at 12/8–12 → ${bwVariantName || "(generic hint)"}, reps reset=${bwPushRec.reps}, kit honest=${bwVariantKitHonest}` },
+  { name: "bodyweight squat ladders into harder variants", pass: bwSquatHasVariant, detail: `bodyweight-squat 22 reps → ${bwSquatRec.variant ? EXERCISE_BY_ID[bwSquatRec.variant].name : "(none)"}` },
 ];
 
 const failures = checks.filter(c=> !c.pass);
@@ -247,6 +271,7 @@ if(process.argv.includes("--write")){
     `| Plateau attribution (plateauAttribution) | good-readiness flat stretch → ${genuineAttribution.kind}; low-readiness flat stretch → ${badAttribution.kind} |`,
     `| Deload assessment (deloadReadinessAssessment) | one-day dip → deload ${dipAssessment.yes} (${dipAssessment.reason}); sustained → deload ${sustainedAssessment.yes} |`,
     `| PR scan (scanPRs) | ${prScan.flagged}/${prScan.n} records not like-for-like (technique change / jitter) |`,
+    `| Bodyweight progression | push-up top-of-range → ${bwVariantName || "generic"}, reps reset ${bwPushRec.reps}; bodyweight-squat → ${bwSquatRec.variant ? EXERCISE_BY_ID[bwSquatRec.variant].name : "none"} |`,
     "",
   ];
   fs.writeFileSync(path.join(__dirname, "results.md"), lines.join("\n"));

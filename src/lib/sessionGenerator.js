@@ -31,6 +31,11 @@ export function generateSession({ goal="general", availableEquipment=[], history
     const sets = setsForProgression(strategyForExercise(ex.id), rec);
     const reps = rec.reps || "8";
     const loadHint = rec.load != null && rec.load>0 ? `${rec.load}kg` : rec.assistKg != null && rec.assistKg>0 ? `${rec.assistKg}kg assist` : (rec.load===null? "bodyweight": "as prescribed");
+    // A variant step-up is the actual work: name it in the load hint slot so
+    // Today's block list and the session target both say "Knee Push-up"
+    // instead of an unchanged "bodyweight" no-op.
+    const variantName = rec.variant && EXERCISE_BY_ID[rec.variant]?.name || null;
+    const shownLoadHint = variantName ? variantName : loadHint;
     const isUnilateral = ex.unilateral || /lunge|split|single|bulgarian/i.test(ex.id);
     // Rest: use helper, fallback to 90
     const restSec = ex.muscle==="Cardio"?0: (recommendedRest({ exerciseId: ex.id, load: rec.load, rpe: null, setIndex: 0, totalSets: sets }) || 90);
@@ -42,7 +47,7 @@ export function generateSession({ goal="general", availableEquipment=[], history
       warmups = warmupSets({ exerciseId: ex.id, targetLoad: rec.load, targetReps: rec.reps, lastSets: prevBlock?.sets||null });
     }
     return {
-      exerciseId: ex.id, sets, reps: String(reps), restSec, loadHint,
+      exerciseId: ex.id, sets, reps: String(reps), restSec, loadHint: shownLoadHint,
       why: rec.reason, unilateral: isUnilateral, includeWarmup, warmups,
       progression: ex.progression || 'hypertrophy',
       supportsWeighted: !!ex.supportsWeighted,
