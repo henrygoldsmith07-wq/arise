@@ -5,6 +5,8 @@ import { e1rm } from '../lib/progression.js';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { totalVolumeKg } from '../lib/store.js';
 import { confidenceLanguage } from '../lib/performance.js';
+import { buildWeeklyReviewMarkdown, readinessVerdictLabel } from '../lib/weeklyReviewMarkdown.js';
+import { shareTextAsFile } from '../lib/nativeShare.js';
 
 const pctDelta = (a,b)=> b>0 ? Math.round((a-b)/b*1000)/10 : null;
 const exName = (id)=> EXERCISE_BY_ID[id]?.name || id;
@@ -17,6 +19,7 @@ const exName = (id)=> EXERCISE_BY_ID[id]?.name || id;
 // Analytics are converted into decisions; nothing here is a metric wall.
 export default function WeeklyReviewCard({ store, setStore }){
   const [expanded,setExpanded]=useState(false);
+  const [exportNote,setExportNote]=useState(null);
 
   const data = useMemo(()=>{
     try{
@@ -79,13 +82,25 @@ export default function WeeklyReviewCard({ store, setStore }){
         if(before > 0 && Math.abs(cur-before)/before < 0.02 && (exposuresBefore.get(id)||0) >= 3) flatExposures.push(exName(id));
       }
       if(flatExposures.length) noticed.push(`${flatExposures.slice(0,3).join(', ')}: flat across three or more exposures — a change of stimulus is the plan, not more grinding.`);
-      const rs = (store.readinessLog||[]).map(r=>Number(r.score)).filter(Number.isFinite).slice(-8);
-      if(rs.length >= 3){
-        const avg = rs.reduce((a,b)=>a+b,0)/rs.length;
-        noticed.push(avg >= 60 ? 'Recovery: no sustained fatigue signal detected.' : `Recovery: readiness averaged ${Math.round(avg)} — worth keeping an eye on sleep.`);
+      // Recovery: the engine's GRADUATED verdict (review.readinessDecision —
+      // the same classifyReadiness output the directives already reason from)
+      // instead of the naive "average of the newest 8 rows" this block used
+      // before: those rows could be months old, and the average never knew
+      // whether the engine considered the week as-planned or on the edge.
+      const rd = review.readinessDecision || null;
+      const verdict = readinessVerdictLabel(rd);
+      if(verdict){
+        noticed.push(`Recovery: ${verdict}${rd.score != null ? ` — ${rd.score} pts, ${rd.confidence || 'low'} confidence` : ''}.`);
       } else {
-        noticed.push('Recovery: not enough check-ins yet to read fatigue — the log grows with your sessions.');
+        noticed.push('Recovery: not enough logged to read fatigue yet — a couple of check-ins and this sharpens.');
       }
+      // Coverage is named because it IS the evidence: a verdict without the
+      // half-dozen check-ins behind it is a weaker read, and the user should
+      // see which week actually produced it.
+      const readinessInWeek = (store.readinessLog||[]).filter(r=> r?.dateISO && weekOf(String(r.dateISO).slice(0, 10)) === review.reviewedWeekKey).length;
+      noticed.push(readinessInWeek
+        ? `Evidence: ${readinessInWeek} readiness check-in${readinessInWeek === 1 ? '' : 's'} logged in the reviewed week.`
+        : 'No check-ins from the reviewed week — log one from Today to keep this read current.');
       if(!noticed.length && !improved.length && !steady.length) noticed.push('Not enough logged work this week to say much yet. Two or three sessions and the picture sharpens.');
 
       // New PRs: best e1RM exceeds every prior session per exercise.
@@ -115,6 +130,7 @@ export default function WeeklyReviewCard({ store, setStore }){
         volumeKg: volW,
         volumeDelta,
         improved, steady, insufficient, noticed, prs, learned,
+        readinessInWeek,
       };
     }catch{ return null; }
   },[store]);
@@ -222,6 +238,52 @@ export default function WeeklyReviewCard({ store, setStore }){
         <button onClick={accept} className="btn btn-primary flex-1 min-h-10 rounded-xl">{data.alreadyApplied ? 'Done' : 'Accept week'}</button>
         <button onClick={()=>setExpanded(e=>!e)} className="btn btn-secondary min-h-10 rounded-xl px-4">{expanded?'Hide reasons':'Show reasons'}</button>
       </div>
+
+      {/* Backlog item 6: the week as a Markdown file. Built from the same
+          computed shape the card renders — nothing is re-derived, so the file
+          can never drift from what the user saw. Handoff uses the platform
+          share sheet where one exists, clipboard elsewhere; 'cancelled' stays
+          silent and a download is not offered here — the full export surface
+          lives in More → Data. */}
+      {data && !data.alreadyApplied && (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={async ()=>{
+              try{
+                const md = buildWeeklyReviewMarkdown({
+                  weekLabel: data.weekNumber != null ? `week ${data.weekNumber}` : null,
+                  reviewedWeekKey: review.reviewedWeekKey,
+                  completion: data.completion,
+                  volumeKg: data.volumeKg,
+                  volumeDelta: data.volumeDelta,
+                  improved: data.improved,
+                  steady: data.steady,
+                  insufficient: data.insufficient,
+                  prs: data.prs,
+                  noticed: data.noticed,
+                  learned: data.learned,
+                  readinessDecision: review.readinessDecision,
+                  readinessInWeek: data.readinessInWeek,
+                  directives: structural.map(d=> ({ text: fmtDir(d), reason: d.reason })),
+                  deloadDecision: review.deloadDecision,
+                });
+                const result = await shareTextAsFile({
+                  text: md,
+                  filename: `arise-week-${review.reviewedWeekKey}.md`,
+                  mimeType: 'text/markdown',
+                  title: 'Arise weekly review',
+                });
+                if(result === 'copied') setExportNote('Copied as Markdown');
+                else if(result === 'shared') setExportNote('Shared');
+                else if(result === 'cancelled') setExportNote(null);
+                else setExportNote('Sharing unavailable — copy from the build view');
+              }catch{ setExportNote('Could not export this week'); }
+            }}
+            className="text-[11px] font-bold text-ink3 underline underline-offset-2"
+          >Export as Markdown</button>
+          {exportNote && <span className="text-[11px] text-ink3" role="status">{exportNote}</span>}
+        </div>
+      )}
     </section>
   );
 }

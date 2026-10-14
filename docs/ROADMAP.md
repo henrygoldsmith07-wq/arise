@@ -71,8 +71,10 @@ the "today" columns are stale — the architecture gate is still accurate).
 4. **Faster profile re-editing** — useful shortcut, deferred by the runtime budget
 5. **Workout note snippet picker** — useful convenience, deferred while the
    runtime bundle is at its product budget
-6. **Weekly Review Markdown export** — useful convenience, deferred while the
-   runtime bundle is at its product budget
+6. ~~**Weekly Review Markdown export**~~ — **shipped**: a pure builder
+   (`weeklyReviewMarkdown.js`, riding the already-loaded review card) shares
+   the week through the platform share sheet / clipboard; it renders exactly
+   what the card computed, including the engine's readiness verdict
 7. **Cohort report scheduling helper** (the `npm run study:report` CLI is
    manual by design; a wrapper that reminds when exports are due could help
    operators — only if operators ask for it)

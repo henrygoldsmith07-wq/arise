@@ -21,6 +21,7 @@ import { EXERCISE_BY_ID } from '../data.js';
 import { trainingAgeDisplay, consistencyInsights } from '../product.js';
 import { programAdherence, isoToday, plateauDetection } from '../programming.js';
 import { observedPrescriptionFollowThrough } from '../analytics.js';
+import { readinessTrend } from '../readinessLog.js';
 
 const conf = (n, highAt, mediumAt) => n >= highAt ? 'high' : n >= mediumAt ? 'medium' : 'low';
 
@@ -188,18 +189,42 @@ export function buildTrainingProfile({ store = {}, today = null } = {}){
     });
   }
 
-  // 9. Recovery signal — the user's own check-ins, averaged honestly.
-  const readiness = (store.readinessLog || []).map(r => Number(r.score)).filter(Number.isFinite).slice(-8);
-  if(readiness.length >= 3){
-    const avg = Math.round(readiness.reduce((a, b) => a + b, 0) / readiness.length);
+  // 9. Recovery signal — the user's own check-ins, read with a bounded
+  // window and a DIRECTION. The old line averaged the newest 8 rows
+  // regardless of age: a 6-week-old check-in said as much as yesterday's,
+  // and the number had no direction (was recovery improving or sliding?).
+  // readinessTrend() answers both: only rows inside a 14-day window count,
+  // and direction names the recent half against the half before it.
+  const trend = readinessTrend(store.readinessLog || [], { todayISO: now });
+  if(trend.available){
+    const phrase = trend.direction === 'improving' ? 'trending up'
+      : trend.direction === 'declining' ? 'trending down' : 'steady';
     rows.push({
       id: 'recovery-readiness',
       label: 'Recovery signal',
-      value: `Readiness averaging ${avg} (last ${readiness.length} check-ins)`,
-      detail: avg >= 60 ? 'No sustained fatigue signal in your recent check-ins.' : 'Recent check-ins read low — sleep and load are worth watching.',
-      confidence: conf(readiness.length, 6, 4),
-      evidence: [`Scores: ${readiness.join(', ')}.`],
-      source: 'readinessLog (your own check-ins)',
+      value: `Readiness ${phrase} — ${trend.recentAvg} recently vs ${trend.prevAvg} before, ${trend.entries} check-ins in ${trend.windowDays} days`,
+      detail: trend.direction === 'declining'
+        ? 'Recent check-ins read below the ones before them — sleep and load are worth watching.'
+        : trend.direction === 'improving'
+          ? 'Recent check-ins read better than the ones before them — keep whatever you were doing.'
+          : 'Check-ins hold level across the fortnight — no fatigue trend in your own readings.',
+      confidence: conf(trend.entries, 8, 6),
+      evidence: [
+        `Recent half average ${trend.recentAvg} vs ${trend.prevAvg} before it.`,
+        `Window: ${trend.firstDate} → ${trend.lastDate} (${trend.entries} check-ins).`,
+      ],
+      source: 'readinessLog (your own check-ins, 14-day window)',
+      editableVia: { label: 'Log a check-in from Today', hint: 'The signal is only as good as the check-ins behind it.' },
+    });
+  } else if(trend.entries){
+    rows.push({
+      id: 'recovery-readiness',
+      label: 'Recovery signal',
+      value: `Readiness averaging ${trend.recentAvg} (${trend.entries} check-ins in ${trend.windowDays} days)`,
+      detail: 'Not enough check-ins in the fortnight to call a direction — the trend names itself once coverage fills in.',
+      confidence: 'low',
+      evidence: [`Window: ${trend.firstDate || '—'} → ${trend.lastDate || '—'} (${trend.entries} check-ins).`],
+      source: 'readinessLog (your own check-ins, 14-day window)',
       editableVia: { label: 'Log a check-in from Today', hint: 'The signal is only as good as the check-ins behind it.' },
     });
   }

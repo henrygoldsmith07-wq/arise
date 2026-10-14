@@ -1,5 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { deriveXp } from '../lib/xp.js';
+const CoachPanel = lazy(() => import('./CoachPanel.jsx'));
+
+// The check-in channel's user-facing line: plain “what the trend says”
+// wording, honest about direction AND about absence. Not a component — so
+// the exact phrasing is assertable without a DOM.
+function readinessTrendLine(read){
+  if(read?.available){
+    return `Recovery (check-ins): ${read.direction === 'improving' ? 'improving' : read.direction === 'declining' ? 'declining' : 'steady'} — ${read.recentAvg} recently vs ${read.prevAvg} before, over ${read.entries} check-ins in ${read.windowDays} days.`;
+  }
+  if(read?.entries){
+    return `Recovery (check-ins): averaging ${read.recentAvg} over the last ${read.entries} — not enough yet to call a direction.`;
+  }
+  return null;
+}
 import WhatChangedPanel from './WhatChangedPanel.jsx';
 import { strengthTrends, workCapacity, consistencyReport, confidenceLanguage, personalBests } from '../lib/performance.js';
 import { totalVolumeKg } from '../lib/store.js';
@@ -18,6 +32,7 @@ import TrainingProfileCard from './TrainingProfileCard.jsx';
 import { longitudinalSummaryAsync } from '../lib/analyticsWorker.js';
 import { isSimpleView, isExpertView } from '../lib/experienceMode.js';
 import { milestoneState, trainingAgeDisplay, consistencyInsights, healthyStreak, monthlyDigest, nextBestAction, progressAssessment, whatChangedSummary, coachingCalibration, coachingEvidence, shadowAgreement } from '../lib/product.js';
+import { readinessTrend } from '../lib/readinessLog.js';
 import { todayISO, sessionForToday, nextSession } from '../lib/schedule.js';
 import { missedWorkoutRecovery } from '../lib/programming.js';
 
@@ -61,6 +76,11 @@ export default function ProgressView({ store, setStore = null, onStart = null })
   // context inside the assessment; the verdict needs repeated-exercise
   // performance plus prescription follow-through.
   const assessment = useMemo(()=> progressAssessment({ history, schedule: store.activeSchedule, today }), [history, store.activeSchedule, today]);
+  // The check-in channel's user-visible surface: the first half of the
+  // assessment card's completion — the user's OWN recovery readings, given a
+  // bounded window and a direction (readinessLog.readinessTrend). Read-only
+  // context here; never a verdict and never a prescription.
+  const readinessRead = useMemo(()=> readinessTrend(store.readinessLog || [], { todayISO: today }), [store.readinessLog, today]);
   const standardSignals = useMemo(()=> (assessment?.signals || []).slice(0, 4), [assessment]);
   const remainingSignals = (assessment?.signals || []).length - standardSignals.length;
   const freq = useMemo(()=> frequencyByMuscleSync(history, EXERCISE_BY_ID), [history]);
@@ -319,6 +339,9 @@ export default function ProgressView({ store, setStore = null, onStart = null })
           {!simple && (
             <p className="text-[11px] text-ink3">Data coverage: {assessment.coverage} · {assessment.basis}</p>
           )}
+          {!simple && readinessTrendLine(readinessRead) && (
+            <p className="text-[11px] text-ink3">{readinessTrendLine(readinessRead)}</p>
+          )}
           {expert && (
             <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
               <summary className="text-xs font-bold cursor-pointer">Evidence and calculations</summary>
@@ -333,6 +356,13 @@ export default function ProgressView({ store, setStore = null, onStart = null })
           )}
         </section>
       )}
+
+      {/* ── On-device coach (lazy): the full local coach engine, one tap deep
+          right where the assessment lives. Same session-scoped, on-device
+          contract as the Today entry point. ── */}
+      {/* programmeWhy is the same stored provenance coachingState derives:
+          the first-plan reasons, only while that programme is still active. */}
+      <Suspense fallback={null}><CoachPanel store={store} programmeWhy={(store.onboarding?.firstPlan && (!store.activeSchedule || store.onboarding.firstPlan.programId === store.activeSchedule.programId)) ? store.onboarding.firstPlan : null} /></Suspense>
 
       {/* ── The five questions (P2.9): interpretation before any chart ──
           What improved / What stalled / Why might it be happening — answered

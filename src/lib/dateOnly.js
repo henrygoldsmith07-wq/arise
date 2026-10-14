@@ -12,6 +12,19 @@ export function localDateISO(value = new Date()){
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
+/**
+ * Monday-start ISO week key (the same grouping mesocycle's weekly review
+ * uses, extracted here so read-only consumers like the readiness helpers
+ * don't have to import the review engine's catalogue-heavy module graph).
+ */
+export function mondayKeyISO(dateISO){
+  const d = new Date(`${dateISO}T00:00:00Z`);
+  if(Number.isNaN(d.getTime())) return null;
+  const monday = new Date(d);
+  monday.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return monday.toISOString().slice(0, 10);
+}
+
 export function dateISOAtOffset(value, offsetMinutes){
   const d = value instanceof Date ? value : new Date(value);
   const offset = Number(offsetMinutes);

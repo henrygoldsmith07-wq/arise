@@ -11,6 +11,7 @@ import {
 import { resolveExperience, isExpertView, isSimpleView, experiencePatch, EXPERIENCE_LEVELS } from '../src/lib/experienceMode.js';
 import { makeDemoStore, makeHistory, JOURNEY_SEEDS } from '../src/lib/demoData.js';
 import { validateStoreData } from '../src/lib/export.js';
+import { localDateISO } from '../src/lib/dateOnly.js';
 
 const TODAY = '2026-09-05';
 
@@ -251,11 +252,17 @@ describe('demo store honesty invariants', () => {
     assert.ok(!errors || errors.length === 0, `validation errors: ${JSON.stringify(errors)}`);
   });
   it('keeps the generator deterministic while alive on the real calendar', () => {
+    // This suite's whole point is the REAL calendar, so it is measured against
+    // the real clock (localDateISO). The hardcoded fixture TODAY above is for
+    // the deterministic engine fixtures; comparing generated history against
+    // it made this test a time bomb — it failed silently-falsely (and then
+    // loudly) once the real date passed the fixture constant.
+    const realToday = localDateISO();
     const h = makeHistory(JOURNEY_SEEDS.consistent, { sessions: 22, startDaysAgo: 38 });
-    assert.ok(h[0].dateISO <= TODAY);
+    assert.ok(h[0].dateISO <= realToday);
     // Living-relative freshness: the demo's last logged session must sit
     // within the last 14 days — never a dead archive.
-    const daysAgo = Math.round((Date.parse(`${TODAY}T00:00:00Z`) - Date.parse(`${h[h.length - 1].dateISO}T00:00:00Z`)) / 86400000);
-    assert.ok(daysAgo <= 14, `last session ${h[h.length - 1].dateISO} is ${daysAgo}d stale`);
+    const daysAgo = Math.round((Date.parse(`${realToday}T00:00:00Z`) - Date.parse(`${h[h.length - 1].dateISO}T00:00:00Z`)) / 86400000);
+    assert.ok(daysAgo <= 14 && daysAgo >= 0, `last session ${h[h.length - 1].dateISO} is ${daysAgo}d stale`);
   });
 });

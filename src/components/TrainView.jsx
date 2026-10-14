@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Suspense, lazy, useMemo, useState } from 'react';
 import { useDialogA11y } from '../lib/a11y.js';
 import { useDialogs } from './Dialog.jsx';
 import { PROGRAMS, PROGRAM_BY_ID, PROGRAM_TEMPLATES, programHistory as programVersionHistory, availablePrograms, EXERCISE_BY_ID, EXERCISES, plannedVsCompleted, GOALS, LEVELS } from '../lib/data.js';
@@ -10,6 +10,13 @@ import { buildEditorTemplate, moveItem, editorSubstitutionPreview } from '../lib
 import { applyEquipmentAdaptation, duplicateCustomTemplate, fallbackProgrammeId, generateProgrammeFromProfile, installSharedTemplate, restoreCustomTemplate, saveCustomTemplate, softDeleteCustomTemplate, startProgramme } from '../services/programmeService.js';
 import ProgressionPreview from './ProgressionPreview.jsx';
 import { programShelf } from '../lib/programShelf.js';
+
+// Evaluator time-to-first-value: the recommendation hero is where a new user
+// (and every Train-first visitor) lands with NO programme running. The
+// on-device coach mounts right under the pick — "why this programme?" gets a
+// real answer from the scorer's own stored reasons instead of a marketing
+// glance. Lazy: the coaching graph must never ride the Train chunk.
+const CoachPanel = lazy(() => import('./CoachPanel.jsx'));
 import { asUnit } from '../lib/units.ts';
 
 const EMPTY_DAY = { title: '', exercises: [{ exerciseId: '', sets: 3, reps: '8–12', restSec: 90 }] };
@@ -277,6 +284,14 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
           </div>
           <div className="space-y-1.5">
             <button onClick={startRecommendation} className="btn btn-primary w-full min-h-14 rounded-xl text-base font-extrabold uppercase tracking-wide">Start programme</button>
+            <Suspense fallback={null}>
+              <CoachPanel
+                store={store}
+                programmeWhy={recommendation?.reasons?.length
+                  ? { programId: recommendation.programId, name: recommendation.name || null, reasons: recommendation.reasons }
+                  : null}
+              />
+            </Suspense>
             <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
               <summary className="text-xs font-bold cursor-pointer">Why this programme?</summary>
               <p className="text-[11px] font-bold text-ink mt-2">Used to choose this programme</p>

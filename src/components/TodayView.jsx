@@ -2,7 +2,7 @@ import WeeklyReviewCard from './WeeklyReviewCard.jsx';
 import ReadinessCheckIn from './ReadinessCheckIn.jsx';
 import ProgrammeLifecycle from './ProgrammeLifecycle.jsx';
 import WhyExplainer from './WhyExplainer.jsx';
-import { useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useMemo, useRef, useState } from 'react';
 import { PROGRAM_BY_ID, EXERCISE_BY_ID, LOCATIONS, EQUIPMENT } from '../lib/data.js';
 import { isoToday, replanSchedule, shortWorkoutMode } from '../lib/programming.js';
 import { backupRecency as computeBackupRecency, backupRecencyLabel, readBackupState } from '../lib/backupState.js';
@@ -10,6 +10,10 @@ import WhatChangedPanel from './WhatChangedPanel.jsx';
 import { isSimpleView } from '../lib/experienceMode.js';
 import { buildCoachingState } from '../lib/coach/coachingState.js';
 import { storedWorkoutMode, workoutModePatch, workoutModeLabel } from '../lib/workoutMode.js';
+
+// Lazy: the panel pulls the full coaching-state graph, which must never
+// inflate this route chunk or the boot bundle (see coach-panel.test.js).
+const CoachPanel = lazy(() => import('./CoachPanel.jsx'));
 
 export default function TodayView({ store, setStore, onStartSession, onOpenTrain, onOpenProgress, plateConfig = null }){
   const sched = store.activeSchedule;
@@ -529,6 +533,11 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
       )}
 
       <WeeklyReviewCard store={store} setStore={setStore} />
+
+      {/* ── On-device coach (lazy): the full local coach engine, one tap deep in
+          the main loop instead of buried behind More → Settings. Renders its
+          own collapsed trigger; the answer state is session-scoped. ── */}
+      <Suspense fallback={null}><CoachPanel store={store} programmeWhy={coach.programmeWhy} /></Suspense>
 
       {/* ── Secondary: programme progress & audit trail — collapsed by default.
           On Today this is reference material, not decision material; the

@@ -29,15 +29,12 @@ import { rankedSubstitutions } from './substitutions.js';
 import { deloadReadinessAssessment } from './sessionQuality.js';
 import { resolvePolicy, sustainedDeloadCheck } from './progressionPolicies.js';
 import { classifyReadiness } from './readinessClassifier.js';
-import { localDateISO } from './dateOnly.js';
+import { localDateISO, mondayKeyISO } from './dateOnly.js';
 
-function mondayKey(dateISO){
-  const d = new Date(`${dateISO}T00:00:00Z`);
-  if(Number.isNaN(d.getTime())) return null;
-  const monday = new Date(d);
-  monday.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
-  return monday.toISOString().slice(0, 10);
-}
+// The Monday-start week grouping is shared with the readiness helpers via
+// dateOnly.mondayKeyISO — one implementation, no drift between the review's
+// week buckets and any other week-bounded read.
+function mondayKey(dateISO){ return mondayKeyISO(dateISO); }
 export function weekOf(dateISO){ return mondayKey(dateISO); }
 export function programmeWeekDateISO(session){
   return session?.scheduledDateISO || session?.dateISO || null;

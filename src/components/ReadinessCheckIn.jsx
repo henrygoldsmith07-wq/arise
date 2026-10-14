@@ -15,8 +15,8 @@
 import { useMemo, useState } from 'react';
 import {
   READINESS_SIGNALS, READINESS_SCALE_MIN, READINESS_SCALE_MAX,
-  readinessBand, readinessFormDefaults, readinessOn, removeReadinessEntry,
-  scoreReadinessInputs, upsertReadinessEntry,
+  readinessBand, readinessFormDefaults, readinessWeekCoverage, readinessOn,
+  removeReadinessEntry, scoreReadinessInputs, upsertReadinessEntry,
 } from '../lib/readinessLog.js';
 
 const SCALE = Array.from(
@@ -52,9 +52,16 @@ export default function ReadinessCheckIn({ store, setStore, todayISO }){
     || form.motivation !== existing?.motivation;
 
   // Collapsed, this is one line — the resting state of the Today tab.
+  // Zero week-coverage is the one state worth saying more about: the Weekly
+  // Review's recovery read leans on check-in coverage, and a week with none
+  // shows up there as "no check-ins from the reviewed week". Naming it HERE
+  // closes that loop where the fix is cheapest (one tap), without nagging on
+  // weeks that already have a row logged.
+  const coverage = useMemo(()=> readinessWeekCoverage(log, todayISO), [log, todayISO]);
+  const weekBlank = !existing && !justSaved && coverage.inWeek === 0;
   if(!open){
     return (
-      <div className="rounded-2xl border border-line bg-surface p-3">
+      <div className={`rounded-2xl p-3 ${weekBlank ? 'border border-review/40 bg-reviewsoft' : 'border border-line bg-surface'}`}>
         <button
           onClick={()=> setOpen(true)}
           aria-expanded={false}
@@ -66,6 +73,11 @@ export default function ReadinessCheckIn({ store, setStore, todayISO }){
             {justSaved ? `Logged — ${band.label}` : (existing ? `${existing.score} · ${readinessBand(existing.score).label}` : 'Not logged')}
           </span>
         </button>
+        {weekBlank && (
+          <p className="text-[11px] text-ink2 mt-1 leading-snug" data-testid="readiness-nudge">
+            No check-ins logged this week — the weekly recovery read is only as good as its coverage. One tap, three taps if anything changed.
+          </p>
+        )}
       </div>
     );
   }
