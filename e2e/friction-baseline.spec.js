@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { loadBaselines, checkLive, formatReport } from '../benchmark/friction-baselines.js';
 import { measureHitArea, gateVerdict } from './hit-target.js';
+import { awaitPersisted } from './helpers.js';
 
 // Executable baselines: docs/friction-baseline.json is validated on load
 // (schema + every derived delta/%/direction recomputed — hand-maintained
@@ -53,6 +54,10 @@ async function completeOnboarding(page){
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('button', { name: /Save & continue/i }).click();
   await expect(page.getByRole('dialog', { name: 'Onboarding' })).toBeHidden();
+  // The profile commits to IndexedDB asynchronously. enableTelemetry (below)
+  // reloads, and a reload that beats the commit boots profile-less — the
+  // onboarding dialog reappears and intercepts every later click.
+  await awaitPersisted(page);
 }
 
 async function enableTelemetry(page){
@@ -62,6 +67,7 @@ async function enableTelemetry(page){
     store.preferences = { ...(store.preferences || {}), telemetryEnabled: true, telemetryOptions: { sessionTimings: true } };
     saveStore(store);
   });
+  await awaitPersisted(page);
   await page.reload();
 }
 
