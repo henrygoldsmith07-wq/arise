@@ -29,3 +29,31 @@ export async function dismissConsent(page){
   }
   await expect(consent).toBeHidden();
 }
+
+/**
+ * Wait until the onboarding profile is durably committed to canonical
+ * IndexedDB — two phases, because either one alone still races:
+ *
+ * Phase 1 (enqueue): poll the in-memory cache until it carries the profile.
+ * React applies state immediately and persists in a post-paint effect, so a
+ * bare whenPersisted() can run BEFORE that effect enqueues the save — and
+ * then it drains an empty queue, resolves instantly, and proves nothing.
+ * setCachedStore assigns the cache synchronously, so a truthy
+ * loadStore().onboarding proves the save is at least queued.
+ *
+ * Phase 2 (commit): whenPersisted() drains the queue, proving IDB carries it.
+ *
+ * Without both, a fast reload boots profile-less and the onboarding dialog
+ * reappears to intercept every later click. That is exactly how
+ * friction-baseline:169 failed all three CI attempts.
+ */
+export async function awaitPersisted(page){
+  await expect.poll(async () => page.evaluate(async () => {
+    const { loadStore } = await import('/src/lib/store.js');
+    return Boolean(loadStore()?.onboarding);
+  }), { timeout: 10_000 }).toBe(true);
+  await page.evaluate(async () => {
+    const { whenPersisted } = await import('/src/lib/storage.js');
+    await whenPersisted();
+  });
+}
