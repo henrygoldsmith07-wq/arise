@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { awaitPersisted } from './helpers.js';
 
 // RIR suggestion friction + measurement semantics. A carried RIR is a
 // suggestion, never an observation: completing a set with a measured RIR
@@ -25,6 +26,10 @@ async function completeOnboarding(page){
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('button', { name: /Save & continue/i }).click();
   await expect(page.getByRole('dialog', { name: 'Onboarding' })).toBeHidden();
+  // Drain the profile commit before anything reloads: a reload that beats it
+  // boots profile-less and the onboarding dialog reappears to intercept
+  // later clicks (same race as friction-baseline:169).
+  await awaitPersisted(page);
 }
 
 async function enableTelemetry(page){
@@ -34,6 +39,7 @@ async function enableTelemetry(page){
     store.preferences = { ...(store.preferences || {}), telemetryEnabled: true };
     saveStore(store);
   });
+  await awaitPersisted(page);
   await page.reload();
 }
 
