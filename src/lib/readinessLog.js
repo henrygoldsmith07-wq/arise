@@ -118,10 +118,10 @@ export function readinessBand(score){
 
 // ── Week coverage + trend (bounded reads) ───────────────────────────────
 // Every readiness read elsewhere in the app answers "what is the data telling
-// us NOW"; these two helpers make the *window* explicit. The review card's
-// coverage line, the Today nudge it feeds, and the Progress trend row all use
-// review card's coverage line, the Today nudge it feeds, and the Progress
-// trend row all use the same Monday-start grouping mesocycle's weekly review
+// us NOW"; these helpers make the *window* explicit. The Weekly Review's
+// coverage lines, the Today zero-coverage nudge and the Progress trend row
+// all use the same Monday-start grouping (mondayKeyISO), so their week
+// buckets can never drift apart.
 
 /**
  * How many check-ins the CURRENT week (the one containing `todayISO` or the
@@ -136,6 +136,47 @@ export function readinessWeekCoverage(log, todayISO = null){
   const rows = Array.isArray(log) ? log : [];
   const inWeek = rows.filter(r => r?.dateISO && mondayKeyISO(String(r.dateISO).slice(0, 10)) === key).length;
   return { inWeek, weekKey: key };
+}
+
+/**
+ * How many of the LAST `weeks` Monday-start weeks (ending with the week that
+ * contains `todayISO`) have at least one check-in. This is the streak-style
+ * framing the review wanted — coverage as a run across recent weeks, not a
+ * single reviewed week — without ever guilting: it counts weeks touched,
+ * never days missed. Bounds `weeks` to 1..26 so a corrupt input cannot walk
+ * the logs backward indefinitely.
+ */
+export function readinessCoverageTrend(log, { todayISO = null, weeks = 4 } = {}){
+  const n = Math.max(1, Math.min(26, Math.round(Number(weeks) || 4)));
+  const t = String(todayISO || localDateISO());
+  const baseKey = mondayKeyISO(t);
+  if(!baseKey) return { covered: 0, weeks: n, counts: [], weekKeys: [] };
+  const base = new Date(`${baseKey}T00:00:00Z`);
+  const rows = Array.isArray(log) ? log : [];
+  const weekKeys = [];
+  const counts = [];
+  for(let i = 0; i < n; i++){
+    const d = new Date(base);
+    d.setUTCDate(d.getUTCDate() - i * 7);
+    const key = d.toISOString().slice(0, 10);
+    weekKeys.push(key);
+    counts.push(rows.filter(r => r?.dateISO && mondayKeyISO(String(r.dateISO).slice(0, 10)) === key).length);
+  }
+  return { covered: counts.filter(c => c > 0).length, weeks: n, counts, weekKeys };
+}
+
+/**
+ * One honest sentence about coverage across recent weeks — the single phrase
+ * source for the Weekly Review's cross-week evidence line (and therefore the
+ * Markdown export, which renders `noticed` verbatim). Sparse coverage is
+ * framed as what sharpens the read, never as failure.
+ */
+export function readinessCoverageLine(coverage){
+  if(!coverage || !Number.isFinite(Number(coverage.weeks)) || coverage.weeks < 1 || coverage.covered == null) return null;
+  const { covered, weeks } = coverage;
+  if(covered >= weeks) return `Check-in coverage: ${covered} of the last ${weeks} weeks had check-ins — the recovery read stands on steady evidence.`;
+  if(covered >= 2) return `Check-in coverage: ${covered} of the last ${weeks} weeks had check-ins.`;
+  return `Check-in coverage: ${covered} of the last ${weeks} weeks had check-ins — a few check-ins most weeks is what keeps the recovery read honest.`;
 }
 
 /**

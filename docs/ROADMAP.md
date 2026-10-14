@@ -8,6 +8,14 @@ the "today" columns are stale — the architecture gate is still accurate).
 
 ## Shipped recently
 
+- **Check-in coverage as a run, not a glance** — the Weekly Review now frames
+  check-in evidence across recent weeks (`readinessCoverageTrend` +
+  `readinessCoverageLine` in `readinessLog.js`, using the same Monday-start
+  buckets as the review itself) and quotes the log's direction read
+  (`readinessTrend` — the same source Progress uses); both refuse to exist
+  from sparse data. A first-run data-posture badge on Today states the
+  local-first contract the moment onboarding completes, and disappears once
+  real sessions exist
 - **Real-user validation layer, end to end**: pseudonymous participant
   identity (one person × many exports = one participant), self-service study
   onboarding with the full lifecycle (eligibility → plain-language consent →

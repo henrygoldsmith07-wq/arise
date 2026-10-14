@@ -144,4 +144,15 @@ describe('WeeklyReviewCard wiring', ()=>{
     assert.doesNotMatch(card, /slice\(-8\)/, 'the naive 8-row average is gone');
     assert.match(card, /shareTextAsFile\(/, 'the file goes out through the existing share path');
   });
+
+  it('quotes the direction read from the SAME helper Progress uses, only when the engine would call it', ()=>{
+    assert.match(card, /readinessTrend\(store\.readinessLog/, 'direction comes from the shared bounded trend, not a re-derivation');
+    assert.match(card, /Recovery trend: \$\{trend\.direction\}/, 'the direction is quoted, not paraphrased');
+    assert.match(card, /if\(trend\.available\)/, 'sparse logs stay silent — no direction is invented');
+  });
+
+  it('frames coverage as a run across recent weeks through the shared phrase builder', ()=>{
+    assert.match(card, /readinessCoverageTrend\(store\.readinessLog/, 'coverage run comes from the shared helper');
+    assert.match(card, /readinessCoverageLine\(/, 'the wording is the single shared source, not the card\'s own');
+  });
 });

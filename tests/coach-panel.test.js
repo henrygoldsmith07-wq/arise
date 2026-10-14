@@ -74,9 +74,28 @@ describe('CoachPanel: lazy entry points keep the route chunks lean', ()=>{
       assert.ok(!/from '\.\/CoachPanel\.jsx'/.test(src), `${name} must not statically import CoachPanel`);
     }
   });
-
   it('passes the suggestions provenance (programmeWhy) from both views', ()=>{
     assert.match(today, /programmeWhy=\{coach\.programmeWhy\}/);
     assert.match(progress, /programmeWhy=/);
+  });
+});
+
+// The trust badge: the moment onboarding completes — before any real data
+// exists to protect — Today states the local-first contract in one line. It
+// must be honest (no "nothing ever leaves" absolutism), scoped to the
+// first-run/evaluator state, and silent in demo (which has no user data).
+describe('CoachPanel surface: the first-run data-posture badge', ()=>{
+  it('renders one badge on Today, keyed to the coach gate and honest copy', ()=>{
+    assert.match(today, /data-testid="today-trust-badge"/, 'the badge renders on Today');
+    assert.match(today, /Your data stays on this device/, 'the badge says what it keeps');
+    assert.match(today, /Exporting or setting up sync is always your choice/, 'the badge stays honest about the user-owned exports/sync');
+  });
+
+  it('is gated to the first-run state and never fires on demo data', ()=>{
+    const gate = today.match(/const showTrustBadge = ([^;]+);/);
+    assert.ok(gate, 'the badge is computed through one named gate');
+    assert.match(gate[1], /coach\.programmeWhy/, 'gate keys to the first-plan being active');
+    assert.match(gate[1], /store\.history/, 'gate closes once real sessions exist');
+    assert.match(gate[1], /!store\.demo/, 'demo data never earns the trust badge');
   });
 });
