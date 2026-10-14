@@ -5,6 +5,7 @@ import { e1rm } from '../lib/progression.js';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { totalVolumeKg } from '../lib/store.js';
 import { confidenceLanguage } from '../lib/performance.js';
+import { readinessTrend, readinessCoverageTrend, readinessCoverageLine } from '../lib/readinessLog.js';
 import { buildWeeklyReviewMarkdown, readinessVerdictLabel } from '../lib/weeklyReviewMarkdown.js';
 import { shareTextAsFile } from '../lib/nativeShare.js';
 
@@ -94,13 +95,25 @@ export default function WeeklyReviewCard({ store, setStore }){
       } else {
         noticed.push('Recovery: not enough logged to read fatigue yet — a couple of check-ins and this sharpens.');
       }
+      // Direction read of the log (last 14 days) — the SAME source the
+      // Progress "Am I improving?" card uses, so the two surfaces can never
+      // disagree about which way recovery is moving. Quoted only when the
+      // helper would actually call a direction; sparse logs stay honest.
+      const trend = readinessTrend(store.readinessLog || [], {});
+      if(trend.available){
+        noticed.push(`Recovery trend: ${trend.direction} — ${trend.recentAvg} recently vs ${trend.prevAvg} before, over ${trend.entries} check-ins in ${trend.windowDays} days.`);
+      }
       // Coverage is named because it IS the evidence: a verdict without the
       // half-dozen check-ins behind it is a weaker read, and the user should
-      // see which week actually produced it.
+      // see which week actually produced it. The cross-week framing (a
+      // coverage RUN, not one reviewed week) is the streak-style reminder:
+      // what matters is weeks touched, and the line never guilts.
       const readinessInWeek = (store.readinessLog||[]).filter(r=> r?.dateISO && weekOf(String(r.dateISO).slice(0, 10)) === review.reviewedWeekKey).length;
       noticed.push(readinessInWeek
         ? `Evidence: ${readinessInWeek} readiness check-in${readinessInWeek === 1 ? '' : 's'} logged in the reviewed week.`
         : 'No check-ins from the reviewed week — log one from Today to keep this read current.');
+      const coverageLine = readinessCoverageLine(readinessCoverageTrend(store.readinessLog || [], { weeks: 4 }));
+      if(coverageLine) noticed.push(coverageLine);
       if(!noticed.length && !improved.length && !steady.length) noticed.push('Not enough logged work this week to say much yet. Two or three sessions and the picture sharpens.');
 
       // New PRs: best e1RM exceeds every prior session per exercise.

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { readinessScore } from '../src/lib/progression.js';
 import {
   READINESS_SCALE_MAX, READINESS_SCALE_MIN, clampSignal, readinessBand,
-  readinessFormDefaults, readinessOn, readinessTrend, readinessWeekCoverage,
+  readinessCoverageLine, readinessCoverageTrend, readinessFormDefaults,
+  readinessOn, readinessTrend, readinessWeekCoverage,
   removeReadinessEntry, scoreReadinessInputs, upsertReadinessEntry,
 } from '../src/lib/readinessLog.js';
 
@@ -183,6 +184,55 @@ describe('readiness trend (bounded window, honest direction)', ()=>{
     for(const bad of [null, undefined, 'nonsense', 42, {}]){
       assert.doesNotThrow(()=> readinessTrend(bad, { todayISO: '2026-09-27' }));
       assert.doesNotThrow(()=> readinessWeekCoverage(bad, '2026-09-27'));
+      assert.doesNotThrow(()=> readinessCoverageTrend(bad, { todayISO: '2026-09-27' }));
     }
+  });
+});
+
+// The cross-week coverage run behind the Weekly Review's streak-style
+// evidence line: weeks TOUCHED, never days missed, bucketed by the same
+// Monday-start grouping as the review itself.
+describe('readiness coverage trend (weeks touched, no guilt)', ()=>{
+  it('counts the last N Monday-start weeks ending with the reference week', ()=>{
+    // 2026-10-05 and 2026-09-28 are Mondays; 2026-09-21 is Monday. Rows sit
+    // in three of the four weeks ending with the week containing 2026-10-07.
+    const log = [
+      { dateISO: '2026-09-08', score: 70 }, // week of 09-07 (outside all four)
+      { dateISO: '2026-09-29', score: 70 }, // week of 09-28
+      { dateISO: '2026-10-05', score: 70 }, // week of 10-05
+      { dateISO: '2026-10-06', score: 70 }, // week of 10-05 again
+    ];
+    const cov = readinessCoverageTrend(log, { todayISO: '2026-10-07', weeks: 4 });
+    assert.equal(cov.weeks, 4);
+    // Newest week first, oldest last.
+    assert.deepEqual(cov.counts, [2, 1, 0, 0]);
+    assert.deepEqual(cov.weekKeys, ['2026-10-05', '2026-09-28', '2026-09-21', '2026-09-14']);
+    assert.equal(cov.covered, 2);
+  });
+
+  it('a Sunday row belongs to the Monday-start week it ends, not the next', ()=>{
+    const cov = readinessCoverageTrend([{ dateISO: '2026-09-27', score: 70 }], { todayISO: '2026-09-29', weeks: 2 });
+    // newest first: the 09-28 week has none, the 09-21 week (which ends 09-27) has one.
+    assert.deepEqual(cov.counts, [0, 1]);
+  });
+
+  it('is honest at full coverage and at zero, in words that never guilt', ()=>{
+    const full = readinessCoverageLine({ covered: 4, weeks: 4 });
+    assert.match(full, /4 of the last 4 weeks/);
+    const mid = readinessCoverageLine({ covered: 3, weeks: 4 });
+    assert.match(mid, /3 of the last 4 weeks/);
+    const sparse = readinessCoverageLine({ covered: 1, weeks: 4 });
+    assert.match(sparse, /1 of the last 4 weeks/);
+    assert.match(sparse, /keeps the recovery read honest/, 'sparse framing names what sharpens the read, not failure');
+    assert.doesNotMatch(sparse, /missed|failed|fallen off|streak broken/);
+    const empty = readinessCoverageLine({ covered: 0, weeks: 4 });
+    assert.match(empty, /0 of the last 4 weeks had check-ins/);
+    assert.equal(readinessCoverageLine(null), null);
+    assert.equal(readinessCoverageLine({ covered: 2, weeks: 0 }), null);
+  });
+
+  it('clamps an absurd weeks request instead of walking the log forever', ()=>{
+    const cov = readinessCoverageTrend([], { todayISO: '2026-09-27', weeks: 500 });
+    assert.equal(cov.weeks, 26);
   });
 });

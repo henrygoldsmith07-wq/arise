@@ -134,6 +134,14 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
     setStore(prev=> ({ ...prev, preferences: workoutModePatch(prev.preferences, mode) }));
   };
 
+  // ── Data-privacy trust badge (first-run / evaluator flow): the moment
+  //    onboarding completes — apo programme chosen, no sessions logged yet —
+  //    one line states the local-first contract in the same breath as the
+  //    plan it produced. It disappears on the first logged session (its job
+  //    — setting the posture before data exists — is done) and never fires
+  //    in demo, where there is no user data to keep anywhere.
+  const showTrustBadge = Boolean(coach.programmeWhy) && !(store.history || []).length && !store.demo;
+
   const startStandard = ()=>{
     if(!heroSession) return;
     const target = timePlan?.session || heroSession;
@@ -351,6 +359,13 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
           days the user skips it — which is the property that decides whether a
           daily check-in gets collected at all. */}
       <ReadinessCheckIn store={store} setStore={setStore} todayISO={isoToday()} />
+
+      {showTrustBadge && (
+        <p className="rounded-xl border border-line bg-surface2 px-3 py-2 text-[11px] text-ink2 leading-snug flex items-start gap-2" data-testid="today-trust-badge">
+          <span aria-hidden>🔒</span>
+          <span>Your data stays on this device — no account, nothing uploaded. Exporting or setting up sync is always your choice, from More.</span>
+        </p>
+      )}
 
       {/* ── Missed workout recovery: three clear choices, brief consequences,
           no guilt. "Do it today" simply surfaces the session to start now;

@@ -141,4 +141,50 @@ test.describe('on-device coach in the main loop', () => {
     await page.getByLabel('Ask the coach a question').fill('x');
     await expect(page.getByRole('button', { name: 'Ask', exact: true })).toBeEnabled();
   });
+
+  test('the first-run data-posture badge: present on a fresh plan, gone with data or demo', async ({ page }) => {
+    // Onboarding completes but no session is logged: the badge states the
+    // local-first contract next to the plan it produced.
+    await page.goto('/');
+    await WIPE(page);
+    await page.reload();
+    const dialog = page.getByRole('dialog', { name: 'Onboarding' });
+    await expect(dialog).toBeVisible({ timeout: 15_000 });
+    await dialog.getByRole('button', { name: /Get stronger/i }).click();
+    await dialog.getByRole('button', { name: 'Next', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Gym' }).click();
+    await dialog.getByRole('button', { name: 'Next', exact: true }).click();
+    await dialog.getByLabel(/Dumbbells/i).click();
+    await dialog.getByRole('button', { name: 'Next', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Beginner', exact: true }).click();
+    await dialog.getByRole('button', { name: '3×' }).click();
+    await dialog.getByRole('button', { name: '45 min' }).click();
+    await dialog.getByRole('button', { name: 'Next', exact: true }).click();
+    await dialog.getByRole('button', { name: /Save & continue/i }).click();
+    await expect(dialog).toBeHidden({ timeout: 15_000 });
+
+    const badge = page.getByTestId('today-trust-badge');
+    await expect(badge).toBeVisible({ timeout: 10_000 });
+    // Honest copy: states what is kept AND that exports/sync stay the user's
+    // choice — never "nothing ever leaves" absolutism.
+    await expect(badge).toContainText(/Your data stays on this device/);
+    await expect(badge).toContainText(/always your choice/);
+
+    // Logging a session retires the badge: its job (setting the posture
+    // before data exists) is done.
+    await page.evaluate(async () => {
+      const { loadStore, saveStore } = await import('/src/lib/store.js');
+      const { whenPersisted } = await import('/src/lib/storage.js');
+      saveStore({ ...loadStore(), history: [{ id: 'e2e-1', dateISO: '2026-10-01', blocks: [] }] });
+      await whenPersisted();
+    });
+    await page.reload();
+    await expect(page.getByTestId('today-trust-badge')).toHaveCount(0);
+  });
+
+  test('the data-posture badge never fires on demo data', async ({ page }) => {
+    await bootToShell(page);
+    // Demo has a rich store and even a plan — but no user data to keep.
+    await expect(page.getByTestId('today-trust-badge')).toHaveCount(0);
+  });
 });
