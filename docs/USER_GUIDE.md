@@ -42,8 +42,18 @@ progress → taking care of your data.
   consistency, PRs (with fake-PR filtering — jitter and technique-change PRs
   are flagged, not celebrated), and per-muscle volume-balance advice.
 - **Weekly Review** is the defining weekly interaction: adherence, what the
-  engine noticed, and the directives for next week. Skim it once a week;
-  ignore it daily.
+  engine noticed, the graduated recovery read from your own readiness
+  check-ins, and the directives for next week. Skim it once a week;
+  ignore it daily. "Export as Markdown" below the review hands the whole week
+  (including the engine's verdicts and the evidence behind them) to the
+  platform share sheet or your clipboard — your record, your format,
+  generated entirely on-device.
+- **Ask the coach** (Today, after the Weekly Review; also on Progress): a
+  plain-language question about your training — "explain my week", "am I
+  improving?", "why did my bench press stall?" — answered on-device from the
+  engines' own findings, with reasons and evidence. Nothing leaves the device;
+  the optional cloud coach stays an explicit opt-in under More → Privacy &
+  integrations.
 - Attributes (Strength / Endurance / Consistency / Technique) derive only
   from your logged history — never from program labels.
 

@@ -8,7 +8,8 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { localCoachAnswer, classifyCoachQuestion, resolveFollowUp } from '../src/lib/coach/localCoach.js';
+import { localCoachAnswer, classifyCoachQuestion, resolveFollowUp, suggestedCoachQuestions } from '../src/lib/coach/localCoach.js';
+import { localDateISO } from '../src/lib/dateOnly.js';
 import { makeDemoStore } from '../src/lib/demoData.js';
 
 const store = makeDemoStore();
@@ -23,6 +24,10 @@ describe('coach intent classification', ()=>{
       ['my squat is stuck', 'exercise'],
       ['am I stuck in a plateau?', 'plateau'],
       ['I feel tired, do I need a deload?', 'deload'],
+      ['am I overdoing it?', 'deload'],
+      ['I\u2019m worn down, should I back off?', 'deload'],
+      ['I am completely burnt out', 'deload'],
+      ['am I overtraining?', 'deload'],
       ['I missed my session yesterday', 'missed'],
       ['am I improving?', 'progress'],
       ['why this programme?', 'programme'],
@@ -120,6 +125,60 @@ describe('localCoachAnswer', ()=>{
   });
 });
 
+// "Am I overdoing it?" reads the user's own readiness check-ins through the
+// safety layer. Two regressions this pins:
+//   * answerDeload used to read a nonexistent `state.safety.items` field,
+//     so readiness-driven warnings were NEVER quoted by the coach;
+//   * the underlying deficit gate used to compare 0–100 check-in scores
+//     against a raw-scale threshold of 4, so the warning never fired at all.
+describe('coach overdoing-it answers from readiness check-ins', ()=>{
+  const isoDaysAgo = (n)=> localDateISO(new Date(Date.now() - n * 86_400_000));
+
+  it('quotes the engine\'s recovery-deficit finding when check-ins read low', ()=>{
+    const lowReadinessStore = {
+      ...store,
+      readinessLog: [
+        { dateISO: isoDaysAgo(6), score: 64 },
+        { dateISO: isoDaysAgo(5), score: 64 },
+        // three genuinely rough mornings on the 0–100 scale the checker writes
+        { dateISO: isoDaysAgo(3), score: 28 },
+        { dateISO: isoDaysAgo(2), score: 31 },
+        { dateISO: isoDaysAgo(1), score: 25 },
+      ].sort((a, b)=> a.dateISO.localeCompare(b.dateISO)),
+    };
+    const r = localCoachAnswer('Am I overdoing it?', { store: lowReadinessStore });
+    assert.equal(r.ok, true);
+    assert.match(r.text, /Recovery running a deficit/, 'the engine\'s own readiness-driven warning must be quoted');
+    assert.match(r.text, /Latest check-in/, 'the latest check-in is named with its band');
+    assert.equal(r.source, 'local-coach');
+  });
+
+  it('stays honest on a healthy readiness log without inventing a deload', ()=>{
+    const healthyStore = {
+      ...store,
+      readinessLog: [
+        { dateISO: isoDaysAgo(2), score: 82 },
+        { dateISO: isoDaysAgo(1), score: 88 },
+        { dateISO: isoDaysAgo(0), score: 90 },
+      ],
+    };
+    const r = localCoachAnswer('Am I overdoing it?', { store: healthyStore });
+    assert.equal(r.ok, true);
+    assert.doesNotMatch(r.text, /Recovery running a deficit/);
+    assert.match(r.text, /Latest check-in/);
+    // no-signal path: nothing on the plan asks for a deload, and it says so
+    assert.match(r.text, /deload|flat/i);
+  });
+
+  it('says where the signal would come from when nothing has been logged', ()=>{
+    const empty = { history: [], activeSchedule: null, readinessLog: [] };
+    const r = localCoachAnswer('am I overdoing it?', { store: empty });
+    assert.equal(r.ok, true);
+    assert.match(r.text, /no readiness check-ins/i, 'an absent signal must be named, not papered over');
+    assert.match(r.text, /check-in/i);
+  });
+});
+
 // Added in the bodyweight/progression coach pass: "how do I progress X" routes
 // to the engine's prescriptions quoted verbatim — never a generic pep talk.
 describe('coach progression intent answers with engine prescriptions', ()=>{
@@ -211,5 +270,97 @@ describe('coach follow-up memory', ()=>{
     for(const re of forbidden){
       assert.doesNotMatch(second.text, re, 'follow-up answers stay under the no-fabrication contract');
     }
+  });
+});
+
+describe('suggestedCoachQuestions', ()=>{
+  it('always offers the two evergreen questions and never invents a demo lift', ()=>{
+    const s = suggestedCoachQuestions({});
+    assert.ok(s.some(q => q.id === 'week-review' && q.text === 'Explain my week'));
+    assert.ok(s.some(q => q.id === 'progress' && q.text === 'Am I improving?'));
+    assert.equal(s.some(q => q.id === 'missed'), false, 'no missed chip on a healthy schedule');
+  });
+
+  it('offers the missed chip only when sessions are genuinely overdue, and it answers', ()=>{
+    const yesterdayISO = localDateISO(new Date(Date.now() - 24 * 60 * 60 * 1000));
+    const schedule = { sessions: [{ id: 's1', title: 'Push', dateISO: yesterdayISO, status: null, week: 1, day: 1, programId: 'generic-full-body', blocks: [{ exerciseId: 'push-up', sets: 3, reps: '8-12' }] }] };
+    const s = suggestedCoachQuestions({ schedule });
+    const chip = s.find(q => q.id === 'missed');
+    assert.ok(chip, 'an overdue session must surface the missed chip');
+    const r = localCoachAnswer(chip.text, { store: { ...store, activeSchedule: schedule } });
+    assert.equal(r.ok, true);
+    assert.ok(/overdue/.test(r.text));
+  });
+
+  it('a done or future schedule row never produces the missed chip', ()=>{
+    const future = localDateISO(new Date(Date.now() + 24 * 60 * 60 * 1000));
+    for(const sess of [
+      { id: 's1', title: 'Push', dateISO: future, status: null },
+      { id: 's1', title: 'Push', dateISO: future, status: 'done' },
+    ]){
+      const s = suggestedCoachQuestions({ schedule: { sessions: [sess] } });
+      assert.equal(s.some(q => q.id === 'missed'), false);
+    }
+  });
+
+  it('personalises the progression chip with the most-logged lift', ()=>{
+    const s = suggestedCoachQuestions({ history: store.history || [] });
+    const counts = new Map();
+    for(const h of store.history || []) for(const b of h.blocks || []) counts.set(b.exerciseId, (counts.get(b.exerciseId) || 0) + 1);
+    const top = [...counts.entries()].sort((a, b)=> b[1] - a[1])[0];
+    if(top){
+      const chip = s.find(q => q.id === 'progression');
+      assert.ok(chip, 'a top lift must produce a progression chip');
+      assert.ok(chip.text.includes(top[0].replace(/-/g, ' ')), `chip should name the top lift ${top[0]}`);
+      // and the question must actually classify to its intent, not just look plausible
+      assert.equal(classifyCoachQuestion(chip.text).id, 'progression');
+    }
+  });
+
+  it('adds the programme chip only when first-plan provenance exists', ()=>{
+    assert.equal(suggestedCoachQuestions({}).some(q => q.id === 'programme'), false);
+    assert.equal(suggestedCoachQuestions({ programmeWhy: { reasons: ['fits your kit'] } }).some(q => q.id === 'programme'), true);
+  });
+
+  it('offers the recovery chip only when recent check-ins actually read low', ()=>{
+    const iso = (n)=> localDateISO(new Date(Date.now() - n * 86_400_000));
+    // No check-ins, or healthy ones: no chip — the answer would be an honest
+    // "nothing to see", and a chip that dead-ends is friction.
+    assert.equal(suggestedCoachQuestions({ readinessLog: [] }).some(q => q.id === 'recovery'), false);
+    assert.equal(suggestedCoachQuestions({ readinessLog: [{ dateISO: iso(1), score: 85 }] }).some(q => q.id === 'recovery'), false);
+    assert.equal(suggestedCoachQuestions({ readinessLog: [
+      { dateISO: iso(3), score: 85 }, { dateISO: iso(2), score: 84 },
+    ] }).some(q => q.id === 'recovery'), false, 'healthy readings never suggest the recovery question');
+    // Three rough mornings on the real 0–100 scale: chip appears, routes to
+    // the deload answerer, and answers from the data.
+    const s = suggestedCoachQuestions({ readinessLog: [
+      { dateISO: iso(3), score: 30 }, { dateISO: iso(2), score: 32 }, { dateISO: iso(1), score: 28 },
+    ] });
+    const chip = s.find(q => q.id === 'recovery');
+    assert.ok(chip, 'sustained low check-ins must surface the recovery question');
+    assert.equal(chip.text, 'Am I overdoing it?');
+    assert.equal(classifyCoachQuestion(chip.text).id, 'deload');
+  });
+
+  it('every suggestion classifies to the intent it claims (no dead-end chips)', ()=>{
+    const s = suggestedCoachQuestions({ history: store.history || [], programmeWhy: { reasons: ['x'] } });
+    for(const chip of s){
+      assert.notEqual(classifyCoachQuestion(chip.text).id, 'general', `chip "${chip.text}" must route to a real intent`);
+    }
+  });
+
+  it('answers each chip with a substantive on-device finding, offline', ()=>{
+    const s = suggestedCoachQuestions({ history: store.history || [] });
+    assert.ok(s.length >= 2, 'at least the evergreen chips exist');
+    for(const chip of s){
+      const r = localCoachAnswer(chip.text, { store });
+      assert.equal(r.ok, true, `chip "${chip.text}" must answer from the demo store`);
+      assert.ok(r.text.length > 40);
+    }
+  });
+
+  it('survives malformed history without throwing', ()=>{
+    const s = suggestedCoachQuestions({ history: 'not-an-array' });
+    assert.ok(Array.isArray(s) && s.length >= 2, 'the evergreen chips always exist');
   });
 });

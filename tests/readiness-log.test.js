@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { readinessScore } from '../src/lib/progression.js';
 import {
   READINESS_SCALE_MAX, READINESS_SCALE_MIN, clampSignal, readinessBand,
-  readinessFormDefaults, readinessOn, removeReadinessEntry,
-  scoreReadinessInputs, upsertReadinessEntry,
+  readinessFormDefaults, readinessOn, readinessTrend, readinessWeekCoverage,
+  removeReadinessEntry, scoreReadinessInputs, upsertReadinessEntry,
 } from '../src/lib/readinessLog.js';
 
 const T = '2026-09-28';
@@ -100,5 +100,89 @@ describe('readiness band', ()=>{
     assert.equal(readinessBand(100).id, 'high');
     assert.equal(readinessBand('nope').id, 'unknown');
     assert.equal(readinessBand(null).label, '—');
+  });
+});
+
+// The bounded reads behind the Today zero-coverage nudge, the Weekly Review's
+// evidence line and the Progress trend row: coverage groupings and a
+// direction call that refuses to be made from thin data.
+describe('readiness week coverage (Monday-start, same buckets as the review)', ()=>{
+  it('counts rows inside the week containing the reference day only', ()=>{
+    // 2026-09-28 is a Monday; 2026-09-27 (Sunday) belongs to the previous week.
+    const log = [
+      { dateISO:'2026-09-27', score:70 },
+      { dateISO:'2026-09-28', score:70 },
+      { dateISO:'2026-09-29', score:70 },
+      { dateISO:'2026-10-05', score:70 },
+    ];
+    assert.equal(readinessWeekCoverage(log, '2026-09-29').inWeek, 2);
+    assert.equal(readinessWeekCoverage(log, '2026-09-27').inWeek, 1, 'a Sunday rows-bucket boundary is the previous week');
+    assert.equal(readinessWeekCoverage([], '2026-09-29').inWeek, 0);
+    assert.equal(readinessWeekCoverage('nonsense', '2026-09-29').inWeek, 0);
+  });
+});
+
+describe('readiness trend (bounded window, honest direction)', ()=>{
+  const row = (dateISO, score)=> ({ dateISO, score });
+
+  it('declining: recent half reads clearly below the half before it', ()=>{
+    const log = [
+      row('2026-09-14', 78), row('2026-09-16', 76),
+      row('2026-09-19', 74), row('2026-09-22', 72),
+      row('2026-09-25', 50), row('2026-09-26', 48),
+    ];
+    const t = readinessTrend(log, { todayISO: '2026-09-27' });
+    assert.equal(t.available, true);
+    assert.equal(t.direction, 'declining');
+    assert.ok(t.prevAvg - t.recentAvg >= 5);
+    assert.equal(t.entries, 6);
+  });
+
+  it('improving mirrors declining', ()=>{
+    const log = [
+      row('2026-09-14', 40), row('2026-09-16', 44),
+      row('2026-09-19', 46), row('2026-09-22', 48),
+      row('2026-09-25', 75), row('2026-09-26', 80),
+    ];
+    const t = readinessTrend(log, { todayISO: '2026-09-27' });
+    assert.equal(t.available, true);
+    assert.equal(t.direction, 'improving');
+  });
+
+  it('steady holds inside the deadband; boundary fires beyond it', ()=>{
+    const dates = ['2026-09-16', '2026-09-17', '2026-09-18', '2026-09-19', '2026-09-20', '2026-09-21'];
+    const steady = [62, 64, 62, 64, 62, 63].map((s, i)=> row(dates[i], s)); // ±2 swing
+    const t = readinessTrend(steady, { todayISO: '2026-09-27' });
+    assert.equal(t.available, true);
+    assert.equal(t.direction, 'steady');
+    const edge = [70, 70, 70, 70, 62, 60].map((s, i)=> row(dates[i], s)); // recent-vs-prev swing ≈10
+    assert.equal(readinessTrend(edge, { todayISO: '2026-09-27' }).direction, 'declining');
+  });
+
+  it('never calls a direction from sparse data, but still reports what is known', ()=>{
+    const t = readinessTrend([row('2026-09-20', 62), row('2026-09-24', 58)], { todayISO: '2026-09-27' });
+    assert.equal(t.available, false);
+    assert.ok(Number.isFinite(t.recentAvg), 'the irrelevant average still exists for honest wording');
+  });
+
+  it('ignores rows outside the 14-day window and future rows', ()=>{
+    const log = [
+      row('2026-08-30', 30), row('2026-08-31', 30), // outside the window
+      row('2026-09-15', 80), row('2026-09-17', 80), row('2026-09-19', 80),
+      row('2026-09-22', 80), row('2026-09-25', 80), row('2026-09-26', 80),
+      row('2026-09-30', 20), // after today — must not leak in
+    ];
+    const t = readinessTrend(log, { todayISO: '2026-09-27' });
+    assert.equal(t.available, true);
+    assert.equal(t.direction, 'steady');
+    assert.equal(t.entries, 6, 'exactly the in-window rows');
+    assert.equal(t.lastDate, '2026-09-26');
+  });
+
+  it('tolerates corrupt logs and dates without throwing', ()=>{
+    for(const bad of [null, undefined, 'nonsense', 42, {}]){
+      assert.doesNotThrow(()=> readinessTrend(bad, { todayISO: '2026-09-27' }));
+      assert.doesNotThrow(()=> readinessWeekCoverage(bad, '2026-09-27'));
+    }
   });
 });

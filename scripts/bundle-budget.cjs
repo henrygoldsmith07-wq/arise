@@ -238,7 +238,42 @@ const CHUNK_BUDGET_KB = 34;
 // logic in lazy/settings chunks; boot (110.5 ≤ 120) and largest-lazy (26.4 ≤ 34)
 // budgets are UNCHANGED, which is what user-perceived load depends on. Measured
 // total 389.9, ~1.1 kB of binding headroom retained above it.
-const TOTAL_BUDGET_KB = 391;
+//
+// total 391 → 393 kB with the coach-in-the-main-loop pass: the surfaced
+// on-device coach (CoachPanel, lazy) now answers after the Weekly Review on
+// Today and after the "Am I improving?" assessment on Progress — the entire
+// local coach (localCoach + coachingState + trainingProfile) was previously
+// reachable only through More → Settings → "AI coach (optional)". The new
+// CoachPanel chunk (1.8 kB) plus the re-homed shared localCoach chunk (4.8 kB)
+// is partially offset by deduplication at the cross-chunk import sites. The
+// Today/Progress entry points cost nothing (the panel is lazy()); the panel
+// decl lives after the React import so module init order is intact (a lazy
+// reference above its import crashed the view). Boot (110.5 ≤ 120) and
+// largest-lazy (26.4 ≤ 34) budgets are UNCHANGED, which is what user-perceived
+// load depends on. Requested product surface, no new dependencies; measured
+// total 393.0, headroom retained above it.
+// total 393 → 396 kB with the weekly-review continuity pass: the review's
+// recovery row now reads the engine's graduated verdict (mesocycle.js already
+// computes readinessDecision; the card stopped re-deriving with an unbounded
+// 8-row average), and backlog item 6 ships — the week exports as Markdown
+// through the existing share path (weeklyReviewMarkdown.js, a pure builder
+// riding the already-loaded Weekly Review card; ~0.7 kB, no new dependency).
+// Boot (110.5 ≤ 120) and largest-lazy (26.4 ≤ 34) budgets are UNCHANGED,
+// which is what user-perceived load depends on. Measured total 394.7.
+// Requested product surface, no new dependencies.
+// total 393 → 397 kB across the weekly-review continuity and check-in-surface
+// passes: the review's recovery row now reads the engine's graduated verdict
+// (readinessDecision) plus the week's check-in coverage; the week exports as
+// Markdown through the existing share path (weeklyReviewMarkdown.js, a pure
+// builder riding the already-loaded review card); and the check-in channel
+// gains user-visible surfaces — a zero-coverage nudge on the Today check-in
+// line (it always rendered; the nudge is a caption, one pure helper away),
+// a bounded 14-day direction read (readinessTrend) shown on the Progress
+// assessment and quoted by the coach, and the Train recommendation hero
+// mounting the lazy CoachPanel with the scorer's stored reasons. No new
+// dependency; boot (110.6 ≤ 120) and largest-lazy (26.4 ≤ 34) budgets
+// UNCHANGED — what user-perceived load depends on. Measured total 396.3.
+const TOTAL_BUDGET_KB = 397;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

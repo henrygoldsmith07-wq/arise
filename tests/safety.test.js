@@ -138,12 +138,15 @@ describe('safety — failed reps and recovery', () => {
   });
 
   it('flags a recovery deficit only after sustained low readiness', () => {
+    // Scores are what the readiness check-in actually writes: 0–100
+    // (readinessLog.readinessScore). A regression to comparing against the
+    // old raw-scale threshold must fail this test, not the shipped gate.
     const low = [
-      { dateISO: '2026-09-04', score: 3 },
-      { dateISO: '2026-09-05', score: 4 },
-      { dateISO: '2026-09-06', score: 2 },
+      { dateISO: '2026-09-04', score: 30 },
+      { dateISO: '2026-09-05', score: 34 },
+      { dateISO: '2026-09-06', score: 22 },
     ];
-    const mixed = [{ dateISO: '2026-09-04', score: 8 }, ...low.slice(1)];
+    const mixed = [{ dateISO: '2026-09-04', score: 72 }, ...low.slice(1)];
     assert.equal(recoveryDeficitWarnings([], low).length, 1);
     assert.equal(recoveryDeficitWarnings([], mixed).length, 0);
     assert.equal(recoveryDeficitWarnings([], low.slice(0, 2)).length, 0);
@@ -151,9 +154,9 @@ describe('safety — failed reps and recovery', () => {
 
   it('escalates to a stop-severity warning only when deficit AND high RPE stack', () => {
     const low = [
-      { dateISO: '2026-09-04', score: 3 },
-      { dateISO: '2026-09-05', score: 3 },
-      { dateISO: '2026-09-06', score: 3 },
+      { dateISO: '2026-09-04', score: 30 },
+      { dateISO: '2026-09-05', score: 30 },
+      { dateISO: '2026-09-06', score: 30 },
     ];
     const grinding = [
       sess('2026-09-05', [block('bench-press', [set(90, 6, { rpe: 9 })])]),
@@ -195,9 +198,9 @@ describe('safety — deload prompts and restarts', () => {
 describe('safety — panel aggregation and cautious mode', () => {
   it('aggregates signals with stop first, then caution, then info', () => {
     const low = [
-      { dateISO: '2026-09-04', score: 3 },
-      { dateISO: '2026-09-05', score: 3 },
-      { dateISO: '2026-09-06', score: 3 },
+      { dateISO: '2026-09-04', score: 30 },
+      { dateISO: '2026-09-05', score: 30 },
+      { dateISO: '2026-09-06', score: 30 },
     ];
     const history = [
       sess('2026-09-05', [block('bench-press', [set(90, 6, { rpe: 9 })])]),

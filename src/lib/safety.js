@@ -31,9 +31,15 @@ export const SAFETY_CONFIG = {
   // is a pattern, not a bad day.
   failedRepCount: 3,
   failedRepWindowDays: 28,
-  // Recovery: readiness below this (or this many deficit days in a row)
-  // raises the recovery-deficit flag.
-  readinessDeficitScore: 4,
+  // Recovery: readiness below this raises the recovery-deficit flag.
+  // Scale note: the check-in writer (readinessLog.js → readinessScore) stores
+  // 0–100 scores, and every other consumer of `readinessLog` scores
+  // (readinessClassifier.js, plateauAttribution, the recovery-messaging rows)
+  // reads them against 0–100 thresholds — 35 here is priors'
+  // `recovery.oneDayDip` / `readinessLowEma` and the top of the "Rough" band
+  // (<40). The old raw-scale value of 4 could never fire on the data the
+  // app actually writes, which silently disabled this flag.
+  readinessDeficitScore: 35,
   readinessDeficitDays: 3,
   // Deload prompt: weekly volume above this multiple of the 4-week average.
   deloadVolumeMultiple: 1.35,
@@ -382,7 +388,10 @@ export function safetyPanel(history, readinessLog = [], { today = null, cautious
         loadJumpPct: SAFETY_CONFIG.loadJumpPct * 0.75,
         prUnrealisticPct: SAFETY_CONFIG.prUnrealisticPct * 0.75,
         failedRepCount: Math.max(2, SAFETY_CONFIG.failedRepCount - 1),
-        readinessDeficitScore: SAFETY_CONFIG.readinessDeficitScore + 1,
+        // +5 — on the 0–100 scale this moves the flag from the top of the
+        // "Rough" band (35) to the band boundary (40), the proportional
+        // equivalent of the old raw-scale +1.
+        readinessDeficitScore: SAFETY_CONFIG.readinessDeficitScore + 5,
       }
     : SAFETY_CONFIG;
   const opts = { today, config };

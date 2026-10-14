@@ -31,6 +31,8 @@
 
 import { buildCoachingState } from './coachingState.js';
 import { buildTrainingProfile } from './trainingProfile.js';
+import { readinessBand } from '../readinessLog.js';
+import { localDateISO } from '../dateOnly.js';
 
 // Exercise ID → display label. The full catalogue (data.js) is heavy, so the
 // coaching state does not ship exercise names — IDs are unambiguous in the
@@ -115,6 +117,53 @@ export function resolveFollowUp(question, { last = null, knownLifts = [] } = {})
   return { question: text, followUp: false };
 }
 
+// ── Suggested questions ─────────────────────────────────────────────────
+// The coach surface (CoachPanel) opens on a blank input otherwise, so a first
+// question must be guessed. These are queries the answerers demonstrably
+// handle today, personalised only with data the user already logged — a
+// lift they actually train, not a generic demo lift. Pure + deterministic.
+export function suggestedCoachQuestions({ history = [], programmeWhy = null, schedule = null, readinessLog = [] } = []){
+  const out = [
+    { id: 'week-review', text: 'Explain my week' },
+    { id: 'progress', text: 'Am I improving?' },
+  ];
+  // The missed-session chip must never be suggested on a healthy schedule: the
+  // answerer returns an honest "nothing is overdue" there, and a chip that
+  // dead-ends is friction. Count real overdue rows the same way the recovery
+  // engine marks them.
+  let overdue = 0;
+  const t = localDateISO();
+  for(const s of schedule?.sessions || []){
+    if(s?.dateISO && s.dateISO < t && s.status !== 'done') overdue++;
+  }
+  if(overdue) out.push({ id: 'missed', text: 'I missed a session this week' });
+  // Same dead-end rule as the missed-session chip: only suggest the recovery
+  // question when the user's own check-ins actually read low. "Am I overdoing
+  // it?" now routes to the deload answerer and quotes the readiness-driven
+  // safety findings — but on a healthy or absent readiness log there is no
+  // positive finding to give, so the chip would dead-end there too.
+  const ready = (Array.isArray(readinessLog) ? readinessLog : [])
+    .map(r => Number(r?.score)).filter(Number.isFinite).slice(-3);
+  if(ready.length >= 2){
+    const avg = ready.reduce((a, b) => a + b, 0) / ready.length;
+    if(avg <= 40) out.push({ id: 'recovery', text: 'Am I overdoing it?' });
+  }
+  // The lift that shows up most in logged sessions is the one the user will
+  // actually ask about; the matcher in resolveFollowUp/answer builders
+  // accepts loose names, so a display-name question resolves.
+  const counts = new Map();
+  for(const h of Array.isArray(history) ? history : []){
+    for(const b of h?.blocks || []){
+      if(!b?.exerciseId) continue;
+      counts.set(b.exerciseId, (counts.get(b.exerciseId) || 0) + 1);
+    }
+  }
+  const [topLift, topCount] = [...counts.entries()].sort((a, b)=> b[1] - a[1])[0] || [];
+  if(topLift && topCount) out.push({ id: 'progression', text: `How do I progress my ${String(topLift).replace(/-/g, ' ')}?` });
+  if(programmeWhy?.reasons?.length) out.push({ id: 'programme', text: 'Why this programme?' });
+  return out;
+}
+
 // ── Intent classification ────────────────────────────────────────────────
 // Deliberately conservative and explicit: a question that matches no intent
 // gets a "here is what I can tell you" answer rather than a guessed one.
@@ -139,7 +188,9 @@ const INTENTS = [
   },
   {
     id: 'deload',
-    re: /\b(deload|tired|fatigue[ds]?|worn out|jaded|overtrain|need a break|rest week)\b/i,
+    // "Overdoing it" is how users actually ask this; the old set only knew
+    // the textbook words and sent "am I overdoing it?" to the general lane.
+    re: /\b(deload|tired|fatigue[ds]?|worn (?:out|down)|jaded|overtrain(?:ing|ed)?|overdoing|burn(?:t|ed)? out|running myself into the ground|need a break|rest week)\b/i,
   },
   {
     id: 'week-review',
@@ -236,7 +287,6 @@ function answerPlateau(state){
 }
 
 function answerDeload(state){
-  const signs = state.signals || state.risks || [];
   const deloadDue = (state.recommendations || []).find(r => r.kind === 'deload');
   if(deloadDue){
     const out = [`${deloadDue.action}.`, deloadDue.reason];
@@ -244,12 +294,41 @@ function answerDeload(state){
     out.push('A deload is a planned drop in volume, not a loss of progress — the engine picks it up again the week after.');
     return out;
   }
-  const fatigue = (state.safety?.items || []).filter(s => /fatigue|tired|effort|load/i.test(s.label || ''));
-  if(!signs.length && !fatigue.length) return null;
-  const out = ['Nothing on today\'s plan is asking for a deload right now.'];
-  if(fatigue.length) out.push(`What the engine is watching: ${fatigue.slice(0, 3).map(f => `${f.label}${f.detail ? ` — ${f.detail}` : ''}`).join('; ')}.`);
+  // The user's own check-ins are the honest input a "tired / overdoing it?"
+  // question needs, and they reach this state through TWO real paths:
+  //   * safety warnings built from the readiness log (recovery deficit,
+  //     excessive fatigue, the volume-hot deload prompt) — these live in
+  //     `state.safety.warnings`; the old code read a nonexistent `.items`
+  //     field and quoted nothing, ever;
+  //   * the latest check-in itself (currentState.readiness), rendered with
+  //     the same band wording the readiness UI uses.
+  const tired = (state.safety?.warnings || [])
+    .filter(w => /recovery-deficit|excessive-fatigue|deload-prompt/.test(w.id || ''));
+  const readiness = state.currentState?.readiness || null;
+  if(!tired.length && !readiness && !(state.risks || []).length){
+    // No check-ins yet and nothing the engines flagged — say so, and say
+    // where the signal would come from, rather than an empty reassurance.
+    return [
+      'Nothing on today\'s plan is asking for a deload right now — and I have no readiness check-ins to read yet.',
+      'Log a quick check-in from Today; "am I overdoing it?" is only as honest as the signal behind it.',
+    ];
+  }
+  const out = [];
+  for(const w of tired.slice(0, 2)){
+    out.push(`${w.title}. ${w.detail}`, w.action ? `What to do: ${w.action}` : null);
+  }
+  if(readiness?.score != null){
+    const band = readinessBand(readiness.score);
+    const ago = readiness.daysAgo == null ? ''
+      : readiness.daysAgo === 0 ? ' (today)'
+        : readiness.daysAgo === 1 ? ' (yesterday)'
+          : ` (${readiness.daysAgo} days ago)`;
+    out.push(`Latest check-in: ${band.label} — ${readiness.score}${ago}.`);
+  } else if(!tired.length){
+    out.push('Nothing on today\'s plan is asking for a deload right now.');
+  }
   out.push('If you are feeling flat, the honest move is to log the session with real RPE numbers rather than guess a load down — the engine reads effort, not feelings.');
-  return out;
+  return out.filter(Boolean);
 }
 
 function answerMissed(state){
@@ -307,13 +386,17 @@ function answerProgress(state, profile){
   const out = [];
   if(!profile?.rows?.length) return null;
   out.push(profile.summary);
-  // The three rows a "am I improving" question actually needs. Rows carry their
-  // own confidence and evidence, so quoting them is quoting the engine.
-  const picks = ['training-age', 'consistency', 'progression-rate']
+  // The rows a "am I improving" question actually needs. Rows carry their
+  // own confidence and evidence, so quoting them is quoting the engine —
+  // recovery-readiness closes the check-in channel into the coach: the user's
+  // own readings, bounded window and all, as context for the trend verdict.
+  const picks = ['training-age', 'consistency', 'progression-rate', 'recovery-readiness']
     .map(id => profile.rows.find(r => r.id === id))
     .filter(Boolean);
   for(const row of picks){
-    out.push(`${row.label}: ${row.value}. ${row.detail}`);
+    out.push(row.id === 'recovery-readiness'
+      ? `Recovery context — ${row.label}: ${row.value}. ${row.detail}`
+      : `${row.label}: ${row.value}. ${row.detail}`);
     const ev = row.evidence?.[0];
     if(ev) out.push(`Evidence: ${ev}`);
   }

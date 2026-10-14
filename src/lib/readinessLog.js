@@ -20,6 +20,7 @@
 // edit must replace the earlier row rather than append beside it.
 
 import { readinessScore } from './progression.js';
+import { localDateISO, mondayKeyISO } from './dateOnly.js';
 
 /** The three signals, in the order the UI asks for them. */
 export const READINESS_SIGNALS = [
@@ -113,4 +114,59 @@ export function readinessBand(score){
   if(n < 60) return { id:'fair', label:'Okay' };
   if(n < 80) return { id:'good', label:'Good' };
   return { id:'high', label:'Ready' };
+}
+
+// ── Week coverage + trend (bounded reads) ───────────────────────────────
+// Every readiness read elsewhere in the app answers "what is the data telling
+// us NOW"; these two helpers make the *window* explicit. The review card's
+// coverage line, the Today nudge it feeds, and the Progress trend row all use
+// review card's coverage line, the Today nudge it feeds, and the Progress
+// trend row all use the same Monday-start grouping mesocycle's weekly review
+
+/**
+ * How many check-ins the CURRENT week (the one containing `todayISO` or the
+ * device clock) has recorded. The zero-coverage case is the one the Today
+ * nudge is built to close: a week with no check-ins produces a recovery read
+ * leaning on increasingly stale rows.
+ */
+export function readinessWeekCoverage(log, todayISO = null){
+  const t = String(todayISO || localDateISO());
+  const key = mondayKeyISO(t);
+  if(!key) return { inWeek: 0, weekKey: null };
+  const rows = Array.isArray(log) ? log : [];
+  const inWeek = rows.filter(r => r?.dateISO && mondayKeyISO(String(r.dateISO).slice(0, 10)) === key).length;
+  return { inWeek, weekKey: key };
+}
+
+/**
+ * Direction of the check-in series over a bounded window (default 14 days):
+ * the recent half of entries versus the half before it, both halves inside
+ * the window. Returns available:false rather than guessing a trend from
+ * sparse data — an honest "not enough" is the same posture every other read
+ * in the app takes. The recent average is still returned when unavailable so
+ * callers can show what IS known ("averaging X over N check-ins").
+ */
+export function readinessTrend(log, { todayISO = null, windowDays = 14, directionThreshold = 5 } = {}){
+  const t = String(todayISO || localDateISO());
+  const base = new Date(`${t}T00:00:00Z`);
+  if(Number.isNaN(base.getTime())) return { available: false, entries: 0, recentAvg: null, windowDays };
+  const min = new Date(base);
+  min.setUTCDate(min.getUTCDate() - (Math.max(1, Number(windowDays) || 14) - 1));
+  const minISO = min.toISOString().slice(0, 10);
+  const rows = (Array.isArray(log) ? log : [])
+    .filter(r => r?.dateISO && r?.score != null && Number.isFinite(Number(r.score)))
+    .filter(r => String(r.dateISO) >= minISO && String(r.dateISO) <= t)
+    .sort((a, b) => String(a.dateISO).localeCompare(String(b.dateISO)));
+  const scores = rows.map(r => Number(r.score));
+  const avgOf = arr => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+  const entries = scores.length;
+  const recentHalf = Math.ceil(entries / 2);
+  if(entries < 6 || recentHalf === entries){
+    return { available: false, entries, recentAvg: avgOf(scores.slice(-Math.min(entries, 5))), windowDays, firstDate: rows[0]?.dateISO || null, lastDate: rows.at(-1)?.dateISO || null };
+  }
+  const recentAvg = avgOf(scores.slice(-recentHalf));
+  const prevAvg = avgOf(scores.slice(0, entries - recentHalf));
+  const delta = recentAvg - prevAvg;
+  const direction = delta >= directionThreshold ? 'improving' : delta <= -directionThreshold ? 'declining' : 'steady';
+  return { available: true, direction, delta, recentAvg, prevAvg, entries, windowDays, firstDate: rows[0]?.dateISO || null, lastDate: rows.at(-1)?.dateISO || null };
 }
