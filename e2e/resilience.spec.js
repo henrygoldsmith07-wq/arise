@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { awaitPersisted } from './helpers.js';
 
 // Resilience + inclusivity e2e: the active-workout draft must survive a hard
 // reload and a second tab must never corrupt it; dialogs must trap and return
@@ -34,14 +35,11 @@ async function completeOnboarding(page){
   await page.getByRole('button', { name: 'Next' }).click();
   await page.getByRole('button', { name: /Save & continue/i }).click();
   await expect(page.getByRole('dialog', { name: 'Onboarding' })).toBeHidden();
-  // Onboarding updates React immediately and persists asynchronously. Tests
-  // that reload/open a peer tab must wait for canonical IndexedDB, otherwise
-  // a fast CI runner can legitimately reload before the profile transaction
-  // commits and see the onboarding dialog again.
-  await page.evaluate(async () => {
-    const { whenPersisted } = await import('/src/lib/storage.js');
-    await whenPersisted();
-  });
+  // Two-phase drain (enqueue-proven + commit-proven, see helpers.js): React
+  // persists in a post-paint effect, so a bare whenPersisted() can resolve
+  // before the save is even queued — and every reload below would then race
+  // the profile commit and resurrect the onboarding dialog.
+  await awaitPersisted(page);
 }
 
 async function openRunner(page){
@@ -242,14 +240,16 @@ test.describe('themes render with real content', () => {
     for (const tab of tabs) {
       test(`${theme} — ${tab} screenshot`, async ({ page }) => {
         await completeOnboarding(page);
-        // Pick the theme via the cycle control until the class matches.
-        await page.evaluate((t) => {
-          localStorage.setItem('arise.store.v1', (() => {
-            const raw = localStorage.getItem('arise.store.v1');
-            if (!raw) return raw;
-            try { const s = JSON.parse(raw); s.preferences = { ...(s.preferences || {}), theme: t }; return JSON.stringify(s); } catch { return raw; }
-          })());
+        // Set the theme through the store (not raw localStorage surgery, which
+        // bypasses migrations and can lose to the canonical IDB snapshot),
+        // then drain before the reload so boot can never see a half-written
+        // profile and resurrect onboarding over the tab under test.
+        await page.evaluate(async (t) => {
+          const { loadStore, saveStore } = await import('/src/lib/store.js');
+          const store = loadStore();
+          saveStore({ ...store, preferences: { ...(store.preferences || {}), theme: t } });
         }, theme);
+        await awaitPersisted(page);
         await page.reload();
         await page.getByRole('button', { name: tab, exact: true }).click();
         await expect(page.locator('#main')).toBeVisible();
@@ -261,10 +261,12 @@ test.describe('themes render with real content', () => {
 
   test('light theme body text has contrast against its background', async ({ page }) => {
     await completeOnboarding(page);
-    await page.evaluate(() => {
-      const raw = localStorage.getItem('arise.store.v1');
-      if (raw) { try { const s = JSON.parse(raw); s.preferences = { ...(s.preferences || {}), theme: 'light' }; localStorage.setItem('arise.store.v1', JSON.stringify(s)); } catch {} }
+    await page.evaluate(async () => {
+      const { loadStore, saveStore } = await import('/src/lib/store.js');
+      const store = loadStore();
+      saveStore({ ...store, preferences: { ...(store.preferences || {}), theme: 'light' } });
     });
+    await awaitPersisted(page);
     await page.reload();
     const dark = await page.evaluate(() => document.documentElement.classList.contains('dark'));
     expect(dark).toBe(false);
