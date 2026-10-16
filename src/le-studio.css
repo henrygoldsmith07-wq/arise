@@ -373,7 +373,7 @@ button { -webkit-tap-highlight-color: transparent; }
   padding: 0.5rem 0.875rem; border-radius: 10px; font-size: 0.75rem; font-weight: 600;
   transition: top 0.15s ease-out;
 }
-.skip-link:focus { top: 8px; }
+.skip-link:focus { top: calc(8px + env(safe-area-inset-top)); }
 
 /* Long-list scroll & battery: skip layout/paint for off-screen rows.
    contain-intrinsic-size reserves height so the scrollbar stays stable. */

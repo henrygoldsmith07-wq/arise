@@ -221,7 +221,16 @@ export function recommendNext({ exerciseId, history, targetReps = null, conserva
     return { load: null, reps, reason: "Top of range — try harder variant (decline/weighted/tempo).", strategy: strat, personalised: prate, suggestWeighted: true, trainingAge, priorsVersion: cfg.version };
   }
   const rpe = last.rpe != null && String(last.rpe).trim()!=='' ? Number(last.rpe) : null;
-  const rir = rpe !== null && Number.isFinite(rpe) ? Math.max(0, 10 - rpe) : 2;
+  const rir = rpe !== null && Number.isFinite(rpe) ? Math.max(0, 10 - rpe) : null;
+  // Missing RPE must not mean "assume room to spare" (old default RIR 2).
+  // Unknown effort stays unknown: hold at the same prescription. Failed /
+  // skipped sets already returned above, so reaching here with unknown RPE
+  // means a completed set of unknown effort — repeat it, don't progress it.
+  // Explicit-RPE paths below are byte-identical.
+  if(rir === null){
+    return plateAware({ load, reps, reason: 'rpe-unknown:holding — no RPE logged, so effort is unknown; repeat at the same target instead of assuming room to spare.', strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version }, plateConfig, exerciseId);
+  }
+  const effortRir = rir;
   // Personalised rate when learned; otherwise strategy base rate scaled by training age.
   const empiricalRate = calibration?.progressionRatePct;
   const incPct = empiricalRate != null && Number.isFinite(Number(empiricalRate))
@@ -233,12 +242,14 @@ export function recommendNext({ exerciseId, history, targetReps = null, conserva
   // Strategy-aware
   if(sCfg.prefer === 'reps'){
     if(reps < hi) return plateAware({ load, reps: Math.min(hi, reps+1), reason: `Endurance — add a rep (${reps}→${Math.min(hi, reps+1)}).`, strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version }, plateConfig, exerciseId);
+    return plateAware({ load, reps, reason: `Endurance at top of ${lo}–${hi} — holding at ${reps} reps.`, strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version }, plateConfig, exerciseId);
   }
   // Double progression (default for hypertrophy, and fallback)
+  // Unknown RPE returns above, so effortRir is always the explicit RIR here.
   if(reps < hi) {
-    if(rir >= 2) return plateAware({ load, reps: Math.min(hi, reps + 1), reason: `Room at RPE ${rpe ?? "/"} — add a rep (${reps}→${Math.min(hi, reps+1)}).`, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
+    if(effortRir >= 2) return plateAware({ load, reps: Math.min(hi, reps + 1), reason: `Room at RPE ${rpe ?? "/"} — add a rep (${reps}→${Math.min(hi, reps+1)}).`, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
     const nextLoad = snapLoad(load * (1 + incPct), cfg);
-    return plateAware({ load: nextLoad, reps: lo, reason: `Close to failure (RIR ~${rir}) — increase ${load} → ${nextLoad} kg and reset to ${lo} reps.`, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
+    return plateAware({ load: nextLoad, reps: lo, reason: `Close to failure (RIR ~${effortRir}) — increase ${load} → ${nextLoad} kg and reset to ${lo} reps.`, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
   }
   const nextLoad = snapLoad(load > 0 ? load * (conservative ? (1 + incPct) : (1 + incPct*cfg.progression.nonConservativeMultiplier)) : 0, cfg);
   return plateAware({ load: nextLoad || load, reps: lo, reason: `You hit the top of ${lo}–${hi} at ${load > 0 ? `${load} kg` : `${reps} reps`} — increase ${load > 0 ? `${load} → ${nextLoad} kg` : `the difficulty`} and reset to ${lo} reps.`, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
@@ -256,7 +267,9 @@ export function recommendSets(history, exerciseId, { targetReps = '8–12', maxS
   if(exposures.length < cfg.minimumSessions) return { sets: current, reason: 'Log another session before judging set count.', add: false };
   const recent = exposures.slice(-cfg.topSessionsRequired);
   const atTop = recent.every(l=> l.reps >= hi);
-  const room = recent.every(l=> l.rpe == null || String(l.rpe).trim()==='' || Number(l.rpe) <= cfg.roomRpeMax);
+  // Missing RPE is unknown effort, not room: every recent session must carry
+  // an explicit RPE at or below the cap before a set is added.
+  const room = recent.every(l=> l.rpe != null && String(l.rpe).trim()!=='' && Number.isFinite(Number(l.rpe)) && Number(l.rpe) <= cfg.roomRpeMax);
   if(atTop && room && current < cap) return { sets: current + 1, reason: `Two sessions at top of ${lo}–${hi} with reps in tank — add a set (${current}→${current+1}).`, add: true };
   if(atTop) return { sets: current, reason: current >= cap ? `At ${cap} sets — cap reached; progress load or reps instead.` : 'At top of rep range but RPE was high — hold sets, add load first.', add: false };
   return { sets: current, reason: `Not at the top of ${lo}–${hi} yet — keep building reps before adding sets.`, add: false };

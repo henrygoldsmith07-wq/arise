@@ -142,7 +142,14 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
       setStore(result.store);
       setBuilderOpen(false);
       setProgramId(result.template.id);
-    }catch(err){ alert(String(err?.message || err)); }
+    }catch(err){
+      void dialogs.confirm({
+        title:'Could not save template',
+        description: String(err?.message || err),
+        confirmLabel:'OK',
+        cancelLabel:'Close',
+      });
+    }
   };
   // Deletion is soft: the row stays recoverable (undo below), analytics and
   // the UI filter on deletedAt, and a tombstone records the deletion so a

@@ -20,13 +20,13 @@ export default function SessionSummary({
         <span className="text-[11px] text-ink3">Optional, useful for next targets</span>
       </div>
       <div className="flex flex-wrap gap-1.5">
-        {NOTE_PROMPTS.map(prompt=> <button key={prompt.id} onClick={()=> onToggleNoteTag(prompt.id)} aria-pressed={noteTags.includes(prompt.id)} className={`text-xs font-semibold px-2.5 py-1.5 rounded-full border ${noteTags.includes(prompt.id)?'bg-ink text-bg border-ink':'bg-surface2 border-line'}`}>{prompt.label}</button>)}
+        {NOTE_PROMPTS.map(prompt=> <button key={prompt.id} onClick={()=> onToggleNoteTag(prompt.id)} aria-pressed={noteTags.includes(prompt.id)} className={`min-h-11 text-xs font-semibold px-2.5 py-1.5 rounded-full border ${noteTags.includes(prompt.id)?'bg-ink text-bg border-ink':'bg-surface2 border-line'}`}>{prompt.label}</button>)}
       </div>
       <div role="group" aria-label="How did the session feel?" className="flex flex-wrap gap-1.5">
         <span className="text-[11px] text-ink3 self-center mr-1">Session quality:</span>
         {SESSION_QUALITY_OPTIONS.map(opt=> (
           <button key={opt.id} onClick={()=> onQualityToggle(opt.id)} aria-pressed={qualityRating===opt.id}
-            className={`text-xs font-semibold px-2.5 py-1.5 rounded-full border ${qualityRating===opt.id?'bg-ink text-bg border-ink':'bg-surface2 border-line'}`}>
+            className={`min-h-11 text-xs font-semibold px-2.5 py-1.5 rounded-full border ${qualityRating===opt.id?'bg-ink text-bg border-ink':'bg-surface2 border-line'}`}>
             {opt.emoji} {opt.label}
           </button>
         ))}
