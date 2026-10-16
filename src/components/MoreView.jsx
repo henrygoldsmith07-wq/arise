@@ -486,7 +486,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
                   <li key={exerciseId} className="flex items-center gap-2 text-xs">
                     <span className="truncate">{exerciseName(exerciseId)}</span>
                     <span className="ml-auto font-bold tabular-nums shrink-0">{seconds < 60 ? `${seconds}s` : `${seconds / 60}m`}</span>
-                    <button onClick={()=> { const nextTs = { ...((store.gymPrefs?.restPresetUpdatedAt && typeof store.gymPrefs.restPresetUpdatedAt === 'object') ? store.gymPrefs.restPresetUpdatedAt : {}) }; delete nextTs[exerciseId]; setStore({ ...store, gymPrefs: { ...(store.gymPrefs||{}), restPresets: setRestPreset(store.gymPrefs, exerciseId, 0), restPresetUpdatedAt: nextTs, updatedAt: new Date().toISOString() } }); }} aria-label={`Clear rest preset for ${exerciseName(exerciseId)}`} className="shrink-0 w-8 h-8 grid place-items-center rounded-full border border-line text-ink3">✕</button>
+                    <button onClick={()=> { const nextTs = { ...((store.gymPrefs?.restPresetUpdatedAt && typeof store.gymPrefs.restPresetUpdatedAt === 'object') ? store.gymPrefs.restPresetUpdatedAt : {}) }; delete nextTs[exerciseId]; setStore({ ...store, gymPrefs: { ...(store.gymPrefs||{}), restPresets: setRestPreset(store.gymPrefs, exerciseId, 0), restPresetUpdatedAt: nextTs, updatedAt: new Date().toISOString() } }); }} aria-label={`Clear rest preset for ${exerciseName(exerciseId)}`} className="shrink-0 w-11 h-11 grid place-items-center rounded-full border border-line text-ink3">✕</button>
                   </li>
                 ))}
               </ul>

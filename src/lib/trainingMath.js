@@ -42,20 +42,36 @@ export function parseReps(value){
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-// Epley estimated 1RM. Returns 0 when either input is missing or unusable,
-// which is the engine's sentinel (falsy = "cannot estimate", so callers can use
-// `e1rm(...) || reps` without a separate null check).
+// Epley estimated 1RM, capped for high-rep sets. Uncapped Epley overstates
+// max strength from endurance-range sets (e.g. 20 reps implies +67%), and
+// that optimistic 1RM then drives load recommendations, PR calls and trends.
+// Reps above EPLEY_CAP_REPS are clamped to the cap before the formula runs,
+// so the estimate saturates instead of growing without bound. The cap is 12:
+// Epley tracks observed 1RM well through the common 1–12 rep working range
+// and degrades beyond it (see docs/METHODOLOGY.md "Strength estimates"); the
+// clamp keeps the estimator inside the range where the formula is defensible
+// while leaving every textbook 1–12-rep value byte-identical.
+// epleyToLoad remains the exact inverse (same capped reps), so
+// epleyToLoad(e1rm(w, r), r) === w round-trips for r in 1..15.
+const EPLEY_CAP_REPS = 12;
+function cappedEpleyReps(reps){
+  const r = parseReps(reps);
+  if(!(r > 0)) return 0;
+  return Math.min(r, EPLEY_CAP_REPS);
+}
+export { EPLEY_CAP_REPS };
 export function e1rm(weightKg, reps){
   const w = Number(weightKg);
-  const r = parseReps(reps);
+  const r = cappedEpleyReps(reps);
   if(!(w > 0 && r > 0)) return 0;
   return w * (1 + r / 30);
 }
 
 // Inverse of e1rm: the load that produces `e1rmVal` for `reps` reps. Used to
 // convert a carried working-set target onto a substituted exercise's rep range.
+// Uses the same capped reps as e1rm, so the pair round-trips exactly.
 export function epleyToLoad(e1rmVal, reps){
-  const r = parseReps(reps);
+  const r = cappedEpleyReps(reps);
   if(!(r > 0)) return 0;
   return Number(e1rmVal) / (1 + r / 30);
 }

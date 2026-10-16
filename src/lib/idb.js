@@ -54,13 +54,25 @@ function memoryBackend(){
 // getFallbackError).
 let openError = null;
 
+// True once indexedDB.open has fired onblocked: another tab still holds the
+// old DB version, so this tab's upgrade waits (neither onsuccess nor onerror
+// fires until that tab closes). Latched for the page session — the recovery is
+// closing the other tab and reloading. Exposed so boot can explain the real
+// cause instead of a generic timeout.
+let idbBlocked = false;
+export function isIdbBlocked(){ return idbBlocked; }
+
 function openDb(){
   if(dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject)=>{
     try{
       if(typeof indexedDB === 'undefined'){ resolve(null); return; }
       const req = indexedDB.open(DB_NAME, DB_VERSION);
-      req.onblocked = ()=> { /* older tab still open on a previous version; upgrade waits */ };
+      req.onblocked = ()=> {
+        // Older tab still open on a previous version; upgrade waits. Flag it
+        // so the boot-timeout UI can name the cause and offer a Reload.
+        idbBlocked = true;
+      };
       req.onupgradeneeded = ()=> {
         const db = req.result;
         const autoStores = new Set(['sets', 'events']);

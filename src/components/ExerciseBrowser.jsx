@@ -207,7 +207,7 @@ export default function ExerciseBrowser({ availableEquipment, onboarding = null,
         </label>
       </div>
 
-      <p className="text-xs text-ink3 px-1" role="status" aria-live="polite">{results.length} exercise{results.length===1?'':'s'} • sorted by relevance</p>
+      <p className="text-xs text-ink3 px-1" role="status" aria-live="polite">{results.length} exercise{results.length===1?'':'s'} • filtered in library order</p>
 
       {!!recs.length && (
         <div className="rounded-2xl border border-line bg-surface p-3">
