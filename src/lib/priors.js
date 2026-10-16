@@ -338,6 +338,14 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
     // Segment-level conclusions (rates) are withheld until a segment has this
     // many resolved recommendation→outcome pairs.
     minimumSegmentSamples: 5,
+    // A segment difference below this rate gap is NOT treated as an observed
+    // weakness. Rates here are point estimates over `minimumSegmentSamples`
+    // transitions; a 5-sample segment cannot distinguish a 5% gap from noise,
+    // so calling one an observed weakness would overclaim. The capability layer
+    // (progressionModel.assessCapabilities) requires this much separation
+    // before it reports a weakness at all, and describes the result as
+    // "observed", never "proven".
+    minimumObservedWeaknessRate: 0.1,
     maxOpenRecordsPerExercise: 3,
     retentionLimit: 500,
     // Outcome-label decision constants for the named classifier (see

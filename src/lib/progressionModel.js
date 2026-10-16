@@ -338,16 +338,29 @@ export function readinessGraduationEstimate(history, { readinessLog = [], config
 // ── Capability assessment ───────────────────────────────────────────────
 
 // Weakness test against the double-progression arm inside a study segment.
+//
+// `conclusive` in study.js:380 means only "n transitions >= minimumSegmentSamples"
+// — a SAMPLE-SIZE threshold, not a significance test. The segments carry rates
+// and counts, not raw scores, so a CI cannot be computed from them here; and in
+// a single-lifter retrospective replay there is no participant to cluster.
+//
+// Therefore this predicate may NOT be described as a proof. It reports an
+// OBSERVED difference: the point-estimate direction plus a minimum magnitude,
+// so a trivial rate difference between two arms is not read as a finding.
+// study.js:478 states plainly what a segment is and is not.
 function losesToDoubleProgression(segment, minimum){
   if(!segment?.arise || !segment?.['double-progression']) return false;
   if(!segment.arise.conclusive || segment.arise.n < minimum) return false;
   const a = segment.arise.targetAchievementRate, d = segment['double-progression'].targetAchievementRate;
-  return a != null && d != null && a < d;
+  if(a == null || d == null) return false;
+  const cfg = resolveArisePriors(null);
+  const floor = cfg.longitudinal.minimumObservedWeaknessRate;
+  return d - a >= floor;
 }
 
 // Short-break easing opens only when BOTH hold:
 //   1. ≥7-day gap transitions show no measurable performance detriment
-//      (mean change above -1.5%), so easing back is provably unnecessary
+//      (mean change above -1.5%), so easing back looks like unnecessary
 //      conservatism rather than recovery prudence, and
 //   2. arise stagnates more than double-progression overall (the engine's
 //      default gap handling is demonstrably too timid).
@@ -366,8 +379,11 @@ export function assessCapabilities({ history, study = null, estimates, config = 
   const push = (id, label, status, detail)=> caps.push({ id, label, status, detail });
 
   const exEntries = Object.entries(estimates.exercises || {});
-  // Exercise-specific logic: response estimate present AND study proves arise
-  // underperforms double progression for THAT exercise.
+  // Exercise-specific logic: response estimate present AND the replay shows
+  // arise underperforming double progression for THAT exercise. This is an
+  // OBSERVED difference over a retrospective replay, not a proof — study.js
+  // says the replay cannot establish causal superiority, so the copy must not
+  // claim it does.
   const eligibleExercises = exEntries.filter(([ex])=> losesToDoubleProgression(study?.byExercise?.[ex], minimum));
   push('individual-response', 'Individual response estimates',
     exEntries.length ? 'ready' : 'insufficient-data',
@@ -375,7 +391,7 @@ export function assessCapabilities({ history, study = null, estimates, config = 
   push('exercise-specific', 'Exercise-specific progression logic',
     eligibleExercises.length ? 'active' : study ? 'dormant' : 'awaiting-study',
     eligibleExercises.length
-      ? `Weakness proven vs double-progression for: ${eligibleExercises.map(([ex]) => ex).join(', ')}.`
+      ? `Observed weakness vs double-progression for: ${eligibleExercises.map(([ex]) => ex).join(', ')}. Descriptive only — the replay cannot establish why, and does not prove superiority.`
       : study ? 'No conclusive exercise stratum where arise loses to double-progression.' : 'Run the comparative study (More → Progression evidence) to test for weaknesses.');
 
   // Movement-specific: group study segments by movement pattern.
@@ -394,7 +410,7 @@ export function assessCapabilities({ history, study = null, estimates, config = 
       .map(([pattern]) => pattern);
     push('movement-specific', 'Movement-specific logic',
       weakPatterns.length ? 'active' : 'dormant',
-      weakPatterns.length ? `Weak patterns: ${weakPatterns.join(', ')}.` : 'No movement pattern shows a proven weakness yet.');
+      weakPatterns.length ? `Weak patterns: ${weakPatterns.join(', ')}.` : 'No movement pattern shows an observed weakness yet.');
   }else{
     push('movement-specific', 'Movement-specific logic', 'awaiting-study', 'Requires comparative study output.');
   }
