@@ -1,4 +1,4 @@
-# Arise — improvements roadmap
+# Arise — improvements roadmap (ARCHIVED — baseline stale, see below)
 
 Sixteen requested improvements, sorted by what the current architecture can
 actually ship. Arise today is local-first: Vite + React, `localStorage`, no
@@ -34,6 +34,12 @@ applied first, before priority.
 Tier A is 10 of 16 and is where the session-by-session experience actually
 improves. Tiers B and C are product decisions, not backlog items — each one
 trades away a property the README currently sells.
+
+> ARCHIVE NOTE: the "Baseline (measured 2026-08-14)" table below is stale —
+> it claims 39 exercises / 3 programs (actual 324 / 5 — see `src/lib/data.js`)
+> and references a non-existent `docs/perf.md`. The architecture gates above
+> are still accurate; the "today" numbers are not. Living plan:
+> `docs/ROADMAP.md`.
 
 ---
 

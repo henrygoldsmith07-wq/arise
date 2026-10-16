@@ -119,8 +119,11 @@ describe('what changed summary', () => {
 });
 
 describe('progress assessment', () => {
+  // RPE 8 on every set: the effort the old RIR-2 default silently assumed.
+  // Unknown RPE now holds (tests/rpe-unknown.test.js), so a replay fixture
+  // whose lifter progressed must log the effort that progression implies.
   const lift = (id, dateISO, exerciseId, weightKg, reps) => ({
-    id, dateISO, blocks: [{ exerciseId, sets: [{ reps: String(reps), weightKg: String(weightKg) }] }],
+    id, dateISO, blocks: [{ exerciseId, sets: [{ reps: String(reps), weightKg: String(weightKg), rpe: '8' }] }],
   });
   const improvingHistory = [
     lift('a', '2026-08-10', 'bench-press-dumbbell', 20, 8),

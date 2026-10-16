@@ -506,28 +506,34 @@ export function deriveProgressionModel({ history, study = null, readinessLog = [
   const pmCfg = cfg.progressionModel;
   const maxDelta = pmCfg.maxIncPctDelta;
 
-  for(const [exerciseId, rate] of Object.entries(estimates.exercises)){
-    const cap = capabilities.find(c => c.id === 'exercise-specific');
-    if(cap.status !== 'active') break;
-    const segment = study?.byExercise?.[exerciseId];
-    if(!losesToDoubleProgression(segment, Math.max(1, cfg.longitudinal.minimumSegmentSamples))) continue;
+  // The cap status is uniform today (one entry for all exercises), so skipping
+  // the loop when the single cap is missing/inactive preserves the old
+  // behaviour exactly — and is cheaper than a per-exercise check. If
+  // per-exercise caps ever diverge, reintroduce a per-exercise `continue`
+  // inside the loop.
+  const exerciseCap = capabilities.find(c => c.id === 'exercise-specific');
+  if(exerciseCap && exerciseCap.status === 'active'){
+    for(const [exerciseId, rate] of Object.entries(estimates.exercises)){
+      const segment = study?.byExercise?.[exerciseId];
+      if(!losesToDoubleProgression(segment, Math.max(1, cfg.longitudinal.minimumSegmentSamples))) continue;
 
-    const baseName = strategyForExercise(exerciseId, { config: cfg });
-    const base = cfg.progression.strategies[baseName] || cfg.progression.strategies.hypertrophy;
-    let tuned = base.incPct * (1 + clamp(rate.weeklyLoadPct, -pmCfg.maxIncPctDelta * 4, pmCfg.maxIncPctDelta * 4));
-    // Fatigue factor: if carry-over is measurably negative, dampen aggression.
-    if(estimates.fatigueCarryover?.ready && estimates.fatigueCarryover.carryoverDelta < 0){
-      tuned *= clamp(1 + estimates.fatigueCarryover.carryoverDelta, 0.85, 1);
+      const baseName = strategyForExercise(exerciseId, { config: cfg });
+      const base = cfg.progression.strategies[baseName] || cfg.progression.strategies.hypertrophy;
+      let tuned = base.incPct * (1 + clamp(rate.weeklyLoadPct, -pmCfg.maxIncPctDelta * 4, pmCfg.maxIncPctDelta * 4));
+      // Fatigue factor: if carry-over is measurably negative, dampen aggression.
+      if(estimates.fatigueCarryover?.ready && estimates.fatigueCarryover.carryoverDelta < 0){
+        tuned *= clamp(1 + estimates.fatigueCarryover.carryoverDelta, 0.85, 1);
+      }
+      // Frequency factor: chronically sparse exposures with worse outcomes.
+      const freqBucket = estimates.frequency?.buckets?.['≥7d'];
+      if(freqBucket && freqBucket.meanChange < 0){
+        tuned *= 0.95;
+      }
+      tuned = clamp(round(tuned, 4), Math.max(0.005, base.incPct - maxDelta), base.incPct + maxDelta);
+      const key = `__model:${exerciseId}`;
+      overlay.progression.strategies[key] = { ...base, incPct: tuned };
+      overlay.progression.strategyByExercise[exerciseId] = key;
     }
-    // Frequency factor: chronically sparse exposures with worse outcomes.
-    const freqBucket = estimates.frequency?.buckets?.['≥7d'];
-    if(freqBucket && freqBucket.meanChange < 0){
-      tuned *= 0.95;
-    }
-    tuned = clamp(round(tuned, 4), Math.max(0.005, base.incPct - maxDelta), base.incPct + maxDelta);
-    const key = `__model:${exerciseId}`;
-    overlay.progression.strategies[key] = { ...base, incPct: tuned };
-    overlay.progression.strategyByExercise[exerciseId] = key;
   }
 
   if(estimates.autoregulation?.ready && Math.abs(estimates.autoregulation.shift) > 0.0005){

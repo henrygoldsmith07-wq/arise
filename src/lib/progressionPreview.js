@@ -10,6 +10,11 @@
 // Honesty rules the preview keeps:
 //   - No history for an exercise → the plan's own prescription is shown with
 //     the engine's "no history" reason. Nothing is invented.
+//   - Each simulated exposure is assumed performed at the target effort the
+//     working-set guide states on every set ("leave ~2 in the tank" = RIR 2 =
+//     RPE 8), so synthetic history carries `rpe: '8'`. Without it the engine
+//     (correctly) treats simulated work as effort-of-unknown-kind and holds
+//     every week flat — a preview that predicts nothing.
 //   - Bodyweight work → reps progress, load stays "bw".
 //   - Plate-aware: with a plate config, every simulated barbell/dumbbell/
 //     machine load is rounded to increments the user actually owns.
@@ -81,7 +86,10 @@ export function simulateExerciseWeeks({ exerciseId, targetReps = '8–12', histo
         sets:[{
           reps:String(rec.reps ?? ''),
           weightKg:String(rec.load ?? ''),
-          rpe:'',
+          // Simulated exposures are assumed performed at the target effort
+          // (RIR 2 = RPE 8, the guide's contract on every set) — see the
+          // honesty rules above. Real logged history still decides week 1.
+          rpe:'8',
           completed:true,
         }],
       }],

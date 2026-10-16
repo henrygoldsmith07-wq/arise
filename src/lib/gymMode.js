@@ -12,6 +12,7 @@
 //   - skipTo: "where was chest press in this session?" for instant navigation.
 
 import { nearestAchievableLoad, minimumAchievableJump, DEFAULT_PLATE_DENOMINATIONS_KG, DEFAULT_DUMBBELL_WEIGHTS_KG, DEFAULT_MACHINE_INCREMENT_KG } from './plates.js';
+import { EXERCISE_BY_ID } from './data.js';
 
 // The smallest real jump for a piece of equipment, derived from the plate /
 // dumbbell / machine-pin configuration (falling back to the defaults). Every
@@ -126,7 +127,11 @@ export function skipTo(blocks, query){
   for(let bi = 0; bi < blocks.length; bi++){
     const block = blocks[bi];
     if(!block) continue;
-    const nameHit = String(block.name || '').toLowerCase().includes(q);
+    // Runner blocks carry exerciseId, not name — resolve the display name so
+    // "chest press" can match. Keep block.name/id matching for callers that
+    // pass enriched blocks.
+    const resolvedName = EXERCISE_BY_ID[block.exerciseId]?.name || '';
+    const nameHit = String(block.name || resolvedName || '').toLowerCase().includes(q);
     const idHit = String(block.exerciseId || '').toLowerCase().includes(q);
     if(!nameHit && !idHit) continue;
     const si = block.sets.findIndex(s=> !s.completed && !s.skipped);

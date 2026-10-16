@@ -28,9 +28,12 @@ const BARBELL_ONLY_HISTORY = [
   { id:'s2', dateISO:'2026-09-14', blocks:[{ exerciseId:'barbell-squat', sets:[{ reps:'8', weightKg:'80', completed:true }] }] },
 ];
 
+// Fixtures now log RPE 8 explicitly: unknown RPE holds (by design — see
+// tests/rpe-unknown.test.js), and RPE 8 = RIR 2 is exactly the effort the old
+// silent default assumed, so the intended rep-first progression is unchanged.
 const DUMBBELL_BENCH_HISTORY = [
-  { id:'s1', dateISO:'2026-09-07', blocks:[{ exerciseId:'bench-press-dumbbell', sets:[{ reps:'8', weightKg:'40', completed:true }] }] },
-  { id:'s2', dateISO:'2026-09-14', blocks:[{ exerciseId:'bench-press-dumbbell', sets:[{ reps:'8', weightKg:'40', completed:true }] }] },
+  { id:'s1', dateISO:'2026-09-07', blocks:[{ exerciseId:'bench-press-dumbbell', sets:[{ reps:'8', weightKg:'40', rpe:'8', completed:true }] }] },
+  { id:'s2', dateISO:'2026-09-14', blocks:[{ exerciseId:'bench-press-dumbbell', sets:[{ reps:'8', weightKg:'40', rpe:'8', completed:true }] }] },
 ];
 
 describe('progression preview — planned exercises', () => {
@@ -70,7 +73,9 @@ describe('progression preview — simulation', () => {
 
   it('rounds the load bump to owned increments when the range tops out', () => {
     const history = [
-      { id:'s1', dateISO:'2026-09-07', blocks:[{ exerciseId:'barbell-squat', sets:[{ reps:'12', weightKg:'80', completed:true }] }] },
+      // RPE 8 = the effort the old default silently assumed; without it the
+      // engine holds instead of bumping load, defeating the test's purpose.
+      { id:'s1', dateISO:'2026-09-07', blocks:[{ exerciseId:'barbell-squat', sets:[{ reps:'12', weightKg:'80', rpe:'8', completed:true }] }] },
     ];
     const entries = simulateExerciseWeeks({
       exerciseId:'barbell-squat',

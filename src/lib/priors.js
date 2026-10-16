@@ -34,9 +34,24 @@ function deepFreeze(value){
 // cold starts and for strata that do not have enough observations to estimate a
 // replacement. Keep changes here versioned so benchmark artifacts remain
 // reproducible.
+// The default policy is intentionally conservative. It is the baseline for
+// cold starts and for strata that do not have enough observations to estimate a
+// replacement. Keep changes here versioned so benchmark artifacts remain
+// reproducible.
+//
+// BASIS NOTES (item 5): every numeric block below carries a `basis` note naming
+// the source AND its uncertainty. Where the literature genuinely disagrees the
+// note states the range and the dispute instead of one authoritative number.
+// Weekly volume, RPE-vs-RIR, deload frequency and proximity-to-failure are all
+// live disputes — the notes say so. ACSM's March 2026 position stand found
+// complex periodisation did not consistently beat simpler programming for the
+// average healthy adult, and that adherence dominates: nothing here hardens
+// claims the field just softened. A test fails if a new constant is added
+// without a basis note (see tests/priors-basis.test.js).
 export const DEFAULT_ARISE_PRIORS = deepFreeze({
   version: 1,
   progression: {
+    basis: 'Design guardrail, not a literature value: 6 exposures ≈ 2–3 weeks at 2–3×/wk per lift — the smallest window that smooths one bad session without freezing adaptation. Confidence: low; dispute: none (engineering choice, stated as such).',
     historyWindow: 6,
     defaultTargetReps: '8–12',
     defaultLowReps: 8,
@@ -45,15 +60,18 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
     nonConservativeMultiplier: 1.6,
     coldLoadPctFloor: 0.01,
     confidence: {
+      basis: 'Design guardrail: 3 sessions to notice a pattern, 6 to trust it. Confidence: low; dispute: none (engineering choice).',
       highSessions: 6,
       mediumSessions: 3,
     },
     validation: {
+      basis: 'Measurement tolerance: ±5% load / ±1 rep absorbs plate-rounding and rep-count noise. Confidence: medium; dispute: none (metrology choice).',
       minimumSessions: 3,
       loadTolerancePct: 0.05,
       repTolerance: 1,
     },
     strategies: {
+      basis: 'Rep ranges follow ACSM resistance-training guidance (strength 1–6, hypertrophy 6–12, endurance ≥12) and weekly load steps are conservative coaching defaults (strength ~5%/wk, hypertrophy ~2.5%, endurance ~2% via reps). Uncertainty: weekly rates vary widely by lifter and study; proximity-to-failure and volume are live disputes (see docs/METHODOLOGY.md). Confidence: medium for ranges, low for exact weekly percentages. ACSM March 2026: adherence dominates outcomes; simple programming is competitive with complex periodisation for average healthy adults.',
       strength: { repRange: '3–6', incPct: 0.05, prefer: 'load' },
       hypertrophy: { repRange: '8–12', incPct: 0.025, prefer: 'double' },
       endurance: { repRange: '12–20', incPct: 0.02, prefer: 'reps' },
@@ -76,6 +94,7 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
       strengthExcludePattern: 'lateral|band',
     },
     personalisedRate: {
+      basis: 'Design guardrail: ≥4 sessions over ≥7 days before fitting a personal rate; weekly load change clamped to −2%…+10% with applied jumps 1.5%…6%. Uncertainty: high — individual progression is noisy and context-dependent. Confidence: low; dispute: the level of personalisation that beats simple programming is itself disputed (see ACSM March 2026 note above).',
       minSessions: 4,
       minSpanDays: 7,
       trimParts: 3,
@@ -85,6 +104,7 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
       appliedLoadPctMax: 0.06,
     },
     trainingAge: {
+      basis: 'Coaching heuristic: novices progress faster than intermediates, advanced lifters slowest (multipliers 1.5 / 1.0 / 0.5 with 6- and 18-month cuts); ≥42 days off halves the return load (×0.8). Uncertainty: high — detraining/retraining rates vary widely. Confidence: low; stated as a safety-biased heuristic, not a physiological model.',
       noviceMaxMonths: 6,
       intermediateMaxMonths: 18,
       noviceMultiplier: 1.5,
@@ -94,6 +114,7 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
       returnLoadMultiplier: 0.8,
     },
     plateau: {
+      basis: 'Design guardrail: 4+ sessions with <1.5% gain flags a plateau; RPE/volume corroboration required so one bad session never triggers it. Uncertainty: plateau definitions vary across studies. Confidence: low; dispute: none on the guardrail shape (engineering choice).',
       legacyMinSessions: 3,
       legacyGainPct: 0.01,
       minSessions: 4,
@@ -107,16 +128,19 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
       recoveryReboundPct: 0.88,
     },
     loadRounding: {
+      basis: 'Equipment reality: standard plate/stack increments (1 / 2.5 / 5 kg steps). Confidence: high; dispute: none.',
       under20KgStep: 1,
       under60KgStep: 2.5,
       defaultStep: 5,
     },
     trend: {
+      basis: 'Design guardrail: ≥3 observations before quoting a trend; R² 0.3/0.6 bands for medium/high confidence. Confidence: low; dispute: none (engineering choice).',
       minimumObservations: 3,
       highR2: 0.6,
       mediumR2: 0.3,
     },
     sets: {
+      basis: 'Volume heuristic: start at 3 sets, cap at 5, add one only after 2 sessions at the top of the range with explicit RPE ≤8. Uncertainty: weekly volume is a live dispute — optimal sets vary widely and adherence dominates (ACSM March 2026). Confidence: low; stated as a conservative starting point, not an optimum.',
       historyWindow: 4,
       minimumSessions: 2,
       defaultSets: 3,
@@ -125,6 +149,7 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
       topSessionsRequired: 2,
     },
     rom: {
+      basis: 'Design guardrail: ROM depth advances only after 2 sessions at the top of the range. Confidence: low; dispute: none (engineering choice).',
       historyWindow: 2,
       topSessionsRequired: 2,
       ladders: {
@@ -161,7 +186,9 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
     },
   },
   sessionQuality: {
+    basis: 'Heuristic scoring: readiness weights (sleep 0.4 / soreness 0.3 / motivation 0.3) and session-score adjustments are design choices that keep scores explainable, not psychometric findings. Readiness-as-proxy is a standing limit (docs/CANNOT_PROVE.md). Confidence: low; dispute: self-report weighting schemes vary widely.',
     readiness: {
+      basis: 'Heuristic weights: sleep 0.4 / soreness 0.3 / motivation 0.3 on a 1–5 scale — explainability choices, not psychometric findings. Readiness is a self-report proxy (docs/CANNOT_PROVE.md). Confidence: low; dispute: weighting schemes vary widely.',
       sleepWeight: 0.4,
       sorenessWeight: 0.3,
       motivationWeight: 0.3,
@@ -185,6 +212,7 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
       techniqueWords: ['rom', 'depth', 'form', 'technique', 'paused', 'tempo', 'assisted', 'band', 'partial', 'shallow'],
     },
     score: {
+      basis: 'Design guardrail: score adjustments (failed −18, low-readiness −22, high-readiness +6, note ±10–12, near-failure −12, comfortable +8) keep one bad day from dominating. Confidence: low; dispute: none (engineering choice).',
       start: 50,
       readinessLow: 35,
       readinessHigh: 70,
@@ -203,11 +231,13 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
       goodCutoff: 60,
     },
     badSession: {
+      basis: 'Design guardrail: ≥50% bad sessions in a 5-session window (min 3) flags a cluster. Confidence: low; dispute: none (engineering choice).',
       window: 5,
       minSessionsForCluster: 3,
       ratio: 0.5,
     },
     plateau: {
+      basis: 'Design guardrail: 4-session window with ≥50% bad sessions plus corroborating low-readiness/high-RPE signals. Confidence: low; dispute: none (engineering choice).',
       window: 4,
       minimumSessions: 4,
       minimumLoggedSets: 3,
@@ -216,12 +246,14 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
       minHighRpe: 2,
     },
     pr: {
+      basis: 'Measurement tolerance: a PR needs ≥2% gain and ≥0.5 kg so plate-rounding and rep-count noise cannot mint records. Confidence: medium; dispute: none (metrology choice).',
       meaningfulGainPct: 0.02,
       minimumAbsoluteKg: 0.5,
       lowReadiness: 40,
     },
   },
   recovery: {
+    basis: 'Design guardrails: EMA smoothing (α 0.35), volume-spike ratio 1.15, and multi-flag deload triggers (≥2 flags, ≥3 for high confidence) with a −40% volume cut. Uncertainty: deload frequency and magnitude are live disputes; some lifters need none, others need planned ones. Confidence: low; ACSM March 2026: adherence dominates — the cut is conservative by design, not optimal by evidence.',
     readinessEmaAlpha: 0.35,
     readinessSpreadLow: 40,
     readinessSpreadMedium: 20,
@@ -254,6 +286,7 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
   // band additionally requires the stated number of DISTINCT contributing
   // factors so no single input can force a big call alone.
   readinessClassifier: {
+    basis: 'Design guardrail: additive points capped per band (15/32/50) with distinct-factor requirements so no single input forces a deload. Readiness is a self-report proxy (docs/CANNOT_PROVE.md). Uncertainty: RPE-vs-RIR mapping and self-report weighting are live disputes. Confidence: low.',
     version: 1,
     emaShortEntries: 3,   // "3-day EMA" window (entries ≈ training days)
     emaLongEntries: 7,    // "7-day EMA" window
@@ -267,6 +300,7 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
     repeatGuardDays: 21,         // fresh successful deload dampens re-escalation
     normalisedReboundRatio: 0.8, // matches validateDeloadDecisions' normalised bar
     weights: {
+      basis: 'Point weights sum to the band caps above; relative ordering (today > short EMA > long EMA, failed-adaptation and assessment high) reflects recency and specificity. Confidence: low; dispute: none (engineering choice within the classifier guardrail).',
       lowToday: 18,             // proportional below recovery.oneDayDip
       shortEmaLow: 16,          // proportional below recovery.readinessLowEma
       longEmaLow: 14,
@@ -277,12 +311,14 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
       failedAdaptation: 12,     // prior cut applied but volume never rebounded
       deloadAssessmentYes: 22,  // scaled by the assessment's own confidence
     },
-    thresholds: { smallAdjustment: 15, recoverySession: 32, genuineDeload: 50 },
-    minimumDistinctFactors: { smallAdjustment: 1, recoverySession: 2, genuineDeload: 3 },
+    thresholds: { basis: 'Escalation bands: 15/32/50 points for small-adjustment / recovery-session / genuine-deload. Confidence: low; dispute: none (engineering choice).', smallAdjustment: 15, recoverySession: 32, genuineDeload: 50 },
+    minimumDistinctFactors: { basis: 'Distinct-factor gate: 1/2/3 independent signals per band so no single input forces a big call. Confidence: low; dispute: none (engineering choice).', smallAdjustment: 1, recoverySession: 2, genuineDeload: 3 },
   },
   programming: {
+    basis: 'Design guardrails: one adaptation per exposure, ≤6 changes per save, short-session defaults (20 min, ≥10 min minimum). Uncertainty: program-level prescriptions vary widely; adherence dominates (ACSM March 2026). Confidence: low; stated as guardrails, not optima.',
     defaultSpacingDays: 2,
     adaptation: {
+      basis: 'Design guardrail: difficulty after 2 sessions, plateau after 4, deload horizon 7 days, one set per change. Confidence: low; dispute: none (engineering choice).',
       difficultySessions: 2,
       plateauMinimumSessions: 4,
       deloadHorizonDays: 7,
@@ -290,6 +326,7 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
       setReduction: 1,
     },
     shortWorkout: {
+      basis: 'Time-budget heuristic: ~1.4 min/set with compound → isolation → cardio priority. Confidence: low; dispute: none (scheduling choice).',
       defaultMinutes: 20,
       minimumMinutes: 10,
       minimumBlockMinutes: 1,
@@ -301,6 +338,7 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
       firstBlockBonus: 0.5,
     },
     noisySession: {
+      basis: 'Design guardrail: short <15 min, long gap >14 days, ≥2 missed sets, ≥15% e1RM drop flags noise. Confidence: low; dispute: none (engineering choice).',
       shortDurationMinutes: 15,
       longGapDays: 14,
       missedSetsThreshold: 2,
@@ -314,6 +352,7 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
   // data gates for the user's own self-experiments; conclusions stay
   // 'inconclusive' until the minimums are met — the honest default.
   experiments: {
+    basis: 'Self-experiment guardrail: 14-day baseline, 28-day intervention, ≥4 sessions before concluding; inconclusive is the honest default. Confidence: low; dispute: none (methodology choice).',
     baselineDays: 14,
     interventionDays: 28,
     // Intervention sessions needed before a conclusion is even attempted.
@@ -326,6 +365,7 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
   // amount so "met the plan" and "met the plan AND beat last time" read
   // differently without double-penalising a rough day.
   workoutQuality: {
+    basis: 'Design guardrail: bounded ±6–10 point adjustments so meeting/missing the plan reads differently without double-penalising a rough day. Confidence: low; dispute: none (engineering choice).',
     targetHitBonus: 8,
     targetMissPenalty: 10,
     prBeatBonus: 6,
@@ -335,6 +375,7 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
     sustainableEffortMaxRpe: 8,
   },
   longitudinal: {
+    basis: 'Evidence-honesty guardrail: ≥5 resolved pairs per segment and ≥10pp rate gaps before reporting an observed weakness; the retrospective replay cannot prove causation (docs/CANNOT_PROVE.md). Confidence: medium for the guardrail logic; the underlying rates remain observational.',
     // Segment-level conclusions (rates) are withheld until a segment has this
     // many resolved recommendation→outcome pairs.
     minimumSegmentSamples: 5,
@@ -353,6 +394,7 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
     // prior; regression + easy-effort are the conservative cuts for grading a
     // prescription — never to punish the engine for an unattempted session.
     outcomeLabels: {
+      basis: 'Grading cuts: ≥2% gain is meaningful (matches the PR prior), −5% is regression, RPE ≤7 is easy, +10% load is aggressive. Confidence: low; dispute: none (engineering choice).',
       meaningfulGainPct: 0.02,
       regressionCutPct: 0.05,
       easyRpeThreshold: 7,
@@ -365,6 +407,7 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
   // retrospective `backtest` block — this only ever reads first-visible
   // prospective ledger rows, never a reconstructed recommendation.
   calibration: {
+    basis: 'Evidence-honesty guardrail: Jeffreys-style shrinkage (pseudo-count 5) with rates withheld below 5 resolved pairs; expected band rates (0.8/0.6/0.45) are starting beliefs, not findings. Confidence: low; dispute: none (methodology choice).',
     // Jeffreys-style prior mass that pulls a small-n empirical rate toward the
     // safe default success rate. weight = n / (n + pseudoCount).
     pseudoCount: 5,
@@ -375,6 +418,7 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
     // Expected target-achievement probability per confidence band, for the
     // calibration-error (expected-vs-realised) estimate.
     bandExpected: {
+      basis: 'Starting beliefs for expected target-achievement per confidence band (0.8/0.6/0.45/0.45/0.5) — used for calibration-error estimates, not as findings. Confidence: low; dispute: none (methodology choice).',
       high: 0.8,
       medium: 0.6,
       low: 0.45,
@@ -394,6 +438,7 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
   // its own sample threshold AND a demonstrated weakness (arise losing to a
   // baseline comparator in that stratum) opens it.
   progressionModel: {
+    basis: 'Evidence-gating guardrail: capabilities stay inert until per-stratum sample gates open AND an observed weakness appears; overlay shifts bounded to ±2pp (readiness/autoregulation ≤1pp). Confidence: medium for the gating logic; the estimates themselves remain observational. See docs/CANNOT_PROVE.md.',
     version: 1,
     minExposuresPerExercise: 6,
     minExposuresPerMovement: 12,
@@ -414,6 +459,7 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
     readinessShiftMax: 0.008,
   },
   backtest: {
+    basis: 'Validation-harness guardrail: minimum samples per stratum/comparison and tight tolerances (±0.5% progression, ±0.1 kg assistance, ±5% load, ±1 rep) so the harness proves mechanics, not training science (docs/CANNOT_PROVE.md). Confidence: high for the harness logic; the corpora are synthetic.',
     minimumComparisons: 5,
     minimumStratumSamples: 8,
     maxOutcomeHorizonExposures: 2,
@@ -426,20 +472,24 @@ export const DEFAULT_ARISE_PRIORS = deepFreeze({
     observedDeloadCutRatio: 0.75,
     observedDeloadWindowDays: 7,
     historyBands: {
+      basis: 'History bands: cold ≤3, developing ≤8 sessions. Confidence: low; dispute: none (engineering choice).',
       coldMax: 3,
       developingMax: 8,
     },
     completion: {
+      basis: 'Completion prior 0.7 with 0.5 decision cutoff. Confidence: low; dispute: none (methodology choice).',
       priorProbability: 0.7,
       decisionCutoff: 0.5,
     },
     fatigue: {
+      basis: 'Fatigue prior 0.2 with 0.5 risk cutoff; readiness/cluster deltas 0.25. Confidence: low; dispute: none (methodology choice).',
       priorProbability: 0.2,
       riskCutoff: 0.5,
       readinessRiskDelta: 0.25,
       clusterRiskDelta: 0.25,
     },
     consistency: {
+      basis: 'Consistency window 56 days; high ≤7d / medium ≤14d median gaps. Confidence: low; dispute: none (engineering choice).',
       windowDays: 56,
       highMedianGapDays: 7,
       mediumMedianGapDays: 14,
