@@ -27,6 +27,12 @@ const CACHE = 'arise-v6';
 const PRECACHE = [];
 const ILLUSTRATION_CACHE = 'arise-illustrations-v1';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './offline.html'];
+// Lookups ignore Vary. Hosts commonly send `Vary: Origin`, module scripts are
+// requested WITH an Origin header, and the precache stored them without one,
+// so a Vary-respecting match missed every precached file offline. Cached
+// files are content-hashed or the app shell, so the header never selects a
+// different body.
+const MATCH = { ignoreVary: true };
 const ILLUSTRATION_ORIGIN = 'https://bryllim.github.io';
 
 self.addEventListener('install', (e) => {
@@ -58,7 +64,7 @@ self.addEventListener('fetch', (e) => {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(req, copy)).catch(()=>{});
         return res;
-      }).catch(async ()=> (await caches.match(req)) || (await caches.match('./index.html')) || (await caches.match('./offline.html')) || Response.error())
+      }).catch(async ()=> (await caches.match(req, MATCH)) || (await caches.match('./index.html', MATCH)) || (await caches.match('./offline.html', MATCH)) || Response.error())
     );
     return;
   }
@@ -71,7 +77,7 @@ self.addEventListener('fetch', (e) => {
     const cacheName = isIllustration ? ILLUSTRATION_CACHE : CACHE;
     e.respondWith(
       caches.open(cacheName).then(async (cache) => {
-        const hit = await cache.match(req);
+        const hit = await cache.match(req, MATCH);
         const refresh = fetch(req).then((res) => {
           if (res && (res.ok || res.type === 'opaque')) {
             cache.put(req, res.clone()).catch(()=>{});
@@ -84,7 +90,7 @@ self.addEventListener('fetch', (e) => {
     return;
   }
   e.respondWith(
-    caches.match(req).then((hit) => {
+    caches.match(req, MATCH).then((hit) => {
       const fetchPromise = fetch(req).then((res) => {
         if (res.ok) {
           const copy = res.clone();

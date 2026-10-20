@@ -28,6 +28,16 @@ describe('service worker', ()=>{
     assert.notEqual(other.match(/const CACHE = '([^']+)'/)[1], stamped.match(/const CACHE = '([^']+)'/)[1], 'a new build gets a new cache name');
   });
 
+  it('matches cached files regardless of Vary', ()=>{
+    // Hosts send `Vary: Origin`; module scripts are requested with an Origin
+    // header and precached without one, so a Vary-respecting lookup missed
+    // every precached bundle offline.
+    const lookups = source.match(/\.match\([^)]*\)/g) || [];
+    assert.ok(lookups.length >= 3, 'sw.js has cache lookups');
+    for(const call of lookups) assert.match(call, /MATCH\)$/, `${call} must pass { ignoreVary: true }`);
+    assert.match(source, /const MATCH = \{ ignoreVary: true \};/);
+  });
+
   it('is deterministic for the same build', ()=>{
     assert.equal(stampServiceWorker(source, ['b.js', 'a.js']), stampServiceWorker(source, ['a.js', 'b.js']));
   });
