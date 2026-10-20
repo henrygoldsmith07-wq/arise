@@ -89,6 +89,28 @@ test('home-screen shortcut URLs route to the right tab and scrub themselves', as
   expect(new URL(page.url()).searchParams.get('shortcut')).toBeNull();
 });
 
+test('offline: a first visit caches everything the app needs to boot', async ({ page }) => {
+  // Fresh context = a genuinely first visit. The entry bundle loads before the
+  // service worker controls the page, so only the build-time precache can
+  // have stored it. Asserted against Cache Storage directly: context.setOffline
+  // does not reliably cut the worker's own fetches, so an offline reload can
+  // pass while the cache is missing the bundle (the reload test below).
+  await page.goto('/');
+  await expect(page.getByRole('dialog', { name: 'Onboarding' })).toBeVisible({ timeout: 10_000 });
+  await page.waitForFunction(() => navigator.serviceWorker?.controller !== null, null, { timeout: 15_000 });
+  const missing = await page.evaluate(async () => {
+    const urls = [
+      ...[...document.querySelectorAll('script[src]')].map((el) => el.src),
+      ...[...document.querySelectorAll('link[rel="stylesheet"], link[rel="modulepreload"]')].map((el) => el.href),
+      ...performance.getEntriesByType('resource').map((e) => e.name).filter((u) => new URL(u).pathname.includes('/assets/')),
+    ].filter((u) => new URL(u).origin === location.origin);
+    const out = [];
+    for(const url of new Set(urls)) if(!(await caches.match(url))) out.push(new URL(url).pathname);
+    return out;
+  });
+  expect(missing).toEqual([]);
+});
+
 test('offline: cached shell still boots the app', async ({ page, context }) => {
   await page.goto('/');
   // The app boots from IndexedDB once hydrated — clearing only localStorage

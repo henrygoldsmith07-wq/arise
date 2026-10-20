@@ -13,17 +13,25 @@
 //   everything else  → cache-first with background refresh (SWR): instant,
 //                      self-healing.
 //
-// Update lifecycle is unchanged: versioned cache, skipWaiting on
-// 'SKIP_WAITING' message, clients.claim on activate; the app defers that
-// activation while a workout is running.
+// Precache: the shell plus every built file. scripts/gen-sw.cjs fills
+// PRECACHE and suffixes CACHE with a build hash after `vite build`, so a
+// first visit is fully offline-capable (the entry bundle loads before this
+// worker controls the page, so runtime caching alone never stored it).
+//
+// Update lifecycle: a new worker installs and then WAITS. The app shows an
+// update banner and posts 'SKIP_WAITING' when the user accepts it — deferred
+// while a workout is running — and reloads on controllerchange. activate
+// drops the previous build's cache and claims clients.
 
 const CACHE = 'arise-v6';
+const PRECACHE = [];
 const ILLUSTRATION_CACHE = 'arise-illustrations-v1';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './offline.html'];
 const ILLUSTRATION_ORIGIN = 'https://bryllim.github.io';
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(()=> self.skipWaiting()));
+  // No skipWaiting() here: activation is the app's call (see header).
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll([...SHELL, ...PRECACHE])));
 });
 
 self.addEventListener('activate', (e) => {

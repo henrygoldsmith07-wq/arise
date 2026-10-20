@@ -36,11 +36,23 @@ async function completeOnboarding(page){
 }
 
 async function mockWebdav(page){
+  // Behaves like a real WebDAV server on a fresh account: the sync folder does
+  // not exist, so a PUT into it is 409 (RFC 4918 §9.7.1) until MKCOL creates it.
+  let folder = false;
+  await page.route('**/dav.test/arise-sync/', async (route) => {
+    if(route.request().method() === 'MKCOL'){
+      await route.fulfill({ status: folder ? 405 : 201 });
+      folder = true;
+    }else{
+      await route.fulfill({ status: 405 });
+    }
+  });
   await page.route('**/dav.test/arise-sync/arise-backup.arise', async (route) => {
     const req = route.request();
     if(req.method() === 'GET'){
       await route.fulfill({ status: DAV_FILE.length ? 200 : 404, body: DAV_FILE[0] || '' });
     }else if(req.method() === 'PUT'){
+      if(!folder){ await route.fulfill({ status: 409 }); return; }
       DAV_FILE[0] = req.postDataBuffer() || req.postData();
       await route.fulfill({ status: 201 });
     }else{

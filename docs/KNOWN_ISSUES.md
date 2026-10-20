@@ -47,6 +47,20 @@ accepted as documented behaviour in the appropriate doc.
    potentially unreliable rest-timer audio on locked-screen iOS.
    **Workaround:** keep the screen on (Gym mode's wake lock) where possible.
 
+7. **WebDAV sync and a remote AI-coach endpoint do not work in the hosted
+   build.** The Content-Security-Policy `connect-src` names fixed hosts only,
+   so the browser refuses connections to the storage or API host a user
+   configures. **Experience:** sync fails with "Could not reach <host>"; the
+   coach works only against a local (loopback) endpoint. **Workaround:**
+   encrypted backup files (More → Backup & portability) move data between
+   devices. **Tracked:** needs a decision to widen `connect-src` or withdraw
+   the features — see `docs/NETWORK_BOUNDARY.md`, "Known limits".
+
+8. **WebDAV servers must allow browser (CORS) access.** Even once the CSP
+   allows the host, servers that do not send CORS headers refuse the app's
+   requests. **Workaround:** configure CORS as described in
+   `docs/SYNC_GUIDE.md` → "Browser access (CORS)".
+
 ## Accepted as documented behaviour
 
 - Kg is the storage and engine unit; workout UI may display and accept lb, converting only at the UI boundary (`src/lib/units.ts`).

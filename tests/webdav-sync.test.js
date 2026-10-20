@@ -5,7 +5,7 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { webdavBaseUrl, makeWebdavAdapter, webdavCheck } from '../src/lib/webdav.js';
+import { webdavBaseUrl, makeWebdavAdapter, webdavCheck, WebdavConflictError } from '../src/lib/webdav.js';
 import { encryptBackup, decryptBackup, looksEncrypted } from '../src/lib/cryptoBackup.js';
 import { buildExportPayload } from '../src/lib/export.js';
 import { runSync, defaultSyncConfig } from '../src/lib/syncEngine.js';
@@ -243,5 +243,117 @@ describe('two-device encrypted sync over bytes', () => {
     const { error, merged } = await runSync({ store: device('B', ['s-b1']), config: cfgFor(server, plain), adapter: makeWebdavAdapter(cfgFor(server, plain)) });
     assert.equal(error, undefined, error);
     assert.deepEqual(merged.history.map((h) => h.id).sort(), ['s-a1', 's-b1']);
+  });
+});
+
+describe('WebDAV write safety', () => {
+  const cfg = { url: 'https://dav.example.com', username: 'me', password: 'pw', filePath: 'a/b/file.arise' };
+
+  it('creates missing parent folders on 409, top-down, then retries the PUT', async () => {
+    const made = new Set();
+    responder = (call) => {
+      if(call.method === 'MKCOL'){
+        const existed = made.has(call.url);
+        made.add(call.url);
+        return res(existed ? 405 : 201);
+      }
+      if(call.method === 'PUT') return res(made.has('https://dav.example.com/a/b/') ? 201 : 409);
+      return res(404);
+    };
+    await makeWebdavAdapter(cfg).push('x');
+    assert.deepEqual(calls.map((c) => `${c.method} ${c.url.replace('https://dav.example.com', '')}`), [
+      'PUT /a/b/file.arise', 'MKCOL /a/', 'MKCOL /a/b/', 'PUT /a/b/file.arise',
+    ]);
+  });
+
+  it('treats an existing folder (405) as fine but reports other MKCOL failures', async () => {
+    responder = (call) => call.method === 'MKCOL' ? res(403) : res(409);
+    await assert.rejects(makeWebdavAdapter(cfg).push('x'), /sync folder: HTTP 403/);
+  });
+
+  it('PUTs with If-Match after a pull that saw a strong ETag, and raises a conflict on 412', async () => {
+    const adapter = makeWebdavAdapter(cfg);
+    responder = (call) => call.method === 'GET' ? res(200, '{}', { etag: '"v1"' }) : res(412);
+    await adapter.pull();
+    await assert.rejects(adapter.push('x'), (err) => err instanceof WebdavConflictError && err.conflict === true);
+    assert.equal(calls[1].headers['If-Match'], '"v1"');
+  });
+
+  it('ignores weak ETags (If-Match needs a strong validator)', async () => {
+    const adapter = makeWebdavAdapter(cfg);
+    responder = (call) => call.method === 'GET' ? res(200, '{}', { etag: 'W/"v1"' }) : res(201);
+    await adapter.pull();
+    await adapter.push('x');
+    assert.equal(calls[1].headers['If-Match'], undefined);
+  });
+
+  it('names the likely causes when the browser refuses the request outright', async () => {
+    globalThis.fetch = async () => { throw new TypeError('Failed to fetch'); };
+    await assert.rejects(makeWebdavAdapter(cfg).pull(), /Could not reach dav\.example\.com.*CORS/);
+  });
+});
+
+describe('runSync robustness', () => {
+  const store = (ids) => device('X', ids);
+
+  it('re-pulls and re-merges when another device wrote between pull and push', async () => {
+    let remote = JSON.stringify(buildExportPayload(device('A', ['s-a1'])));
+    let pushes = 0;
+    const adapter = {
+      pull: async () => remote,
+      push: async (body) => {
+        pushes++;
+        if(pushes === 1){
+          // Device B lands its write first; our conditional PUT must lose.
+          remote = JSON.stringify(buildExportPayload(device('B', ['s-a1', 's-b1'])));
+          throw new WebdavConflictError();
+        }
+        remote = body;
+      },
+    };
+    const { merged, error } = await runSync({ store: store(['s-x1']), config: defaultSyncConfig(), adapter, encryption: null });
+    assert.equal(error, undefined, error);
+    assert.equal(pushes, 2);
+    assert.deepEqual(merged.history.map((h) => h.id).sort(), ['s-a1', 's-b1', 's-x1'], "B's session survives the race");
+  });
+
+  it('gives up with an error after repeated conflicts', async () => {
+    const adapter = { pull: async () => null, push: async () => { throw new WebdavConflictError(); } };
+    const { error } = await runSync({ store: store(['s-x1']), config: defaultSyncConfig(), adapter, encryption: null });
+    assert.match(error, /changed on the server/);
+  });
+
+  it('turning encryption ON reads the old plaintext remote and re-seals it', async () => {
+    const server = inMemoryWebdav();
+    await runSync({ store: device('A', ['s-a1']), config: cfgFor(server, { encryption: false }), adapter: makeWebdavAdapter(cfgFor(server)) });
+    assert.equal(looksEncrypted(server.bytes()), false);
+    const { error, merged } = await runSync({ store: device('A', ['s-a2']), config: cfgFor(server), adapter: makeWebdavAdapter(cfgFor(server)) });
+    assert.equal(error, undefined, error);
+    assert.deepEqual(merged.history.map((h) => h.id).sort(), ['s-a1', 's-a2']);
+    assert.equal(looksEncrypted(server.bytes()), true, 'the next push is sealed');
+  });
+
+  it('turning encryption OFF still opens the sealed remote with the saved passphrase', async () => {
+    const server = inMemoryWebdav();
+    await runSync({ store: device('A', ['s-a1']), config: cfgFor(server), adapter: makeWebdavAdapter(cfgFor(server)) });
+    const { error, merged } = await runSync({ store: device('B', ['s-b1']), config: cfgFor(server, { encryption: false }), adapter: makeWebdavAdapter(cfgFor(server)) });
+    assert.equal(error, undefined, error);
+    assert.deepEqual(merged.history.map((h) => h.id).sort(), ['s-a1', 's-b1']);
+    assert.equal(looksEncrypted(server.bytes()), false, 'the push follows this device\'s setting');
+  });
+
+  it('a sealed remote with no passphrase on this device is a clear error, not a parse failure', async () => {
+    const server = inMemoryWebdav();
+    await runSync({ store: device('A', ['s-a1']), config: cfgFor(server), adapter: makeWebdavAdapter(cfgFor(server)) });
+    const pushes = server.pushes;
+    const { error } = await runSync({ store: device('B', ['s-b1']), config: cfgFor(server, { encryption: false, passphrase: '' }), adapter: makeWebdavAdapter(cfgFor(server)) });
+    assert.match(error, /encrypted — enter the encryption passphrase/);
+    assert.equal(server.pushes, pushes, 'nothing pushed');
+  });
+
+  it('a successful cycle clears the offline queue', async () => {
+    const config = { ...defaultSyncConfig(), queue: [{ at: 'x', reason: 'offline', attempts: 2, nextAttemptAt: null }] };
+    const { config: next } = await runSync({ store: store(['s-x1']), config, adapter: { pull: async () => null, push: async () => {} }, encryption: null });
+    assert.deepEqual(next.queue, []);
   });
 });

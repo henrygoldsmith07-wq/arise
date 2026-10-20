@@ -15,7 +15,7 @@ app can construct at runtime.
 | 2 | `https://classifier.dev` | `lib/feedbackClassifier.js:13` | Off | **No** — compiled out |
 | 3 | Pulse connector | `lib/pulse.js` (dependency-injected adapter) | Off | **No** — compiled out |
 | 4 | `https://bryllim.github.io/workout-guide/frames` | `lib/exerciseImages.js:12` | **On** | Yes — the one documented exception |
-| 5 | User's own WebDAV host | `lib/webdav.js:31` | Off | Yes, but only after the user configures a host and consents |
+| 5 | User's own WebDAV host | `lib/webdav.js` | Off | Only after the user configures a host and consents — and currently refused by the CSP (see Known limits) |
 | 6 | `<your origin>/…` (service-worker probe) | `components/OfflineBanner.jsx:14` | On | Yes — same-origin HEAD only |
 | 7 | `https://github.com/henrygoldsmith07-wq/arise/…` | `aiCoach.js:30`, `MoreView.jsx:766` | Links | Not a fetch — an `<a href>` the user clicks |
 
@@ -115,13 +115,15 @@ npm run e2e:integrations
 
 Stated rather than papered over:
 
-1. **WebDAV sync is now permitted for user-configured hosts.** The CSP allowlists
-   loopback origins for the local-first AI coach default.
-   only `'self'`, the illustration CDN and (when enabled) the two integration
-   hosts. A user-supplied WebDAV domain is therefore blocked by the shipped
-   policy. `e2e/sync.spec.js` passes only because it sets `bypassCSP: true`.
-   Fixing this needs a decision about the CSP (an explicit, narrow relaxation
-   is not expressible in CSP for arbitrary hosts) — raised in the final report.
+1. **The shipped CSP blocks user-configured hosts.** `connect-src` permits
+   only `'self'`, the illustration CDN, the loopback AI-coach origins and
+   (when compiled in) the integration hosts. A user's WebDAV domain, or a
+   remote OpenAI-compatible endpoint for the AI coach, is therefore refused by
+   the browser in every production build. `e2e/sync.spec.js` passes only
+   because it sets `bypassCSP: true`. CSP cannot express "the host the user
+   typed", so fixing this means widening `connect-src` (e.g. to `https:`) or
+   withdrawing both features — an open decision, tracked in
+   [`KNOWN_ISSUES.md`](./KNOWN_ISSUES.md).
 2. **The illustration CDN is genuinely third-party.** It is the one origin a
    user reaches without opting in. It is documented above and in `PRIVACY.md`
    precisely because it is the exception, not because it is fine.
