@@ -23,6 +23,10 @@ const child = spawn(
 const onCode = (code)=> spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'build'], {
   stdio: 'inherit',
   env: { ...process.env, VITE_ARISE_INTEGRATIONS: 'on' },
-}).on('close', (viteCode)=> process.exit(viteCode ?? 1));
+}).on('close', (viteCode)=> {
+  if(viteCode !== 0) process.exit(viteCode ?? 1);
+  // Stamp the precache list into dist/sw.js, exactly as `npm run build` does.
+  spawn(process.execPath, ['scripts/gen-sw.cjs'], { stdio: 'inherit' }).on('close', (swCode)=> process.exit(swCode ?? 1));
+});
 
 child.on('close', (code)=>{ if(code === 0) onCode(); else process.exit(code ?? 1); });

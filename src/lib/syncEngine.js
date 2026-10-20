@@ -18,11 +18,14 @@
 
 import { syncDown } from './sync.js';
 import { buildExportPayload, storeWithLiveCollections } from './export.js';
-import { encryptBackup, decryptBackup } from './cryptoBackup.js';
+import { encryptBackup, decryptBackup, looksEncrypted } from './cryptoBackup.js';
 
 export const SYNC_QUEUE_LIMIT = 20;
 export const SYNC_LOG_LIMIT = 50;
 export const MAX_BACKOFF_MS = 5 * 60 * 1000;
+// Pull→merge→push attempts when the remote changes between our pull and our
+// push (adapter.push throws an error carrying `conflict: true`).
+export const SYNC_CONFLICT_ATTEMPTS = 3;
 
 /** Deterministic exponential backoff: 1s, 2s, 4s … capped at 5 minutes. */
 export function backoffDelayMs(attempt){
@@ -143,59 +146,79 @@ export async function drainQueue(config, pushOne){
  * payload back. With `encryption`, the payload is sealed with the
  * passphrase-derived key before it touches the provider.
  *
+ * The pulled file is decoded by what it IS, not by the current toggle: an
+ * ARCB envelope is decrypted with the passphrase and plain JSON is read as
+ * text, so switching encryption on or off (or two devices that disagree)
+ * migrates the remote on the next push instead of failing every cycle. The
+ * push always follows this device's setting.
+ *
+ * If the push reports a conflict (another device wrote in between), the cycle
+ * re-pulls and re-merges, up to SYNC_CONFLICT_ATTEMPTS times.
+ *
  * Returns { merged, config } — the caller persists both.
  */
 export async function runSync({ store, config, adapter, encryption } = {}){
   const cfg = normalizeSyncConfig(config);
   const localStore = storeWithLiveCollections(store || {});
   // encryption: undefined → follow the config toggle; null → explicitly off;
-  // an object → custom seal implementation (tests/future providers).
+  // an object → custom seal implementation (tests/future providers). Custom
+  // seals must emit the ARCB envelope so pulls can recognise sealed files.
   const seal = encryption === undefined
     ? (cfg.encryption ? { encrypt: encryptBackup, decrypt: decryptBackup } : null)
     : encryption;
   const logs0 = cfg.logs;
-  try{
-    // 1. Pull + merge (syncDown already handles "remote empty" → local).
+
+  async function pullRemoteText(){
     // The transport carries BYTES so sealed envelopes survive intact; a
     // sealed payload decrypts with the ENCRYPTION PASSPHRASE — the account
     // password authenticates to the storage and must never be used as key
-    // material. Plain text stays plain text when encryption is off.
-    let remoteText = null;
+    // material.
     try{
       const remoteRaw = await adapter.pull();
-      if(remoteRaw != null){
-        if(typeof remoteRaw === 'string'){
-          remoteText = remoteRaw; // legacy/string adapters (tests, providers that expose text)
-        }else if(remoteRaw instanceof Uint8Array){
-          if(seal){
-            remoteText = JSON.stringify(await seal.decrypt(remoteRaw, cfg.passphrase));
-          }else{
-            remoteText = new TextDecoder().decode(remoteRaw);
-          }
-        }
-      }
+      if(remoteRaw == null) return null;
+      if(typeof remoteRaw === 'string') return remoteRaw; // legacy/string adapters (tests, providers that expose text)
+      if(!(remoteRaw instanceof Uint8Array)) return null;
+      if(!looksEncrypted(remoteRaw)) return new TextDecoder().decode(remoteRaw);
+      if(!cfg.passphrase) throw new Error('The synced file is encrypted — enter the encryption passphrase used on your other device.');
+      return JSON.stringify(await (seal?.decrypt || decryptBackup)(remoteRaw, cfg.passphrase));
     }catch(err){
       // A missing remote file is a first run, not an error. A wrong
       // passphrase or corrupt ciphertext IS an error — and nothing is
       // pushed, so neither the remote file nor local history changes.
-      if(!/404|not found/i.test(String(err?.message || err))) throw err;
+      if(/404|not found/i.test(String(err?.message || err))) return null;
+      throw err;
     }
-    const merged = remoteText
-      ? await syncDown(localStore, { pull: async () => remoteText }, 'merge')
-      : localStore;
-    // 2. Push the merged state so both devices converge on the same payload.
-    const payload = buildExportPayload(merged, true);
-    let outgoing = JSON.stringify(payload);
-    if(seal){
-      if(!cfg.passphrase) throw new Error('Sync encryption is on but no passphrase is set.');
-      outgoing = await seal.encrypt(payload, cfg.passphrase);
+  }
+
+  try{
+    let merged, remoteText;
+    for(let attempt = 1; ; attempt++){
+      // 1. Pull + merge (syncDown already handles "remote empty" → local).
+      remoteText = await pullRemoteText();
+      merged = remoteText
+        ? await syncDown(localStore, { pull: async () => remoteText }, 'merge')
+        : localStore;
+      // 2. Push the merged state so both devices converge on the same payload.
+      const payload = buildExportPayload(merged, true);
+      let outgoing = JSON.stringify(payload);
+      if(seal){
+        if(!cfg.passphrase) throw new Error('Sync encryption is on but no passphrase is set.');
+        outgoing = await seal.encrypt(payload, cfg.passphrase);
+      }
+      try{
+        await adapter.push(outgoing);
+        break;
+      }catch(err){
+        if(!err?.conflict || attempt >= SYNC_CONFLICT_ATTEMPTS) throw err;
+      }
     }
-    await adapter.push(outgoing);
     // Record who last wrote the remote file (device registry), then stamp
-    // this cycle's timestamps on top.
+    // this cycle's timestamps on top. The push carried the full portable
+    // state, so anything queued from earlier failures is now delivered.
     const peered = observePeerDevice(cfg, remoteText);
     const next = {
       ...peered,
+      queue: [],
       lastPushAt: new Date().toISOString(),
       lastPullAt: remoteText ? new Date().toISOString() : cfg.lastPullAt,
       lastError: null,
