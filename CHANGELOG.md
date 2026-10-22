@@ -9,3 +9,32 @@ At the first tagged release, bootstrap this file from the tag history:
 
 Each release section is derived from the commit log since the previous tag —
 the history is the changelog; this file is its human-readable index.
+
+## Unreleased
+
+### Fixed
+
+- **Loaded lifts were treated as bodyweight in the runner.** The load field
+  showed `bw` and hid the plate/stack keypad on almost every barbell,
+  dumbbell, machine and cable lift (the catalogue's `supportsWeighted` flag
+  only marks weightable *bodyweight* moves). The guided runner said
+  "bodyweight × 5" for a back squat. New `takesExternalLoad()` /
+  `isLoadedKitLift()` in `src/lib/data.js` decide this from the kit.
+- **Swapping a loaded lift lost its load.** The swap e1RM carry was gated on
+  the same flag, so squat → leg press / goblet squat started blank, while
+  squat → bodyweight squat could inherit the barbell load. The carry now
+  lands only on kit-loaded replacements; swapped blocks no longer say
+  "bodyweight" for a machine.
+- **First plan ignored days/week, session length and avoided movements.**
+  Onboarding started the raw template (a 3-day user got a 4-day schedule and
+  was "missing" sessions in week one). It now builds with the same generator
+  the Train card previews.
+- **Fewer days than the template dropped the same session every week.** A
+  3-day user on the 4-day upper/lower got Lower A, Lower B, Upper B forever —
+  Upper A never appeared and legs were trained twice as often as upper.
+  Sessions now rotate across weeks, keeping upper/lower alternation.
+
+### Changed
+
+- Onboarding's kit step warns a gym-goer who has only Bodyweight ticked and
+  offers a one-tap "Tick everything".

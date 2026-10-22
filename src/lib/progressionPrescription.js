@@ -2,6 +2,7 @@
 // Extracted from progression.js; public compatibility remains via re-export.
 
 import { resolveArisePriors } from './priors.js';
+import { takesExternalLoad } from './data.js';
 
 export const PRESCRIPTION_SNAPSHOT_VERSION = 1;
 
@@ -279,7 +280,7 @@ function swapCore({ target, option, session, recommendation, planIndex, policy, 
       exerciseId: option.id,
       unilateral,
       warmups: [],
-      loadHint: option.supportsWeighted ? 'use a controlled load' : 'bodyweight',
+      loadHint: takesExternalLoad(option) ? 'use a controlled load' : 'bodyweight',
       substitutionFrom: origin,
       substitutionReason: option.reason || 'user-requested change',
       substitutedFromBlockIndex: Number.isInteger(planIndex) ? planIndex : null,
