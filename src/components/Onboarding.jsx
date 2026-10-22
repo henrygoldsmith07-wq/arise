@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDialogA11y } from '../lib/a11y.js';
-import { EQUIPMENT, EQUIPMENT_PRESETS, LOCATIONS, GOALS, LEVELS, EXERCISES, exerciseAvailable } from '../lib/data.js';
+import { EQUIPMENT, EQUIPMENT_PRESETS, LOCATIONS, defaultKitForLocation, GOALS, LEVELS, EXERCISES, exerciseAvailable } from '../lib/data.js';
 import { DEFAULT_PLATE_DENOMINATIONS_KG } from '../lib/plates.js';
 import { asUnit, weightInputToKg, weightInputValue } from '../lib/units.ts';
 
@@ -169,6 +169,14 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
       title: 'What kit do you have?',
       body: (
         <div className="space-y-2">
+          {/* A gym-goer who taps Next here with only Bodyweight ticked gets
+              a bodyweight plan — say so where the choice is made. */}
+          {location === 'gym' && equipment.length === 1 && equipment[0] === 'bodyweight' && (
+            <div className="flex items-center gap-2 text-xs text-ink2 bg-surface2 border border-line rounded-xl px-3 py-2">
+              <span className="flex-1">Training at a gym? Only <strong>Bodyweight</strong> is ticked, so your plan would be bodyweight-only.</span>
+              <button type="button" onClick={()=> setEquipment(defaultKitForLocation('gym'))} className="shrink-0 min-h-11 rounded-lg border border-ink bg-ink text-bg px-3 font-bold">Tick everything</button>
+            </div>
+          )}
           <p className="text-xs text-ink3">Pick everything you can use today. We’ll only recommend exercises you can actually do, and surface substitutions otherwise. You can change this anytime in More.</p>
           <div className="flex flex-wrap gap-1.5">
             {EQUIPMENT_PRESETS.map(preset=> (
