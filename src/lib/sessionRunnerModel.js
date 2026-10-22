@@ -2,7 +2,7 @@
 // React owns rendering and side effects; this module owns the pure transitions
 // that are easiest to regression-test and most dangerous to duplicate inline.
 
-import { EXERCISE_BY_ID } from './data.js';
+import { EXERCISE_BY_ID, isLoadedKitLift } from './data.js';
 import { lastExerciseSets } from './store.js';
 import {
   applySwapToBlocks,
@@ -307,7 +307,11 @@ export function captureVisiblePrescriptions({
 // replacements, bodyweight-only source work, or no known performance.
 export function swapCarryPlan({ target, option, history = [], plateConfig = null } = {}){
   if(!target || !option?.id || option.id === target.exerciseId) return { loadKg:0, fromE1rmKg:0 };
-  if(option.supportsWeighted !== true) return { loadKg:0, fromE1rmKg:0 };
+  // Carry only onto kit-loaded lifts (barbell/dumbbell/machine/cable). The
+  // catalogue's `supportsWeighted` marks weightable BODYWEIGHT moves and is
+  // false for nearly every barbell/machine lift, so gating on it silently
+  // dropped the carry for the swaps that need it most (squat → leg press).
+  if(!isLoadedKitLift(option)) return { loadKg:0, fromE1rmKg:0 };
   const candidates = [];
   for(const set of target.sets || []){
     const reps = Number(String(set?.reps ?? '').match(/\d+/)?.[0] ?? set?.reps) || 0;

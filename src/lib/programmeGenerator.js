@@ -21,18 +21,16 @@ function addDays(dateISO, days){
 function fitExercise(exerciseId, kit){
   return !kit || exerciseAvailable(exerciseId, kit);
 }
-function chooseIndexes(length, desired){
-  const count = Math.max(1, Math.min(length, Number(desired) || length));
-  if(count >= length) return Array.from({ length }, (_, index)=> index);
-  const indexes = [];
-  for(let index = 0; index < count; index++){
-    const candidate = Math.round(index * (length - 1) / Math.max(1, count - 1));
-    if(!indexes.includes(candidate)) indexes.push(candidate);
-  }
-  for(let index = 0; indexes.length < count && index < length; index++) if(!indexes.includes(index)) indexes.push(index);
-  return indexes.sort((a, b)=> a - b);
-}
-
+// Fewer training days than the template has sessions: ROTATE through the
+// week's sessions instead of picking a fixed subset. A fixed pick (the old
+// evenly-spaced index choice) dropped the SAME session every week — a 3-day
+// user on a 4-day upper/lower got Lower A, Lower B, Upper B forever, so one
+// upper day (and every movement only it contains) never appeared and lower
+// body was trained twice as often as upper. Rotating carries the cursor
+// across weeks (week 1: L-A U-A L-B, week 2: U-B L-A U-A, …), so every
+// session recurs, the upper/lower alternation is kept, and each template
+// week's own progression (+reps, +load) still applies to the sessions drawn
+// from it.
 function resampleFrequency(sessions, startDateISO, daysPerWeek){
   const byWeek = new Map();
   for(const session of sessions || []){
@@ -41,13 +39,24 @@ function resampleFrequency(sessions, startDateISO, daysPerWeek){
     byWeek.set(session.week, list);
   }
   const output = [];
-  for(const [week, weekSessions] of byWeek){
-    const indexes = chooseIndexes(weekSessions.length, daysPerWeek);
-    indexes.forEach((sourceIndex, position)=> {
+  let cursor = 0;
+  const weeks = [...byWeek.keys()].sort((a, b)=> (Number(a) || 0) - (Number(b) || 0));
+  for(const week of weeks){
+    const weekSessions = byWeek.get(week);
+    const length = weekSessions.length;
+    const count = Math.max(1, Math.min(length, Number(daysPerWeek) || length));
+    const picks = [];
+    if(count >= length){
+      for(let index = 0; index < length; index++) picks.push(index);
+    } else {
+      for(let k = 0; k < count; k++) picks.push((cursor + k) % length);
+      cursor = (cursor + count) % length;
+    }
+    const weekNumber = Math.max(1, Number(week) || 1);
+    picks.forEach((sourceIndex, position)=> {
       const source = weekSessions[sourceIndex];
-      const weekNumber = Math.max(1, Number(week) || 1);
-      const offset = (weekNumber - 1) * 7 + Math.round(position * 7 / Math.max(1, indexes.length));
-      output.push({ ...source, dateISO: addDays(startDateISO, offset), frequencyAdjusted: indexes.length !== weekSessions.length });
+      const offset = (weekNumber - 1) * 7 + Math.round(position * 7 / Math.max(1, picks.length));
+      output.push({ ...source, dateISO: addDays(startDateISO, offset), frequencyAdjusted: picks.length !== length });
     });
   }
   return output.sort((a, b)=> String(a.dateISO).localeCompare(String(b.dateISO)));

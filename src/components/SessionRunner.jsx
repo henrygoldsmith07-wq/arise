@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
-import { EXERCISE_BY_ID } from '../lib/data.js';
+import { EXERCISE_BY_ID, takesExternalLoad } from '../lib/data.js';
 import { lastExerciseSets } from '../lib/store.js';
 import { strengthSeries } from '../lib/analytics.js';
 import { POLICY_ORDER } from '../lib/progressionPolicies.js';
@@ -804,7 +804,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           const ex=EXERCISE_BY_ID[b.exerciseId];
           if(gymMode && bi !== focusIdx) return null;
           const prev=blockMeta.prevs.get(b.exerciseId) || null;
-          const supportsWeighted=ex?.supportsWeighted;
+          // Loaded lifts (barbell/dumbbell/machine/cable) AND weightable bodyweight
+          // moves get a load field + keypad; `ex.supportsWeighted` alone is false
+          // for nearly every barbell/machine lift (see takesExternalLoad).
+          const supportsWeighted=takesExternalLoad(ex);
           const supportsAssisted=ex?.supportsAssisted;
           const recommendation=blockMeta.recs.get(b.exerciseId) || null;
           const clearTarget = clearTargetParts(recommendation, b, unit);
