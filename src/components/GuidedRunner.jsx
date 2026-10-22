@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
-import { EXERCISE_BY_ID, takesExternalLoad } from '../lib/data.js';
+import { EXERCISE_BY_ID, takesExternalLoad, firstLoadHint } from '../lib/data.js';
 import {
   NOTE_PROMPTS,
   fmtRest,
@@ -424,6 +424,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
                     <span className="font-black text-ink">{currentSet?.reps?.trim() || '—'}</span> reps
                     {currentBlock.loadHint ? <span className="text-ink3"> · {currentBlock.loadHint}</span> : null}
                   </p>
+                  {(h=> h && <p className="text-[11px] text-ink2 mt-1">{h}</p>)(firstLoadHint({ takesLoad: takesExternalLoad(currentExercise), weightKg: currentSet?.weightKg }))}
                   {currentExercise?.cues?.[0] && <p className="text-[11px] text-ink3 mt-1">Cue: {currentExercise.cues[0]}</p>}
                   {activeArm && activeRec && (
                     <p className="text-[11px] text-ink3 mt-1">

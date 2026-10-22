@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### First-session load guidance
+- Guided Mode now tells you how to pick a first weight ("start light, a weight you could lift 4–5 reps easier") when a loaded set has no load yet, instead of showing only "log load".
+
 ### Added
 
 - **Rider Upper 3×Week programme** for cyclists, runners and triathletes who
