@@ -85,6 +85,7 @@ export const EXERCISE_TAG_IDS = EXERCISE_TAGS.map(t => t.id);
 import { EXERCISES_PRIMARY } from './data/exercises-primary.js';
 import { EXERCISES_COVERAGE } from './data/exercises-coverage.js';
 import { PROGRAMS as BUILTIN_PROGRAMS, PROGRAM_VERSION_HISTORY as BUILTIN_PROGRAM_VERSION_HISTORY } from './data/programs.js';
+import { RIDER_UPPER_3X, RIDER_UPPER_3X_HISTORY } from './data/programs-rider.js';
 export const EXERCISES = [
   ...EXERCISES_PRIMARY,
   ...EXERCISES_COVERAGE,
@@ -197,6 +198,14 @@ export function recommendExercises({ goal, availableEquipment, limit = 8 }) {
 }
 
 // Programmes are scheduled training: each program has weeks → workouts → blocks.
+// The rider plan lives in its own module (data/programs-rider.js) and is
+// appended once here, after the original built-ins, so their order and ids are
+// unchanged. It has no PROGRAM_TEMPLATES entry, so profile recommendation is
+// untouched: it is picked deliberately from the Train list.
+if(!BUILTIN_PROGRAMS.some(p=> p.id === RIDER_UPPER_3X.id)){
+  BUILTIN_PROGRAMS.push(RIDER_UPPER_3X);
+  BUILTIN_PROGRAM_VERSION_HISTORY.push(...RIDER_UPPER_3X_HISTORY);
+}
 export const PROGRAMS = BUILTIN_PROGRAMS;
 export const PROGRAM_VERSION_HISTORY = BUILTIN_PROGRAM_VERSION_HISTORY;
 

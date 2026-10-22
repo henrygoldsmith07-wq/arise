@@ -12,6 +12,15 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Added
+
+- **Rider Upper 3×Week programme** for cyclists, runners and triathletes who
+  lift mainly for the upper body. Three machine/cable sessions a week; each
+  session keeps leg/hip work to one short block (≤2 sets, stopped well short
+  of failure) and there are no barbell squats or deadlifts. It is picked from
+  the Train list and does not change profile recommendations.
+  `tests/rider-programme.test.js` pins the leg cap, kit and upper-body share.
+
 ### Fixed
 
 - **Loaded lifts were treated as bodyweight in the runner.** The load field
