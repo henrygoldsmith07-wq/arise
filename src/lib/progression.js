@@ -223,12 +223,14 @@ export function recommendNext({ exerciseId, history, targetReps = null, conserva
   const rpe = last.rpe != null && String(last.rpe).trim()!=='' ? Number(last.rpe) : null;
   const rir = rpe !== null && Number.isFinite(rpe) ? Math.max(0, 10 - rpe) : null;
   // Missing RPE must not mean "assume room to spare" (old default RIR 2).
-  // Unknown effort stays unknown: hold at the same prescription. Failed /
-  // skipped sets already returned above, so reaching here with unknown RPE
-  // means a completed set of unknown effort — repeat it, don't progress it.
-  // Explicit-RPE paths below are byte-identical.
-  if(rir === null){
-    return plateAware({ load, reps, reason: 'rpe-unknown:holding — no RPE logged, so effort is unknown; repeat at the same target instead of assuming room to spare.', strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version }, plateConfig, exerciseId);
+  // Unknown effort stays unknown: below the top of the range, hold at the same
+  // prescription instead of adding a rep on an assumed RIR. Failed / skipped
+  // sets already returned above. Reaching the TOP of the range is itself
+  // evidence (the top-of-range load step below never read RPE), so a lifter
+  // who never logs RPE still progresses by double progression — otherwise
+  // they would be held at the same load forever.
+  if(rir === null && reps < hi){
+    return plateAware({ load, reps, reason: `No effort (RPE) logged last time, so Arise can't tell how close you were — repeat ${reps} reps at this load, or log RPE to let it progress.`, effortUnknown: true, strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version }, plateConfig, exerciseId);
   }
   const effortRir = rir;
   // Personalised rate when learned; otherwise strategy base rate scaled by training age.
@@ -242,16 +244,16 @@ export function recommendNext({ exerciseId, history, targetReps = null, conserva
   // Strategy-aware
   if(sCfg.prefer === 'reps'){
     if(reps < hi) return plateAware({ load, reps: Math.min(hi, reps+1), reason: `Endurance — add a rep (${reps}→${Math.min(hi, reps+1)}).`, strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version }, plateConfig, exerciseId);
-    return plateAware({ load, reps, reason: `Endurance at top of ${lo}–${hi} — holding at ${reps} reps.`, strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version }, plateConfig, exerciseId);
   }
   // Double progression (default for hypertrophy, and fallback)
-  // Unknown RPE returns above, so effortRir is always the explicit RIR here.
+  // Unknown RPE below the top returns above, so effortRir is explicit here;
+  // at the top, unknown RPE takes the conservative load step only.
   if(reps < hi) {
     if(effortRir >= 2) return plateAware({ load, reps: Math.min(hi, reps + 1), reason: `Room at RPE ${rpe ?? "/"} — add a rep (${reps}→${Math.min(hi, reps+1)}).`, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
     const nextLoad = snapLoad(load * (1 + incPct), cfg);
     return plateAware({ load: nextLoad, reps: lo, reason: `Close to failure (RIR ~${effortRir}) — increase ${load} → ${nextLoad} kg and reset to ${lo} reps.`, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
   }
-  const nextLoad = snapLoad(load > 0 ? load * (conservative ? (1 + incPct) : (1 + incPct*cfg.progression.nonConservativeMultiplier)) : 0, cfg);
+  const nextLoad = snapLoad(load > 0 ? load * ((conservative || rir === null) ? (1 + incPct) : (1 + incPct*cfg.progression.nonConservativeMultiplier)) : 0, cfg);
   return plateAware({ load: nextLoad || load, reps: lo, reason: `You hit the top of ${lo}–${hi} at ${load > 0 ? `${load} kg` : `${reps} reps`} — increase ${load > 0 ? `${load} → ${nextLoad} kg` : `the difficulty`} and reset to ${lo} reps.`, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
 }
 
