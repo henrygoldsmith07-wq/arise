@@ -19,7 +19,7 @@ export const RIDER_UPPER_3X = {
   tagline: 'Upper body on machines and cables for cyclists and triathletes. Legs get one short, easy block so rides stay fresh.',
   level: 'Beginner',
   daysPerWeek: 3,
-  mesocycle: { weeks: 4, deloadWeek: 4, progression: 'double-progression' },
+  mesocycle: { weeks: 2, deloadWeek: null, progression: 'double-progression' },
   version: 1,
   equipment: ['machine', 'cable', 'bodyweight'],
   weeks: [
