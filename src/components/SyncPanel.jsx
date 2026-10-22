@@ -14,7 +14,6 @@
 import { useState } from 'react';
 import { runSync, drainQueue, sanitizeSyncConfig, syncStatusLabel, enqueueOffline } from '../lib/syncEngine.js';
 import { makeWebdavAdapter, webdavCheck } from '../lib/webdav.js';
-import { buildExportPayload } from '../lib/export.js';
 import { getDeviceId } from '../lib/exportPolicy.js';
 
 function StatusPill({ label }){
@@ -55,17 +54,28 @@ export default function SyncPanel({ store, setStore, setMsg }){
     if(thenSync) await syncNow(nextStore, nextSync);
   };
 
+  // Every upload is a full pull→merge→push cycle. A blind push of this
+  // device's store would overwrite sessions other devices synced since our
+  // last pull, so there is deliberately no push-only path.
+  const cycle = (storeArg, syncArg) => {
+    const adapter = makeWebdavAdapter({ url: syncArg?.url, username: syncArg?.username, password: syncArg?.password });
+    return runSync({ store: storeArg, config: syncArg, adapter });
+  };
+
+  // Persist runtime state (timestamps, logs, queue) and the merged store in
+  // one write; merged.preferences keeps the local sync config, which we
+  // refresh with the runtime config so status stays truthful.
+  const persistMerged = (storeArg, merged, config) => {
+    setStore({ ...storeArg, ...merged, preferences: { ...(merged.preferences || {}), sync: config } });
+  };
+
   const syncNow = async (storeArg = store, syncArg = prefs.sync) => {
     if(!enabled){ setMsg('Enable sync first — nothing leaves this device until you do.'); setTimeout(() => setMsg(null), 4000); return; }
     setBusy(true);
     try{
-      const adapter = makeWebdavAdapter({ url: syncArg?.url, username: syncArg?.username, password: syncArg?.password });
       const localIds = new Set((storeArg.history || []).map((h) => h?.id));
-      const { merged, config, error } = await runSync({ store: storeArg, config: syncArg, adapter });
-      // Persist runtime state (timestamps, logs, queue) and the merged store in
-      // one write; merged.preferences keeps the local sync config, which we
-      // refresh with the runtime config so status stays truthful.
-      setStore({ ...storeArg, ...merged, preferences: { ...(merged.preferences || {}), sync: config } });
+      const { merged, config, error } = await cycle(storeArg, syncArg);
+      persistMerged(storeArg, merged, config);
       if(error){
         setMsg(`Sync failed: ${error}. Local history is unchanged.`);
       }else{
@@ -89,15 +99,15 @@ export default function SyncPanel({ store, setStore, setMsg }){
     if(!enabled){ setMsg('Enable sync first.'); setTimeout(() => setMsg(null), 3000); return; }
     setBusy(true);
     try{
-      const adapter = makeWebdavAdapter({ url: sync?.url, username: sync?.username, password: sync?.password });
-      const payload = buildExportPayload(store);
-      const outgoing = sync?.encryption !== false
-        ? await import('../lib/cryptoBackup.js').then((m) => m.encryptBackup(payload, sync?.passphrase))
-        : JSON.stringify(payload);
-      await adapter.push(outgoing);
-      patchSync({ lastPushAt: new Date().toISOString(), lastError: null });
-      setMsg('Pushed a backup to your storage.');
-      setTimeout(() => setMsg(null), 4000);
+      const { merged, config, error } = await cycle(store, sync);
+      if(error){
+        patchSync(enqueueOffline(config, error));
+        setMsg(`Push failed — queued for retry: ${error}`);
+      }else{
+        persistMerged(store, merged, config);
+        setMsg('Backed up to your storage, merged with your other devices first.');
+      }
+      setTimeout(() => setMsg(null), 5000);
     }catch(err){
       patchSync(enqueueOffline(sync, String(err?.message || err)));
       setMsg(`Push failed — queued for retry: ${String(err?.message || err)}`);
@@ -110,15 +120,15 @@ export default function SyncPanel({ store, setStore, setMsg }){
   const retryQueued = async () => {
     setBusy(true);
     try{
-      const adapter = makeWebdavAdapter({ url: sync?.url, username: sync?.username, password: sync?.password });
+      // One cycle delivers the full state, so every queued item shares its
+      // outcome instead of re-running the sync once per item.
+      let outcome = null;
       const next = await drainQueue(sync, async () => {
-        const payload = buildExportPayload(store);
-        const outgoing = sync?.encryption !== false
-          ? await import('../lib/cryptoBackup.js').then((m) => m.encryptBackup(payload, sync?.passphrase))
-          : JSON.stringify(payload);
-        await adapter.push(outgoing);
+        outcome ||= await cycle(store, sync);
+        if(outcome.error) throw new Error(outcome.error);
       });
-      patchSync(next);
+      if(outcome && !outcome.error) persistMerged(store, outcome.merged, outcome.config);
+      else patchSync(next);
       setMsg(next.queue.length ? `Some items still queued (${next.queue.length}).` : 'Queue drained — everything is uploaded.');
     }catch(err){
       setMsg(String(err?.message || err));

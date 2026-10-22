@@ -2,7 +2,7 @@
 
 A game-like, offline-first training companion. Not a nutrition app.
 
-**Stack:** Vite + React + Tailwind v4 + `le-studio.css` design tokens. Local-first — the canonical store is **IndexedDB on your device**, no backend, no account. PWA-ready (installable, offline, shortcuts). **Progression engine** in `progression.js` + `substitutions.js`, **template engine** in `templates.js`, **analytics** in `analytics.js`, **session generator** in `sessionGenerator.js` (fatigue-aware ordering in `warmup.js`).
+**Stack:** Vite + React + Tailwind v4 + `le-studio.css` design tokens. Local-first — the canonical store is **IndexedDB on your device**, no backend, no account. PWA-ready (installable, offline, shortcuts). **Progression engine** in `progression.js` + `substitutions.js`, **template engine** in `templates.js`, **analytics** in `analytics.js`, fatigue-aware ordering in `warmup.js`.
 
 ## Quickstart
 
@@ -42,7 +42,7 @@ and there is no account to delete. See the [privacy guide](docs/PRIVACY.md).
 5. **Onboarding shapes recommendations** — goal + location + equipment + level/days/time + optional liked/avoided movements + barbell plate setup. `recommendExercises()` and `availablePrograms()` are deterministic and re-sort visibly when onboarding changes.
 6. **Resistance / load tracking** — every logged set is `{ reps, weightKg, rpe }`. Leave weight blank for bodyweight. Session volume (`kg`) is derived live; `SessionRunner` enforces reps-filled before save.
 7. **Attributes derive from history** — `deriveAttributes(history)` computes Strength / Endurance / Consistency / Technique from logged volume, loads (Epley 1RM), variety, cardio minutes, streak and logging discipline. Level is `avg/7`. Nothing derives from program labels.
-8. **PWA** — `manifest.webmanifest` + `sw.js` (cache-first navigations, stale-while-revalidate assets, same-origin only), install onboarding, home-screen shortcuts, offline fallback UI. Install → airplane mode → reload keeps Today / Exercises / schedule from cache.
+8. **PWA** — `manifest.webmanifest` + `sw.js` (network-first navigations, the whole build precached at install, same-origin only; updates wait for your OK and never interrupt a workout), install onboarding, home-screen shortcuts, offline fallback UI. Install → airplane mode → reload keeps Today / Exercises / schedule from cache.
 9. **Gym Mode** — one-thumb session runner: focus mode, large targets, swipe to complete/fail, equipment-aware load numpad, persistent rest dock.
 10. **Accessibility** — landmarks, skip link, visible focus, throttled live announcements, dialog focus management, reduced motion, high-contrast/large-text modes. Statement: [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md).
 11. **No nutrition system** — intentionally out of scope.
@@ -174,7 +174,7 @@ src/lib/plateauInvestigation.js  five cross-exercise checks that explain a stall
 src/lib/workoutQualityReport.js  post-workout debrief: quality vs target + what to change next
 src/lib/analytics.js   weekly volume + frequency + strength series + volume-balance advice
 src/lib/warmup.js      warm-ups + rest/duration + supersets + fatigue-aware ordering + weak points
-src/lib/sessionGenerator.js equipment-aware, history-aware session builder + superset hints
+src/lib/sessionGenerator.js test/benchmark harness: equipment- and history-aware session builder (not used by the app UI)
 src/lib/sync.js + syncEngine.js + webdav.js  optional cross-device sync over user-owned WebDAV
 src/components/*       Today / Train+SessionRunner(Gym Mode) / Exercises / Progress / More + Onboarding + AppShell
 public/                manifest.webmanifest + sw.js + icons + splashes

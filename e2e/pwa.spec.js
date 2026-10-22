@@ -89,6 +89,22 @@ test('home-screen shortcut URLs route to the right tab and scrub themselves', as
   expect(new URL(page.url()).searchParams.get('shortcut')).toBeNull();
 });
 
+test('offline: a first visit is enough to boot offline afterwards', async ({ page, context }) => {
+  // Fresh context = a genuinely first visit. The entry bundle loads before the
+  // service worker controls the page, so only the build-time precache can
+  // have stored it — and the worker must find it again for a module-script
+  // request that carries an Origin header (the server sends Vary: Origin).
+  // No warm-up reload in between: that step (the test below) let runtime
+  // caching hide a blank offline screen on first visits.
+  await page.goto('/');
+  await expect(page.getByRole('dialog', { name: 'Onboarding' })).toBeVisible({ timeout: 10_000 });
+  await page.waitForFunction(() => navigator.serviceWorker?.controller !== null, null, { timeout: 15_000 });
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.getByRole('dialog', { name: 'Onboarding' })).toBeVisible({ timeout: 15_000 });
+  await context.setOffline(false);
+});
+
 test('offline: cached shell still boots the app', async ({ page, context }) => {
   await page.goto('/');
   // The app boots from IndexedDB once hydrated — clearing only localStorage

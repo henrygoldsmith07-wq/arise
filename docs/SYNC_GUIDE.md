@@ -15,7 +15,22 @@ backup file there.
    - The passphrase is *not* your WebDAV password; the app refuses to run
      one as the other. It derives the encryption key on-device and is never
      sent anywhere.
-4. **Test connection**, then **Sync now**.
+4. **Test connection**, then **Sync now**. The first sync creates the
+   `arise-sync/` folder on your storage if it does not exist.
+
+### Browser access (CORS)
+
+Arise runs in your browser, so your WebDAV server must accept requests from
+the app's origin. Many hosted providers and a default Nextcloud install do not
+send the CORS headers a browser needs; the request then fails with "Could not
+reach <host> … (CORS)". The server (or a reverse proxy in front of it) has to:
+
+- answer `OPTIONS` preflights without requiring a login;
+- send `Access-Control-Allow-Origin: <the app's origin>`;
+- allow the methods `GET, PUT, MKCOL, OPTIONS` and the request headers
+  `Authorization, Content-Type, If-Match`;
+- expose the `ETag` response header (optional — without it sync still works,
+  but loses the overwrite protection described below).
 
 ## What a sync cycle does
 
@@ -36,6 +51,13 @@ blocking a workout.
 ## Offline and conflicts
 
 Offline pushes queue (bounded at 20) and drain with exponential backoff.
+Every upload — **Sync now**, **Push backup** and queue retries — is a full
+pull → merge → push cycle; there is no blind overwrite of the remote file.
+
+When the server exposes a strong `ETag`, the push is conditional
+(`If-Match`). If another device wrote the file between this device's pull and
+push, the server refuses the write (412) and Arise re-pulls, re-merges and
+retries (up to three times) instead of overwriting the other device's sync.
 Two devices editing the same session converge to the newest save; edits
 you made on a third copy that lost the race are visible in the merged
 history rather than silently dropped — per-record provenance shows which
@@ -64,6 +86,10 @@ device last touched what.
 - **Forgot the passphrase?** The remote file is unreadable without it — by
   design. Delete the remote file and push a fresh one to start over.
 - **Rotating the app password:** update it in More → Sync and test.
+- **Switching encryption on or off** is safe: the pulled file is read as
+  whatever it actually is (sealed or plain), and the next push follows this
+  device's setting. Opening a sealed file still needs the passphrase, so keep
+  it set on every device even if you turn encryption off.
 - **Don't point unrelated Arise profiles at the same remote path.** Different
   encryption passphrases already fail to decrypt; different active study
   participant identities are also refused explicitly rather than merged.

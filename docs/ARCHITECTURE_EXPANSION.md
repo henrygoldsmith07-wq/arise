@@ -2,8 +2,7 @@
 
 Where Arise can grow without breaking its invariants (local-first, no
 account, engine purity, evidence honesty). This page records the evaluated
-expansion candidates and the seams they would use. The machine-readable
-summary lives in `src/lib/futureExpansion.js`.
+expansion candidates and the seams they would use.
 
 ## The seams that already exist
 
