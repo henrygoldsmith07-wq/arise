@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
-import { EXERCISE_BY_ID } from '../lib/data.js';
+import { EXERCISE_BY_ID, takesExternalLoad } from '../lib/data.js';
 import {
   NOTE_PROMPTS,
   fmtRest,
@@ -419,7 +419,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
                   <p className="text-xl font-black tracking-tight">{currentExercise?.name || currentBlock.exerciseId}{currentBlock.unilateral ? <span className="text-xs font-semibold text-ink3"> (per side — {currentSet?.side || 'L'} first)</span> : null}</p>
                   <div className="mt-1"><Suspense fallback={null}><TeachingPanel exerciseId={currentBlock.exerciseId} variant="inline" /></Suspense></div>
                   <p className="text-sm text-ink2 mt-1 tabular-nums">
-                    <span className="font-black text-ink">{currentSet?.weightKg?.trim() ? fmtWeight(currentSet.weightKg, unit) : (currentExercise?.supportsWeighted ? 'log load' : 'bodyweight')}</span>
+                    <span className="font-black text-ink">{currentSet?.weightKg?.trim() ? fmtWeight(currentSet.weightKg, unit) : (takesExternalLoad(currentExercise) ? 'log load' : 'bodyweight')}</span>
                     {' × '}
                     <span className="font-black text-ink">{currentSet?.reps?.trim() || '—'}</span> reps
                     {currentBlock.loadHint ? <span className="text-ink3"> · {currentBlock.loadHint}</span> : null}
@@ -436,7 +436,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
 
               <div className="grid grid-cols-2 gap-2">
                 <label className="text-[11px]">Load {unit}
-                  <WeightInput type="text" inputMode="decimal" value={currentSet?.weightKg || ''} unit={unit} onChange={v=> updateSet(step.blockIndex, step.setIndex, { weightKg: v })} onFocus={trackFieldFocus} onBlur={(e)=> { if(fieldCommitted(e)){ try{ recordEvent('load-field-commit', { sessionId: session.id, exerciseId: currentBlock.exerciseId, setIndex: step.setIndex, mode: 'guided' }); }catch{} } }} placeholder={currentExercise?.supportsWeighted ? (unit === 'lb' ? '50' : '22') : 'bw'} aria-label={`Load in ${unit === 'lb' ? 'pounds' : 'kilograms'}`} className="mt-1 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center" />
+                  <WeightInput type="text" inputMode="decimal" value={currentSet?.weightKg || ''} unit={unit} onChange={v=> updateSet(step.blockIndex, step.setIndex, { weightKg: v })} onFocus={trackFieldFocus} onBlur={(e)=> { if(fieldCommitted(e)){ try{ recordEvent('load-field-commit', { sessionId: session.id, exerciseId: currentBlock.exerciseId, setIndex: step.setIndex, mode: 'guided' }); }catch{} } }} placeholder={takesExternalLoad(currentExercise) ? unit : 'bw'} aria-label={`Load in ${unit === 'lb' ? 'pounds' : 'kilograms'}`} className="mt-1 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center" />
                 </label>
                 <label className="text-[11px]">Reps
                   <input type="number" min="0" step="1" inputMode="numeric" value={currentSet?.reps || ''} onChange={e=> updateSet(step.blockIndex, step.setIndex, { reps: e.target.value })} onFocus={trackFieldFocus} onBlur={(e)=> { if(fieldCommitted(e)){ try{ recordEvent('reps-field-commit', { sessionId: session.id, exerciseId: currentBlock.exerciseId, setIndex: step.setIndex, mode: 'guided' }); }catch{} } }} placeholder="9" aria-label="Reps" className="mt-1 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />

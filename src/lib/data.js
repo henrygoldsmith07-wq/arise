@@ -35,6 +35,15 @@ export const EQUIPMENT_PRESETS = [
   { id: 'full-gym',       label: 'Full gym',       icon: '🏢', hint: 'Everything: racks, cables, machines, bench', equipment: ['bodyweight', 'dumbbells', 'barbell', 'bench', 'pullup-bar', 'cable', 'machine', 'kettlebell'] },
 ];
 
+// Starting kit for a location pick in onboarding, used only until the user
+// chooses kit themselves. A gym implies the full floor (the Gym tile itself
+// promises "Full equipment access"); everywhere else starts at bodyweight and
+// the user adds what they own.
+export function defaultKitForLocation(locationId){
+  if(locationId === 'gym') return [...EQUIPMENT_PRESETS.find(p=> p.id === 'full-gym').equipment];
+  return ['bodyweight'];
+}
+
 export const LOCATIONS = [
   { id: 'home', label: 'Home', hint: 'No commute, minimal kit' },
   { id: 'gym', label: 'Gym', hint: 'Full equipment access' },
@@ -95,6 +104,36 @@ export function equipmentClassFor(exerciseId){
   if(equipment.some(eq=> ['barbell', 'dumbbells', 'kettlebell'].includes(eq))) return 'free-weights';
   if(equipment.length === 1 && equipment[0] === 'bodyweight') return 'bodyweight';
   return 'other';
+}
+
+// Does this movement take an external load the user logs in kg/lb?
+// `supportsWeighted` only marks BODYWEIGHT movements that can have load added
+// (weighted pull-up, weighted dip) — it is false for almost every barbell,
+// dumbbell, machine and cable lift, so it must never be read as "is loaded".
+// Loaded kit (barbell, dumbbells, kettlebell, machine stack, cable stack) is
+// loaded by definition; bands/bench/pull-up bar alone are not.
+const LOADED_EQUIPMENT = ['barbell', 'dumbbells', 'kettlebell', 'machine', 'cable'];
+function resolveExercise(exerciseOrId){
+  if(!exerciseOrId) return null;
+  if(typeof exerciseOrId === 'string') return EXERCISE_BY_ID[exerciseOrId] || null;
+  // Partial option objects ({ id, reason }) inherit the catalogue entry.
+  const known = exerciseOrId.id ? EXERCISE_BY_ID[exerciseOrId.id] : null;
+  return known ? { ...known, ...exerciseOrId, equipment: exerciseOrId.equipment || known.equipment } : exerciseOrId;
+}
+// Loaded by its kit: the load the user logs IS the whole resistance, so a
+// load carried from another loaded lift (e1RM re-expression) is meaningful.
+// Weightable bodyweight moves are excluded — body mass dominates there.
+export function isLoadedKitLift(exerciseOrId){
+  const ex = resolveExercise(exerciseOrId);
+  if(!ex) return false;
+  // Cardio machines (rower, bike) are timed/distance work, not a stack.
+  if(ex.muscle === 'Cardio') return false;
+  return (ex.equipment || []).some(eq=> LOADED_EQUIPMENT.includes(eq));
+}
+export function takesExternalLoad(exerciseOrId){
+  const ex = resolveExercise(exerciseOrId);
+  if(!ex) return false;
+  return ex.supportsWeighted === true || isLoadedKitLift(ex);
 }
 
 // Programme templates — reusable blueprints that can be instantiated with different start dates / tweaks.
