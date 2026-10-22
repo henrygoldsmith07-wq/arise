@@ -177,7 +177,7 @@ describe('capability gating + overlay', ()=>{
     } };
   }
 
-  it('opens exercise-specific logic only under proven weakness', ()=>{
+  it('opens exercise-specific logic only under an observed weakness', ()=>{
     const history = risingBench();
     const capsWeak = assessCapabilities({ history, study: weakStudy(), estimates: deriveProgressionModel({ history, study: weakStudy(), config: LOOSE }).estimates, config: LOOSE });
     assert.equal(capsWeak.find(c=> c.id === 'exercise-specific').status, 'active');
@@ -211,8 +211,36 @@ describe('capability gating + overlay', ()=>{
     assert.equal(cold.__progressionModel.applied, false);
 
     const warm = recommendNextWithModel({ exerciseId: 'bench-press-dumbbell', history: risingBench(), study: weakStudy() });
-    assert.ok(warm.__progressionModel.applied, 'expected model application under proven weakness');
+    assert.ok(warm.__progressionModel.applied, 'expected model application under an observed weakness');
     assert.ok(warm.reps != null || warm.load != null);
+  });
+
+  // Regression: the capability layer used to tell users a weakness was "proven"
+  // vs double-progression. `conclusive` in study.js means only "n transitions
+  // >= minimumSegmentSamples" — a sample-size threshold, not a significance
+  // test — and the replay cannot establish causal superiority (study.js:478).
+  // The copy must not claim a proof the machinery cannot deliver.
+  it('never claims a weakness is proven', ()=>{
+    const history = risingBench();
+    for(const [label, study] of [['weak', weakStudy()], ['strong', strongStudy()]]){
+      const caps = assessCapabilities({ history, study, estimates: deriveProgressionModel({ history, study, config: LOOSE }).estimates, config: LOOSE });
+      const prose = caps.map(c=> c.detail).join(' ');
+      assert.doesNotMatch(prose, /\bproven|provable|proof\b/i, `${label} study copy overclaims: ${prose}`);
+    }
+  });
+
+  it('ignores a weakness gap too small to be a finding', ()=>{
+    // A 5-transition arm cannot distinguish a 5-point rate gap from noise.
+    const tiny = { overall: {}, byExercise: {
+      'bench-press-dumbbell': {
+        arise: { n: 10, conclusive: true, targetAchievementRate: 0.55 },
+        'double-progression': { n: 10, conclusive: true, targetAchievementRate: 0.60 },
+      },
+    } };
+    const history = risingBench();
+    const caps = assessCapabilities({ history, study: tiny, estimates: deriveProgressionModel({ history, study: tiny, config: LOOSE }).estimates, config: LOOSE });
+    assert.equal(caps.find(c=> c.id === 'exercise-specific').status, 'dormant',
+      'a sub-floor rate difference must not open an override');
   });
 });
 

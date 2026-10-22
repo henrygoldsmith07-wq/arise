@@ -2,6 +2,10 @@
 // (Chest, Back, Legs/Glutes, Shoulders/Arms, Core, Conditioning/Full body).
 // Moved verbatim from data.js; the combined EXERCISES order is preserved by
 // data.js assembling PRIMARY then COVERAGE.
+//
+// NOTE: `imageSlug` on some rows is legacy — the illustration registry
+// (exerciseImages.js) keys by exercise `id`, so `imageSlug` is read nowhere.
+// It is kept (not deleted) for data-file compatibility; do not add new uses.
 export const EXERCISES_PRIMARY = [
   // ── Chest
   { id: 'push-up', name: 'Push-up', muscle: 'Chest', equipment: ['bodyweight'], level: 'Beginner', tags: ['compound','push'], instructions: ['Start in a straight line, hands under your shoulders.', 'Lower your chest toward the floor with your elbows around 45°.', 'Press back up until your arms are straight.'], mistakes: ['Hips sagging or piking — squeeze your glutes to stay straight.', 'Flaring elbows out to a T — keep them closer to the body.', 'Rushing the bottom — touch the floor with control.'], cues: ['Hands under shoulders','Body in a straight line','Chest to floor'], substitution: ['bench-press-dumbbell', 'chest-press-machine', 'bench-press-barbell', 'incline-push-up', 'overhead-press-dumbbell', 'tricep-dip-bench', 'incline-dumbbell-press', 'decline-push-up', 'close-grip-push-up', 'tricep-pushdown', 'weighted-push-up', 'chest-dip', 'knee-push-up', 'wide-push-up', 'archer-push-up', 'typewriter-push-up', 'explosive-push-up', 'hindu-push-up', 'seal-jack', 'wall-push-up'], unilateral: false, supportsWeighted: true, supportsAssisted: false, progression: 'reps', rom: true },

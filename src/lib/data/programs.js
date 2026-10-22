@@ -2,6 +2,14 @@
 // source appends via PROGRAMS.push) and the append-only programme version
 // history. Moved verbatim from data.js, in original order; data.js re-exports
 // the names unchanged.
+//
+// BASIS (item 5): built-in prescriptions use 3–4 sets of 5–12 reps with 60–150s
+// rest, 3–4 days/week in 4-week blocks with a deload week — standard beginner /
+// intermediate programming structure per ACSM resistance-training guidance.
+// Uncertainty: set × rep × frequency optima are live disputes and adherence
+// dominates outcomes (ACSM March 2026 position stand). Confidence: medium for
+// the structure, low for exact set/rep/rest numbers — stated as sensible
+// defaults, not optima. Program-level version history below records changes.
 export const PROGRAMS = [
   {
     id: 'starter-3x',

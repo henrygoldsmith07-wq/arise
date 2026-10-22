@@ -715,7 +715,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   };
 
   return (
-    <div ref={rootRef} onKeyDown={trapTab} className="fixed inset-0 z-40 bg-bg flex flex-col" role="dialog" aria-modal="true" aria-label={`Session — ${session.title}`}>
+    <div ref={rootRef} onKeyDown={trapTab} className="fixed inset-0 z-40 bg-bg flex flex-col pt-[env(safe-area-inset-top)]" role="dialog" aria-modal="true" aria-label={`Session — ${session.title}`}>
       <span className="sr-only" role="status" aria-live="polite">{restAnnouncement || `${completedSets} of ${totalSets} sets completed`}</span>
       {/* App-level announcer output lives in App's <LiveAnnouncer/>; this
           span keeps the in-runner completion notice. Rest minute marks are
@@ -835,7 +835,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                   {/* One clear target */}
                   <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                     <span className="text-xl font-black tabular-nums leading-none">{clearTarget.text}</span>
-                    {recommendation && <button onClick={()=> applyRecommendation(bi,recommendation)} className="relative text-[10px] font-bold underline underline-offset-2 shrink-0 before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']">Use</button>}
+                    {recommendation && <button onClick={()=> applyRecommendation(bi,recommendation)} className="relative min-h-11 min-w-11 px-2 text-[10px] font-bold underline underline-offset-2 shrink-0 before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']">Use</button>}
                     <Suspense fallback={null}><TeachingPanel exerciseId={b.exerciseId} variant="inline" /></Suspense>
                   </div>
                   {/* Target · range · effort — visible on every set row of the
@@ -903,10 +903,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                   </details>
                 </div>
                 <div className="flex gap-1.5 shrink-0 flex-wrap justify-end max-w-[190px]">
-                  {b.restSec ? <button onClick={()=> startRest(restPresetFor(gymPrefs, b.exerciseId, b.restSec) || b.restSec, ex?.name || b.exerciseId, b.exerciseId)} className="relative text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">Start rest</button> : null}
+                  {b.restSec ? <button onClick={()=> startRest(restPresetFor(gymPrefs, b.exerciseId, b.restSec) || b.restSec, ex?.name || b.exerciseId, b.exerciseId)} className="relative min-h-11 text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">Start rest</button> : null}
                   {voiceSupportedInput && (
                     <button onClick={()=> toggleDictation(bi)} aria-pressed={dictating===bi} title="Dictate a set — say the load, then the reps"
-                      className={`relative text-xs font-bold px-3 py-1.5 rounded-full border before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-[''] ${dictating===bi ? 'bg-ink text-bg border-ink' : 'border-line bg-surface2'}`}>🎙️</button>
+                      className={`relative min-h-11 min-w-11 text-xs font-bold px-3 py-1.5 rounded-full border before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-[''] ${dictating===bi ? 'bg-ink text-bg border-ink' : 'border-line bg-surface2'}`}>🎙️</button>
                   )}
                   <button onClick={()=> { if(swapOpen!==bi){ swapOpenedAtRef.current = Date.now(); try{ recordEvent('swap-open', { sessionId:session.id, exerciseId:blocks[bi]?.exerciseId, mode: gymMode ? 'gym' : 'standard' }); }catch{} } setSwapOpen(swapOpen===bi ? null : bi); }} aria-expanded={swapOpen===bi} className="text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 min-h-11">Swap</button>
                   <button onClick={()=> addSet(bi)} className="text-xs font-bold px-3 py-1.5 rounded-full bg-ink text-bg min-h-11">+ Set</button>

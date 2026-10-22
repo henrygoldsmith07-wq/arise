@@ -441,8 +441,12 @@ export function sessionSaveState(blocks){
   if(canSave) return { totalSets, completedSets, pendingSets, canSave, blocker:null };
   const missingReps = blocks.reduce((total, block)=> total + block.sets.filter(set=> String(set.reps).trim() === '').length, 0);
   let blocker;
-  if(missingReps) blocker = `Enter reps for ${missingReps} remaining set${missingReps === 1 ? '' : 's'}.`;
-  else if(pendingSets) blocker = `Tap Done for ${pendingSets} set${pendingSets === 1 ? '' : 's'} you completed — Save logs unfinished sets as skipped.`;
+  // Blocker copy is only reachable when completedSets === 0 (canSave requires
+  // a completed set), so never report completed counts here — report what is
+  // still missing. All three branches describe pending work, never a claim
+  // about completed sets.
+  if(missingReps) blocker = `Enter reps for ${missingReps} remaining set${missingReps === 1 ? '' : 's'} — nothing is logged yet.`;
+  else if(pendingSets) blocker = `Tap Done for ${pendingSets} set${pendingSets === 1 ? '' : 's'} to log ${pendingSets === 1 ? 'it' : 'them'} — Save logs unfinished sets as skipped.`;
   else blocker = 'Add at least one set to each exercise.';
   return { totalSets, completedSets, pendingSets, canSave, blocker };
 }

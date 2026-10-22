@@ -351,7 +351,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   }, [progress.total, progress.pending, celebrate]);
 
   return (
-    <div ref={rootRef} onKeyDown={trapTab} className="fixed inset-0 z-40 bg-bg flex flex-col" role="dialog" aria-modal="true" aria-label={`Guided session — ${session.title}`}>
+    <div ref={rootRef} onKeyDown={trapTab} className="fixed inset-0 z-40 bg-bg flex flex-col pt-[env(safe-area-inset-top)]" role="dialog" aria-modal="true" aria-label={`Guided session — ${session.title}`}>
       <span className="sr-only" role="status" aria-live="polite">
         {/* Never interpolate the running countdown here — a per-second value in
             a live region queues every tick on screen readers. Rest progress is
