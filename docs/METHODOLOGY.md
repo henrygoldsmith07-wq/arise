@@ -74,6 +74,24 @@ never the engine.
   per exposure — add a set, ease the next block, or swap the variation —
   idempotently, with its basis stored.
 
+## Strength estimates
+
+Estimated 1RM uses the Epley formula with reps clamped to a cap of 12
+(`EPLEY_CAP_REPS` in `src/lib/trainingMath.js`). Uncapped Epley grows linearly
+with reps — a 20-rep set implies a 1RM 67% above the working load — well past
+the range where the formula tracks observed maxes. The clamp keeps the
+estimator inside roughly the range where Epley is defensible (≤12 reps, leaving
+every textbook 1–12-rep value byte-identical) and
+saturates beyond it rather than inventing strength the user has not shown.
+`epleyToLoad` applies the same cap, so the pair round-trips exactly and the
+swap load-carry path is unaffected.
+
+Limits, honestly: the cap is a guardrail, not a finding. A 15-rep estimate is
+still an extrapolation, and no rep formula measures hypertrophy or predicts
+what the user can actually single. High-rep PRs are therefore conservative by
+construction — they understate rather than overstate — and strength trends
+blend e1RM with volume and RPE signals rather than trusting any single number.
+
 ## Why conservative by default
 
 The cost asymmetry: recommending 2.5 kg too little costs you one slightly

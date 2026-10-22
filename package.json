@@ -26,7 +26,7 @@
     "lint:encoding": "node scripts/mojibake-gate.cjs",
     "check": "npm run lint:content && npm run lint:encoding && npm test",
     "type-check": "tsc --noEmit",
-    "verify": "npm run lint:content && npm run lint:encoding && npm run type-check && npm run screenshots:check && npm run exercise-images:check && npm test && npm run test:integrations && npm run build",
+    "verify": "npm run lint:content && npm run lint:encoding && npm run type-check && npm run screenshots:check && npm run exercise-images:check && npm test && npm run test:integrations && npm run build && npm run bundle:budget",
     "exercise-images:generate": "node scripts/generate-exercise-images.mjs",
     "exercise-images:check": "node scripts/generate-exercise-images.mjs --check",
     "test:storage": "node --test tests/idb-storage.test.js",

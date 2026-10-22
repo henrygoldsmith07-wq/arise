@@ -81,7 +81,7 @@ export default function SetRow({
             onClick={()=> { if(s.failed){ try{ recordEvent('undo-set', { sessionId, exerciseId:b.exerciseId, setIndex:si, ...(s.setId ? { setId: s.setId } : {}), mode: gymMode ? 'gym' : 'standard' }); }catch{} updateSet(bi,si,{ failed:false }); } else markFailed(bi,si); }}
             aria-pressed={s.failed}
             aria-label={s.failed ? `Unmark set ${si+1} failed` : `Mark set ${si+1} failed`}
-            className={`min-h-12 w-9 grid place-items-center rounded-xl border text-[11px] font-bold ${s.failed?'bg-review text-bg border-review':'bg-surface2 border-line'}`}>{s.failed?'↺':'✗'}</button>
+            className={`min-h-11 min-w-11 grid place-items-center rounded-xl border text-[11px] font-bold ${s.failed?'bg-review text-bg border-review':'bg-surface2 border-line'}`}>{s.failed?'↺':'✗'}</button>
         )}
         {/* Standard mode gets the same one-tap failure log: a
             failed attempt stays a failed attempt in history
@@ -97,7 +97,7 @@ export default function SetRow({
       {isSetPerformed(s) ? (
         <span className="w-9 h-9 grid place-items-center text-ink3" title="Already performed — undo it before removing" aria-label={`Set ${si+1} performed`}>·</span>
       ) : (
-        <button onClick={()=> removeSet(bi,si)} aria-label={`Remove set ${si+1}`} className="relative w-9 h-9 grid place-items-center rounded-full border border-line text-ink3 before:absolute before:-inset-1.5 before:rounded-full before:content-['']">×</button>
+        <button onClick={()=> removeSet(bi,si)} aria-label={`Remove set ${si+1}`} className="relative w-11 h-11 grid place-items-center rounded-full border border-line text-ink3 before:absolute before:-inset-1 before:rounded-full before:content-['']">×</button>
       )}
       </div>
     </div>

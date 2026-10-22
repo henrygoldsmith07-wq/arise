@@ -37,9 +37,20 @@ The readiness score weights them because they correlate with performance,
 not because they measure recovery.
 
 **Strength standards and e1RM are estimates.** Epley 1RM is a regression
-over community data; it is least accurate at high rep counts. PRs are
+over community data; it is least accurate at high rep counts, so Arise clamps
+reps to 12 before applying it (`EPLEY_CAP_REPS` — high-rep estimates saturate
+rather than grow without bound). PRs are
 filtered for jitter and technique changes precisely because raw logs
 overstate them.
+
+**Unknown effort stays unknown.** A set logged without RPE is repeated, not
+progressed — the engine never assumes room to spare where it knows least.
+
+**Simple programming is competitive.** Per ACSM's March 2026 position stand,
+complex periodisation did not consistently beat simpler programming for the
+average healthy adult, and adherence dominates outcomes. Arise's progression
+constants are therefore stated as conservative starting guardrails with
+documented uncertainty (`basis:` notes in `src/lib/priors.js`), not optima.
 
 **No medical claims, ever.** Arise is a logging and planning tool. It does
 not diagnose, treat or advise on injuries or health conditions; pain tags
