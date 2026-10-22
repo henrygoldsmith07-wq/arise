@@ -34,10 +34,6 @@ function deepFreeze(value){
 // cold starts and for strata that do not have enough observations to estimate a
 // replacement. Keep changes here versioned so benchmark artifacts remain
 // reproducible.
-// The default policy is intentionally conservative. It is the baseline for
-// cold starts and for strata that do not have enough observations to estimate a
-// replacement. Keep changes here versioned so benchmark artifacts remain
-// reproducible.
 //
 // BASIS NOTES (item 5): every numeric block below carries a `basis` note naming
 // the source AND its uncertainty. Where the literature genuinely disagrees the
