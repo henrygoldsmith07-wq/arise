@@ -15,6 +15,11 @@ progress → taking care of your data.
    answer is a hard honesty gate (a bodyweight-only user is never shown a
    barbell lift as "recommended"). Barbell users can optionally enter their
    plate inventory, which makes load targets achievable-by-construction.
+   Saving builds your first programme from these answers — the days-per-week,
+   session-length and liked/avoided-movement answers all apply. If you train
+   fewer days than the programme was written for, its sessions **rotate**
+   week to week (a 3-day user on a 4-day upper/lower gets every upper and
+   lower session in turn) rather than one session being dropped for good.
 2. **Today** is the home screen. It shows the session scheduled for today —
    or "up next" on rest days — and nothing else competes with it.
 3. **Train → pick a program** creates a dated schedule. The schedule lives
@@ -23,7 +28,8 @@ progress → taking care of your data.
 ## Training day
 
 - Open the session from **Today**. Sets are logged inline: reps, load, RPE
-  (leave load blank for bodyweight).
+  (leave load blank for bodyweight). Every barbell, dumbbell, machine and
+  cable lift has a load field and the plate/stack keypad.
 - **Gym Mode** (session header toggle) is the one-thumb layout: focus on one
   exercise at a time, large touch targets, swipe right to complete / left to
   mark a set failed, long-press to edit, and a load numpad with equipment-aware
