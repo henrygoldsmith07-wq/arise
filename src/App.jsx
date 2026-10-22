@@ -427,7 +427,7 @@ export default function App(){
     // old flow: pick a programme in Train.
     if(!store.onboarding && !store.activeSchedule){
       try{
-        const [{ trainRecommendation }, { startProgramme }] = await Promise.all([
+        const [{ trainRecommendation }, { generateProgrammeFromProfile }] = await Promise.all([
           import('./lib/trainRecommendation.js'),
           import('./services/programmeService.js'),
         ]);
@@ -437,12 +437,14 @@ export default function App(){
           history: [],
         });
         if(recommendation?.programId){
-          const started = startProgramme({
-            store: next,
-            programId: recommendation.programId,
-            availableEquipment: payload.equipment || [],
-          });
-          if(started.started){
+          // Build the first plan with the SAME generator the Train card
+          // previews and its Start button uses, so the days/week, session
+          // length and liked/avoided movements the user just answered are
+          // applied. (Starting the raw template here ignored all three: a
+          // 3-day, 45-minute user was handed a 4-day schedule and started
+          // "missing" sessions in week one.)
+          const started = generateProgrammeFromProfile(next);
+          if(started.programId && started.store?.activeSchedule){
             next = {
               ...started.store,
               onboarding: {
