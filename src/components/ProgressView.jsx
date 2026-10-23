@@ -487,6 +487,12 @@ export default function ProgressView({ store, setStore = null, onStart = null })
                 <ul className="mt-1 space-y-0.5">{lastQuality.whatToChangeNext.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}</ul>
               </div>
             </div>
+            {lastQuality.scoreBreakdown?.length > 0 && (
+              <details className="mt-2" data-testid="quality-breakdown">
+                <summary className="text-[11px] text-ink2 cursor-pointer min-h-[44px] flex items-center">Why this score?</summary>
+                <ul className="space-y-0.5">{lastQuality.scoreBreakdown.map((b, i)=> <li key={i} className="text-[11px] text-ink2 flex justify-between gap-2"><span>{b.label}</span><span className="tabular-nums">{i === 0 ? b.points : (b.points > 0 ? '+' : '') + b.points}</span></li>)}</ul>
+              </details>
+            )}
             <p className="mt-2 text-right text-sm font-black tabular-nums" data-testid="quality-score">{lastQuality.quality}/100</p>
           </div>
         </section>

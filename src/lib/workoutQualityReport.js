@@ -42,6 +42,7 @@ export function workoutQualityReport(session, { readinessLog = [], schedule = nu
   const cfg = resolveArisePriors(config);
   const sc = sessionQuality(session, { readinessLog, config });
   const parts = [];
+  const breakdown = [{ label: 'Starting point (readiness, notes, failed reps)', points: sc.score }];
   let cameFromScore = sc.score; // carried through so engine score + target lens both land in one number
 
   // ── Target lens: completion vs the prescription ──
@@ -68,15 +69,29 @@ export function workoutQualityReport(session, { readinessLog = [], schedule = nu
     if(planned){
       targetHit = achieved >= planned;
       targetDetail = `${achieved}/${planned} sets met their rep target`;
-      if(!targetHit) cameFromScore -= cfg.workoutQuality.targetMissPenalty;
-      else cameFromScore += cfg.workoutQuality.targetHitBonus;
+      const d = targetHit ? cfg.workoutQuality.targetHitBonus : -cfg.workoutQuality.targetMissPenalty;
+      cameFromScore += d;
+      breakdown.push({ label: targetHit ? 'Rep targets met' : 'Rep targets missed', points: d });
     }
   }
 
   // ── Sustainable-effort bonus: everything done, nothing ground out. ──
   const allCompleted = totalSets > 0 && completedSets === totalSets;
   const sustainableEffort = allCompleted && sc.avgRpe != null && sc.avgRpe <= cfg.workoutQuality.sustainableEffortMaxRpe;
-  if(sustainableEffort) cameFromScore += cfg.workoutQuality.sustainableEffortBonus;
+  if(sustainableEffort){
+    cameFromScore += cfg.workoutQuality.sustainableEffortBonus;
+    breakdown.push({ label: `Everything done at a sustainable effort (avg RPE ${sc.avgRpe})`, points: cfg.workoutQuality.sustainableEffortBonus });
+  }
+  // RPE is optional: skipping it must not cost points. A clean, fully
+  // completed session with no effort logged earns the same completion credit
+  // (effort is simply unknown), and the report says its read is less certain.
+  const rpeLogged = sc.avgRpe != null;
+  const noFailures = !sc.reasons?.some(r => /failed|missed/.test(r));
+  const completionNoRpe = allCompleted && !rpeLogged && noFailures;
+  if(completionNoRpe){
+    cameFromScore += cfg.workoutQuality.sustainableEffortBonus;
+    breakdown.push({ label: 'Every set completed (no RPE logged, so effort is unknown)', points: cfg.workoutQuality.sustainableEffortBonus });
+  }
 
   // ── Beats / matched previous performance ──
   const beatPrevious = [];
@@ -90,6 +105,7 @@ export function workoutQualityReport(session, { readinessLog = [], schedule = nu
     if(prevBest > 0 && curBest > prevBest * 1.005){
       beatPrevious.push({ exerciseId: block.exerciseId, name, pct: Math.round((curBest / prevBest - 1) * 1000) / 10 });
       cameFromScore += cfg.workoutQuality.prBeatBonus;
+      breakdown.push({ label: `Beat previous best on ${name}`, points: cfg.workoutQuality.prBeatBonus });
     }
   }
 
@@ -121,6 +137,7 @@ export function workoutQualityReport(session, { readinessLog = [], schedule = nu
   if(sc.avgRpe != null && sc.avgRpe >= 9) nextFocus.push('If effort stays ≥9 for two sessions, hold load and collect a clean exposure first.');
   if(readiness != null && readiness < cfg.sessionQuality.score.readinessLow) nextFocus.push('Protect sleep this week; readiness was low before you started lifting.');
   if(targetHit && beatPrevious.length) nextFocus.push('Progression is landing — hold the plan and let repeated clean exposures accumulate.');
+  if(!rpeLogged && !nextFocus.length) nextFocus.push('RPE is optional, but a quick tap next time lets the debrief separate effort from outcome.');
   if(!nextFocus.length) nextFocus.push('Keep logging RPE so the debrief can separate effort from outcome next time.');
 
   return {
@@ -133,6 +150,9 @@ export function workoutQualityReport(session, { readinessLog = [], schedule = nu
     avgRpe: sc.avgRpe,
     target: targetDetail ? { hit: targetHit, detail: targetDetail } : null,
     sustainableEffort,
+    rpeLogged,
+    confidence: rpeLogged ? 'normal' : 'lower',
+    scoreBreakdown: breakdown,
     beatsPrevious: beatPrevious.filter(b => b.exerciseId),
     lowReadiness: readiness != null && readiness < cfg.sessionQuality.score.readinessLow ? readiness : null,
     whatWentWell: wentWell,
