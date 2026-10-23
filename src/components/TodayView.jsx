@@ -115,7 +115,7 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
     line: [
       ob.location && (LOCATIONS.find(l=> l.id === ob.location)?.label || ob.location),
       ob.daysPerWeek ? `${ob.daysPerWeek} days/week` : null,
-      ob.availableMinutes ? `${ob.availableMinutes}-minute sessions` : null,
+      ob.availableMinutes ? `up to ${ob.availableMinutes} min a session` : null,
       ob.level || null,
     ].filter(Boolean).join(' · '),
     kit: (()=> {
