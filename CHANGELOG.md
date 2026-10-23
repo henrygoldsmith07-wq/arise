@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Session score no longer punishes skipped RPE
+- A fully completed session that hit its rep targets scored 58 "Mixed" when RPE was skipped. RPE is now optional: completion earns the same credit, the debrief marks confidence as lower, and Progress has a "Why this score?" breakdown.
+
 ### Find your starting weight (first session on a loaded lift)
 - A loaded exercise with no history and no prescribed load now offers "Not sure what weight? Find it" in the session runner (Standard and Gym Mode). Do one easy set, enter weight, reps and reps-in-reserve, and it suggests a starting load for the programme's rep range; "Use for all sets" fills the empty sets.
 - The estimate is Epley-based, aimed at the bottom of the rep range with ~2 reps in reserve, and always rounded DOWN to a load your kit can make (machine stack step, dumbbell set, plates). Unknown reps-in-reserve is treated as 2 and flagged low-confidence; trials above 15 reps are flagged as a cautious start. It is an estimate, not a tested 1RM.

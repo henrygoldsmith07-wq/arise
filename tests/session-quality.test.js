@@ -153,3 +153,27 @@ describe("PR scan", ()=>{
     assert.ok(r.prs[2].flags.length === 0); // jitter is flagged by not-meaningful, no named flag
   });
 });
+
+import { workoutQualityReport } from "../src/lib/workoutQualityReport.js";
+describe("workout quality: RPE optional", ()=>{
+  const mk = rpe => ({ id:"a", dateISO:"2026-10-20", blocks:[{ exerciseId:"x", sets:[1,2,3].map(()=>({ reps:10, weightKg:40, completed:true, ...(rpe!=null?{rpe}:{}) })) }] });
+  const schedule = { sessions:[{ id:"a", blocks:[{ exerciseId:"x", sets:3, reps:"8-12" }] }] };
+  it("a fully completed, target-hitting session without RPE is not 'Mixed'", ()=>{
+    const r = workoutQualityReport(mk(null), { schedule });
+    assert.ok(r.quality >= 65, `got ${r.quality}`);
+    assert.notEqual(r.band, "Mixed");
+    assert.equal(r.rpeLogged, false);
+    assert.equal(r.confidence, "lower");
+  });
+  it("skipping RPE scores the same as a sustainable RPE", ()=>{
+    assert.equal(workoutQualityReport(mk(null), { schedule }).quality, workoutQualityReport(mk(7), { schedule }).quality);
+  });
+  it("breakdown sums to the score", ()=>{
+    const r = workoutQualityReport(mk(null), { schedule });
+    assert.equal(Math.min(100, Math.max(0, r.scoreBreakdown.reduce((n,b)=>n+b.points,0))), r.quality);
+  });
+  it("failed reps without RPE get no completion credit", ()=>{
+    const s = mk(null); s.blocks[0].sets[2].failed = true;
+    assert.ok(!workoutQualityReport(s, { schedule }).scoreBreakdown.some(b=>/no RPE/.test(b.label)));
+  });
+});
