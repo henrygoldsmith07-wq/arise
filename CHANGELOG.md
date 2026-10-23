@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Onboarding keeps your answers
+- Closing onboarding by accident (Esc, tapping outside, ✕) no longer wipes your answers: they are autosaved to this browser session only (sessionStorage, 24 h max, cleared on save) and restored on reopen with a "Start over" option.
+
 ### Session score no longer punishes skipped RPE
 - A fully completed session that hit its rep targets scored 58 "Mixed" when RPE was skipped. RPE is now optional: completion earns the same credit, the debrief marks confidence as lower, and Progress has a "Why this score?" breakdown.
 

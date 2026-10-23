@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDialogA11y } from '../lib/a11y.js';
+import { saveDraft, loadDraft, clearDraft, draftDiffers } from '../lib/onboardingDraft.js';
 import { EQUIPMENT, EQUIPMENT_PRESETS, LOCATIONS, defaultKitForLocation, GOALS, LEVELS, EXERCISES, exerciseAvailable } from '../lib/data.js';
 import { DEFAULT_PLATE_DENOMINATIONS_KG } from '../lib/plates.js';
 import { asUnit, weightInputToKg, weightInputValue } from '../lib/units.ts';
@@ -23,6 +24,8 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
   const [dumbbellsInput,setDumbbellsInput]=useState(Array.isArray(initial?.plateConfig?.dumbbellsKg) ? displayList(initial.plateConfig.dumbbellsKg) : '');
   const [machineIncrementInput,setMachineIncrementInput]=useState(initial?.plateConfig?.machineIncrementKg != null ? weightInputValue(initial.plateConfig.machineIncrementKg, unit) : '');
   const dialogRef = useRef(null);
+  const [ready,setReady]=useState(false);
+  const [restored,setRestored]=useState(false);
 
   // Reset to initial values only when the dialog opens — not whenever the
   // parent re-creates onClose, which would silently wipe in-progress edits.
@@ -41,6 +44,31 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
     setPlateDenominationsKg(initial?.plateConfig?.platesKg || DEFAULT_PLATE_DENOMINATIONS_KG);
     setDumbbellsInput(Array.isArray(initial?.plateConfig?.dumbbellsKg) ? displayList(initial.plateConfig.dumbbellsKg) : '');
     setMachineIncrementInput(initial?.plateConfig?.machineIncrementKg != null ? weightInputValue(initial.plateConfig.machineIncrementKg, unit) : '');
+    // Restore answers left behind by an accidental close (Esc / outside tap).
+    const draft = loadDraft();
+    const baseline = {
+      goal: initial?.goal || 'general', equipment: initial?.equipment || ['bodyweight'],
+      location: initial?.location || 'home', level: initial?.level || 'Beginner',
+      days: initial?.daysPerWeek || 3, minutes: initial?.availableMinutes || 45,
+    };
+    if(draftDiffers(draft, baseline)){
+      if(draft.goal) setGoal(draft.goal);
+      if(draft.equipment) setEquipment(draft.equipment);
+      if(draft.location) setLocation(draft.location);
+      if(draft.level) setLevel(draft.level);
+      if(draft.days) setDays(draft.days);
+      if(draft.minutes) setMinutes(draft.minutes);
+      if(draft.preferredExerciseIds) setPreferredExerciseIds(draft.preferredExerciseIds);
+      if(draft.dislikedExerciseIds) setDislikedExerciseIds(draft.dislikedExerciseIds);
+      if(draft.barWeightKg != null) setBarWeightKg(draft.barWeightKg);
+      if(draft.plateDenominationsKg) setPlateDenominationsKg(draft.plateDenominationsKg);
+      if(typeof draft.dumbbellsInput === 'string') setDumbbellsInput(draft.dumbbellsInput);
+      if(typeof draft.machineIncrementInput === 'string') setMachineIncrementInput(draft.machineIncrementInput);
+      if(Number.isInteger(draft.step)) setStep(Math.max(0, Math.min(draft.step, 9)));
+      setRestored(true);
+    } else setRestored(false);
+    setReady(true);
+    return ()=> setReady(false);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(()=>{
@@ -51,6 +79,13 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
     requestAnimationFrame(()=> dialogRef.current?.querySelector('button[aria-label="Close"]')?.focus());
     return ()=> window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
+
+  // Autosave on every change so closing never loses answers.
+  useEffect(()=>{
+    if(!open || !ready) return;
+    saveDraft({ goal, equipment, location, level, days, minutes, preferredExerciseIds, dislikedExerciseIds,
+      barWeightKg: Number(barWeightKg) || 0, plateDenominationsKg, dumbbellsInput, machineIncrementInput, step });
+  }, [open, ready, goal, equipment, location, level, days, minutes, preferredExerciseIds, dislikedExerciseIds, barWeightKg, plateDenominationsKg, dumbbellsInput, machineIncrementInput, step]);
 
   // Focus capture/trap/restore for the modal, active only while open.
   const { rootRef, trapTab } = useDialogA11y({ active: open });
@@ -112,6 +147,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
       dislikedExerciseIds,
       plateConfig,
     };
+    clearDraft();
     onComplete(payload);
     onClose();
   };
@@ -338,6 +374,14 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
   ];
 
   const cur = steps[step];
+  const startOver = ()=>{
+    clearDraft();
+    setStep(0); setGoal(initial?.goal || 'general'); setEquipment(initial?.equipment || ['bodyweight']);
+    setLocation(initial?.location || 'home'); setLevel(initial?.level || 'Beginner');
+    setDays(initial?.daysPerWeek || 3); setMinutes(initial?.availableMinutes || 45);
+    setPreferredExerciseIds(initial?.preferredExerciseIds || []); setDislikedExerciseIds(initial?.dislikedExerciseIds || []);
+    setRestored(false);
+  };
 
   return (
     <div ref={rootRef} onKeyDown={trapTab} className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm grid place-items-center p-4" role="dialog" aria-modal="true" aria-label="Onboarding" onClick={(e)=>{ if(e.target===e.currentTarget) onClose(); }}>
@@ -351,6 +395,12 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
             {steps.map((_,i)=> <span key={i} className={`h-1.5 flex-1 rounded-full ${i<=step ? 'bg-ink' : 'bg-line'}`} />)}
           </div>
           <p className="text-[11px] text-ink3 mt-2">Step {step+1} of {steps.length}</p>
+          {restored && (
+            <p className="text-[11px] text-ink3 mt-1" data-testid="onboarding-restored">
+              Picked up where you left off.{' '}
+              <button onClick={startOver} className="underline font-bold text-ink min-h-11 px-1">Start over</button>
+            </p>
+          )}
           {step === 0 && onLoadDemo && (
             <p className="text-[11px] text-ink3 mt-1">
               Just looking?{' '}
