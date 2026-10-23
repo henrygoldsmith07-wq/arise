@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Docs
+- CONTRIBUTING no longer claims there are no open PRs; it points to the live GitHub list.
+
 ### Fixed
 - Today's "Built for you" line now says "up to 60 min a session" (your time ceiling) instead of "60-minute sessions", which contradicted the ~35 min plan beside it.
 
