@@ -59,7 +59,8 @@ training history, health summaries or backup files into an issue: they are
 your data, and issues are public. Diagnose first, share a minimal
 reproduction second.
 
-**Open PRs and branches:** none. The numbered PR series (#17–#35) is fully
+**Open PRs and branches:** see the live list on GitHub (this file does not
+track it, so it cannot go stale). The numbered PR series (#17–#35) is fully
 merged, and PRs #13–#16 were reviewed and closed on 2026-09-17 — #13 as
 stale-completed (its substance already landed on main), #14 and #16 as
 stale/out-of-scope against the current roadmap, and #15 (hosted Google-account

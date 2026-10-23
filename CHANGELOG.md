@@ -14,6 +14,9 @@ the history is the changelog; this file is its human-readable index.
 
 ### First-session load guidance
 - Guided Mode now tells you how to pick a first weight ("start light, a weight you could lift 4–5 reps easier") when a loaded set has no load yet, instead of showing only "log load".
+### Docs
+- CONTRIBUTING no longer claims there are no open PRs; it points to the live GitHub list.
+
 ### Fixed
 - Today's "Built for you" line now says "up to 60 min a session" (your time ceiling) instead of "60-minute sessions", which contradicted the ~35 min plan beside it.
 
