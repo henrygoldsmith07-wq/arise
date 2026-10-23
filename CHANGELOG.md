@@ -12,6 +12,10 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Hevy import that actually imports
+- More → Import from another app now understands Hevy's own "Export workout data" CSV: sets are grouped into the real workouts (titled as in Hevy), warm-up sets are left out so they cannot fake a low working load, lbs exports convert to kg, and exercise names map through an explicit table. Lifts not in the table are listed, never guessed.
+- Bug fix: every CSV import (generic or Hevy) silently produced zero sessions, because imported sessions had no `id` and the merge keys history by id. Imports now get a content-derived id, so re-importing the same file adds nothing twice.
+
 ### Onboarding keeps your answers
 - Closing onboarding by accident (Esc, tapping outside, ✕) no longer wipes your answers: they are autosaved to this browser session only (sessionStorage, 24 h max, cleared on save) and restored on reopen with a "Start over" option.
 

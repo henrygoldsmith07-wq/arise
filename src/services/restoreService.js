@@ -61,5 +61,7 @@ export async function importAppCsv({ text, store, byId, parse, rowsToHistory }){
     sessionCount: entries.length,
     unmappedExercises: parsed.unmappedExercises || [],
     skipped: parsed.skipped,
+    source: parsed.source || 'csv',
+    warmupsDropped: parsed.warmupsDropped || 0,
   };
 }

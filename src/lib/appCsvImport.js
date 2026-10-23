@@ -11,6 +11,8 @@
 // and nothing here touches the store — the caller applies the result through
 // the same preview/confirm import flow as any other import.
 
+import { isHevyCsv, parseHevyCsv, hevyRowsToHistory, stableImportId } from './hevyCsvImport.js';
+
 // Column aliases per logical field. Match is case-insensitive, first hit wins.
 const ALIASES = {
   date: ['date', 'dateISO', 'day', 'workout date', 'date (yyyy-mm-dd)'],
@@ -109,6 +111,7 @@ function normaliseDate(v){
  * @returns {{ rows: Array, unmappedExercises: string[], skipped: number, totalRows: number }}
  */
 export function parseAppCsv(text, { byId = null } = {}){
+  if(isHevyCsv(text)) return parseHevyCsv(text, { byId });
   const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   if(!lines.length) return { rows: [], unmappedExercises: [], skipped: 0, totalRows: 0 };
   const delim = detectDelimiter(lines[0]);
@@ -149,12 +152,14 @@ export function parseAppCsv(text, { byId = null } = {}){
 
 /** Convert parsed rows into Arise history entries (one per day). */
 export function rowsToHistory(rows, { byId = null } = {}){
+  if(rows.length && rows[0].workoutKey) return hevyRowsToHistory(rows);
   const byDate = new Map();
   for(const r of rows){
     if(!byDate.has(r.dateISO)) byDate.set(r.dateISO, []);
     byDate.get(r.dateISO).push(r);
   }
   return [...byDate.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([dateISO, list]) => ({
+    id: stableImportId('csv', dateISO, list.map(r => [r.exerciseId, r.sets])),
     dateISO,
     title: 'Imported session',
     blocks: list.map(r => ({ exerciseId: r.exerciseId, sets: r.sets.map(s => ({ weightKg: s.weightKg ?? 0, reps: s.reps ?? '', completed: true, rpe: s.rpe || '' })) })),

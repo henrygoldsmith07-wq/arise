@@ -265,7 +265,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
         return;
       }
       setStore(result.store);
-      flashMsg(`Imported ${result.rowCount} rows into ${result.sessionCount} sessions${result.unmappedExercises.length ? ` · skipped unknown exercises: ${result.unmappedExercises.slice(0, 5).join(', ')}` : ''}.`, 6000);
+      flashMsg(`Imported ${result.rowCount} ${result.source === 'hevy' ? 'exercises' : 'rows'} into ${result.sessionCount} sessions${result.warmupsDropped ? ` (${result.warmupsDropped} warm-up sets left out)` : ''}${result.unmappedExercises.length ? ` · skipped unknown exercises: ${result.unmappedExercises.slice(0, 5).join(', ')}` : ''}.`, 6000);
     }catch(err){
       flashMsg(String(err.message || err), 6000);
     }
