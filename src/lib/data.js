@@ -401,3 +401,9 @@ export function validateContentWarnings(){
 }
 
 export const PROGRAM_BY_ID = Object.fromEntries(PROGRAMS.map(p => [p.id, p]));
+
+// First-time load guidance: generic technique advice, no invented numbers.
+export function firstLoadHint({ takesLoad, weightKg }){
+  if(!takesLoad || String(weightKg ?? '').trim()) return null;
+  return 'No load yet: start light and build.';
+}

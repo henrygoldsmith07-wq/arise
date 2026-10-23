@@ -12,6 +12,8 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### First-session load guidance
+- Guided Mode now tells you a first-weight hint ("No load yet: start light and build.") when a loaded set has no load yet, instead of showing only "log load".
 ### Docs
 - CONTRIBUTING no longer claims there are no open PRs; it points to the live GitHub list.
 
