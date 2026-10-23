@@ -50,6 +50,11 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
       goal: initial?.goal || 'general', equipment: initial?.equipment || ['bodyweight'],
       location: initial?.location || 'home', level: initial?.level || 'Beginner',
       days: initial?.daysPerWeek || 3, minutes: initial?.availableMinutes || 45,
+      preferredExerciseIds: initial?.preferredExerciseIds || [], dislikedExerciseIds: initial?.dislikedExerciseIds || [],
+      barWeightKg: Number(initial?.plateConfig?.barWeightKg ?? 20) || 0,
+      plateDenominationsKg: initial?.plateConfig?.platesKg || DEFAULT_PLATE_DENOMINATIONS_KG,
+      dumbbellsInput: Array.isArray(initial?.plateConfig?.dumbbellsKg) ? displayList(initial.plateConfig.dumbbellsKg) : '',
+      machineIncrementInput: initial?.plateConfig?.machineIncrementKg != null ? weightInputValue(initial.plateConfig.machineIncrementKg, unit) : '',
     };
     if(draftDiffers(draft, baseline)){
       if(draft.goal) setGoal(draft.goal);
@@ -380,6 +385,10 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
     setLocation(initial?.location || 'home'); setLevel(initial?.level || 'Beginner');
     setDays(initial?.daysPerWeek || 3); setMinutes(initial?.availableMinutes || 45);
     setPreferredExerciseIds(initial?.preferredExerciseIds || []); setDislikedExerciseIds(initial?.dislikedExerciseIds || []);
+    setBarWeightKg(initial?.plateConfig?.barWeightKg ?? 20);
+    setPlateDenominationsKg(initial?.plateConfig?.platesKg || DEFAULT_PLATE_DENOMINATIONS_KG);
+    setDumbbellsInput(Array.isArray(initial?.plateConfig?.dumbbellsKg) ? displayList(initial.plateConfig.dumbbellsKg) : '');
+    setMachineIncrementInput(initial?.plateConfig?.machineIncrementKg != null ? weightInputValue(initial.plateConfig.machineIncrementKg, unit) : '');
     setRestored(false);
   };
 
