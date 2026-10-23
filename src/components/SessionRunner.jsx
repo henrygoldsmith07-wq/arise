@@ -10,6 +10,8 @@ import { markRecommendationOverride } from '../lib/longitudinal.js';
 import { buildRunnerRecommendationMeta, recordProspectiveRecommendation, runnerStudy } from '../lib/runnerRecommendations.js';
 import { quickJumps, applyQuickJump, skipTo, restPresetFor, visiblePrescriptionIndexes } from '../lib/gymMode.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
+import { needsWorkingWeight } from '../lib/workingWeight.js';
+import WorkingWeightFinder from './WorkingWeightFinder.jsx';
 import { announce, useDialogA11y } from '../lib/a11y.js';
 import { useWorkoutClock, useWorkoutDraftPersistence, useWorkoutWakeLock } from '../hooks/useWorkoutRuntime.js';
 import { restStartCue } from '../lib/audioCues.js';
@@ -889,6 +891,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     {exerciseTrends.get(b.exerciseId) ? <span> · trend: {exerciseTrends.get(b.exerciseId)}</span> : null}
                   </p>
                   <p className="text-[11px]"><span className="font-bold text-ink">Goal:</span> {goalText}</p>
+                  {needsWorkingWeight({ block: b, history, recommendation, takesLoad: supportsWeighted }) && (
+                    <WorkingWeightFinder exerciseId={b.exerciseId} targetReps={b.reps} unit={unit} plateConfig={plateConfig}
+                      onUse={(kg)=> b.sets.forEach((_,si)=> updateSet(bi, si, { weightKg: kg }))} />
+                  )}
 
                   <details className="mt-1.5">
                     <summary className="text-[11px] text-ink3 cursor-pointer select-none">Details & rationale</summary>

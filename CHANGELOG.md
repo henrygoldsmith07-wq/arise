@@ -12,6 +12,12 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Find your starting weight (first session on a loaded lift)
+- A loaded exercise with no history and no prescribed load now offers "Not sure what weight? Find it" in the session runner (Standard and Gym Mode). Do one easy set, enter weight, reps and reps-in-reserve, and it suggests a starting load for the programme's rep range; "Use for all sets" fills the empty sets.
+- The estimate is Epley-based, aimed at the bottom of the rep range with ~2 reps in reserve, and always rounded DOWN to a load your kit can make (machine stack step, dumbbell set, plates). Unknown reps-in-reserve is treated as 2 and flagged low-confidence; trials above 15 reps are flagged as a cautious start. It is an estimate, not a tested 1RM.
+- Build now minifies with terser (2 passes): total JS 404.8 → ~399.5 kB gz with the feature included, so the budget (405 kB, unchanged) has real headroom again.
+- New `tests/working-weight.test.js`.
+
 ### Faster first paint: boot bundle 114 kB → 60 kB gz
 - The boot-time integrity gate imported the whole export/sync/evidence graph just to reuse one validator. The validator now lives in `src/lib/storeValidation.js` (re-exported from `export.js`, behaviour unchanged), so export, longitudinal evaluation, study, priors and progression load only with the screens that use them.
 - Rollup groups that code into three shared lazy chunks (`evidence`, `engine`, `evidence-core`), each under the largest-lazy budget. Total stays at 404.8 / 405 kB (budget unchanged); boot drops 114.4 → 60.2 kB gz.

@@ -15,6 +15,8 @@ export default defineConfig({
     // browser-specific down-transforms without narrowing the app to a bleeding-
     // edge target. Keep bundle budgets fixed; new runtime code must fit them.
     target: 'es2020',
+    minify: 'terser',
+    terserOptions: { format: { comments: false }, compress: { passes: 1 } },
     rollupOptions: {
       output: {
         // data.js is shared by most feature routes. Without an explicit chunk

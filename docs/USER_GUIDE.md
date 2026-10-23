@@ -34,6 +34,7 @@ progress → taking care of your data.
   exercise at a time, large touch targets, swipe right to complete / left to
   mark a set failed, long-press to edit, and a load numpad with equipment-aware
   quick-add buttons (plates, dumbbell steps, machine increments).
+- First time on a loaded lift with no history? Tap **Not sure what weight? Find it** on the exercise: do one easy set, enter weight, reps and how many you had left, and you get a starting weight (an estimate, rounded down to what your kit can load).
 - **Rest timer** auto-starts after a completed set (configurable in More).
   It announces the last seconds with sound/haptics/voice per your settings,
   keeps running in a dock while you browse, and can hold the screen awake.
