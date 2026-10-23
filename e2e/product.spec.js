@@ -337,6 +337,12 @@ test.describe('Prospective prescription capture', () => {
     await expect(saveBtn).toBeEnabled({ timeout: 5000 });
     await saveBtn.click();
 
+    // Saving is async (lazy chunks load first): wait for the draft to clear
+    // rather than reading the store in the same tick as the click.
+    await expect.poll(() => page.evaluate(async () => {
+      const { loadStore } = await import('/src/lib/store.js');
+      return !loadStore().activeWorkout;
+    }), { timeout: 8000, message: 'draft cleared after save' }).toBe(true);
     const saved = await page.evaluate(async () => {
       const { loadStore } = await import('/src/lib/store.js');
       const store = loadStore();

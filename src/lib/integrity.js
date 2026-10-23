@@ -15,7 +15,7 @@
 // the same per-entry resilience loadStore already applies to history. The
 // user sees a notice, never a crash, and never silent corruption.
 
-import { validateStoreData } from './export.js';
+import { validateStoreData } from './storeValidation.js';
 import { idbPut, idbGet, idbGetAll, idbDelete } from './idb.js';
 import { normaliseHistory } from './store.js';
 
