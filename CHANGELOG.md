@@ -12,6 +12,12 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Faster first paint: boot bundle 114 kB → 60 kB gz
+- The boot-time integrity gate imported the whole export/sync/evidence graph just to reuse one validator. The validator now lives in `src/lib/storeValidation.js` (re-exported from `export.js`, behaviour unchanged), so export, longitudinal evaluation, study, priors and progression load only with the screens that use them.
+- Rollup groups that code into three shared lazy chunks (`evidence`, `engine`, `evidence-core`), each under the largest-lazy budget. Total stays at 404.8 / 405 kB (budget unchanged); boot drops 114.4 → 60.2 kB gz.
+- New `tests/bootGraph.test.js` fails if the first-paint import graph regains any of those modules.
+
+
 ### First-session load guidance
 - Guided Mode now tells you a first-weight hint ("No load yet: start light and build.") when a loaded set has no load yet, instead of showing only "log load".
 ### Docs

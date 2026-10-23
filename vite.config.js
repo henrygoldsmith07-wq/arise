@@ -5,6 +5,7 @@ import pkg from './package.json';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  esbuild: { legalComments: 'none' },
   // Injected for export metadata (exportPolicy.js getAppVersion).
   define: { __ARISE_APP_VERSION__: JSON.stringify(pkg.version) },
   base: './',
@@ -20,9 +21,18 @@ export default defineConfig({
         // Rollup hoists it into index.js, making a rarely edited 200 kB source
         // catalogue part of first paint. Keep it as a shared dependency while
         // preserving React's existing vendor grouping/compression behavior.
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          catalogue: ['./src/lib/data.js'],
+        //
+        // `engine` groups the evidence/progression modules that only lazy
+        // routes and post-boot services reach (since integrity.js stopped
+        // importing export.js). One shared chunk compresses better than five
+        // small ones, each repeating its own import/export headers.
+        manualChunks(id){
+          if(/node_modules\/(react|react-dom)\//.test(id)) return 'vendor';
+          if(id.endsWith('/src/lib/data.js')) return 'catalogue';
+          if(/\/src\/lib\/(longitudinal|longitudinalCore|evaluation|trainingExperiments|export|exportPolicy)\.js$/.test(id)) return 'evidence';
+          if(/\/src\/lib\/(progression|progressionModel|substitutions)\.js$/.test(id)) return 'engine';
+          if(/\/src\/lib\/(priors|study)\.js$/.test(id)) return 'evidence-core';
+          return undefined;
         },
       },
     },
