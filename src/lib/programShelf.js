@@ -19,6 +19,7 @@
 // Pure + deterministic; no network.
 
 import { recommendTemplate, applyEquipmentSubstitutions, equipmentCoverage } from './templates.js';
+import { RIDER_UPPER_3X } from './data/programs-rider.js';
 import { PROGRAM_BY_ID, scheduleProgram, exerciseAvailable } from './data.js';
 import { blockDurationMinutes } from './programming.js';
 
@@ -41,6 +42,16 @@ function measuredSessionMinutes(program){
   return avg > 0 ? avg : null;
 }
 
+export const ENDURANCE_SPORTS = Object.freeze(['cycling', 'running', 'triathlon']);
+
+// An athlete who rides/runs/races is offered the rider plan first, but only
+// when their kit has machines or cables (the plan's own equipment) — it is a
+// deliberate pick, never forced, and the ranked list follows it unchanged.
+export function wantsRiderPlan(onboarding, kit){
+  if(!ENDURANCE_SPORTS.includes(onboarding?.sport)) return false;
+  return kit.includes('machine') || kit.includes('cable');
+}
+
 export function programShelf({ onboarding = null, customTemplates = [], history = [], availableEquipment = [], limit = 5 } = {}){
   if(!onboarding) return null;
   const kit = kitWithBodyweight(availableEquipment);
@@ -55,8 +66,14 @@ export function programShelf({ onboarding = null, customTemplates = [], history 
     extraTemplates:liveCustoms,
   });
 
+  const riderPick = wantsRiderPlan(onboarding, kit)
+    ? { id:RIDER_UPPER_3X.id, programId:RIDER_UPPER_3X.id, isCustom:false, name:RIDER_UPPER_3X.name, level:RIDER_UPPER_3X.level,
+        reasons:[`Built for ${onboarding.sport}: upper body carries the volume, legs get one short easy block (2 sets max).`], score:Infinity }
+    : null;
+  const candidates = riderPick ? [riderPick, ...ranked.filter(t=> t.programId !== riderPick.programId)] : ranked;
+
   const items = [];
-  for(const template of ranked){
+  for(const template of candidates){
     if(items.length >= limit) break;
     const program = template.isCustom ? template.program : PROGRAM_BY_ID[template.programId];
     if(!program?.weeks?.length) continue;
