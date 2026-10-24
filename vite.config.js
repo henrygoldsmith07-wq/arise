@@ -16,7 +16,7 @@ export default defineConfig({
     // edge target. Keep bundle budgets fixed; new runtime code must fit them.
     target: 'es2020',
     minify: 'terser',
-    terserOptions: { format: { comments: false }, compress: { passes: 1 } },
+    terserOptions: { format: { comments: false }, compress: { passes: 2, pure_getters: true } },
     rollupOptions: {
       output: {
         // data.js is shared by most feature routes. Without an explicit chunk

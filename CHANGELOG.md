@@ -12,6 +12,10 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Stalled-lift deload suggestion
+- Progress now says "Stalled 3 sessions" when a lift's last three sessions haven't beaten its earlier best e1RM, and proposes the same reps at about 10% less load (snapped to a load your kit can make). New `src/lib/stallDeload.js` + tests; terser now runs two passes to keep the bundle inside budget.
+
+
 ### Onboarding exercise picker
 - The "Fine-tune preferences" step no longer shows one flat ~60-row list. Exercises are grouped by muscle in collapsible sections (each header shows "N liked · M avoided"), with a labelled search box (case/accent-insensitive, gym shorthand such as `db`, `rdl`, `lat`, `pec`), muscle filter chips, a "Show my picks" toggle, a live "Showing N of M" count and a "No exercises match…" empty state with a clear-search action.
 - Like/Avoid buttons are now 44px touch targets (were ~24px) with accessible names that include the exercise ("Like Lat Pulldown") and `aria-pressed` state. Like and Avoid stay mutually exclusive, and choices still persist in the onboarding draft.

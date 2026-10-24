@@ -26,6 +26,7 @@ import { exerciseHistorySummary, plateauDetection, programAdherence, recommendat
 import { badSessionAttribution, plateauAttribution } from '../lib/sessionQuality.js';
 import { workoutQualityReport } from '../lib/workoutQualityReport.js';
 import { investigatePlateau } from '../lib/plateauInvestigation.js';
+import { stallDeloadSuggestion } from '../lib/stallDeload.js';
 import { evaluateExperiment, experimentDaysRemaining, EXPERIMENT_PRESETS } from '../lib/trainingExperiments.js';
 import { suggestNextExperiment, startExperiment, concludeExperimentById, cancelExperimentById, deleteExperiment } from '../services/experimentService.js';
 import TrainingProfileCard from './TrainingProfileCard.jsx';
@@ -171,6 +172,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       rows: pts.map((p,i)=> ({ session: i + 1, date: p.dateISO || '', e1rm: Math.round(p.observed * 10) / 10 })),
     };
   }, [history, exerciseId, unitsPref]);
+  const stallDeload = useMemo(()=> exerciseId ? stallDeloadSuggestion(history, exerciseId, { equipment: EXERCISE_BY_ID[exerciseId]?.equipment?.[0] || 'machine' }) : null, [history, exerciseId]);
   const plateau = useMemo(()=> exerciseId ? plateauDetection(history, exerciseId, { readinessLog: store.readinessLog || [] }) : null, [history, exerciseId, store.readinessLog]);
   const deloadValidation = useMemo(()=> validateDeloadLogic({ history, readinessLog: store.readinessLog || [] }), [history, store.readinessLog]);
   const calibration = useMemo(()=> recommendationCalibration(history, {
@@ -772,6 +774,11 @@ export default function ProgressView({ store, setStore = null, onStart = null })
               <span className={plateau?.detected ? 'font-bold text-review' : ''}>{plateau?.detected ? 'Plateau detected' : plateau?.status === 'fatigue' ? 'Fatigue signal' : 'No plateau'}</span>
             </div>
             <p className="text-xs text-ink3">{plateau?.reason || 'Keep logging consistent sets before judging a plateau.'}</p>
+            {stallDeload?.stalled && (
+              <div className="rounded-xl border border-review/40 bg-reviewsoft px-3 py-2 text-xs" data-testid="stall-deload" role="status">
+                <strong>Stalled {stallDeload.sessions} sessions.</strong> Try a deload: {stallDeload.reps} reps at {fmtWeight(stallDeload.loadKg, unitsPref)} (about −10% from {fmtWeight(stallDeload.fromKg, unitsPref)}), then build back — or swap the exercise.
+              </div>
+            )}
             {trendBand && (
               <figure className="rounded-xl border border-line bg-surface2 px-3 py-2">
                 <svg viewBox="0 0 320 84" className="w-full h-20" role="img" aria-hidden="true" focusable="false">
