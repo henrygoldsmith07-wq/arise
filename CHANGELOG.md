@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Warm-up ramp from the working-weight finder
+- Accepting the finder's load now also builds that lift's warm-up ramp (50/70/85%) from it, so a first-ever session no longer shows an empty warm-up list.
+
 ### Rider Upper 2×Week + why legs are capped
 - New 2-day rider plan for heavy ride weeks (2 gym days or 4+ ride days); the programme shelf picks it automatically and explains why leg work is capped. Leg sets stay ≤2 per session.
 
