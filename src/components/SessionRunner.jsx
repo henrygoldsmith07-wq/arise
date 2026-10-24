@@ -291,7 +291,8 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     studyEnrollment,
     policy:appPolicy,
     previousForExercise:(exerciseId)=> lastExerciseSets(history, exerciseId),
-  }),[blocks,history,session.dateISO,plateConfig,study,studyEnrollment,appPolicy]);
+    deloadTargets:gymPrefs?.deloadTargets || null,
+  }),[blocks,history,session.dateISO,plateConfig,study,studyEnrollment,appPolicy,gymPrefs?.deloadTargets]);
 
   // Exercise intelligence (P3.11): the progression trend for each lift in
   // this session — best e1RM per exposure, last four exposures, direction

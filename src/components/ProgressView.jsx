@@ -26,7 +26,8 @@ import { exerciseHistorySummary, plateauDetection, programAdherence, recommendat
 import { badSessionAttribution, plateauAttribution } from '../lib/sessionQuality.js';
 import { workoutQualityReport } from '../lib/workoutQualityReport.js';
 import { investigatePlateau } from '../lib/plateauInvestigation.js';
-import { stallDeloadSuggestion } from '../lib/stallDeload.js';
+import { stallDeloadSuggestion, acceptDeloadTarget, clearDeloadTarget, activeDeloadTarget } from '../lib/stallDeload.js';
+import { patchGymPreferences } from '../services/settingsService.js';
 import { evaluateExperiment, experimentDaysRemaining, EXPERIMENT_PRESETS } from '../lib/trainingExperiments.js';
 import { suggestNextExperiment, startExperiment, concludeExperimentById, cancelExperimentById, deleteExperiment } from '../services/experimentService.js';
 import TrainingProfileCard from './TrainingProfileCard.jsx';
@@ -776,7 +777,8 @@ export default function ProgressView({ store, setStore = null, onStart = null })
             <p className="text-xs text-ink3">{plateau?.reason || 'Keep logging consistent sets before judging a plateau.'}</p>
             {stallDeload?.stalled && (
               <div className="rounded-xl border border-review/40 bg-reviewsoft px-3 py-2 text-xs" data-testid="stall-deload" role="status">
-                <strong>Stalled {stallDeload.sessions} sessions.</strong> Try a deload: {stallDeload.reps} reps at {fmtWeight(stallDeload.loadKg, unitsPref)} (about −10% from {fmtWeight(stallDeload.fromKg, unitsPref)}), then build back — or swap the exercise.
+                <strong>Stalled {stallDeload.sessions} sessions.</strong> Deload: {stallDeload.reps} reps at {fmtWeight(stallDeload.loadKg, unitsPref)} (−10% from {fmtWeight(stallDeload.fromKg, unitsPref)}), then rebuild, or swap it.
+                {typeof setStore === 'function' && (()=>{ const on = activeDeloadTarget(store.gymPrefs?.deloadTargets, exerciseId, history); return <button type="button" className="mt-2 block min-h-[44px] rounded-lg border border-line px-3 font-semibold" data-testid={on ? 'stall-deload-undo' : 'stall-deload-accept'} onClick={()=> setStore(patchGymPreferences(store, on ? clearDeloadTarget(store.gymPrefs, exerciseId) : acceptDeloadTarget(store.gymPrefs, exerciseId, stallDeload, new Date().toISOString())))}>{on ? 'Next target set — undo' : 'Use as my next target'}</button>; })()}
               </div>
             )}
             {trendBand && (
