@@ -12,6 +12,10 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Onboarding asks if you ride, run or race
+- New optional sport question on the goal step (No / Cycling / Running / Triathlon). Answering one pins Rider Upper 3×Week first on Train's programme shelf when your kit has machines or cables, with the reason shown. Stored on-device only.
+
+
 ### Hevy import that actually imports
 - More → Import from another app now understands Hevy's own "Export workout data" CSV: sets are grouped into the real workouts (titled as in Hevy), warm-up sets are left out so they cannot fake a low working load, lbs exports convert to kg, and exercise names map through an explicit table. Lifts not in the table are listed, never guessed.
 - Bug fix: every CSV import (generic or Hevy) silently produced zero sessions, because imported sessions had no `id` and the merge keys history by id. Imports now get a content-derived id, so re-importing the same file adds nothing twice.

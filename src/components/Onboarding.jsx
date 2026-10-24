@@ -6,12 +6,20 @@ import { DEFAULT_PLATE_DENOMINATIONS_KG } from '../lib/plates.js';
 import { asUnit, weightInputToKg, weightInputValue } from '../lib/units.ts';
 
 
+const SPORTS = [
+  { id:'none', label:'No' },
+  { id:'cycling', label:'Cycling' },
+  { id:'running', label:'Running' },
+  { id:'triathlon', label:'Triathlon' },
+];
+
 export default function Onboarding({ open, onClose, onComplete, initial, units = 'kg', onLoadDemo = null }){
   const unit = asUnit(units);
   const toKg = (value)=> Number(weightInputToKg(value, unit));
   const displayList = (values)=> (values || []).map((value)=> weightInputValue(value, unit)).join(', ');
   const [step,setStep]=useState(0);
   const [goal,setGoal]=useState(initial?.goal || 'general');
+  const [sport,setSport]=useState(initial?.sport || 'none');
   const [equipment,setEquipment]=useState(initial?.equipment || ['bodyweight']);
   const [location,setLocation]=useState(initial?.location || 'home');
   const [level,setLevel]=useState(initial?.level || 'Beginner');
@@ -33,6 +41,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
     if(!open) return;
     setStep(0);
     setGoal(initial?.goal || 'general');
+    setSport(initial?.sport || 'none');
     setEquipment(initial?.equipment || ['bodyweight']);
     setLocation(initial?.location || 'home');
     setLevel(initial?.level || 'Beginner');
@@ -143,6 +152,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
     }
     const payload = {
       goal,
+      sport,
       equipment: equipment.length ? equipment : ['bodyweight'],
       location,
       level,
@@ -191,6 +201,13 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
               <span className="block font-bold">{g.label}</span><span className={`block text-xs ${goal===g.id ? 'text-bg/80' : 'text-ink3'}`}>{g.hint}</span>
             </button>
           ))}
+          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3 pt-1">Do you also ride, run or race?</p>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Endurance sport">
+            {SPORTS.map(o=> (
+              <button key={o.id} type="button" aria-pressed={sport===o.id} onClick={()=> setSport(o.id)} className={`min-h-11 rounded-xl border px-3 text-sm font-semibold ${sport===o.id ? 'bg-ink text-bg border-ink' : 'bg-surface border-line hover:border-ink3'}`}>{o.label}</button>
+            ))}
+          </div>
+          {sport !== 'none' && <p className="text-xs text-ink3">We’ll offer an upper-body-first plan that keeps leg work short so training doesn’t leave you heavy for your sessions. Optional, and it stays on your device.</p>}
         </div>
       )
     },
