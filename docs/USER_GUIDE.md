@@ -20,6 +20,14 @@ progress → taking care of your data.
    fewer days than the programme was written for, its sessions **rotate**
    week to week (a 3-day user on a 4-day upper/lower gets every upper and
    lower session in turn) rather than one session being dropped for good.
+   The last step, **Fine-tune preferences**, is where you mark movements to
+   **Like** (preferred when substituting) or **Avoid** (never prescribed).
+   Exercises are grouped by muscle — tap a group to open it; each header
+   shows how many you've liked and avoided. Type in the search box to find a
+   lift by name, muscle or kit; gym shorthand works too (`db` for dumbbell,
+   `rdl` for Romanian deadlift, `lat` for pulldowns, `pec`/`chest`). Muscle
+   chips narrow the list, and **Show my picks** lists only what you've marked.
+   Liking a movement clears an Avoid on it and vice versa.
 2. **Today** is the home screen. It shows the session scheduled for today —
    or "up next" on rest days — and nothing else competes with it.
 3. **Train → pick a program** creates a dated schedule. The schedule lives
