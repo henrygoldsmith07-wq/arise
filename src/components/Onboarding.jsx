@@ -4,6 +4,7 @@ import { saveDraft, loadDraft, clearDraft, draftDiffers } from '../lib/onboardin
 import { EQUIPMENT, EQUIPMENT_PRESETS, LOCATIONS, defaultKitForLocation, GOALS, LEVELS, EXERCISES, exerciseAvailable } from '../lib/data.js';
 import { DEFAULT_PLATE_DENOMINATIONS_KG } from '../lib/plates.js';
 import { asUnit, weightInputToKg, weightInputValue } from '../lib/units.ts';
+import ExercisePreferencePicker from './ExercisePreferencePicker.jsx';
 
 
 const SPORTS = [
@@ -374,23 +375,13 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
             <span className="rounded-full border border-success/40 bg-success/10 px-2 py-1">Like = prefer when substituting</span>
             <span className="rounded-full border border-review/40 bg-reviewsoft px-2 py-1">Avoid = do not prescribe</span>
           </div>
-          <div className="max-h-72 overflow-auto space-y-1.5 pr-1">
-            {preferenceExercises.map(ex=> {
-              const liked = preferredExerciseIds.includes(ex.id);
-              const avoided = dislikedExerciseIds.includes(ex.id);
-              return (
-                <div key={ex.id} className="flex items-center gap-2 rounded-xl border border-line bg-surface2 px-3 py-2">
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold truncate">{ex.name}</span>
-                    <span className="block text-[11px] text-ink3">{ex.muscle} • {ex.equipment.join(', ')}</span>
-                  </span>
-                  <button onClick={()=> togglePreference(ex.id, 'preferred')} aria-pressed={liked} className={`rounded-lg border px-2 py-1 text-[11px] font-bold ${liked ? 'bg-success text-bg border-success' : 'bg-surface border-line text-ink3'}`}>Like</button>
-                  <button onClick={()=> togglePreference(ex.id, 'disliked')} aria-pressed={avoided} className={`rounded-lg border px-2 py-1 text-[11px] font-bold ${avoided ? 'bg-review text-bg border-review' : 'bg-surface border-line text-ink3'}`}>Avoid</button>
-                </div>
-              );
-            })}
-          </div>
-          <p className="text-[11px] text-ink3">{preferredExerciseIds.length} liked • {dislikedExerciseIds.length} avoided. You can change these choices by editing onboarding.</p>
+          <ExercisePreferencePicker
+            exercises={preferenceExercises}
+            preferredIds={preferredExerciseIds}
+            dislikedIds={dislikedExerciseIds}
+            onToggle={togglePreference}
+          />
+          <p className="text-[11px] text-ink3">You can change these choices later by editing onboarding.</p>
         </div>
       )
     },

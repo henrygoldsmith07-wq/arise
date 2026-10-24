@@ -31,6 +31,13 @@ export default defineConfig({
         manualChunks(id){
           if(/node_modules\/(react|react-dom)\//.test(id)) return 'vendor';
           if(id.endsWith('/src/lib/data.js')) return 'catalogue';
+          // Tiny dependency-free helpers shared only by lazy routes that
+          // already load the catalogue. As their own chunks each paid gzip
+          // + import/export overhead; folding them into the catalogue saves
+          // ~0.9 kB total gz JS. Boot is unchanged and every importer already
+          // imports the catalogue (routes that load it early, e.g. Today, pick
+          // up ~1.5 kB gz of helpers they did not need before).
+          if(/\/src\/lib\/(units\.ts|experienceMode\.js|voiceCoach\.js|trainSurface\.js)$/.test(id)) return 'catalogue';
           if(/\/src\/lib\/(longitudinal|longitudinalCore|evaluation|trainingExperiments|export|exportPolicy)\.js$/.test(id)) return 'evidence';
           if(/\/src\/lib\/(progression|progressionModel|substitutions)\.js$/.test(id)) return 'engine';
           if(/\/src\/lib\/(priors|study)\.js$/.test(id)) return 'evidence-core';

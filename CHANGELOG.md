@@ -12,6 +12,11 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Onboarding exercise picker
+- The "Fine-tune preferences" step no longer shows one flat ~60-row list. Exercises are grouped by muscle in collapsible sections (each header shows "N liked · M avoided"), with a labelled search box (case/accent-insensitive, gym shorthand such as `db`, `rdl`, `lat`, `pec`), muscle filter chips, a "Show my picks" toggle, a live "Showing N of M" count and a "No exercises match…" empty state with a clear-search action.
+- Like/Avoid buttons are now 44px touch targets (were ~24px) with accessible names that include the exercise ("Like Lat Pulldown") and `aria-pressed` state. Like and Avoid stay mutually exclusive, and choices still persist in the onboarding draft.
+- Build: four tiny dependency-free helper chunks (units, experienceMode, voiceCoach, trainSurface) now ship inside the shared `catalogue` chunk, which every importer already loads — about 0.9 kB gz less total JS, so the picker fits the unchanged 405 kB budget.
+
 ### Fixed
 - Progression: a "go up" decision on a light load (e.g. 30 kg cable work, where 2.5% rounds to 0.75 kg) used to print "increase 30 → 30 kg" and keep the lifter on the same weight indefinitely. It now always takes at least one real step (1 kg under 20 kg, 2.5 kg to 60 kg, 5 kg above), and stays an increase after rounding onto the lifter's own plate/dumbbell/machine increments.
 
