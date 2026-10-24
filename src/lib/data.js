@@ -85,7 +85,7 @@ export const EXERCISE_TAG_IDS = EXERCISE_TAGS.map(t => t.id);
 import { EXERCISES_PRIMARY } from './data/exercises-primary.js';
 import { EXERCISES_COVERAGE } from './data/exercises-coverage.js';
 import { PROGRAMS as BUILTIN_PROGRAMS, PROGRAM_VERSION_HISTORY as BUILTIN_PROGRAM_VERSION_HISTORY } from './data/programs.js';
-import { RIDER_UPPER_3X, RIDER_UPPER_3X_HISTORY } from './data/programs-rider.js';
+import { RIDER_UPPER_3X, RIDER_UPPER_3X_HISTORY, RIDER_UPPER_2X, RIDER_UPPER_2X_HISTORY } from './data/programs-rider.js';
 export const EXERCISES = [
   ...EXERCISES_PRIMARY,
   ...EXERCISES_COVERAGE,
@@ -205,6 +205,10 @@ export function recommendExercises({ goal, availableEquipment, limit = 8 }) {
 if(!BUILTIN_PROGRAMS.some(p=> p.id === RIDER_UPPER_3X.id)){
   BUILTIN_PROGRAMS.push(RIDER_UPPER_3X);
   BUILTIN_PROGRAM_VERSION_HISTORY.push(...RIDER_UPPER_3X_HISTORY);
+}
+if(!BUILTIN_PROGRAMS.some(p=> p.id === RIDER_UPPER_2X.id)){
+  BUILTIN_PROGRAMS.push(RIDER_UPPER_2X);
+  BUILTIN_PROGRAM_VERSION_HISTORY.push(...RIDER_UPPER_2X_HISTORY);
 }
 export const PROGRAMS = BUILTIN_PROGRAMS;
 export const PROGRAM_VERSION_HISTORY = BUILTIN_PROGRAM_VERSION_HISTORY;

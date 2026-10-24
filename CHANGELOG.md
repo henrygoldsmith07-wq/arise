@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Rider Upper 2×Week + why legs are capped
+- New 2-day rider plan for heavy ride weeks (2 gym days or 4+ ride days); the programme shelf picks it automatically and explains why leg work is capped. Leg sets stay ≤2 per session.
+
 ### Stalled lift: accept the deload as your next target
 - The Progress stalled-lift card now has **Use this as my next target** (with undo). The next session shows that lift at the deload load and reps instead of the engine's usual number; once you log the lift, normal progression resumes. Local only (gymPrefs.deloadTargets).
 

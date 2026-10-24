@@ -19,7 +19,7 @@
 // Pure + deterministic; no network.
 
 import { recommendTemplate, applyEquipmentSubstitutions, equipmentCoverage } from './templates.js';
-import { RIDER_UPPER_3X } from './data/programs-rider.js';
+import { RIDER_UPPER_3X, RIDER_UPPER_2X, RIDER_WHY_LEGS_CAPPED, riderPlanIdFor } from './data/programs-rider.js';
 import { PROGRAM_BY_ID, scheduleProgram, exerciseAvailable } from './data.js';
 import { blockDurationMinutes } from './programming.js';
 
@@ -67,8 +67,11 @@ export function programShelf({ onboarding = null, customTemplates = [], history 
   });
 
   const riderPick = wantsRiderPlan(onboarding, kit)
-    ? { id:RIDER_UPPER_3X.id, programId:RIDER_UPPER_3X.id, isCustom:false, name:RIDER_UPPER_3X.name, level:RIDER_UPPER_3X.level,
-        reasons:[`Built for ${onboarding.sport}: upper body carries the volume, legs get one short easy block (2 sets max).`], score:Infinity }
+    ? (()=>{
+        const plan = riderPlanIdFor(onboarding) === RIDER_UPPER_2X.id ? RIDER_UPPER_2X : RIDER_UPPER_3X;
+        return { id:plan.id, programId:plan.id, isCustom:false, name:plan.name, level:plan.level,
+          reasons:[`Built for ${onboarding.sport}: upper body carries the volume, legs get one short easy block (2 sets max).`, RIDER_WHY_LEGS_CAPPED], score:Infinity };
+      })()
     : null;
   const candidates = riderPick ? [riderPick, ...ranked.filter(t=> t.programId !== riderPick.programId)] : ranked;
 

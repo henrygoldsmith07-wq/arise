@@ -11,7 +11,7 @@ const rider = ()=> PROGRAM_BY_ID['rider-upper-3x'];
 
 test('the rider plan is a selectable built-in, appended after the originals', ()=>{
   assert.ok(rider(), 'rider-upper-3x exists');
-  assert.equal(PROGRAMS[PROGRAMS.length - 1].id, 'rider-upper-3x');
+  assert.equal(PROGRAMS[PROGRAMS.length - 2].id, 'rider-upper-3x');
   assert.equal(PROGRAMS.filter(p=> p.id === 'rider-upper-3x').length, 1, 'appended exactly once');
   assert.equal(PROGRAMS[0].id, 'starter-3x', 'original order unchanged');
   assert.equal(rider().daysPerWeek, 3);
