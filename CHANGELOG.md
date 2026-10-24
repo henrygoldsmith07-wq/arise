@@ -12,6 +12,10 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Stalled lift: accept the deload as your next target
+- The Progress stalled-lift card now has **Use this as my next target** (with undo). The next session shows that lift at the deload load and reps instead of the engine's usual number; once you log the lift, normal progression resumes. Local only (gymPrefs.deloadTargets).
+
+
 ### Stalled-lift deload suggestion
 - Progress now says "Stalled 3 sessions" when a lift's last three sessions haven't beaten its earlier best e1RM, and proposes the same reps at about 10% less load (snapped to a load your kit can make). New `src/lib/stallDeload.js` + tests; terser now runs two passes to keep the bundle inside budget.
 

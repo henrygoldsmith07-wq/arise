@@ -55,3 +55,44 @@ export function stallDeloadSuggestion(
     reps: last.reps,
   };
 }
+
+// ── Accept → next target ────────────────────────────────────────────────────
+// Accepting pins ONE deload target per lift in gymPrefs.deloadTargets. It
+// governs the next session only: once a newer session logs that lift, the pin
+// is spent and the engine resumes. Passing no suggestion clears the pin.
+export const acceptDeloadTarget = (gymPrefs, id, s, acceptedISO) => {
+  const { [id]: _drop, ...rest } = gymPrefs?.deloadTargets || {};
+  return {
+    ...gymPrefs,
+    deloadTargets: s?.stalled ? { ...rest, [id]: { ...s, acceptedISO } } : rest,
+  };
+};
+
+export const clearDeloadTarget = (gymPrefs, id) =>
+  acceptDeloadTarget(gymPrefs, id);
+
+export function activeDeloadTarget(targets, id, history = []) {
+  const t = targets?.[id];
+  const day = String(t?.acceptedISO).slice(0, 10);
+  return t?.loadKg > 0 &&
+    !history.some(
+      (s) =>
+        String(s.dateISO).slice(0, 10) > day &&
+        s.blocks?.some((b) => b.exerciseId === id),
+    )
+    ? t
+    : null;
+}
+
+export function applyDeloadTarget(rec, targets, id, history = []) {
+  const t = activeDeloadTarget(targets, id, history);
+  return t && rec
+    ? {
+        ...rec,
+        load: t.loadKg,
+        reps: t.reps || rec.reps,
+        deload: true,
+        reason: `Deload you accepted (from ${t.fromKg} kg).`,
+      }
+    : rec;
+}

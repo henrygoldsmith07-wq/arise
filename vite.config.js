@@ -41,6 +41,9 @@ export default defineConfig({
           if(/\/src\/lib\/(longitudinal|longitudinalCore|evaluation|trainingExperiments|export|exportPolicy)\.js$/.test(id)) return 'evidence';
           if(/\/src\/lib\/(progression|progressionModel|substitutions)\.js$/.test(id)) return 'engine';
           if(/\/src\/lib\/(priors|study)\.js$/.test(id)) return 'evidence-core';
+          // Small settings leaves that always open together from More: one chunk
+          // instead of four, each repeating gzip + import/export overhead.
+          if(/\/src\/components\/(settings\/(FeedbackSettings|GuidedSettings|AppearanceAccessibilitySettings)|InstallCard)\.jsx$/.test(id)) return 'settings-lite';
           return undefined;
         },
       },

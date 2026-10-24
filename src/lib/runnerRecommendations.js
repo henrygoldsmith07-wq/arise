@@ -2,13 +2,18 @@
 // presentation. Standard, Gym and Guided modes must resolve the same treatment
 // from the same prior-only inputs, then record exactly what was shown.
 
-import { recordRecommendation } from './longitudinal.js';
-import { runComparativeStudy } from './study.js';
-import { studyArmFor } from './studyEnrollment.js';
-import { treatmentRecommendation } from './treatment.js';
+import { recordRecommendation } from "./longitudinal.js";
+import { runComparativeStudy } from "./study.js";
+import { studyArmFor } from "./studyEnrollment.js";
+import { treatmentRecommendation } from "./treatment.js";
+import { applyDeloadTarget } from "./stallDeload.js";
 
-export function runnerStudy(history){
-  try{ return runComparativeStudy(history); }catch{ return null; }
+export function runnerStudy(history) {
+  try {
+    return runComparativeStudy(history);
+  } catch {
+    return null;
+  }
 }
 
 export function runnerRecommendationForBlock({
@@ -18,17 +23,17 @@ export function runnerRecommendationForBlock({
   plateConfig = null,
   study = null,
   studyEnrollment = null,
-  policy = 'standard',
-} = {}){
-  if(!block?.exerciseId) return { arm:null, recommendation:null };
+  policy = "standard",
+} = {}) {
+  if (!block?.exerciseId) return { arm: null, recommendation: null };
   const arm = studyArmFor(studyEnrollment, block.exerciseId);
   const recommendation = treatmentRecommendation({
     block,
     history,
-    asOfDateISO:dateISO,
+    asOfDateISO: dateISO,
     plateConfig,
     study,
-    assignedArm:arm,
+    assignedArm: arm,
     policy,
   });
   return { arm, recommendation };
@@ -41,14 +46,15 @@ export function buildRunnerRecommendationMeta({
   plateConfig = null,
   study = null,
   studyEnrollment = null,
-  policy = 'standard',
+  policy = "standard",
   previousForExercise = null,
-} = {}){
+  deloadTargets = null,
+} = {}) {
   const arms = new Map();
   const recs = new Map();
   const prevs = new Map();
-  for(const block of blocks){
-    if(!block?.exerciseId || arms.has(block.exerciseId)) continue;
+  for (const block of blocks) {
+    if (!block?.exerciseId || arms.has(block.exerciseId)) continue;
     const { arm, recommendation } = runnerRecommendationForBlock({
       block,
       history,
@@ -59,10 +65,21 @@ export function buildRunnerRecommendationMeta({
       policy,
     });
     arms.set(block.exerciseId, arm);
-    recs.set(block.exerciseId, recommendation);
-    if(typeof previousForExercise === 'function') prevs.set(block.exerciseId, previousForExercise(block.exerciseId));
+    recs.set(
+      block.exerciseId,
+      deloadTargets
+        ? applyDeloadTarget(
+            recommendation,
+            deloadTargets,
+            block.exerciseId,
+            history,
+          )
+        : recommendation,
+    );
+    if (typeof previousForExercise === "function")
+      prevs.set(block.exerciseId, previousForExercise(block.exerciseId));
   }
-  return { arms, assigned:arms, recs, prevs };
+  return { arms, assigned: arms, recs, prevs };
 }
 
 export function prospectiveRecommendationRecord({
@@ -73,22 +90,23 @@ export function prospectiveRecommendationRecord({
   session,
   participantId = null,
   measurementConsent = false,
-} = {}){
+} = {}) {
   return {
-    exerciseId:block.exerciseId,
+    exerciseId: block.exerciseId,
     recommendation,
     history,
-    dueDateISO:session.dateISO,
-    targetSessionId:session.id || null,
-    programId:session.programId || null,
-    programVersion:session.programVersion ?? null,
-    targetReps:block.reps || undefined,
-    assignedArm:arm ?? null,
+    dueDateISO: session.dateISO,
+    targetSessionId: session.id || null,
+    programId: session.programId || null,
+    programVersion: session.programVersion ?? null,
+    targetReps: block.reps || undefined,
+    assignedArm: arm ?? null,
     participantId,
-    preferences:measurementConsent === true ? { telemetryEnabled:true } : null,
+    preferences:
+      measurementConsent === true ? { telemetryEnabled: true } : null,
   };
 }
 
-export function recordProspectiveRecommendation(args){
+export function recordProspectiveRecommendation(args) {
   return recordRecommendation(prospectiveRecommendationRecord(args));
 }
