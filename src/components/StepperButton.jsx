@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { isKeyboardActivation } from '../lib/a11y.js';
 
 // StepperButton — a −/+ control built for one thumb and a sweaty palm.
 //
@@ -44,12 +45,24 @@ export default function StepperButton({ label, ariaLabel, onStep, disabled, clas
     }, 450);
   }, [disabled, onStep]);
 
+  // Pointer users step on pointerdown (immediate feedback, hold-to-repeat).
+  // Keyboard and screen-reader users only produce a click event, so without
+  // this mirror the button was focusable but inert (WCAG 2.1.1). Keyboard
+  // activation is exactly ONE step: start() would arm the hold-to-repeat timer
+  // with no pointerup coming to stop it.
+  const stepFromKeyboard = useCallback((e)=> {
+    if(!isKeyboardActivation(e)) return;
+    stop();
+    if(!disabled) onStep();
+  }, [disabled, onStep, stop]);
+
   return (
     <button
       type="button"
       disabled={disabled}
       aria-label={ariaLabel}
       onPointerDown={(e)=> { e.preventDefault(); start(); }}
+      onClick={stepFromKeyboard}
       onPointerUp={stop}
       onPointerLeave={stop}
       onPointerCancel={stop}
