@@ -7,6 +7,7 @@ import { recommendTemplate, instantiateTemplate } from './templates.js';
 import { rankedSubstitutions } from './substitutions.js';
 import { shortWorkoutMode } from './programming.js';
 import { localDateISO } from './dateOnly.js';
+import { nameForDays, sessionsPerWeek } from './programmeName.js';
 
 function dateAt(dateISO){ return new Date(`${dateISO}T00:00:00Z`); }
 function toISO(date){
@@ -158,7 +159,7 @@ export function generateProgramme({
     // The schedule record carries the PROGRAMME's name — the same name the
     // Train hero shows. The template's display name ("Anywhere Template")
     // is builder vocabulary, not what the user picked.
-    name: (template.isCustom ? template.program?.name : PROGRAM_BY_ID[instantiated.programId]?.name) || instantiated.name,
+    name: nameForDays((template.isCustom ? template.program?.name : PROGRAM_BY_ID[instantiated.programId]?.name) || instantiated.name, sessionsPerWeek(timed)),
     startDateISO: start,
     sessions: timed,
     substitutions: preferred.substitutions,

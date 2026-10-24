@@ -20,6 +20,7 @@
 // time caps and substitutions. The onboarding preferred length is labelled
 // as a preference, never displayed as the programme's estimated duration.
 
+import { nameForDays } from './programmeName.js';
 import { recommendTemplate } from './templates.js';
 import { GOALS, PROGRAM_BY_ID } from './data.js';
 import { blockDurationMinutes } from './programming.js';
@@ -149,7 +150,7 @@ export function trainRecommendation({ onboarding = null, customTemplates = [], h
     templateId: top.id,
     programId: top.isCustom ? top.id : top.programId,
     isCustom: !!top.isCustom,
-    name: program.name || top.name,
+    name: nameForDays(program.name || top.name, previewedDaysPerWeek),
     daysPerWeek: previewedDaysPerWeek || program.daysPerWeek || top.daysPerWeek || null,
     level: top.level || program.level || level,
     // Measured from the actual generated schedule (post-cap, post-swap).

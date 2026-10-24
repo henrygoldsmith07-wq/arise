@@ -12,6 +12,10 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Fixed
+- A built-in programme resampled to the days you chose now carries the real day count ("Full Gym 3×Week", not "4×Week") in the Train hero and the saved schedule.
+
+
 ### Onboarding asks if you ride, run or race
 - New optional sport question on the goal step (No / Cycling / Running / Triathlon). Answering one pins Rider Upper 3×Week first on Train's programme shelf when your kit has machines or cables, with the reason shown. Stored on-device only.
 
