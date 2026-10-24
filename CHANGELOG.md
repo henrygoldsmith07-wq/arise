@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Fixed
+- Progression: a "go up" decision on a light load (e.g. 30 kg cable work, where 2.5% rounds to 0.75 kg) used to print "increase 30 → 30 kg" and keep the lifter on the same weight indefinitely. It now always takes at least one real step (1 kg under 20 kg, 2.5 kg to 60 kg, 5 kg above), and stays an increase after rounding onto the lifter's own plate/dumbbell/machine increments.
+
 ### Ride-aware leg scheduling
 - Mark key ride days on the Train tab; leg sessions on a ride day or the day before are flagged and can be moved to the nearest clear day in one tap (never into the past, never onto another session).
 

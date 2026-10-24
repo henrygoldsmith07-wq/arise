@@ -250,10 +250,10 @@ export function recommendNext({ exerciseId, history, targetReps = null, conserva
   // at the top, unknown RPE takes the conservative load step only.
   if(reps < hi) {
     if(effortRir >= 2) return plateAware({ load, reps: Math.min(hi, reps + 1), reason: `Room at RPE ${rpe ?? "/"} — add a rep (${reps}→${Math.min(hi, reps+1)}).`, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
-    const nextLoad = snapLoad(load * (1 + incPct), cfg);
+    const nextLoad = bumpLoad(load, load * (1 + incPct), cfg, trainingAge);
     return plateAware({ load: nextLoad, reps: lo, reason: `Close to failure (RIR ~${effortRir}) — increase ${load} → ${nextLoad} kg and reset to ${lo} reps.`, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
   }
-  const nextLoad = snapLoad(load > 0 ? load * ((conservative || rir === null) ? (1 + incPct) : (1 + incPct*cfg.progression.nonConservativeMultiplier)) : 0, cfg);
+  const nextLoad = load > 0 ? bumpLoad(load, load * ((conservative || rir === null) ? (1 + incPct) : (1 + incPct*cfg.progression.nonConservativeMultiplier)), cfg, trainingAge) : 0;
   return plateAware({ load: nextLoad || load, reps: lo, reason: `You hit the top of ${lo}–${hi} at ${load > 0 ? `${load} kg` : `${reps} reps`} — increase ${load > 0 ? `${load} → ${nextLoad} kg` : `the difficulty`} and reset to ${lo} reps.`, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
 }
 
@@ -684,6 +684,24 @@ export function snapLoad(v, config = null){
   const step = v < 20 ? cfg.under20KgStep : v < 60 ? cfg.under60KgStep : cfg.defaultStep;
   return Math.round(v/step)*step;
 }
+// A "go up" decision must actually go up. A percentage step on a light load
+// (2.5% of 30 kg = 0.75 kg) rounds back onto the same grid point, which used
+// to print "increase 30 → 30 kg" and leave a lifter on the same weight forever
+// (cable curls, lateral raises, machine presses in the 10–30 kg range). Take
+// at least one grid step above the current load.
+export function increaseLoad(load, rawNext, config = null){
+  const snapped = snapLoad(rawNext, config);
+  if(!(load > 0) || snapped > load) return snapped;
+  const cfg = resolveArisePriors(config).progression.loadRounding;
+  const step = load < 20 ? cfg.under20KgStep : load < 60 ? cfg.under60KgStep : cfg.defaultStep;
+  return Math.round((load + step) * 100) / 100;
+}
+// Advanced lifters deliberately get a smaller step that may round to a hold
+// (training-age policy), so only novice/intermediate "go up" decisions are
+// forced to move.
+function bumpLoad(load, rawNext, cfg, trainingAge){
+  return trainingAge?.phase === 'advanced' ? snapLoad(rawNext, cfg) : increaseLoad(load, rawNext, cfg);
+}
 // Exported: the swap-time e1RM carry needs the same equipment dispatch the
 // plate-aware prescription uses, so a carried load lands on the replacement's
 // own achievable increments (never the original lift's).
@@ -703,9 +721,10 @@ function plateAware(result, plateConfig, exerciseId = null){
   if(!plateConfig || !(result?.load > 0)) return result;
   const equipment = exerciseId ? equipmentForExercise(exerciseId) : 'barbell';
   // Legacy barbell-only path uses nearestLoadToPlates directly; newer equipment types use dispatcher.
-  const plateLoad = equipment === 'barbell'
-    ? nearestLoadToPlates(result.load, plateConfig)
-    : nearestAchievableLoad(result.load, { equipment, config: plateConfig });
+  const nearest = target=> equipment === 'barbell'
+    ? nearestLoadToPlates(target, plateConfig)
+    : nearestAchievableLoad(target, { equipment, config: plateConfig });
+  const plateLoad = nearest(result.load);
   if(!plateLoad) return result;
   if(plateLoad.exact) return { ...result, plateLoad, plateEquipment: equipment };
   const suffix = equipment === 'barbell'
