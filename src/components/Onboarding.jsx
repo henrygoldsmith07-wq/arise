@@ -57,7 +57,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
     const draft = loadDraft();
     const baseline = {
       goal: initial?.goal || 'general', equipment: initial?.equipment || ['bodyweight'],
-      location: initial?.location || 'home', level: initial?.level || 'Beginner',
+      location: initial?.location || 'home', sport: initial?.sport || 'none', level: initial?.level || 'Beginner',
       days: initial?.daysPerWeek || 3, minutes: initial?.availableMinutes || 45,
       preferredExerciseIds: initial?.preferredExerciseIds || [], dislikedExerciseIds: initial?.dislikedExerciseIds || [],
       barWeightKg: Number(initial?.plateConfig?.barWeightKg ?? 20) || 0,
@@ -70,6 +70,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
       if(draft.equipment) setEquipment(draft.equipment);
       if(draft.location) setLocation(draft.location);
       if(draft.level) setLevel(draft.level);
+      if(draft.sport) setSport(draft.sport);
       if(draft.days) setDays(draft.days);
       if(draft.minutes) setMinutes(draft.minutes);
       if(draft.preferredExerciseIds) setPreferredExerciseIds(draft.preferredExerciseIds);
@@ -97,9 +98,9 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
   // Autosave on every change so closing never loses answers.
   useEffect(()=>{
     if(!open || !ready) return;
-    saveDraft({ goal, equipment, location, level, days, minutes, preferredExerciseIds, dislikedExerciseIds,
+    saveDraft({ goal, equipment, location, sport, level, days, minutes, preferredExerciseIds, dislikedExerciseIds,
       barWeightKg: Number(barWeightKg) || 0, plateDenominationsKg, dumbbellsInput, machineIncrementInput, step });
-  }, [open, ready, goal, equipment, location, level, days, minutes, preferredExerciseIds, dislikedExerciseIds, barWeightKg, plateDenominationsKg, dumbbellsInput, machineIncrementInput, step]);
+  }, [open, ready, goal, equipment, location, sport, level, days, minutes, preferredExerciseIds, dislikedExerciseIds, barWeightKg, plateDenominationsKg, dumbbellsInput, machineIncrementInput, step]);
 
   // Focus capture/trap/restore for the modal, active only while open.
   const { rootRef, trapTab } = useDialogA11y({ active: open });

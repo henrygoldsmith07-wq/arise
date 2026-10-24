@@ -28,3 +28,10 @@ describe('rider plan on the shelf', () => {
     assert.ok(!shelf.items.some(i=> i.programId === 'rider-upper-3x'));
   });
 });
+
+import { saveDraft as _sd, loadDraft as _ld } from '../src/lib/onboardingDraft.js';
+it('onboarding draft keeps the sport answer', ()=>{
+  const m = new Map(); const storage = { getItem:k=>m.get(k)??null, setItem:(k,v)=>m.set(k,v), removeItem:k=>m.delete(k) };
+  _sd({ goal:'general', sport:'cycling' }, { storage });
+  assert.equal(_ld({ storage }).sport, 'cycling');
+});

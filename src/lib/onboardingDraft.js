@@ -5,7 +5,7 @@
 export const ONBOARDING_DRAFT_KEY = 'arise.onboardingDraft.v1';
 export const ONBOARDING_DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-const STRING_FIELDS = ['goal', 'location', 'level', 'dumbbellsInput', 'machineIncrementInput'];
+const STRING_FIELDS = ['goal', 'location', 'sport', 'level', 'dumbbellsInput', 'machineIncrementInput'];
 const ARRAY_FIELDS = ['equipment', 'preferredExerciseIds', 'dislikedExerciseIds'];
 const NUMBER_FIELDS = ['days', 'minutes', 'barWeightKg', 'step'];
 
