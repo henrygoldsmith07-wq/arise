@@ -12,6 +12,10 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Ride-aware leg scheduling
+- Mark key ride days on the Train tab; leg sessions on a ride day or the day before are flagged and can be moved to the nearest clear day in one tap (never into the past, never onto another session).
+
+
 ### Fixed
 - A built-in programme resampled to the days you chose now carries the real day count ("Full Gym 3×Week", not "4×Week") in the Train hero and the saved schedule.
 

@@ -9,6 +9,7 @@ import { whyChoseBullets } from '../lib/trainSurface.js';
 import { buildEditorTemplate, moveItem, editorSubstitutionPreview } from '../lib/templateEditor.js';
 import { applyEquipmentAdaptation, duplicateCustomTemplate, fallbackProgrammeId, generateProgrammeFromProfile, installSharedTemplate, restoreCustomTemplate, saveCustomTemplate, softDeleteCustomTemplate, startProgramme } from '../services/programmeService.js';
 import ProgressionPreview from './ProgressionPreview.jsx';
+import RideDaysCard from './RideDaysCard.jsx';
 import { programShelf } from '../lib/programShelf.js';
 
 // Evaluator time-to-first-value: the recommendation hero is where a new user
@@ -254,6 +255,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
               ))}
             </ul>
           </details>
+          <RideDaysCard store={store} setStore={setStore} />
           <ProgressionPreview
             program={programMeta(active.programId)}
             history={store.history || []}
