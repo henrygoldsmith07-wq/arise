@@ -184,12 +184,12 @@ test.describe('Progress assessment', () => {
   test('a planned deload dip is contextualised rather than labelled regression', async ({ page }) => {
     const monday = currentMonday();
     const history = [
-      lift('deload-0', daysBefore(monday, 20), 'bench-press-dumbbell', 20, 8),
-      lift('deload-1', daysBefore(monday, 17), 'bench-press-dumbbell', 20, 9),
-      lift('deload-2', daysBefore(monday, 14), 'bench-press-dumbbell', 20, 10),
-      lift('deload-3', daysBefore(monday, 11), 'bench-press-dumbbell', 20, 11),
-      lift('deload-4', daysBefore(monday, 8), 'bench-press-dumbbell', 20, 12),
-      lift('deload-5', daysBefore(monday, 5), 'bench-press-dumbbell', 22.5, 8),
+      lift('deload-0', daysBefore(monday, 14), 'bench-press-dumbbell', 20, 8),
+      lift('deload-1', daysBefore(monday, 12), 'bench-press-dumbbell', 20, 9),
+      lift('deload-2', daysBefore(monday, 10), 'bench-press-dumbbell', 20, 10),
+      lift('deload-3', daysBefore(monday, 8), 'bench-press-dumbbell', 20, 11),
+      lift('deload-4', daysBefore(monday, 6), 'bench-press-dumbbell', 20, 12),
+      lift('deload-5', daysBefore(monday, 4), 'bench-press-dumbbell', 22.5, 8),
       lift('deload-6', daysBefore(monday, 2), 'bench-press-dumbbell', 22.5, 9),
       lift('deload-7', isoDaysAgo(0), 'bench-press-dumbbell', 12.5, 8),
     ];

@@ -25,13 +25,14 @@ test('accepting the stalled-lift deload pins it as the next target and can be un
     const storageModule = await import('/src/lib/storage.js');
     const store = storeModule.loadStore();
     const kgs = [50, 55, 55, 55, 55];
+    const isoAgo = (d) => { const t = new Date(); t.setUTCDate(t.getUTCDate() - d); return t.toISOString().slice(0, 10); };
     storeModule.saveStore({
       ...store,
       preferences:{ ...(store.preferences || {}), telemetryEnabled:false },
       history: kgs.map((kg, i) => ({
         id:`stall-${i}`,
-        dateISO:`2026-09-${String(10 + i).padStart(2, '0')}`,
-        savedAt:`2026-09-${String(10 + i).padStart(2, '0')}T10:00:00Z`,
+        dateISO:isoAgo(12 - i * 3),
+        savedAt:`${isoAgo(12 - i * 3)}T10:00:00Z`,
         title:'Upper',
         blocks:[{ exerciseId:'bench-press-dumbbell', sets:[{ reps:'8', weightKg:String(kg), rpe:'8', completed:true }] }],
       })),
