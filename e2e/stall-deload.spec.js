@@ -43,6 +43,7 @@ test('accepting the stalled-lift deload pins it as the next target and can be un
   await expect(page.getByTestId('stall-deload')).toBeVisible({ timeout:10_000 });
   await page.getByTestId('stall-deload-accept').click();
   await expect(page.getByTestId('stall-deload-undo')).toBeVisible();
+  await page.evaluate(async () => { const m = await import('/src/lib/storage.js'); await m.whenPersisted(); });
   await page.reload();
   await page.getByRole('button', { name:/^Progress$/i }).click();
   await expect(page.getByTestId('stall-deload-undo')).toBeVisible();
