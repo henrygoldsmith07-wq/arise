@@ -16,13 +16,22 @@ test('top of range on a light load always goes up, never "20 → 20 kg"', ()=>{
   }
 });
 
-test('close-to-failure branch also moves up on light loads', ()=>{
+test('hard set inside the range holds the load and asks for one more rep', ()=>{
   const r = recommendNext({
     exerciseId: 'lat-pulldown',
     history: [mk('2026-10-01', 30, 8, 9), mk('2026-10-04', 30, 9, 9)],
     targetReps: '8–12', asOfDateISO: '2026-10-06',
   });
-  assert.ok(r.load > 30, r.reason);
+  assert.equal(r.load, 30, r.reason);
+  assert.equal(r.reps, 10);
+});
+
+test('failing below the range never adds weight; far below eases off', ()=>{
+  const run = (reps, rpe)=> recommendNext({ exerciseId: 'lat-pulldown', history: [mk('2026-10-01', 40, reps, rpe)], targetReps: '8–12', asOfDateISO: '2026-10-06' });
+  const near = run(6, 9.5);
+  assert.equal(near.load, 40); assert.equal(near.reps, 8);
+  const far = run(5, 10);
+  assert.ok(far.load < 40, far.reason);
 });
 
 test('increaseLoad takes one grid step when the percentage rounds away', ()=>{

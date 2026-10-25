@@ -250,8 +250,16 @@ export function recommendNext({ exerciseId, history, targetReps = null, conserva
   // at the top, unknown RPE takes the conservative load step only.
   if(reps < hi) {
     if(effortRir >= 2) return plateAware({ load, reps: Math.min(hi, reps + 1), reason: `Room at RPE ${rpe ?? "/"} — add a rep (${reps}→${Math.min(hi, reps+1)}).`, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
-    const nextLoad = bumpLoad(load, load * (1 + incPct), cfg, trainingAge);
-    return plateAware({ load: nextLoad, reps: lo, reason: `Close to failure (RIR ~${effortRir}) — increase ${load} → ${nextLoad} kg and reset to ${lo} reps.`, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
+    // Double progression: load only rises after the TOP of the range is hit.
+    // A hard set below the range (or inside it) must never add weight.
+    if(load > 0 && reps < lo){
+      if(reps <= lo - 3){
+        const eased = snapLoad(load * 0.95, cfg);
+        if(eased < load) return plateAware({ load: eased, reps: lo, reason: `Only ${reps} reps (range is ${lo}–${hi}) near failure — ease ${load} → ${eased} kg and rebuild to ${lo}.`, belowRange: true, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
+      }
+      return plateAware({ load, reps: lo, reason: `${reps} reps is under the ${lo}–${hi} range — repeat ${load} kg and aim for ${lo} clean reps before adding weight.`, belowRange: true, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
+    }
+    return plateAware({ load, reps: Math.min(hi, reps + 1), reason: `Hard set (RIR ~${effortRir}) and not at ${hi} reps yet — keep ${load} kg and earn one more rep (${reps}→${Math.min(hi, reps+1)}) before adding weight.`, hardHold: true, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
   }
   const nextLoad = load > 0 ? bumpLoad(load, load * ((conservative || rir === null) ? (1 + incPct) : (1 + incPct*cfg.progression.nonConservativeMultiplier)), cfg, trainingAge) : 0;
   return plateAware({ load: nextLoad || load, reps: lo, reason: `You hit the top of ${lo}–${hi} at ${load > 0 ? `${load} kg` : `${reps} reps`} — increase ${load > 0 ? `${load} → ${nextLoad} kg` : `the difficulty`} and reset to ${lo} reps.`, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
