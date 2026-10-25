@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Tap-to-explain RIR
+- A 44px “?” beside the suggested-RIR row in Gym Mode explains RIR in plain words (Esc or tap outside closes). Glossary in `src/lib/glossary.js` also covers RPE, e1RM and double progression for wider rollout.
+
 ### Warm-up ramp from the working-weight finder
 - Accepting the finder's load now also builds that lift's warm-up ramp (50/70/85%) from it, so a first-ever session no longer shows an empty warm-up list.
 
