@@ -9,6 +9,7 @@ import { rirFromRpe, rpeFromRir, stepRir } from '../../lib/sessionRunnerModel.js
 import { recordEvent } from '../../lib/telemetry.js';
 import { swipeRowHandlers, WeightInput } from '../GymModePanel.jsx';
 import StepperButton from '../StepperButton.jsx';
+import JargonHelp from '../JargonHelp.jsx';
 
 export default function SetRow({
   block,
@@ -107,7 +108,7 @@ export default function SetRow({
         done: Done alone must never persist a suggestion. */}
     {rirSuggest && rirSuggest.bi===bi && rirSuggest.si===si && !s.completed && rirFromRpe(s.rpe).trim()==='' && (
       <div role="group" aria-label={`Suggested RIR ${rirSuggest.value} for set ${si+1}`} className="flex items-center gap-1.5 rounded-xl border border-dashed border-line bg-surface2 px-2.5 py-1.5 -mt-1">
-        <span className="text-[11px] text-ink3 flex-1 min-w-0">RIR {rirSuggest.value} suggested from last set</span>
+        <span className="text-[11px] text-ink3 flex-1 min-w-0">RIR {rirSuggest.value} suggested from last set<JargonHelp term="RIR" /></span>
         <button onClick={()=> confirmRirSuggestion(rirSuggest.value)} aria-label={`Use suggested RIR ${rirSuggest.value} for set ${si+1}`} className="min-h-11 px-3 rounded-full bg-ink text-bg text-xs font-bold">Same</button>
         <button onClick={()=> confirmRirSuggestion(stepRir(rirSuggest.value,-1))} aria-label={`Decrease suggested RIR for set ${si+1}`} className="min-h-11 min-w-11 grid place-items-center rounded-full border border-line bg-surface text-sm font-black">−</button>
         <span aria-hidden className="text-xs font-black tabular-nums w-6 text-center">{rirSuggest.value}</span>
