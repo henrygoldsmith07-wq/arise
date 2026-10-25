@@ -14,3 +14,13 @@ describe('glossary', () => {
     for(const e of Object.values(GLOSSARY)) assert.doesNotMatch(e.body, /calorie|protein|diet/i);
   });
 });
+import { jargonIn } from '../src/lib/glossary.js';
+describe('jargonIn', () => {
+  it('finds whole-word terms only', () => {
+    assert.deepEqual(jargonIn('Hold steady or deload if RPE was high'), ['RPE','deload']);
+    assert.deepEqual(jargonIn('Your PRs and RIRs'), []);
+  });
+  it('has deload and PR entries', () => {
+    assert.ok(glossaryEntry('deload')); assert.ok(glossaryEntry('pr'));
+  });
+});

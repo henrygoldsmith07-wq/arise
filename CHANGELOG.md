@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Tap-to-explain jargon in Progress and lift history
+- Progress (best e1RM, trend table, PR cards) and the Gym Mode history sheet now have 44px “?” helpers explaining e1RM and PR; glossary gains Deload and PR plus a whole-word `jargonIn` helper.
+
 ### Per-lift history sheet + 13 kB smaller bundle
 - Gym Mode shows a 44px “History” button under each lift that has logged sets: last five sessions (loads, reps, RIR, best e1RM) and an e1RM sparkline. Lazy-loaded, Esc/tap outside closes.
 - Removed the dedicated analytics Web Worker, which shipped a second ~13 kB gz copy of the evaluation code; the Progress evaluation now runs inline after a yield so the screen paints first.
