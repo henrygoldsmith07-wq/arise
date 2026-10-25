@@ -109,6 +109,27 @@ export function restPresetFor(gymPrefs, exerciseId, fallbackSec){
   return defaultRestPreset(fallbackSec);
 }
 
+// Effort-aware rest: when the user has NOT set their own preset for a lift,
+// a grind (RIR 0 / RPE >= 9.5) earns +30 s and an easy set (RIR >= 3 /
+// RPE <= 6) trims 15 s (never below 45 s, never above 300 s). A remembered
+// preset always wins: their choice is never overridden. Unknown effort = no change.
+export function effortAdjustedRest(baseSec, { rir = null, rpe = null } = {}, { hasUserPreset = false } = {}){
+  const base = Math.round(Number(baseSec) || 0);
+  if(base <= 0 || hasUserPreset) return base;
+  const rirN = rir === null || rir === '' ? NaN : Number(rir);
+  const rpeN = rpe === null || rpe === '' ? NaN : Number(rpe);
+  let r = Number.isFinite(rirN) ? rirN : (Number.isFinite(rpeN) ? 10 - rpeN : NaN);
+  if(!Number.isFinite(r)) return base;
+  if(r <= 0.5) return Math.min(300, base + 30);
+  if(r >= 3) return Math.max(45, base - 15);
+  return base;
+}
+
+export function hasUserRestPreset(gymPrefs, exerciseId){
+  const stored = Number(gymPrefs?.restPresets?.[exerciseId]);
+  return Number.isFinite(stored) && stored > 0;
+}
+
 export function setRestPreset(gymPrefs, exerciseId, seconds){
   const sec = Math.max(0, Math.round(Number(seconds) || 0));
   const next = { ...(gymPrefs?.restPresets || {}) };

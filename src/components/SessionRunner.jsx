@@ -9,7 +9,7 @@ import { substitutionOptions } from '../lib/substitutions.js';
 import { recordEvent, trackFieldFocus, fieldCommitted } from '../lib/telemetry.js';
 import { markRecommendationOverride } from '../lib/longitudinal.js';
 import { buildRunnerRecommendationMeta, recordProspectiveRecommendation, runnerStudy } from '../lib/runnerRecommendations.js';
-import { quickJumps, applyQuickJump, skipTo, restPresetFor, visiblePrescriptionIndexes } from '../lib/gymMode.js';
+import { quickJumps, applyQuickJump, skipTo, restPresetFor, effortAdjustedRest, hasUserRestPreset, visiblePrescriptionIndexes } from '../lib/gymMode.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
 import { needsWorkingWeight, warmupsFromFoundLoad } from '../lib/workingWeight.js';
 import WorkingWeightFinder from './WorkingWeightFinder.jsx';
@@ -551,7 +551,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       }
       // Auto-start the rest countdown unless the user turned it off
       // (preferences.autoRest, default on). Manual Start rest stays as override.
-      if(preferences?.autoRest !== false && appPrefs?.autoRest !== false && hasUnfinishedSet(blocks,bi,si)) startRest(restPresetFor(gymPrefs, block.exerciseId, block.restSec) || block.restSec, EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId, block.exerciseId);
+      if(preferences?.autoRest !== false && appPrefs?.autoRest !== false && hasUnfinishedSet(blocks,bi,si)) startRest(effortAdjustedRest(restPresetFor(gymPrefs, block.exerciseId, block.restSec) || block.restSec, { rir: set.rir, rpe: set.rpe }, { hasUserPreset: hasUserRestPreset(gymPrefs, block.exerciseId) }), EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId, block.exerciseId);
     }else{
       // Undoing a completion is a correction, recorded as its own fact so
       // friction metrics can count undos without guessing from missing rows.
