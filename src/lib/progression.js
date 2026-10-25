@@ -126,6 +126,8 @@ function lastWorkingSet(history, exerciseId, asOfDateISO){
 // Recommend next load/reps from last N sessions for an exercise.
 // Conservative double-progression: first add reps, then add load.
 // Now strategy-aware + personalised + plateau-aware.
+export const COARSE_JUMP_PCT = 0.2;
+export const COARSE_JUMP_EXTRA_REPS = 3;
 export function recommendNext({ exerciseId, history, targetReps = null, conservative = true, strategy, config = null, asOfDateISO = null, calibration = null, plateConfig = null }){
   const cfg = resolveArisePriors(config);
   targetReps = targetReps || cfg.progression.defaultTargetReps;
@@ -262,6 +264,17 @@ export function recommendNext({ exerciseId, history, targetReps = null, conserva
     return plateAware({ load, reps: Math.min(hi, reps + 1), reason: `Hard set (RIR ~${effortRir}) and not at ${hi} reps yet — keep ${load} kg and earn one more rep (${reps}→${Math.min(hi, reps+1)}) before adding weight.`, hardHold: true, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
   }
   const nextLoad = load > 0 ? bumpLoad(load, load * ((conservative || rir === null) ? (1 + incPct) : (1 + incPct*cfg.progression.nonConservativeMultiplier)), cfg, trainingAge) : 0;
+  // Coarse stacks: when the next achievable load is a huge jump (a 5 kg pin on a
+  // 20 kg cable is +25%), stretch the reps past the range ceiling first so the
+  // jump lands on a set the lifter can actually hold, instead of an overload.
+  if(load > 0 && plateConfig){
+    const probe = plateAware({ load: nextLoad || load, reps: lo, reason: '' }, plateConfig, exerciseId);
+    const jumpPct = (probe.load - load) / load;
+    const ceiling = hi + COARSE_JUMP_EXTRA_REPS;
+    if(jumpPct > COARSE_JUMP_PCT && probe.load - (nextLoad || load) >= 1.5 && reps < ceiling){
+      return { load, reps: reps + 1, coarseJump: { jumpKg: Math.round((probe.load - load) * 100) / 100, jumpPct: Math.round(jumpPct * 100), ceiling }, reason: `The next stack step (${load} → ${probe.load} kg) is a ${Math.round(jumpPct * 100)}% jump — stay at ${load} kg and add reps (${reps}→${reps + 1}, up to ${ceiling}) before stepping up.`, strategy: strat, personalised: prate, trainingAge, plateLoad: probe.plateLoad, plateEquipment: probe.plateEquipment, priorsVersion: cfg.version };
+    }
+  }
   return plateAware({ load: nextLoad || load, reps: lo, reason: `You hit the top of ${lo}–${hi} at ${load > 0 ? `${load} kg` : `${reps} reps`} — increase ${load > 0 ? `${load} → ${nextLoad} kg` : `the difficulty`} and reset to ${lo} reps.`, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
 }
 
