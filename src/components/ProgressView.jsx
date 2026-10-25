@@ -622,7 +622,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
               {perf.pbs.map((pr, i)=> (
                 <li key={i} className="text-[11px] text-ink3">
                   <span className="font-bold text-ink">{EXERCISE_BY_ID[pr.exerciseId]?.name || pr.exerciseId}</span> — {pr.kind} · {pr.dateISO}
-                  <span className="block">{pr.why} (est. 1RM {pr.priorE1rmKg} → {pr.e1rmKg} kg)</span>
+                  <span className="block"><JargonHelp term="PR"/>{pr.why} (est. 1RM {pr.priorE1rmKg} → {pr.e1rmKg} kg)</span>
                 </li>
               ))}
             </ul>
@@ -772,7 +772,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
           <>
             <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink3">
               <span><strong className="text-ink">{exerciseSummary.sessions}</strong> exposures</span>
-              <span><strong className="text-ink">{exerciseSummary.best?.e1rm ? fmtWeight(exerciseSummary.best.e1rm, unitsPref) : '—'}</strong> best e1RM</span>
+              <span><strong className="text-ink">{exerciseSummary.best?.e1rm ? fmtWeight(exerciseSummary.best.e1rm, unitsPref) : '—'}</strong> best e1RM<JargonHelp term="e1RM"/></span>
               <span className={plateau?.detected ? 'font-bold text-review' : ''}>{plateau?.detected ? 'Plateau detected' : plateau?.status === 'fatigue' ? 'Fatigue signal' : 'No plateau'}</span>
             </div>
             <p className="text-xs text-ink3">{plateau?.reason || 'Keep logging consistent sets before judging a plateau.'}</p>
@@ -800,7 +800,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
                 <span className="sr-only">{trendBand.summary}</span>
                 <table className="sr-only">
                   <caption>Estimated 1RM per session</caption>
-                  <thead><tr><th scope="col">Session</th><th scope="col">Date</th><th scope="col">e1RM ({unitsPref})</th></tr></thead>
+                  <thead><tr><th scope="col">Session</th><th scope="col">Date</th><th scope="col">e1RM ({unitsPref}) <JargonHelp term="e1RM"/></th></tr></thead>
                   <tbody>
                     {trendBand.rows.map(row=> (
                       <tr key={row.session}><th scope="row">{row.session}</th><td>{row.date}</td><td>{fmtWeight(row.e1rm, unitsPref)}</td></tr>

@@ -14,6 +14,8 @@ the history is the changelog; this file is its human-readable index.
 
 ### Jargon help where RIR/RPE appear
 - Tap-to-explain "?" now sits on the set-list RIR header (and a one-line RIR note on phones), the Progress volume hint (RPE/RIR) and the per-lift history sheet.
+### Tap-to-explain jargon in Progress and lift history
+- Progress (best e1RM, trend table, PR cards) and the Gym Mode history sheet now have 44px “?” helpers explaining e1RM and PR; glossary gains Deload and PR plus a whole-word `jargonIn` helper.
 
 ### Per-lift history sheet + 13 kB smaller bundle
 - Gym Mode shows a 44px “History” button under each lift that has logged sets: last five sessions (loads, reps, RIR, best e1RM) and an e1RM sparkline. Lazy-loaded, Esc/tap outside closes.
