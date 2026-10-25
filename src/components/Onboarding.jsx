@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useDialogA11y } from '../lib/a11y.js';
 import { saveDraft, loadDraft, clearDraft, draftDiffers } from '../lib/onboardingDraft.js';
 import { EQUIPMENT, EQUIPMENT_PRESETS, LOCATIONS, defaultKitForLocation, GOALS, LEVELS, EXERCISES, exerciseAvailable } from '../lib/data.js';
-import { DEFAULT_PLATE_DENOMINATIONS_KG } from '../lib/plates.js';
+import { DEFAULT_PLATE_DENOMINATIONS_KG, coarseStackWarning } from '../lib/plates.js';
 import { asUnit, weightInputToKg, weightInputValue } from '../lib/units.ts';
 import ExercisePreferencePicker from './ExercisePreferencePicker.jsx';
 
@@ -366,6 +366,9 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
               <input id="onboarding-machine-increment" type="number" min="0.25" step="0.5" inputMode="decimal" value={machineIncrementInput} onChange={e=> setMachineIncrementInput(e.target.value)} placeholder={unit === 'lb' ? '5' : '2.5'}
                 className="w-full min-h-10 rounded-lg border border-line bg-surface px-3 text-sm" />
               <p className="text-[11px] text-ink3">Enter the smallest stack jump on your machine — targets snap to real pin positions.</p>
+              {(()=>{ const w = coarseStackWarning(toKg(machineIncrementInput)); return w ? (
+                <p role="status" data-testid="coarse-stack-warning" className="text-[11px] text-warn font-semibold">A {weightInputValue(w.incrementKg, unit)} {unit} step is about {w.pct}% of a typical {weightInputValue(w.typicalLoadKg, unit)} {unit} upper-body load, so each progression would be a big jump. Arise will add reps first; add-on micro-plates ({weightInputValue(w.suggestedKg, unit)} {unit} or less) make smoother progress.</p>
+              ) : null; })()}
             </div>
           )}
               </div>
