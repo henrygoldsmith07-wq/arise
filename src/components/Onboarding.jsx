@@ -21,6 +21,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
   const [step,setStep]=useState(0);
   const [goal,setGoal]=useState(initial?.goal || 'general');
   const [sport,setSport]=useState(initial?.sport || 'none');
+  const [rideDaysPerWeek,setRideDaysPerWeek]=useState(Number(initial?.rideDaysPerWeek) || 0);
   const [equipment,setEquipment]=useState(initial?.equipment || ['bodyweight']);
   const [location,setLocation]=useState(initial?.location || 'home');
   const [level,setLevel]=useState(initial?.level || 'Beginner');
@@ -43,6 +44,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
     setStep(0);
     setGoal(initial?.goal || 'general');
     setSport(initial?.sport || 'none');
+    setRideDaysPerWeek(Number(initial?.rideDaysPerWeek) || 0);
     setEquipment(initial?.equipment || ['bodyweight']);
     setLocation(initial?.location || 'home');
     setLevel(initial?.level || 'Beginner');
@@ -155,6 +157,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
     const payload = {
       goal,
       sport,
+      ...(sport !== 'none' && rideDaysPerWeek ? { rideDaysPerWeek } : {}),
       equipment: equipment.length ? equipment : ['bodyweight'],
       location,
       level,
@@ -209,6 +212,17 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
               <button key={o.id} type="button" aria-pressed={sport===o.id} onClick={()=> setSport(o.id)} className={`min-h-11 rounded-xl border px-3 text-sm font-semibold ${sport===o.id ? 'bg-ink text-bg border-ink' : 'bg-surface border-line hover:border-ink3'}`}>{o.label}</button>
             ))}
           </div>
+          {sport !== 'none' && (
+            <div className="flex flex-col gap-2" data-testid="ride-days-question">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-ink3 pt-1">How many days a week do you ride or train?</p>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Ride days per week">
+                {[1,2,3,4,5,6,7].map(n=> (
+                  <button key={n} type="button" aria-pressed={rideDaysPerWeek===n} onClick={()=> setRideDaysPerWeek(n)} className={`min-h-11 min-w-11 rounded-xl border px-3 text-sm font-semibold ${rideDaysPerWeek===n ? 'bg-ink text-bg border-ink' : 'bg-surface border-line hover:border-ink3'}`}>{n}</button>
+                ))}
+              </div>
+              {rideDaysPerWeek >= 4 && <p className="text-xs text-ink3">4+ ride days: we’ll pick the 2-day heavy-week plan so lifting doesn’t crowd your key rides.</p>}
+            </div>
+          )}
           {sport !== 'none' && <p className="text-xs text-ink3">We’ll offer an upper-body-first plan that keeps leg work short so training doesn’t leave you heavy for your sessions. Optional, and it stays on your device.</p>}
         </div>
       )
