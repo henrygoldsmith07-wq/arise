@@ -15,6 +15,7 @@ the history is the changelog; this file is its human-readable index.
 ### Gym Mode: coarse-jump chip
 - When the stack's next step is a >20% jump, the target row shows "Stay at 20 kg — add reps up to 15" as a 44px chip instead of leaving the held load unexplained.
 
+- Onboarding warns when a machine/cable pin step is over 10% of a typical upper-body load (e.g. a 5 kg pin), suggesting micro-plates.
 ### Coarse weight stacks add reps before a big jump
 When the next achievable machine/cable load would jump more than 20% (e.g. a 5 kg pin on 20 kg), the target stays at the current load and adds reps up to 3 past the range ceiling, then steps up.
 
