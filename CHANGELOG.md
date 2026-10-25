@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Jargon help where RIR/RPE appear
+- Tap-to-explain "?" now sits on the set-list RIR header (and a one-line RIR note on phones), the Progress volume hint (RPE/RIR) and the per-lift history sheet.
+
 ### Per-lift history sheet + 13 kB smaller bundle
 - Gym Mode shows a 44px “History” button under each lift that has logged sets: last five sessions (loads, reps, RIR, best e1RM) and an e1RM sparkline. Lazy-loaded, Esc/tap outside closes.
 - Removed the dedicated analytics Web Worker, which shipped a second ~13 kB gz copy of the evaluation code; the Progress evaluation now runs inline after a yield so the screen paints first.

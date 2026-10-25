@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import JargonHelp from './JargonHelp.jsx';
 import { exerciseSessionHistory, sparklinePoints } from '../lib/exerciseHistory.js';
 import { useDialogA11y } from '../lib/a11y.js';
 import { fmtWeight } from '../lib/units.ts';
@@ -33,6 +34,7 @@ export default function ExerciseHistorySheet({ exerciseId, name, history, unit =
             </li>
           ))}
         </ul>
+        <p className="text-[11px] text-ink3">@2RIR = 2 reps left in the tank<JargonHelp term="RIR" /></p>
       </div>
     </div>
   );
