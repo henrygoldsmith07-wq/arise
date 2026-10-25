@@ -12,6 +12,10 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Best lifting days around key rides
+Ride-days card now suggests the best three weekdays to lift (off ride days, away from the day before, not back-to-back).
+
+
 ### Jargon help where RIR/RPE appear
 - Tap-to-explain "?" now sits on the set-list RIR header (and a one-line RIR note on phones), the Progress volume hint (RPE/RIR) and the per-lift history sheet.
 ### Tap-to-explain jargon in Progress and lift history
