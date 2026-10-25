@@ -34,6 +34,7 @@ export default function ExerciseHistorySheet({ exerciseId, name, history, unit =
             </li>
           ))}
         </ul>
+        <p className="text-[11px] text-ink3">@2RIR = 2 reps left in the tank<JargonHelp term="RIR" /></p>
       </div>
     </div>
   );

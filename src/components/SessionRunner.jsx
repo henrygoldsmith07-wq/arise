@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
+import JargonHelp from './JargonHelp.jsx';
 import { EXERCISE_BY_ID, takesExternalLoad } from '../lib/data.js';
 import { lastExerciseSets } from '../lib/store.js';
 import { strengthSeries } from '../lib/analytics.js';
@@ -953,8 +954,9 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                 <div className="grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)] gap-1 text-[10px] font-bold uppercase tracking-widest text-ink3 px-1 sm:hidden" aria-hidden>
                   <span>#</span><span>Load {unit}</span><span>Reps</span>
                 </div>
+                <p className="sm:hidden text-[11px] text-ink3 -mt-1 px-1">RIR = reps left in the tank<JargonHelp term="RIR" /></p>
                 <div className="hidden sm:grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] gap-1.5 text-[10px] font-bold uppercase tracking-widest text-ink3 px-1">
-                  <span>#</span><span>Load {unit}</span><span>Reps</span><span>RIR</span><span>{b.unilateral?'L/R':''}</span><span>Done</span><span></span>
+                  <span>#</span><span>Load {unit}</span><span>Reps</span><span className="flex items-center normal-case">RIR<JargonHelp term="RIR" /></span><span>{b.unilateral?'L/R':''}</span><span>Done</span><span></span>
                 </div>
                 {b.sets.map((s,si)=> (
                   <SetRow

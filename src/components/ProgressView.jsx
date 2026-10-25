@@ -656,7 +656,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
             {wv.slice(-8).map(w=>{ const max=Math.max(...wv.map(x=>x.vol),1); const h=Math.max(4, Math.round(w.vol/max*48)); return <div key={w.week} title={`${w.week}: ${fmtWeight(w.vol, unitsPref)} volume`} className="flex-1 rounded bg-ink" style={{height:`${h}px`}} />; })}
           </div>
         )}
-        {!!wv.length && <p className="text-xs text-ink3 mt-2">{wv[wv.length-1]?.vol> (wv[wv.length-2]?.vol||0)*1.2 ? `Volume up ${Math.round((wv[wv.length-1].vol/(wv[wv.length-2]?.vol||1)-1)*100)}% vs last week — hold steady or deload if RPE was high.` : wv[wv.length-1]?.vol < (wv[wv.length-2]?.vol||0)*0.8 ? 'Volume dipped — good if planned deload, otherwise add a session.' : 'Trends look steady — keep progressing where RIR ≥2.'}</p>}
+        {!!wv.length && <p className="text-xs text-ink3 mt-2"><JargonHelp term="RPE" /><JargonHelp term="RIR" /> {wv[wv.length-1]?.vol> (wv[wv.length-2]?.vol||0)*1.2 ? `Volume up ${Math.round((wv[wv.length-1].vol/(wv[wv.length-2]?.vol||1)-1)*100)}% vs last week — hold steady or deload if RPE was high.` : wv[wv.length-1]?.vol < (wv[wv.length-2]?.vol||0)*0.8 ? 'Volume dipped — good if planned deload, otherwise add a session.' : 'Trends look steady — keep progressing where RIR ≥2.'}</p>}
       </section>
 
       {/* Advanced analytics, gated exactly like "Volume landmarks" above:

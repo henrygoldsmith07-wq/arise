@@ -12,6 +12,8 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Jargon help where RIR/RPE appear
+- Tap-to-explain "?" now sits on the set-list RIR header (and a one-line RIR note on phones), the Progress volume hint (RPE/RIR) and the per-lift history sheet.
 ### Tap-to-explain jargon in Progress and lift history
 - Progress (best e1RM, trend table, PR cards) and the Gym Mode history sheet now have 44px “?” helpers explaining e1RM and PR; glossary gains Deload and PR plus a whole-word `jargonIn` helper.
 
