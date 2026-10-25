@@ -241,3 +241,16 @@ export function buildGuidedPayload({ session, blocks, note = '', noteTags = [], 
     sessionDuration: durationMinutes,
   };
 }
+
+// Guided first-lift finder: apply a found working load to every set of one
+// block that is still pending (never rewrites a logged or skipped set) and
+// replace the block's warm-up ramp. Pure: returns a new blocks array.
+export function applyFoundLoadToBlock(blocks, blockIndex, loadKg, warmups = null){
+  const kg = String(loadKg ?? '').trim();
+  if(!Array.isArray(blocks) || !blocks[blockIndex] || !kg) return blocks;
+  return blocks.map((b, i)=> i !== blockIndex ? b : {
+    ...b,
+    ...(Array.isArray(warmups) ? { warmups } : {}),
+    sets: b.sets.map(s=> (s.completed || s.skipped) ? s : { ...s, weightKg: kg }),
+  });
+}
