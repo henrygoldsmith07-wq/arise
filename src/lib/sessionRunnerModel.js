@@ -2,8 +2,8 @@
 // React owns rendering and side effects; this module owns the pure transitions
 // that are easiest to regression-test and most dangerous to duplicate inline.
 
-import { EXERCISE_BY_ID, isLoadedKitLift } from './data.js';
-import { lastExerciseSets } from './store.js';
+import { EXERCISE_BY_ID, isLoadedKitLift } from "./data.js";
+import { lastExerciseSets } from "./store.js";
 import {
   applySwapToBlocks,
   attachPrescription,
@@ -17,14 +17,14 @@ import {
   removeSetAt,
   snapLoad,
   userAddedSet,
-} from './progression.js';
-import { nearestAchievableLoad } from './plates.js';
-import { runnerRecommendationForBlock } from './runnerRecommendations.js';
-import { NOTE_PROMPTS } from './sessionNotes.js';
-import { fmtWeight, weightInputValue } from './units.ts';
-import { localDateISO } from './dateOnly.js';
+} from "./progression.js";
+import { nearestAchievableLoad } from "./plates.js";
+import { runnerRecommendationForBlock } from "./runnerRecommendations.js";
+import { NOTE_PROMPTS } from "./sessionNotes.js";
+import { fmtWeight, weightInputValue } from "./units.ts";
+import { localDateISO } from "./dateOnly.js";
 
-export function parseRunnerNumber(value){
+export function parseRunnerNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
 }
@@ -35,129 +35,184 @@ export function parseRunnerNumber(value){
 // suggestion picker offers. The engine's copy returns a NUMBER with a null
 // sentinel because progressionPolicies compares it numerically. Merging the two
 // would break one of them; see progression.js for its half.
-export function rirFromRpe(rpe){
-  const text = String(rpe ?? '').trim();
-  if(text === '') return '';
+export function rirFromRpe(rpe) {
+  const text = String(rpe ?? "").trim();
+  if (text === "") return "";
   const number = Number(text);
-  if(!Number.isFinite(number)) return '';
+  if (!Number.isFinite(number)) return "";
   return String(Math.max(0, Math.min(10, Math.round((10 - number) * 2) / 2)));
 }
 
-export function rpeFromRir(rir){
-  const text = String(rir ?? '').trim();
-  if(text === '') return '';
+export function rpeFromRir(rir) {
+  const text = String(rir ?? "").trim();
+  if (text === "") return "";
   const number = Number(text);
-  if(!Number.isFinite(number)) return '';
+  if (!Number.isFinite(number)) return "";
   return String(Math.max(0, Math.min(10, Math.round((10 - number) * 2) / 2)));
 }
 
-export function stepRir(rir, delta){
+export function stepRir(rir, delta) {
   const number = Number(rir);
-  if(!Number.isFinite(number)) return rir;
-  return String(Math.max(0, Math.min(10, Math.round((number + delta) * 2) / 2)));
+  if (!Number.isFinite(number)) return rir;
+  return String(
+    Math.max(0, Math.min(10, Math.round((number + delta) * 2) / 2)),
+  );
 }
 
-export function formatRest(seconds){
+export function formatRest(seconds) {
   const minutes = Math.floor(seconds / 60);
   const remainder = seconds % 60;
-  return minutes ? `${minutes}:${String(remainder).padStart(2, '0')}` : `${remainder}s`;
+  return minutes
+    ? `${minutes}:${String(remainder).padStart(2, "0")}`
+    : `${remainder}s`;
 }
 
-export function firstRep(reps){
+export function firstRep(reps) {
   const match = String(reps).match(/\d+/);
-  return match ? match[0] : '';
+  return match ? match[0] : "";
 }
 
-export function newRunnerSet(reps, unilateral, previous = null){
+export function newRunnerSet(reps, unilateral, previous = null) {
   return {
     reps: previous?.reps != null ? String(previous.reps) : firstRep(reps),
-    weightKg: previous?.weightKg != null ? String(previous.weightKg) : '',
-    rpe: '',
-    side: unilateral ? (previous?.side || 'L') : '',
-    rom: previous?.rom || '',
-    assistedKg: previous?.assistedKg || '',
-    tempo: '',
+    weightKg: previous?.weightKg != null ? String(previous.weightKg) : "",
+    rpe: "",
+    side: unilateral ? previous?.side || "L" : "",
+    rom: previous?.rom || "",
+    assistedKg: previous?.assistedKg || "",
+    tempo: "",
     completed: false,
   };
 }
 
-export function normaliseRunnerBlock(block, history, draftBlock, planIndex = 0){
+export function normaliseRunnerBlock(
+  block,
+  history,
+  draftBlock,
+  planIndex = 0,
+) {
   const source = draftBlock || block;
-  const unilateral = !!source.unilateral || !!EXERCISE_BY_ID[source.exerciseId]?.unilateral;
-  const previous = draftBlock ? null : lastExerciseSets(history, source.exerciseId);
+  const unilateral =
+    !!source.unilateral || !!EXERCISE_BY_ID[source.exerciseId]?.unilateral;
+  const previous = draftBlock
+    ? null
+    : lastExerciseSets(history, source.exerciseId);
   const count = Math.max(1, Number(source.sets) || source.sets?.length || 1);
   const sets = Array.isArray(source.sets)
-    ? source.sets.map(set=> ({ ...newRunnerSet(source.reps, unilateral), ...set, completed: !!set.completed }))
-    : Array.from({ length:count }, (_, index)=> newRunnerSet(
-      source.reps,
-      unilateral,
-      previous?.sets?.[index] || previous?.sets?.[previous.sets.length - 1],
-    ));
+    ? source.sets.map((set) => ({
+        ...newRunnerSet(source.reps, unilateral),
+        ...set,
+        completed: !!set.completed,
+      }))
+    : Array.from({ length: count }, (_, index) =>
+        newRunnerSet(
+          source.reps,
+          unilateral,
+          previous?.sets?.[index] || previous?.sets?.[previous.sets.length - 1],
+        ),
+      );
 
   return freezePrescriptionBlock({
     exerciseId: source.exerciseId,
-    reps: source.reps || '',
+    reps: source.reps || "",
     sets,
     restSec: Number(source.restSec) || 0,
     unilateral,
     warmups: source.warmups || [],
-    loadHint: source.loadHint || '',
-    why: source.why || '',
-    substitutionFrom: source.substitutionFrom || '',
-    substitutionReason: source.substitutionReason || '',
-    planIndex: Number.isInteger(source.planIndex) ? source.planIndex : planIndex,
-    governedSlots: Array.isArray(source.governedSlots) ? source.governedSlots : null,
-    removedSlots: Array.isArray(source.removedSlots) ? source.removedSlots : null,
+    loadHint: source.loadHint || "",
+    why: source.why || "",
+    substitutionFrom: source.substitutionFrom || "",
+    substitutionReason: source.substitutionReason || "",
+    planIndex: Number.isInteger(source.planIndex)
+      ? source.planIndex
+      : planIndex,
+    governedSlots: Array.isArray(source.governedSlots)
+      ? source.governedSlots
+      : null,
+    removedSlots: Array.isArray(source.removedSlots)
+      ? source.removedSlots
+      : null,
     prescriptionOverridden: source.prescriptionOverridden === true,
     prescription: source.prescription || null,
-    prescriptionHistory: Array.isArray(source.prescriptionHistory) ? source.prescriptionHistory : null,
+    prescriptionHistory: Array.isArray(source.prescriptionHistory)
+      ? source.prescriptionHistory
+      : null,
   });
 }
 
-export function clearTargetParts(recommendation, block, unit = 'kg'){
-  const reps = recommendation?.reps != null && String(recommendation.reps).trim() !== ''
-    ? recommendation.reps
-    : (firstRep(block.reps) || null);
-  if(recommendation?.assistKg != null) return { text:`${reps ?? '—'} reps @ ${fmtWeight(recommendation.assistKg, unit)} assist` };
+export function clearTargetParts(recommendation, block, unit = "kg") {
+  const reps =
+    recommendation?.reps != null && String(recommendation.reps).trim() !== ""
+      ? recommendation.reps
+      : firstRep(block.reps) || null;
+  if (recommendation?.assistKg != null)
+    return {
+      text: `${reps ?? "—"} reps @ ${fmtWeight(recommendation.assistKg, unit)} assist`,
+    };
   let load = null;
-  if(recommendation?.load != null && Number(recommendation.load) > 0) load = fmtWeight(recommendation.load, unit);
-  else if(block.loadHint && /\d/.test(String(block.loadHint))) load = block.loadHint;
-  const text = [load, reps ? `× ${reps}` : null].filter(Boolean).join(' ');
-  return { text:text || 'working set' };
+  if (recommendation?.load != null && Number(recommendation.load) > 0)
+    load = fmtWeight(recommendation.load, unit);
+  else if (block.loadHint && /\d/.test(String(block.loadHint)))
+    load = block.loadHint;
+  const text = [load, reps ? `× ${reps}` : null].filter(Boolean).join(" ");
+  return { text: text || "working set" };
 }
 
-export function previousPerformanceSummary(previous, unit = 'kg'){
-  if(!previous?.sets?.length) return null;
-  const firstWeight = previous.sets.find(set=> set.weightKg != null && String(set.weightKg).trim() !== '')?.weightKg || null;
+export function previousPerformanceSummary(previous, unit = "kg") {
+  if (!previous?.sets?.length) return null;
+  const firstWeight =
+    previous.sets.find(
+      (set) => set.weightKg != null && String(set.weightKg).trim() !== "",
+    )?.weightKg || null;
   const detail = previous.sets
-    .map(set=> `${set.reps}${set.side ? ` ${set.side}` : ''}${set.assistedKg ? ` (-${weightInputValue(set.assistedKg, unit)} ${unit})` : ''}`)
-    .join(', ');
-  const totalReps = previous.sets.reduce((total, set)=> total + parseRunnerNumber(set.reps), 0);
-  const bestKg = previous.sets.reduce((best, set)=> Math.max(best, parseRunnerNumber(set.weightKg)), 0);
-  const maxReps = previous.sets.reduce((best, set)=> Math.max(best, parseRunnerNumber(set.reps)), 0);
+    .map(
+      (set) =>
+        `${set.reps}${set.side ? ` ${set.side}` : ""}${set.assistedKg ? ` (-${weightInputValue(set.assistedKg, unit)} ${unit})` : ""}`,
+    )
+    .join(", ");
+  const totalReps = previous.sets.reduce(
+    (total, set) => total + parseRunnerNumber(set.reps),
+    0,
+  );
+  const bestKg = previous.sets.reduce(
+    (best, set) => Math.max(best, parseRunnerNumber(set.weightKg)),
+    0,
+  );
+  const maxReps = previous.sets.reduce(
+    (best, set) => Math.max(best, parseRunnerNumber(set.reps)),
+    0,
+  );
   return {
-    summary:firstWeight ? `${fmtWeight(firstWeight, unit)} × ${detail}` : detail,
+    summary: firstWeight
+      ? `${fmtWeight(firstWeight, unit)} × ${detail}`
+      : detail,
     totalReps,
     bestKg,
     maxReps,
-    dateISO:previous.dateISO,
+    dateISO: previous.dateISO,
   };
 }
 
-export function transitionChip(recommendation, previousSummary, unit = 'kg'){
-  if(!recommendation || !previousSummary) return null;
-  const recommendedLoad = Number(recommendation.load) > 0 ? Number(recommendation.load) : null;
-  const recommendedReps = recommendation.reps != null && String(recommendation.reps).trim() !== ''
-    ? parseRunnerNumber(recommendation.reps)
-    : null;
-  if(recommendedLoad != null && previousSummary.bestKg > 0){
-    if(recommendedLoad > previousSummary.bestKg) return `↑ ${fmtWeight(previousSummary.bestKg, unit)} → ${fmtWeight(recommendedLoad, unit)}`;
-    if(recommendedLoad < previousSummary.bestKg) return `↓ ${fmtWeight(previousSummary.bestKg, unit)} → ${fmtWeight(recommendedLoad, unit)}`;
+export function transitionChip(recommendation, previousSummary, unit = "kg") {
+  if (!recommendation || !previousSummary) return null;
+  const recommendedLoad =
+    Number(recommendation.load) > 0 ? Number(recommendation.load) : null;
+  const recommendedReps =
+    recommendation.reps != null && String(recommendation.reps).trim() !== ""
+      ? parseRunnerNumber(recommendation.reps)
+      : null;
+  if (recommendedLoad != null && previousSummary.bestKg > 0) {
+    if (recommendedLoad > previousSummary.bestKg)
+      return `↑ ${fmtWeight(previousSummary.bestKg, unit)} → ${fmtWeight(recommendedLoad, unit)}`;
+    if (recommendedLoad < previousSummary.bestKg)
+      return `↓ ${fmtWeight(previousSummary.bestKg, unit)} → ${fmtWeight(recommendedLoad, unit)}`;
     return `holds ${fmtWeight(recommendedLoad, unit)}`;
   }
-  if(recommendedReps != null && previousSummary.maxReps > 0){
-    if(recommendedReps > previousSummary.maxReps) return `↑ ${previousSummary.maxReps} → ${recommendedReps} reps`;
-    if(recommendedReps < previousSummary.maxReps) return `↓ ${previousSummary.maxReps} → ${recommendedReps} reps`;
+  if (recommendedReps != null && previousSummary.maxReps > 0) {
+    if (recommendedReps > previousSummary.maxReps)
+      return `↑ ${previousSummary.maxReps} → ${recommendedReps} reps`;
+    if (recommendedReps < previousSummary.maxReps)
+      return `↓ ${previousSummary.maxReps} → ${recommendedReps} reps`;
     return `holds ${recommendedReps} reps`;
   }
   return null;
@@ -168,97 +223,129 @@ export function transitionChip(recommendation, previousSummary, unit = 'kg'){
 // contract. The effort text is NOT a new prescription: it restates the engine's
 // existing room rule (progression only moves when ~2 reps are left in reserve;
 // the policy layer clamps loads when a set lands below that), in plain language.
-export function workingSetGuide(block, recommendation){
-  const planned = String(block?.reps ?? '').trim();
+export function workingSetGuide(block, recommendation) {
+  const planned = String(block?.reps ?? "").trim();
   const rangeMatch = planned.match(/\d+\s*[–\-]\s*\d+/);
-  const rangeText = rangeMatch ? rangeMatch[0].replace(/\s+/g, '') : null;
+  const rangeText = rangeMatch ? rangeMatch[0].replace(/\s+/g, "") : null;
   const recRepsRaw = recommendation?.reps;
-  const recReps = recRepsRaw != null && String(recRepsRaw).trim() !== '' ? String(recRepsRaw) : null;
+  const recReps =
+    recRepsRaw != null && String(recRepsRaw).trim() !== ""
+      ? String(recRepsRaw)
+      : null;
   return {
     rangeText,
     recReps,
-    effortText:'leave ~2 in the tank',
+    effortText: "leave ~2 in the tank",
   };
 }
 
-export function hasUnfinishedSet(blocks, blockIndex, setIndex){
-  for(let index = blockIndex; index < blocks.length; index++){
+export function hasUnfinishedSet(blocks, blockIndex, setIndex) {
+  for (let index = blockIndex; index < blocks.length; index++) {
     const start = index === blockIndex ? setIndex + 1 : 0;
-    if(blocks[index].sets.slice(start).some(set=> !set.completed)) return true;
+    if (blocks[index].sets.slice(start).some((set) => !set.completed))
+      return true;
   }
   return false;
 }
 
-export function patchRunnerSet(blocks, blockIndex, setIndex, patch, { prescriptionOverridden = false } = {}){
-  if(!blocks[blockIndex]?.sets?.[setIndex]) return blocks;
-  return blocks.map((block, index)=> index !== blockIndex ? block : {
-    ...block,
-    ...(prescriptionOverridden ? { prescriptionOverridden:true } : {}),
-    sets:block.sets.map((set, innerIndex)=> innerIndex !== setIndex ? set : { ...set, ...patch }),
-  });
+export function patchRunnerSet(
+  blocks,
+  blockIndex,
+  setIndex,
+  patch,
+  { prescriptionOverridden = false } = {},
+) {
+  if (!blocks[blockIndex]?.sets?.[setIndex]) return blocks;
+  return blocks.map((block, index) =>
+    index !== blockIndex
+      ? block
+      : {
+          ...block,
+          ...(prescriptionOverridden ? { prescriptionOverridden: true } : {}),
+          sets: block.sets.map((set, innerIndex) =>
+            innerIndex !== setIndex ? set : { ...set, ...patch },
+          ),
+        },
+  );
 }
 
-export function isManualLoadOverride(value, recommendation){
-  const shownLoad = recommendation?.load != null && Number(recommendation.load) > 0 ? Number(recommendation.load) : null;
-  if(shownLoad == null) return false;
+export function isManualLoadOverride(value, recommendation) {
+  const shownLoad =
+    recommendation?.load != null && Number(recommendation.load) > 0
+      ? Number(recommendation.load)
+      : null;
+  if (shownLoad == null) return false;
   const nextWeight = Number(String(value).match(/[\d.]+/)?.[0] ?? value) || 0;
   return Math.abs(nextWeight - shownLoad) > Math.max(0.5, shownLoad * 0.02);
 }
 
-export function carryForwardPlan(block, setIndex){
+export function carryForwardPlan(block, setIndex) {
   const set = block?.sets?.[setIndex];
-  if(!set) return { nextIndex:-1, carry:{}, rirSuggestion:null };
-  const nextIndex = block.sets.findIndex((candidate, index)=>
-    index > setIndex
-      && !candidate.completed
-      && (String(candidate.reps).trim() === '' || String(candidate.weightKg).trim() === '')
+  if (!set) return { nextIndex: -1, carry: {}, rirSuggestion: null };
+  const nextIndex = block.sets.findIndex(
+    (candidate, index) =>
+      index > setIndex &&
+      !candidate.completed &&
+      (String(candidate.reps).trim() === "" ||
+        String(candidate.weightKg).trim() === ""),
   );
-  if(nextIndex === -1) return { nextIndex, carry:{}, rirSuggestion:null };
+  if (nextIndex === -1) return { nextIndex, carry: {}, rirSuggestion: null };
   const next = block.sets[nextIndex];
   const carry = {};
-  if(String(next.reps).trim() === '') carry.reps = set.reps;
-  if(String(next.weightKg).trim() === '') carry.weightKg = set.weightKg;
-  const rirSuggestion = rirFromRpe(next.rpe).trim() === ''
-    && !next.completed
-    && String(set.rpe ?? '').trim() !== ''
-    ? rirFromRpe(set.rpe)
-    : null;
+  if (String(next.reps).trim() === "") carry.reps = set.reps;
+  if (String(next.weightKg).trim() === "") carry.weightKg = set.weightKg;
+  const rirSuggestion =
+    rirFromRpe(next.rpe).trim() === "" &&
+    !next.completed &&
+    String(set.rpe ?? "").trim() !== ""
+      ? rirFromRpe(set.rpe)
+      : null;
   return { nextIndex, carry, rirSuggestion };
 }
 
-export function addUserSetToBlock(block, makeId){
+export function addUserSetToBlock(block, makeId) {
   const previous = block.sets[block.sets.length - 1] || null;
   return {
     ...block,
-    sets:[...block.sets, userAddedSet(newRunnerSet('', block.unilateral, previous), makeId)],
+    sets: [
+      ...block.sets,
+      userAddedSet(newRunnerSet("", block.unilateral, previous), makeId),
+    ],
   };
 }
 
-export function duplicateUnilateralSetInBlock(block, makeId){
-  if(!block?.unilateral) return block;
+export function duplicateUnilateralSetInBlock(block, makeId) {
+  if (!block?.unilateral) return block;
   const last = block.sets[block.sets.length - 1];
-  if(!last) return block;
+  if (!last) return block;
   return {
     ...block,
-    sets:[...block.sets, userAddedSet({
-      ...last,
-      side:last.side === 'L' ? 'R' : 'L',
-      completed:false,
-      failed:false,
-      skipped:false,
-    }, makeId)],
+    sets: [
+      ...block.sets,
+      userAddedSet(
+        {
+          ...last,
+          side: last.side === "L" ? "R" : "L",
+          completed: false,
+          failed: false,
+          skipped: false,
+        },
+        makeId,
+      ),
+    ],
   };
 }
 
-export function removeRunnerSet(block, setIndex){
+export function removeRunnerSet(block, setIndex) {
   return removeSetAt(block, setIndex).block;
 }
 
-export function nextActionableBlockIndex(blocks, currentIndex){
-  if(!blocks.length) return currentIndex;
-  for(let step = 1; step <= blocks.length; step++){
+export function nextActionableBlockIndex(blocks, currentIndex) {
+  if (!blocks.length) return currentIndex;
+  for (let step = 1; step <= blocks.length; step++) {
     const next = (currentIndex + step) % blocks.length;
-    if(blocks[next]?.sets.some(set=> !set.completed && !set.failed)) return next;
+    if (blocks[next]?.sets.some((set) => !set.completed && !set.failed))
+      return next;
   }
   return currentIndex;
 }
@@ -268,25 +355,27 @@ export function captureVisiblePrescriptions({
   visibleIndexes = [],
   session,
   recommendations = new Map(),
-  policy = 'standard',
+  policy = "standard",
   shownAt,
   makeId,
-} = {}){
+} = {}) {
   const visible = new Set(visibleIndexes);
   let changed = false;
-  const next = blocks.map((block, index)=>{
-    if(block?.prescription || !visible.has(index)) return block;
-    const planIndex = Number.isInteger(block.planIndex) ? block.planIndex : index;
+  const next = blocks.map((block, index) => {
+    if (block?.prescription || !visible.has(index)) return block;
+    const planIndex = Number.isInteger(block.planIndex)
+      ? block.planIndex
+      : index;
     const planned = session?.blocks?.[planIndex] || {};
     const snapshot = buildPrescriptionSnapshot({
       session,
-      block:{ ...planned, exerciseId:block.exerciseId, sets:block.sets },
-      blockIndex:planIndex,
-      recommendation:recommendations.get(block.exerciseId) || null,
+      block: { ...planned, exerciseId: block.exerciseId, sets: block.sets },
+      blockIndex: planIndex,
+      recommendation: recommendations.get(block.exerciseId) || null,
       shownAt,
       policy,
     });
-    if(!snapshot) return block;
+    if (!snapshot) return block;
     changed = true;
     return attachPrescription(
       attributePrescribedSets(block, snapshot.prescriptionId, makeId),
@@ -305,35 +394,47 @@ export function captureVisiblePrescriptions({
 // becomes a plate-legal dumbbell/machine load, never an unbuildable number.
 // Returns { loadKg: 0 } when there is nothing honest to carry: bodyweight
 // replacements, bodyweight-only source work, or no known performance.
-export function swapCarryPlan({ target, option, history = [], plateConfig = null } = {}){
-  if(!target || !option?.id || option.id === target.exerciseId) return { loadKg:0, fromE1rmKg:0 };
+export function swapCarryPlan({
+  target,
+  option,
+  history = [],
+  plateConfig = null,
+} = {}) {
+  if (!target || !option?.id || option.id === target.exerciseId)
+    return { loadKg: 0, fromE1rmKg: 0 };
   // Carry only onto kit-loaded lifts (barbell/dumbbell/machine/cable). The
   // catalogue's `supportsWeighted` marks weightable BODYWEIGHT moves and is
   // false for nearly every barbell/machine lift, so gating on it silently
   // dropped the carry for the swaps that need it most (squat → leg press).
-  if(!isLoadedKitLift(option)) return { loadKg:0, fromE1rmKg:0 };
+  if (!isLoadedKitLift(option)) return { loadKg: 0, fromE1rmKg: 0 };
   const candidates = [];
-  for(const set of target.sets || []){
-    const reps = Number(String(set?.reps ?? '').match(/\d+/)?.[0] ?? set?.reps) || 0;
+  for (const set of target.sets || []) {
+    const reps =
+      Number(String(set?.reps ?? "").match(/\d+/)?.[0] ?? set?.reps) || 0;
     const weightKg = Number(set?.weightKg) || 0;
-    if(reps > 0 && weightKg > 0) candidates.push(e1rm(weightKg, reps));
+    if (reps > 0 && weightKg > 0) candidates.push(e1rm(weightKg, reps));
   }
-  if(!candidates.length){
-    for(const set of lastExerciseSets(history, target.exerciseId)?.sets || []){
-      const reps = Number(String(set?.reps ?? '').match(/\d+/)?.[0] ?? set?.reps) || 0;
+  if (!candidates.length) {
+    for (const set of lastExerciseSets(history, target.exerciseId)?.sets ||
+      []) {
+      const reps =
+        Number(String(set?.reps ?? "").match(/\d+/)?.[0] ?? set?.reps) || 0;
       const weightKg = Number(set?.weightKg) || 0;
-      if(reps > 0 && weightKg > 0) candidates.push(e1rm(weightKg, reps));
+      if (reps > 0 && weightKg > 0) candidates.push(e1rm(weightKg, reps));
     }
   }
   const fromE1rmKg = candidates.length ? Math.max(...candidates) : 0;
-  if(!(fromE1rmKg > 0)) return { loadKg:0, fromE1rmKg:0 };
-  const reps = Number(String(target.reps ?? '').match(/\d+/)?.[0]) || 8;
+  if (!(fromE1rmKg > 0)) return { loadKg: 0, fromE1rmKg: 0 };
+  const reps = Number(String(target.reps ?? "").match(/\d+/)?.[0]) || 8;
   const equivalent = epleyToLoad(fromE1rmKg, reps);
-  if(!(equivalent > 0)) return { loadKg:0, fromE1rmKg };
+  if (!(equivalent > 0)) return { loadKg: 0, fromE1rmKg };
   // Plate-legal for the replacement's own equipment; without a plate config,
   // fall back to the engine's generic increment grid.
   const rounded = plateConfig
-    ? nearestAchievableLoad(equivalent, { equipment: equipmentForExercise(option.id), config: plateConfig })?.loadKg
+    ? nearestAchievableLoad(equivalent, {
+        equipment: equipmentForExercise(option.id),
+        config: plateConfig,
+      })?.loadKg
     : snapLoad(equivalent, null);
   return { loadKg: rounded > 0 ? rounded : 0, fromE1rmKg };
 }
@@ -348,19 +449,24 @@ export function buildRunnerSwapTransition({
   plateConfig = null,
   study = null,
   studyEnrollment = null,
-  policy = 'standard',
+  policy = "standard",
   nowISO,
   makeId,
-} = {}){
+} = {}) {
   const target = blocks[index];
-  if(!target || !option?.id || option.id === target.exerciseId){
-    return { blocks, replacementIndex:null, changed:false };
+  if (!target || !option?.id || option.id === target.exerciseId) {
+    return { blocks, replacementIndex: null, changed: false };
   }
-  const planIndex = Number.isInteger(target.planIndex) ? target.planIndex : index;
+  const planIndex = Number.isInteger(target.planIndex)
+    ? target.planIndex
+    : index;
   const { recommendation } = runnerRecommendationForBlock({
-    block:{ exerciseId:option.id, reps:target.reps || session?.blocks?.[planIndex]?.reps },
+    block: {
+      exerciseId: option.id,
+      reps: target.reps || session?.blocks?.[planIndex]?.reps,
+    },
     history,
-    dateISO:dateISO || session?.dateISO,
+    dateISO: dateISO || session?.dateISO,
     plateConfig,
     study,
     studyEnrollment,
@@ -373,81 +479,120 @@ export function buildRunnerSwapTransition({
   // Rows with a real prior performance, and bodyweight replacements, stay as
   // the generic factory made them.
   const carry = swapCarryPlan({ target, option, history, plateConfig });
-  const newSet = carry.loadKg > 0
-    ? (reps, unilateral, previous)=>{
-      const base = newRunnerSet(reps, unilateral, previous);
-      if(String(base.weightKg ?? '').trim() !== '') return base;
-      return { ...base, weightKg:String(carry.loadKg) };
-    }
-    : newRunnerSet;
+  const newSet =
+    carry.loadKg > 0
+      ? (reps, unilateral, previous) => {
+          const base = newRunnerSet(reps, unilateral, previous);
+          if (String(base.weightKg ?? "").trim() !== "") return base;
+          return { ...base, weightKg: String(carry.loadKg) };
+        }
+      : newRunnerSet;
   const next = applySwapToBlocks({
     blocks,
     index,
     option,
     session,
-    recommendation:recommendation || null,
-    priorSets:lastExerciseSets(history, option.id)?.sets || [],
+    recommendation: recommendation || null,
+    priorSets: lastExerciseSets(history, option.id)?.sets || [],
     planIndex,
     policy,
     nowISO,
     newSet,
     makeId,
   });
-  const replacementIndex = next.findIndex(block=>
-    block && block.exerciseId === option.id && block.substitutedAt === nowISO
+  const replacementIndex = next.findIndex(
+    (block) =>
+      block && block.exerciseId === option.id && block.substitutedAt === nowISO,
   );
   return {
-    blocks:next,
-    replacementIndex:replacementIndex === -1 ? null : replacementIndex,
-    changed:next !== blocks,
+    blocks: next,
+    replacementIndex: replacementIndex === -1 ? null : replacementIndex,
+    changed: next !== blocks,
   };
 }
 
-export function applyRecommendationToBlock(block, recommendation){
-  if(!block || !recommendation) return block;
+export function applyRecommendationToBlock(block, recommendation) {
+  if (!block || !recommendation) return block;
   return {
     ...block,
-    sets:block.sets.map(set=> set.completed ? set : {
-      ...set,
-      reps:recommendation.reps != null ? String(recommendation.reps) : set.reps,
-      weightKg:recommendation.load != null && recommendation.load > 0 ? String(recommendation.load) : set.weightKg,
-      assistedKg:recommendation.assistKg != null ? String(recommendation.assistKg) : set.assistedKg,
-    }),
+    sets: block.sets.map((set) =>
+      set.completed
+        ? set
+        : {
+            ...set,
+            reps:
+              recommendation.reps != null
+                ? String(recommendation.reps)
+                : set.reps,
+            weightKg:
+              recommendation.load != null && recommendation.load > 0
+                ? String(recommendation.load)
+                : set.weightKg,
+            assistedKg:
+              recommendation.assistKg != null
+                ? String(recommendation.assistKg)
+                : set.assistedKg,
+          },
+    ),
   };
 }
 
-export function applyAllRecommendations(blocks, recommendations){
+export function applyAllRecommendations(blocks, recommendations) {
   const applied = [];
-  const nextBlocks = blocks.map((block, index)=>{
-    if(block.sets.some(set=> set.completed || set.failed || String(set.reps).trim() !== '')) return block;
+  const nextBlocks = blocks.map((block, index) => {
+    if (
+      block.sets.some(
+        (set) => set.completed || set.failed || String(set.reps).trim() !== "",
+      )
+    )
+      return block;
     const recommendation = recommendations.get(block.exerciseId);
-    if(!recommendation) return block;
+    if (!recommendation) return block;
     const hasLoad = recommendation.load != null && recommendation.load > 0;
-    const hasReps = recommendation.reps != null && String(recommendation.reps).trim() !== '';
-    if(!hasLoad && !hasReps) return block;
-    applied.push({ index, exerciseId:block.exerciseId });
+    const hasReps =
+      recommendation.reps != null && String(recommendation.reps).trim() !== "";
+    if (!hasLoad && !hasReps) return block;
+    applied.push({ index, exerciseId: block.exerciseId });
     return applyRecommendationToBlock(block, recommendation);
   });
-  return { blocks:nextBlocks, applied };
+  return { blocks: nextBlocks, applied };
 }
 
-export function sessionSaveState(blocks){
-  const totalSets = blocks.reduce((total, block)=> total + block.sets.length, 0);
-  const completedSets = blocks.reduce((total, block)=> total + block.sets.filter(set=> set.completed).length, 0);
-  const canSave = blocks.length > 0
-    && blocks.every(block=> block.sets.length > 0 && block.sets.every(set=> String(set.reps).trim() !== ''))
-    && completedSets > 0;
+export function sessionSaveState(blocks) {
+  const totalSets = blocks.reduce(
+    (total, block) => total + block.sets.length,
+    0,
+  );
+  const completedSets = blocks.reduce(
+    (total, block) => total + block.sets.filter((set) => set.completed).length,
+    0,
+  );
+  const canSave =
+    blocks.length > 0 &&
+    blocks.every(
+      (block) =>
+        block.sets.length > 0 &&
+        block.sets.every((set) => String(set.reps).trim() !== ""),
+    ) &&
+    completedSets > 0;
   const pendingSets = totalSets - completedSets;
-  if(canSave) return { totalSets, completedSets, pendingSets, canSave, blocker:null };
-  const missingReps = blocks.reduce((total, block)=> total + block.sets.filter(set=> String(set.reps).trim() === '').length, 0);
+  if (canSave)
+    return { totalSets, completedSets, pendingSets, canSave, blocker: null };
+  const missingReps = blocks.reduce(
+    (total, block) =>
+      total + block.sets.filter((set) => String(set.reps).trim() === "").length,
+    0,
+  );
   let blocker;
   // Blocker copy is only reachable when completedSets === 0 (canSave requires
   // a completed set), so never report completed counts here — report what is
   // still missing. All three branches describe pending work, never a claim
   // about completed sets.
-  if(missingReps) blocker = `Enter reps for ${missingReps} remaining set${missingReps === 1 ? '' : 's'} — nothing is logged yet.`;
-  else if(pendingSets) blocker = `Tap Done for ${pendingSets} set${pendingSets === 1 ? '' : 's'} to log ${pendingSets === 1 ? 'it' : 'them'} — Save logs unfinished sets as skipped.`;
-  else blocker = 'Add at least one set to each exercise.';
+  if (missingReps)
+    blocker = `Enter reps for ${missingReps} remaining set${missingReps === 1 ? "" : "s"} — nothing is logged yet.`;
+  else if (pendingSets)
+    blocker = `Tap Done for ${pendingSets} set${pendingSets === 1 ? "" : "s"} to log ${pendingSets === 1 ? "it" : "them"} — Save logs unfinished sets as skipped.`;
+  else blocker = "Add at least one set to each exercise.";
   return { totalSets, completedSets, pendingSets, canSave, blocker };
 }
 
@@ -455,87 +600,142 @@ export function buildSessionHistoryPayload({
   session,
   blocks,
   availableEquipment = [],
-  note = '',
+  note = "",
   noteTags = [],
   quality = null,
   startedAt,
   nowISO,
   performedDateISO = null,
-}){
-  const labels = noteTags.map(id=> NOTE_PROMPTS.find(tag=> tag.id === id)?.label).filter(Boolean);
-  const finalNote = [labels.join(', '), String(note).trim()].filter(Boolean).join(' · ');
-  const durationMinutes = Math.max(1, Math.round((Date.parse(nowISO) - Date.parse(startedAt)) / 60000));
-  const painDiscomfort = noteTags.includes('pain-discomfort');
-  const actualDateISO = performedDateISO || localDateISO(startedAt) || localDateISO(nowISO) || session.dateISO;
+}) {
+  const labels = noteTags
+    .map((id) => NOTE_PROMPTS.find((tag) => tag.id === id)?.label)
+    .filter(Boolean);
+  const finalNote = [labels.join(", "), String(note).trim()]
+    .filter(Boolean)
+    .join(" · ");
+  const durationMinutes = Math.max(
+    1,
+    Math.round((Date.parse(nowISO) - Date.parse(startedAt)) / 60000),
+  );
+  const painDiscomfort = noteTags.includes("pain-discomfort");
+  const actualDateISO =
+    performedDateISO ||
+    localDateISO(startedAt) ||
+    localDateISO(nowISO) ||
+    session.dateISO;
   const scheduledDateISO = session.scheduledDateISO || session.dateISO || null;
   const substitutions = blocks
-    .filter(block=> block.substitutionFrom)
-    .map(block=> ({ from:block.substitutionFrom, to:block.exerciseId, reason:block.substitutionReason }));
+    .filter((block) => block.substitutionFrom)
+    .map((block) => ({
+      from: block.substitutionFrom,
+      to: block.exerciseId,
+      reason: block.substitutionReason,
+    }));
 
   return {
-    id:session.id,
-    dateISO:actualDateISO,
-    ...(scheduledDateISO && scheduledDateISO !== actualDateISO ? { scheduledDateISO } : {}),
-    programId:session.programId,
-    programVersion:session.programVersion || null,
-    templateVersion:session.templateVersion || null,
-    week:session.week,
-    day:session.day,
-    title:session.title,
-    mode:session.mode || 'standard',
-    targetMinutes:session.targetMinutes || null,
-    originalDurationMin:session.originalDurationMin || null,
+    id: session.id,
+    dateISO: actualDateISO,
+    ...(scheduledDateISO && scheduledDateISO !== actualDateISO
+      ? { scheduledDateISO }
+      : {}),
+    programId: session.programId,
+    programVersion: session.programVersion || null,
+    templateVersion: session.templateVersion || null,
+    week: session.week,
+    day: session.day,
+    title: session.title,
+    mode: session.mode || "standard",
+    targetMinutes: session.targetMinutes || null,
+    originalDurationMin: session.originalDurationMin || null,
     // Time-budget adaptation (P2.5): why this session differs from the plan
     // — target minutes, what was set aside, the engine's own reason.
-    timeAdaptation:session.timeAdaptation || null,
-    rescheduledFrom:session.rescheduledFrom || null,
+    timeAdaptation: session.timeAdaptation || null,
+    rescheduledFrom: session.rescheduledFrom || null,
     durationMinutes,
     startedAt,
-    finishedAt:nowISO,
-    savedAt:nowISO,
-    equipmentSnapshot:[...(availableEquipment || [])],
-    substitutions:substitutions.length ? substitutions : undefined,
-    exerciseOrder:blocks.map(block=> block.exerciseId),
+    finishedAt: nowISO,
+    savedAt: nowISO,
+    equipmentSnapshot: [...(availableEquipment || [])],
+    substitutions: substitutions.length ? substitutions : undefined,
+    exerciseOrder: blocks.map((block) => block.exerciseId),
     painDiscomfort,
-    blocks:blocks.map((block, index)=> ({
-      exerciseId:block.exerciseId,
-      exerciseOrder:index,
-      ...(block.substitutionFrom ? { substitutionFrom:block.substitutionFrom, substitutionReason:block.substitutionReason } : {}),
-      ...(Array.isArray(block.governedSlots) && block.governedSlots.length ? { governedSlots:block.governedSlots } : {}),
-      ...(Array.isArray(block.removedSlots) && block.removedSlots.length ? { removedSlots:block.removedSlots } : {}),
-      ...(block.prescriptionOverridden ? { prescriptionOverridden:true } : {}),
+    blocks: blocks.map((block, index) => ({
+      exerciseId: block.exerciseId,
+      exerciseOrder: index,
+      ...(block.substitutionFrom
+        ? {
+            substitutionFrom: block.substitutionFrom,
+            substitutionReason: block.substitutionReason,
+          }
+        : {}),
+      ...(Array.isArray(block.governedSlots) && block.governedSlots.length
+        ? { governedSlots: block.governedSlots }
+        : {}),
+      ...(Array.isArray(block.removedSlots) && block.removedSlots.length
+        ? { removedSlots: block.removedSlots }
+        : {}),
+      ...(block.prescriptionOverridden ? { prescriptionOverridden: true } : {}),
       ...carryPrescription(block),
-      equipment:EXERCISE_BY_ID[block.exerciseId]?.equipment || null,
-      sets:block.sets.map(set=>{
+      equipment: EXERCISE_BY_ID[block.exerciseId]?.equipment || null,
+      sets: block.sets.map((set) => {
         const completed = !!set.completed;
-        const skipped = !completed && String(set.reps).trim() !== '';
+        const skipped = !completed && String(set.reps).trim() !== "";
         const failed = !!set.failed;
         const out = {
-          reps:String(set.reps).trim(),
-          weightKg:String(set.weightKg).trim(),
-          rpe:String(set.rpe).trim(),
+          reps: String(set.reps).trim(),
+          weightKg: String(set.weightKg).trim(),
+          rpe: String(set.rpe).trim(),
           completed,
           skipped,
           failed,
         };
-        if(set.setId) out.setId = set.setId;
-        if(set.origin) out.origin = set.origin;
-        if(Number.isInteger(set.plannedSlot)) out.plannedSlot = set.plannedSlot;
-        else if(set.origin === 'user-added') out.plannedSlot = null;
-        if(set.governingPrescriptionId) out.governingPrescriptionId = set.governingPrescriptionId;
-        else if(set.origin === 'user-added') out.governingPrescriptionId = null;
-        if(painDiscomfort) out.pain = true;
-        if(block.unilateral && set.side) out.side = set.side;
-        if(set.rom && String(set.rom).trim()) out.rom = String(set.rom).trim();
-        if(set.assistedKg && String(set.assistedKg).trim()) out.assistedKg = String(set.assistedKg).trim();
-        if(set.tempo && String(set.tempo).trim()) out.tempo = String(set.tempo).trim();
+        if (set.setId) out.setId = set.setId;
+        if (set.origin) out.origin = set.origin;
+        if (Number.isInteger(set.plannedSlot))
+          out.plannedSlot = set.plannedSlot;
+        else if (set.origin === "user-added") out.plannedSlot = null;
+        if (set.governingPrescriptionId)
+          out.governingPrescriptionId = set.governingPrescriptionId;
+        else if (set.origin === "user-added")
+          out.governingPrescriptionId = null;
+        if (painDiscomfort) out.pain = true;
+        if (block.unilateral && set.side) out.side = set.side;
+        if (set.rom && String(set.rom).trim()) out.rom = String(set.rom).trim();
+        if (set.assistedKg && String(set.assistedKg).trim())
+          out.assistedKg = String(set.assistedKg).trim();
+        if (set.tempo && String(set.tempo).trim())
+          out.tempo = String(set.tempo).trim();
         return out;
       }),
     })),
-    skippedSetsCount:blocks.reduce((total, block)=> total + block.sets.filter(set=> !set.completed).length, 0),
-    note:finalNote || undefined,
-    noteTags:noteTags.length ? noteTags : undefined,
-    sessionDuration:durationMinutes,
-    quality:quality || undefined,
+    skippedSetsCount: blocks.reduce(
+      (total, block) =>
+        total + block.sets.filter((set) => !set.completed).length,
+      0,
+    ),
+    note: finalNote || undefined,
+    noteTags: noteTags.length ? noteTags : undefined,
+    sessionDuration: durationMinutes,
+    quality: quality || undefined,
+  };
+}
+
+/**
+ * Chip for the target row when the engine held the load because the next
+ * stack step is a coarse jump (recommendNext().coarseJump). Returns null for
+ * ordinary recommendations so no row gains clutter.
+ */
+export function coarseJumpChip(recommendation, fmt = (kg) => `${kg} kg`) {
+  const cj = recommendation?.coarseJump;
+  if (
+    !cj ||
+    !Number.isFinite(Number(recommendation.load)) ||
+    !Number.isFinite(Number(cj.ceiling))
+  )
+    return null;
+  const jump = fmt(cj.jumpKg);
+  return {
+    label: `Stay at ${fmt(recommendation.load)} — add reps up to ${cj.ceiling}`,
+    detail: `Next stack step is +${jump} (${cj.jumpPct}%). Reps first, then step up.`,
   };
 }

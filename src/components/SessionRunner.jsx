@@ -49,6 +49,7 @@ import {
   nextActionableBlockIndex,
   normaliseRunnerBlock,
   parseRunnerNumber,
+  coarseJumpChip,
   patchRunnerSet,
   previousPerformanceSummary,
   removeRunnerSet,
@@ -856,6 +857,9 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                       <span>{guide.effortText}</span>
                     </p>
                   )}
+                  {(()=>{ const cj = coarseJumpChip(recommendation, kg=> fmtWeight(kg, unit)); return cj ? (
+                    <p data-testid="coarse-jump-chip" title={cj.detail} className="mt-1 inline-flex items-center min-h-11 rounded-full border border-line bg-surface2 px-3 text-[11px] font-bold text-ink2">↔ {cj.label}</p>
+                  ) : null; })()}
                   {(changeChip || recommendation?.reason) && (
                     <p className="text-[11px] mt-1 leading-snug">
                       {changeChip && <span className="font-bold text-success">{changeChip}</span>}
