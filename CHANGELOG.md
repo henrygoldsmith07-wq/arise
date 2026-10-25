@@ -12,6 +12,8 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+- Playwright spec for the tap-to-explain e1RM help (44px target, Escape closes).
+
 ### Best lifting days around key rides
 Ride-days card now suggests the best three weekdays to lift (off ride days, away from the day before, not back-to-back).
 
