@@ -154,3 +154,27 @@ describe('gym mode — session quality', () => {
     assert.equal(sessionQualityLabel(undefined), null);
   });
 });
+
+import { effortAdjustedRest, hasUserRestPreset } from '../src/lib/gymMode.js';
+describe('effortAdjustedRest', () => {
+  it('adds 30s after a grind (RIR 0 or RPE 10)', () => {
+    assert.equal(effortAdjustedRest(90, { rir: 0 }), 120);
+    assert.equal(effortAdjustedRest(90, { rpe: 10 }), 120);
+  });
+  it('trims 15s after an easy set but floors at 45', () => {
+    assert.equal(effortAdjustedRest(90, { rir: 4 }), 75);
+    assert.equal(effortAdjustedRest(50, { rir: 5 }), 45);
+  });
+  it('caps at 300s', () => assert.equal(effortAdjustedRest(290, { rir: 0 }), 300));
+  it('never overrides a user preset or unknown effort', () => {
+    assert.equal(effortAdjustedRest(90, { rir: 0 }, { hasUserPreset: true }), 90);
+    assert.equal(effortAdjustedRest(90, {}), 90);
+    assert.equal(effortAdjustedRest(90, { rir: '' }), 90);
+    assert.equal(effortAdjustedRest(90, { rir: 2 }), 90);
+    assert.equal(effortAdjustedRest(0, { rir: 0 }), 0);
+  });
+  it('detects stored presets', () => {
+    assert.equal(hasUserRestPreset({ restPresets: { a: 60 } }, 'a'), true);
+    assert.equal(hasUserRestPreset({}, 'a'), false);
+  });
+});
