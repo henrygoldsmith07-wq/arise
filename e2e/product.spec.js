@@ -191,7 +191,7 @@ test.describe('Progress assessment', () => {
       lift('deload-4', daysBefore(monday, 6), 'bench-press-dumbbell', 20, 12),
       lift('deload-5', daysBefore(monday, 4), 'bench-press-dumbbell', 22.5, 8),
       lift('deload-6', daysBefore(monday, 2), 'bench-press-dumbbell', 22.5, 9),
-      lift('deload-7', isoDaysAgo(0), 'bench-press-dumbbell', 12.5, 8),
+      lift('deload-7', monday, 'bench-press-dumbbell', 12.5, 8),
     ];
     const schedule = {
       programId: 'starter-3x',
