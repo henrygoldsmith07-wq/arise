@@ -182,3 +182,16 @@ export function isLoadAchievable(targetKg, equipment, config){
 export function formatPlateStack(stack = []){
   return stack.length ? stack.map(value=> `${value}kg`).join(' + ') : 'no plates';
 }
+
+export const TYPICAL_UPPER_MACHINE_LOAD_KG = 25;
+export const COARSE_STACK_PCT = 0.1;
+// Warn when one pin step is a big slice of a typical working load: each
+// "progression" would then be a large overload. Returns null when fine.
+export function coarseStackWarning(incrementKg, typicalLoadKg = TYPICAL_UPPER_MACHINE_LOAD_KG){
+  const inc = Number(incrementKg);
+  const load = Number(typicalLoadKg);
+  if(!Number.isFinite(inc) || inc <= 0 || !Number.isFinite(load) || load <= 0) return null;
+  const pct = Math.round((inc / load) * 100);
+  if(inc / load <= COARSE_STACK_PCT + 1e-9) return null;
+  return { incrementKg: inc, typicalLoadKg: load, pct, suggestedKg: Math.max(0.5, Math.round(load * COARSE_STACK_PCT * 2) / 2) };
+}
