@@ -69,7 +69,7 @@ src/core/*                Cross-cutting: config, flags, errors, DI container
 | Export contract & import policy | `src/lib/exportPolicy.js` (ADR 0003) |
 | Domain model & tombstones | `src/lib/domain.js` |
 | Ledger recording / aggregation | `src/lib/longitudinal.js` / `evaluation.js` (ADR 0007) |
-| Pure worker evidence summary | `src/lib/evaluationSummary.js` + `analytics-worker.js` |
+| Pure worker evidence summary | `src/lib/evaluationSummary.js` (the dedicated worker was removed to save ~13 kB gz) |
 
 ## IndexedDB and multi-tab state
 

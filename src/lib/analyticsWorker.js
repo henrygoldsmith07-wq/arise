@@ -13,62 +13,20 @@
 // (tests, old browsers) the same function runs inline — the caller's
 // contract is identical, only the timing differs (promise vs sync).
 
-import { loadEvaluationLedger, longitudinalSummary } from './longitudinal.js';
+import { longitudinalSummary } from './longitudinal.js';
 
-let worker = null;
-let seq = 0;
-const pending = new Map();
-
-function getWorker(){
-  if(worker !== null) return worker;
-  try{
-    if(typeof Worker === 'undefined') worker = false;
-    else worker = new Worker(new URL('./analytics-worker.js', import.meta.url), { type: 'module' });
-  }catch{ worker = false; }
-  if(worker){
-    worker.onmessage = (event)=>{
-      const { id, ok, result, error } = event.data || {};
-      const entry = pending.get(id);
-      if(!entry) return;
-      pending.delete(id);
-      if(ok) entry.resolve(result);
-      else entry.reject(new Error(error || 'Worker evaluation failed.'));
-    };
-    worker.onerror = ()=>{
-      // Any worker-level failure demotes everything to inline evaluation —
-      // correctness first, responsiveness second.
-      for(const entry of pending.values()) entry.reject(new Error('Worker failed.'));
-      pending.clear();
-      try{ worker.terminate(); }catch{}
-      worker = false;
-    };
-  }
-  return worker;
-}
+// The dedicated Web Worker was removed: Vite bundled a second copy of the
+// whole evaluation graph (~13 kB gz) for it, on top of the copy the app
+// already ships, which is what pinned the total at the 405 kB budget. The
+// summary now runs inline after a macrotask yield, so the Progress screen
+// paints first and the evaluation fills in right after. Same contract.
 
 /**
- * Same contract as `longitudinalSummary({ preferences, config })`, but the
- * evaluation happens off the main thread when possible. Always resolves
- * (never throws for environmental reasons) so a caller can treat the result
- * as "best available evaluation" without try/catch.
+ * Same contract as `longitudinalSummary({ preferences, config })`, resolved
+ * after yielding to the event loop. Never throws for environmental reasons.
  */
 export async function longitudinalSummaryAsync({ preferences = null, config = null } = {}){
-  // Workers cannot read localStorage. Capture the ledger on the main thread.
-  const ledger = loadEvaluationLedger();
-  const w = getWorker();
-  if(w){
-    const id = ++seq;
-    try{
-      const result = await new Promise((resolve, reject)=> {
-        pending.set(id, { resolve, reject });
-        w.postMessage({ id, payload: { ledger, preferences, config } });
-      });
-      return result;
-    }catch{
-      try{ w.terminate(); }catch{}
-      worker = false;
-    }
-  }
+  await new Promise(resolve => setTimeout(resolve, 0));
   try{ return longitudinalSummary({ preferences, config }); }
   catch{ return { consented: false, evaluation: null }; }
 }
