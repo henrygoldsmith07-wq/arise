@@ -12,6 +12,10 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Per-lift history sheet + 13 kB smaller bundle
+- Gym Mode shows a 44px “History” button under each lift that has logged sets: last five sessions (loads, reps, RIR, best e1RM) and an e1RM sparkline. Lazy-loaded, Esc/tap outside closes.
+- Removed the dedicated analytics Web Worker, which shipped a second ~13 kB gz copy of the evaluation code; the Progress evaluation now runs inline after a yield so the screen paints first.
+
 ### Tap-to-explain RIR
 - A 44px “?” beside the suggested-RIR row in Gym Mode explains RIR in plain words (Esc or tap outside closes). Glossary in `src/lib/glossary.js` also covers RPE, e1RM and double progression for wider rollout.
 

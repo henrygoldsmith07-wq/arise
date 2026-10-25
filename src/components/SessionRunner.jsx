@@ -59,6 +59,7 @@ import {
 
 // Teaching opens on a deliberate tap, so the panel + its derived content
 // ride their own lazy chunk — boot logging weight is untouched.
+const ExerciseHistorySheet = lazy(() => import('./ExerciseHistorySheet.jsx'));
 const TeachingPanel = lazy(() => import('./TeachingPanel.jsx'));
 
 export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, appPrefs = null, gymPrefs = null, onSetRestPreset = null, studyEnrollment = null, participantId = null, onDraftChange, onSave, onCancel }){
@@ -67,6 +68,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   // reference was previously undefined (a latent crash when explanations
   // exist on a recommendation).
   const explanationMode = appPrefs?.explanationMode || 'standard';
+  const [historyFor,setHistoryFor]=useState(null);
   const [blocks,setBlocks]=useState(()=> session.blocks.map((b,i)=> normaliseRunnerBlock(b, history, draft?.blocks?.[i], i)));
   // Transient confirmation for the one-tap "apply all" fast-log path.
   const [applyAllNote,setApplyAllNote]=useState(null);
@@ -892,6 +894,12 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     {exerciseTrends.get(b.exerciseId) ? <span> · trend: {exerciseTrends.get(b.exerciseId)}</span> : null}
                   </p>
                   <p className="text-[11px]"><span className="font-bold text-ink">Goal:</span> {goalText}</p>
+                  {prev && <button type="button" onClick={()=> setHistoryFor(bi)} className="min-h-11 text-xs font-bold px-3 rounded-full border border-line bg-surface2 self-start">History</button>}
+                  {historyFor === bi && (
+                    <Suspense fallback={null}>
+                      <ExerciseHistorySheet exerciseId={b.exerciseId} name={ex?.name || b.exerciseId} history={history} unit={unit} onClose={()=> setHistoryFor(null)} />
+                    </Suspense>
+                  )}
                   {needsWorkingWeight({ block: b, history, recommendation, takesLoad: supportsWeighted }) && (
                     <WorkingWeightFinder exerciseId={b.exerciseId} targetReps={b.reps} unit={unit} plateConfig={plateConfig}
                       onUse={(kg)=> {
