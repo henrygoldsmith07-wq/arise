@@ -68,3 +68,28 @@ export function applyRideAwareDates(schedule, rideDays, { todayISO = '0000-00-00
   next.sort((a, b) => a.dateISO.localeCompare(b.dateISO));
   return { schedule: { ...schedule, sessions: next, rev: (schedule.rev || 0) + (moved.length ? 1 : 0), updatedAt: moved.length ? new Date().toISOString() : schedule.updatedAt }, moved, stuck };
 }
+
+/**
+ * Best weekdays for `count` upper-body sessions around key rides: never on a
+ * ride day, fewest on the day before, and spread so no two lifts are adjacent
+ * when possible. Deterministic (Mon-first tie-break). Returns weekdays 0=Sun…6=Sat.
+ */
+export function suggestLiftDays(rideDays, count = 3){
+  const rides = new Set(normaliseRideDays(rideDays));
+  const n = Math.max(0, Math.min(Math.floor(Number(count)) || 0, 7));
+  const order = [1, 2, 3, 4, 5, 6, 0];
+  const cost = d => (rides.has(d) ? 100 : 0) + (rides.has((d + 1) % 7) ? 3 : 0) + (rides.has((d + 6) % 7) ? 1 : 0);
+  const chosen = [];
+  while(chosen.length < n){
+    let best = null, bestScore = Infinity;
+    for(const d of order){
+      if(chosen.includes(d)) continue;
+      const adj = chosen.filter(c => (c + 1) % 7 === d || (d + 1) % 7 === c).length;
+      const s = cost(d) + adj * 5;
+      if(s < bestScore){ best = d; bestScore = s; }
+    }
+    if(best === null) break;
+    chosen.push(best);
+  }
+  return chosen.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+}
