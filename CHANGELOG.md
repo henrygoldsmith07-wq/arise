@@ -14,6 +14,14 @@ the history is the changelog; this file is its human-readable index.
 
 ### Progress: rides vs lifting overlay
 - New "Rides vs lifting" card on Progress (needs key ride days set): per week, lift days vs ride days and how many leg sets landed on a ride day or the day before. `rideLiftOverlay` in rideAwareSchedule.js; tests/ride-lift-overlay.test.js.
+### Engine: fatigue fade holds the load
+- If the last two sets of a lift's previous session fell under the rep floor (or failed), the next-session prescription holds the load instead of progressing off the single best set. Matches the Gym Mode stop-early advice. `fatigueFadeInLastSession` in `src/lib/progression.js`; tests in `tests/progression-fatigue-fade.test.js`.
+
+### Gym Mode: stop-early advice
+- After two finished sets in a row under the rep floor (or failed) with sets still pending, a chip says it's fine to stop the lift and offers one tap to drop the remaining sets.
+
+### Gym Mode: remember "skip warm-ups" per lift
+- A lift's details now have "Always skip warm-ups for this lift"; the choice is stored in `gymPrefs.skipWarmups`, drops that lift's ramp sets and shortens the predicted session time.
 
 ### Gym Mode: rest after a rep shortfall
 - When you log fewer reps than the bottom of the target and skip RIR/RPE, the auto rest adds 30 s (capped at 5 min). Your own saved rest preset still wins.

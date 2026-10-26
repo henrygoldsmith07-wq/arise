@@ -51,7 +51,7 @@ import { setHapticsSource } from './lib/haptics.js';
 import OfflineBanner from './components/OfflineBanner.jsx';
 import DemoBanner from './components/DemoBanner.jsx';
 const InstallCard = lazy(() => import('./components/InstallCard.jsx'));
-import { setRestPreset } from './lib/gymMode.js';
+import { setRestPreset, setWarmupSkip } from './lib/gymMode.js';
 import { cancellationPlan } from './services/workoutCancellationService.js';
 import { setTelemetryConsent } from './services/settingsService.js';
 
@@ -523,6 +523,10 @@ export default function App(){
     });
   },[]);
 
+  const handleSetWarmupSkip = useCallback((exerciseId, skip)=>{
+    setStoreState(prev=>({ ...prev, gymPrefs: { ...(prev.gymPrefs||{}), skipWarmups: setWarmupSkip(prev.gymPrefs, exerciseId, skip), updatedAt: new Date().toISOString() } }));
+  },[]);
+
   const handleSaveSession = async (payload)=>{
     if(saveInFlightRef.current) return;
     saveInFlightRef.current = true;
@@ -834,6 +838,7 @@ export default function App(){
           appPrefs={store.preferences || null}
           gymPrefs={store.gymPrefs || null}
           onSetRestPreset={handleSetRestPreset}
+          onSetWarmupSkip={handleSetWarmupSkip}
           draft={store.activeWorkout?.session?.id===activeSession.id ? store.activeWorkout : null}
           measurementConsent={store.preferences?.telemetryEnabled === true}
           studyEnrollment={store.studyEnrollment || null}

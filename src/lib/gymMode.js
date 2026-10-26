@@ -144,6 +144,26 @@ export function setRestPreset(gymPrefs, exerciseId, seconds){
   return next;
 }
 
+// ── Warm-up skip memory ─────────────────────────────────────────────────────
+// Remembered per lift in gymPrefs.skipWarmups ({exerciseId:true}); the runner
+// drops that lift's ramp sets from the plan and the predicted session length.
+
+export function warmupsSkipped(gymPrefs, exerciseId){
+  return gymPrefs?.skipWarmups?.[exerciseId] === true;
+}
+
+export function setWarmupSkip(gymPrefs, exerciseId, skip){
+  const next = { ...(gymPrefs?.skipWarmups || {}) };
+  if(skip) next[exerciseId] = true;
+  else delete next[exerciseId];
+  return next;
+}
+
+export function effectiveWarmups(block, gymPrefs){
+  if(!block || !Array.isArray(block.warmups)) return [];
+  return warmupsSkipped(gymPrefs, block.exerciseId) ? [] : block.warmups;
+}
+
 // ── Skip-to navigation ──────────────────────────────────────────────────────
 // One tap to jump to the first unfinished set of a named exercise — for when
 // you come back from a water refill and want straight back to the rack.
@@ -235,5 +255,29 @@ export function nextSetAdvice(block, { equipment = 'machine', config = null } = 
     reason: dir < 0
       ? `Set ${nextIdx} gave ${reps} reps, under the ${range.min}–${range.max} range.`
       : `Set ${nextIdx} hit ${reps} reps with ${rirN} left in the tank.`,
+  };
+}
+
+// ── Stop-early advice ───────────────────────────────────────────────────────
+// Two finished sets in a row under the rep floor (or failed) with sets still
+// pending means the lift is fatigued: more junk volume costs recovery (and
+// the next ride) without adding stimulus. Advice only; the lifter taps to drop
+// the pending sets. Needs ≥ 2 sets already done so one bad set never triggers.
+export function stopEarlyAdvice(block){
+  const sets = Array.isArray(block?.sets) ? block.sets : [];
+  const range = parseRepRange(block?.reps);
+  if(!range) return null;
+  const done = sets.filter(s => s.completed || s.failed);
+  const pendingIdx = sets.map((s, i) => (!s.completed && !s.failed && !s.skipped) ? i : -1).filter(i => i >= 0);
+  if(done.length < 2 || !pendingIdx.length) return null;
+  const lastTwo = done.slice(-2);
+  const low = s => s.failed || (s.reps != null && s.reps !== '' && Number.isFinite(Number(s.reps)) && Number(s.reps) < range.min);
+  if(!lastTwo.every(low)) return null;
+  // Only the tail of the list may be pending; a skipped middle set means the user is reordering.
+  const lastDoneIdx = sets.lastIndexOf(lastTwo[1]);
+  if(pendingIdx.some(i => i < lastDoneIdx)) return null;
+  return {
+    pendingIndexes: pendingIdx,
+    reason: `Two sets in a row came in under ${range.min} reps. More sets now add fatigue, not much stimulus.`,
   };
 }
