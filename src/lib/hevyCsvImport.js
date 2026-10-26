@@ -86,11 +86,52 @@ export const HEVY_EXERCISE_MAP = Object.freeze({
 
 const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 
-/** Hevy name → Arise id (or null). `byId` guards against ids Arise doesn't have. */
+const STOP = new Set(['the', 'a', 'an', 'with', 'on']);
+const EQUIP_SYNONYM = { 'machine plates': 'machine', 'plate loaded': 'machine', 'smith': 'smith', 'ez': 'ez', 'ezbar': 'ez' };
+
+/** Light plural stemmer: "curls"→"curl"; never mangles "press" or "cross". */
+export function stemToken(w){
+  if(w.length <= 3 || /(ss|us)$/.test(w)) return w;
+  if(/(ch|sh|x|ss)es$/.test(w)) return w.slice(0, -2);
+  return w.endsWith('s') ? w.slice(0, -1) : w;
+}
+
+/** Order-free token key: "Bench Press (Dumbbell)" and "Dumbbell Bench Press" share one. */
+export function exerciseTokenKey(title){
+  let t = norm(title).replace(/[()\-_/,]+/g, ' ');
+  for(const [from, to] of Object.entries(EQUIP_SYNONYM)) t = t.replace(new RegExp(`\\b${from}\\b`, 'g'), to);
+  const toks = t.split(' ').filter(w => w && !STOP.has(w)).map(stemToken);
+  return [...new Set(toks)].sort().join(' ');
+}
+
+let tokenIndex = null, tokenIndexFor = null;
+function indexFor(byId){
+  if(tokenIndex && tokenIndexFor === byId) return tokenIndex;
+  const idx = new Map();
+  for(const [id, ex] of Object.entries(byId)){
+    const k = exerciseTokenKey(ex && ex.name);
+    if(!k) continue;
+    idx.set(k, idx.has(k) ? null : id); // null = ambiguous, never guess
+  }
+  tokenIndex = idx; tokenIndexFor = byId;
+  return idx;
+}
+
+/**
+ * Hevy name → Arise id (or null). `byId` guards against ids Arise doesn't have.
+ * Curated map first; then, only when a library is supplied, an order-free exact
+ * name match (unique only), so "Dumbbell Bench Press" lands without guessing.
+ */
 export function resolveHevyExercise(title, byId = null){
   const id = HEVY_EXERCISE_MAP[norm(title)];
-  if(!id) return null;
-  return !byId || byId[id] ? id : null;
+  if(id) return !byId || byId[id] ? id : null;
+  if(!byId) return null;
+  const idx = indexFor(byId);
+  const hit = idx.get(exerciseTokenKey(title));
+  if(hit) return hit;
+  // Barbell is the implied default for bare library names ("Pendlay Row").
+  const bare = exerciseTokenKey(title).split(' ').filter(w => w !== 'barbell').join(' ');
+  return /\bbarbell\b/i.test(title) ? (idx.get(bare) || null) : null;
 }
 
 const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
