@@ -231,3 +231,27 @@ export function nextSetAdvice(block, { equipment = 'machine', config = null } = 
       : `Set ${nextIdx} hit ${reps} reps with ${rirN} left in the tank.`,
   };
 }
+
+// ── Stop-early advice ───────────────────────────────────────────────────────
+// Two finished sets in a row under the rep floor (or failed) with sets still
+// pending means the lift is fatigued: more junk volume costs recovery (and
+// the next ride) without adding stimulus. Advice only; the lifter taps to drop
+// the pending sets. Needs ≥ 2 sets already done so one bad set never triggers.
+export function stopEarlyAdvice(block){
+  const sets = Array.isArray(block?.sets) ? block.sets : [];
+  const range = parseRepRange(block?.reps);
+  if(!range) return null;
+  const done = sets.filter(s => s.completed || s.failed);
+  const pendingIdx = sets.map((s, i) => (!s.completed && !s.failed) ? i : -1).filter(i => i >= 0);
+  if(done.length < 2 || !pendingIdx.length) return null;
+  const lastTwo = done.slice(-2);
+  const low = s => s.failed || (Number.isFinite(Number(s.reps)) && s.reps !== '' && Number(s.reps) < range.min);
+  if(!lastTwo.every(low)) return null;
+  // Only the tail of the list may be pending; a skipped middle set means the user is reordering.
+  const lastDoneIdx = sets.lastIndexOf(lastTwo[1]);
+  if(pendingIdx.some(i => i < lastDoneIdx)) return null;
+  return {
+    pendingIndexes: pendingIdx,
+    reason: `Two sets in a row came in under ${range.min} reps. More sets now add fatigue, not much stimulus.`,
+  };
+}

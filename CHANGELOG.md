@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Gym Mode: stop-early advice
+- After two finished sets in a row under the rep floor (or failed) with sets still pending, a chip says it's fine to stop the lift and offers one tap to drop the remaining sets.
+
 ### Gym Mode: next-set advice
 - After a set finishes under the rep range (or fails), the next set of a loaded lift offers a one-tap lighter load; at the top of the range with 2+ reps in reserve it offers a heavier one. Never auto-applied, hidden once you change the load yourself.
 
