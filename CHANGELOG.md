@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Gym Mode: rest after a rep shortfall
+- When you log fewer reps than the bottom of the target and skip RIR/RPE, the auto rest adds 30 s (capped at 5 min). Your own saved rest preset still wins.
+
 ### Hevy import: fewer skipped exercises
 - Hevy names that aren't in the curated map now match a library exercise when the words are the same in any order ("Bench Press (Dumbbell)" = "Dumbbell Bench Press") and the match is unique; ambiguous or different-equipment lifts stay in the "skipped" list, never guessed.
 

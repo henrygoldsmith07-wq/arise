@@ -113,9 +113,15 @@ export function restPresetFor(gymPrefs, exerciseId, fallbackSec){
 // a grind (RIR 0 / RPE >= 9.5) earns +30 s and an easy set (RIR >= 3 /
 // RPE <= 6) trims 15 s (never below 45 s, never above 300 s). A remembered
 // preset always wins: their choice is never overridden. Unknown effort = no change.
-export function effortAdjustedRest(baseSec, { rir = null, rpe = null } = {}, { hasUserPreset = false } = {}){
+export function effortAdjustedRest(baseSec, { rir = null, rpe = null, reps = null, minReps = null } = {}, { hasUserPreset = false } = {}){
   const base = Math.round(Number(baseSec) || 0);
   if(base <= 0 || hasUserPreset) return base;
+  // Rep shortfall (fewer reps than the bottom of the target) is a grind even
+  // when RIR/RPE were not logged: +30 s, same cap as a grind.
+  const repsN = reps === null || reps === '' ? NaN : Number(reps);
+  const minN = minReps === null || minReps === '' ? NaN : Number(minReps);
+  const noEffort = (rir === null || rir === '' || rir === undefined) && (rpe === null || rpe === '' || rpe === undefined);
+  if(noEffort && Number.isFinite(repsN) && Number.isFinite(minN) && minN > 0 && repsN > 0 && repsN < minN) return Math.min(300, base + 30);
   const rirN = rir === null || rir === '' ? NaN : Number(rir);
   const rpeN = rpe === null || rpe === '' ? NaN : Number(rpe);
   let r = Number.isFinite(rirN) ? rirN : (Number.isFinite(rpeN) ? 10 - rpeN : NaN);
