@@ -188,6 +188,31 @@ describe('effortAdjustedRest', () => {
   });
 });
 
+import { stopEarlyAdvice } from '../src/lib/gymMode.js';
+describe('stopEarlyAdvice', () => {
+  it('ignores skipped sets as pending and null reps as low', () => {
+    assert.equal(stopEarlyAdvice(mk([{completed:true,reps:5},{completed:true,reps:5},{skipped:true}])), null);
+    assert.equal(stopEarlyAdvice(mk([{completed:true,reps:5},{completed:true,reps:null},{}])), null);
+  });
+  const mk = (sets, reps='8-12') => ({ reps, sets });
+  it('fires after two low sets with sets pending', () => {
+    const a = stopEarlyAdvice(mk([{completed:true,reps:7},{completed:true,reps:6},{},{}]));
+    assert.deepEqual(a.pendingIndexes, [2,3]);
+  });
+  it('counts failed sets as low', () => {
+    assert.ok(stopEarlyAdvice(mk([{completed:true,reps:5},{failed:true},{}])));
+  });
+  it('does not fire on a single low set, in-range sets, or nothing pending', () => {
+    assert.equal(stopEarlyAdvice(mk([{completed:true,reps:6},{completed:true,reps:9},{}])), null);
+    assert.equal(stopEarlyAdvice(mk([{completed:true,reps:5},{}])), null);
+    assert.equal(stopEarlyAdvice(mk([{completed:true,reps:5},{completed:true,reps:5}])), null);
+  });
+  it('ignores a skipped middle set and unparseable reps', () => {
+    assert.equal(stopEarlyAdvice(mk([{completed:true,reps:5},{},{completed:true,reps:5}])), null);
+    assert.equal(stopEarlyAdvice(mk([{completed:true,reps:5},{completed:true,reps:5},{}], 'AMRAP')), null);
+  });
+});
+
 describe('warm-up skip memory', () => {
   it('remembers and clears a skip per lift without mutating prefs', () => {
     const prefs = { skipWarmups: { a: true } };
