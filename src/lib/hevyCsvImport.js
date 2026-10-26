@@ -89,11 +89,18 @@ const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 const STOP = new Set(['the', 'a', 'an', 'with', 'on']);
 const EQUIP_SYNONYM = { 'machine plates': 'machine', 'plate loaded': 'machine', 'smith': 'smith', 'ez': 'ez', 'ezbar': 'ez' };
 
+/** Light plural stemmer: "curls"→"curl"; never mangles "press" or "cross". */
+export function stemToken(w){
+  if(w.length <= 3 || /(ss|us)$/.test(w)) return w;
+  if(/(ch|sh|x|ss)es$/.test(w)) return w.slice(0, -2);
+  return w.endsWith('s') ? w.slice(0, -1) : w;
+}
+
 /** Order-free token key: "Bench Press (Dumbbell)" and "Dumbbell Bench Press" share one. */
 export function exerciseTokenKey(title){
   let t = norm(title).replace(/[()\-_/,]+/g, ' ');
   for(const [from, to] of Object.entries(EQUIP_SYNONYM)) t = t.replace(new RegExp(`\\b${from}\\b`, 'g'), to);
-  const toks = t.split(' ').filter(w => w && !STOP.has(w)).map(w => w.length > 3 ? w.replace(/(es|s)$/, m => (m === 'es' && !/(ss|ch|sh|x)es$/.test(w) ? 'es' : '')).replace(/s$/, '') : w);
+  const toks = t.split(' ').filter(w => w && !STOP.has(w)).map(stemToken);
   return [...new Set(toks)].sort().join(' ');
 }
 
