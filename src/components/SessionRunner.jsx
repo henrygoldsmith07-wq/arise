@@ -9,7 +9,7 @@ import { substitutionOptions } from '../lib/substitutions.js';
 import { recordEvent, trackFieldFocus, fieldCommitted } from '../lib/telemetry.js';
 import { markRecommendationOverride } from '../lib/longitudinal.js';
 import { buildRunnerRecommendationMeta, recordProspectiveRecommendation, runnerStudy } from '../lib/runnerRecommendations.js';
-import { quickJumps, applyQuickJump, skipTo, restPresetFor, nextSetAdvice, stopEarlyAdvice, extraSetAdvice, effortAdjustedRest, hasUserRestPreset, visiblePrescriptionIndexes, warmupsSkipped, effectiveWarmups } from '../lib/gymMode.js';
+import { quickJumps, applyQuickJump, skipTo, restPresetFor, nextSetAdvice, stopEarlyAdvice, extraSetAdvice, longerRestAdvice, effortAdjustedRest, hasUserRestPreset, visiblePrescriptionIndexes, warmupsSkipped, effectiveWarmups } from '../lib/gymMode.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
 import { needsWorkingWeight, warmupsFromFoundLoad } from '../lib/workingWeight.js';
 import WorkingWeightFinder from './WorkingWeightFinder.jsx';
@@ -979,6 +979,12 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                   <div data-testid="stop-early-advice" role="status" className="flex items-center gap-2 flex-wrap rounded-xl border border-line bg-surface2 px-3 py-2 text-[11px] text-ink2">
                     <span className="min-w-0 flex-1">{stop.reason} Fine to stop this lift here.</span>
                     <button type="button" onClick={()=> [...stop.pendingIndexes].reverse().forEach(i=> removeSet(bi, i))} className="min-h-11 min-w-11 px-3 rounded-full border border-ink text-xs font-bold">Drop {stop.pendingIndexes.length} remaining {stop.pendingIndexes.length===1?'set':'sets'}</button>
+                  </div>
+                ) : null; })()}
+                {(()=>{ const lr = onSetRestPreset ? longerRestAdvice(b, { restSec: restPresetFor(gymPrefs, b.exerciseId, b.restSec) || b.restSec, hasUserPreset: hasUserRestPreset(gymPrefs, b.exerciseId) }) : null; return lr ? (
+                  <div data-testid="longer-rest-advice" role="status" className="flex items-center gap-2 flex-wrap rounded-xl border border-line bg-surface2 px-3 py-2 text-[11px] text-ink2">
+                    <span className="min-w-0 flex-1">{lr.reason}</span>
+                    <button type="button" onClick={()=> onSetRestPreset(b.exerciseId, lr.seconds)} className="min-h-11 min-w-11 px-3 rounded-full border border-ink text-xs font-bold">Rest {lr.seconds} s for this lift</button>
                   </div>
                 ) : null; })()}
                 {(()=>{ const extra = extraSetAdvice(b); return extra ? (
