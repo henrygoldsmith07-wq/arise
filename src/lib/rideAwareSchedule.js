@@ -130,3 +130,34 @@ export function rideLiftOverlay(history, rideDays, { weeks = 4, todayISO = null 
   }
   return out;
 }
+
+/**
+ * Heads-up for the session the lifter is about to do: names the leg exercises
+ * and says which ride they would cost. Returns null when there is no clash.
+ * `swapSuggestion` lists upper-body-only block ids so the UI can offer to skip legs.
+ */
+export function legRideWarning(session, dateISO, rideDays){
+  if(!session || !dateISO || !hasLegWork(session)) return null;
+  const clash = rideClash(dateISO, rideDays);
+  if(!clash) return null;
+  const legs = [];
+  const upperBlockIds = [];
+  for(const b of session.blocks || []){
+    const ex = EXERCISE_BY_ID[b.exerciseId];
+    if(ex && LOWER.has(ex.muscle)) legs.push(ex.name || b.exerciseId);
+    else upperBlockIds.push(b.exerciseId);
+  }
+  const when = clash === 'ride-day' ? 'on a key ride day' : 'the day before a key ride';
+  return {
+    clash,
+    legExercises: legs,
+    upperBlockIds,
+    message: `This session has leg work (${legs.slice(0, 3).join(', ')}${legs.length > 3 ? '…' : ''}) ${when}. Heavy legs can cost you the ride — do the upper blocks and skip or halve the legs.`,
+  };
+}
+
+/** Session copy without lower-body blocks (never empties a session). */
+export function withoutLegBlocks(session){
+  const blocks = (session?.blocks || []).filter(b => !LOWER.has(EXERCISE_BY_ID[b.exerciseId]?.muscle));
+  return blocks.length ? { ...session, blocks, legsSkippedForRide: true } : session;
+}

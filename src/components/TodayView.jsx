@@ -9,6 +9,7 @@ import { backupRecency as computeBackupRecency, backupRecencyLabel, readBackupSt
 import WhatChangedPanel from './WhatChangedPanel.jsx';
 import { isSimpleView } from '../lib/experienceMode.js';
 import { buildCoachingState } from '../lib/coach/coachingState.js';
+import { legRideWarning } from '../lib/rideAwareSchedule.js';
 import { storedWorkoutMode, workoutModePatch, workoutModeLabel } from '../lib/workoutMode.js';
 
 // Lazy: the panel pulls the full coaching-state graph, which must never
@@ -177,6 +178,7 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
     onStartSession({ ...today, mode: 'guided' });
   };
 
+  const rideWarning = heroSession ? legRideWarning(heroSession, heroSession.dateISO, sched?.keyRideDays) : null;
   return (
     <>
     {heroSession ? (
@@ -189,6 +191,7 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
               <h2 className="text-2xl font-black tracking-tight truncate">{heroSession.title}</h2>
               <p className="text-xs text-ink3">{heroSession.dateISO}{sched ? ` · Week ${sched.sessions.find(s=> s.status!=='done')?.week || '?'}` : ''}</p>
               <p className="text-[11px] text-ink2 mt-0.5">{coach.nextSession.objective}</p>
+              {rideWarning && <p role="status" data-testid="leg-ride-warning" className="text-[11px] text-ink2 mt-1.5 rounded-lg border border-line bg-surface2 px-2 py-1.5">{rideWarning.message}</p>}
             </div>
             <span className="shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-full bg-surface2 border border-line tabular-nums">≈{timePlan?.changed ? timePlan.estimatedDurationMin : coach.nextSession.estimatedDurationMin} min</span>
           </div>

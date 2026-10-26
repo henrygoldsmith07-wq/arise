@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Added
+- Today shows a heads-up when the next session has leg work on a key ride day or the day before (`legRideWarning`, `withoutLegBlocks` in `rideAwareSchedule.js`).
+
 - Gym Mode: next-set advice now uses your own machine increment and, when the next step would be a jump over 15% of the load, says to keep the weight and add reps.
 
 - Gym Mode: after every planned set hits the top of the range with 3+ reps left, an "Add 1 set" suggestion appears (max 4 sets).
