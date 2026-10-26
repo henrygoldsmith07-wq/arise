@@ -6,6 +6,9 @@ import assert from 'node:assert/strict';
 import {
   quickJumps,
   applyQuickJump,
+  warmupsSkipped,
+  setWarmupSkip,
+  effectiveWarmups,
   adjacentLoad,
   equipmentIncrement,
   REST_PRESET_CHOICES,
@@ -207,5 +210,27 @@ describe('stopEarlyAdvice', () => {
   it('ignores a skipped middle set and unparseable reps', () => {
     assert.equal(stopEarlyAdvice(mk([{completed:true,reps:5},{},{completed:true,reps:5}])), null);
     assert.equal(stopEarlyAdvice(mk([{completed:true,reps:5},{completed:true,reps:5},{}], 'AMRAP')), null);
+  });
+});
+
+describe('warm-up skip memory', () => {
+  it('remembers and clears a skip per lift without mutating prefs', () => {
+    const prefs = { skipWarmups: { a: true } };
+    const on = setWarmupSkip(prefs, 'b', true);
+    assert.deepEqual(on, { a: true, b: true });
+    assert.deepEqual(prefs.skipWarmups, { a: true });
+    assert.deepEqual(setWarmupSkip({ skipWarmups: on }, 'a', false), { b: true });
+    assert.deepEqual(setWarmupSkip(null, 'a', false), {});
+  });
+  it('reports skip only for exact true', () => {
+    assert.equal(warmupsSkipped({ skipWarmups: { a: true } }, 'a'), true);
+    assert.equal(warmupsSkipped({ skipWarmups: { a: 'yes' } }, 'a'), false);
+    assert.equal(warmupsSkipped(null, 'a'), false);
+  });
+  it('drops ramp sets for skipped lifts only', () => {
+    const block = { exerciseId: 'a', warmups: [{ reps: 8, weightKg: 20 }] };
+    assert.equal(effectiveWarmups(block, { skipWarmups: { a: true } }).length, 0);
+    assert.equal(effectiveWarmups(block, { skipWarmups: { b: true } }).length, 1);
+    assert.deepEqual(effectiveWarmups({ exerciseId: 'a' }, null), []);
   });
 });

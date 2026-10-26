@@ -144,6 +144,26 @@ export function setRestPreset(gymPrefs, exerciseId, seconds){
   return next;
 }
 
+// ── Warm-up skip memory ─────────────────────────────────────────────────────
+// Remembered per lift in gymPrefs.skipWarmups ({exerciseId:true}); the runner
+// drops that lift's ramp sets from the plan and the predicted session length.
+
+export function warmupsSkipped(gymPrefs, exerciseId){
+  return gymPrefs?.skipWarmups?.[exerciseId] === true;
+}
+
+export function setWarmupSkip(gymPrefs, exerciseId, skip){
+  const next = { ...(gymPrefs?.skipWarmups || {}) };
+  if(skip) next[exerciseId] = true;
+  else delete next[exerciseId];
+  return next;
+}
+
+export function effectiveWarmups(block, gymPrefs){
+  if(!block || !Array.isArray(block.warmups)) return [];
+  return warmupsSkipped(gymPrefs, block.exerciseId) ? [] : block.warmups;
+}
+
 // ── Skip-to navigation ──────────────────────────────────────────────────────
 // One tap to jump to the first unfinished set of a named exercise — for when
 // you come back from a water refill and want straight back to the rack.
