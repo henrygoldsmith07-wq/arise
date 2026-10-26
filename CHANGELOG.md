@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Hevy import: fewer skipped exercises
+- Hevy names that aren't in the curated map now match a library exercise when the words are the same in any order ("Bench Press (Dumbbell)" = "Dumbbell Bench Press") and the match is unique; ambiguous or different-equipment lifts stay in the "skipped" list, never guessed.
+
 - Onboarding asks how many days a week you ride or train; 4+ pins the 2-day Rider Upper plan on the shelf (stored as rideDaysPerWeek on the device).
 
 ### Guided Mode: first-lift weight finder
