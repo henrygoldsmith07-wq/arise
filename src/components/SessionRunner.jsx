@@ -9,7 +9,7 @@ import { substitutionOptions } from '../lib/substitutions.js';
 import { recordEvent, trackFieldFocus, fieldCommitted } from '../lib/telemetry.js';
 import { markRecommendationOverride } from '../lib/longitudinal.js';
 import { buildRunnerRecommendationMeta, recordProspectiveRecommendation, runnerStudy } from '../lib/runnerRecommendations.js';
-import { quickJumps, applyQuickJump, skipTo, restPresetFor, nextSetAdvice, effortAdjustedRest, hasUserRestPreset, visiblePrescriptionIndexes } from '../lib/gymMode.js';
+import { quickJumps, applyQuickJump, skipTo, restPresetFor, nextSetAdvice, effortAdjustedRest, hasUserRestPreset, visiblePrescriptionIndexes, warmupsSkipped, effectiveWarmups } from '../lib/gymMode.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
 import { needsWorkingWeight, warmupsFromFoundLoad } from '../lib/workingWeight.js';
 import WorkingWeightFinder from './WorkingWeightFinder.jsx';
@@ -64,7 +64,7 @@ import {
 const ExerciseHistorySheet = lazy(() => import('./ExerciseHistorySheet.jsx'));
 const TeachingPanel = lazy(() => import('./TeachingPanel.jsx'));
 
-export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, appPrefs = null, gymPrefs = null, onSetRestPreset = null, studyEnrollment = null, participantId = null, onDraftChange, onSave, onCancel }){
+export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, appPrefs = null, gymPrefs = null, onSetRestPreset = null, onSetWarmupSkip = null, studyEnrollment = null, participantId = null, onDraftChange, onSave, onCancel }){
   const unit = asUnit(appPrefs?.units);
   // Explanation verbosity comes from the training-policy preference; the
   // reference was previously undefined (a latent crash when explanations
@@ -418,10 +418,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   // from actual logging speed. Display-only — never telemetered.
   const pace = useMemo(()=>{
     try{
-      const plannedMin = predictSessionDuration(blocks.map(b=> ({ sets: b.sets.length, restSec: b.restSec, warmups: b.warmups })));
+      const plannedMin = predictSessionDuration(blocks.map(b=> ({ sets: b.sets.length, restSec: b.restSec, warmups: effectiveWarmups(b, gymPrefs) })));
       return sessionPace({ startedAtMs: Date.parse(startedAtRef.current), nowMs: clock, completedSets, totalSets, plannedMin });
     }catch{ return null; }
-  },[blocks, clock, completedSets, totalSets]);
+  },[blocks, clock, completedSets, totalSets, gymPrefs]);
   const paceLabel = pace ? `About ${pace.remainingMin} minutes left, estimated finish ${new Date(pace.etaMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${pace.aheadBehind === 'ahead' ? ', ahead of plan' : pace.aheadBehind === 'behind' ? ', behind plan' : ''}` : null;
 
   // Gym Mode skip-to: index into the full block list for the first match.
@@ -918,7 +918,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     <summary className="text-[11px] text-ink3 cursor-pointer select-none">Details & rationale</summary>
                     <div className="mt-1 space-y-0.5 text-[11px] text-ink3">
                       {ex?.cues?.[0] && <p>Cue: {ex.cues[0]}</p>}
-                      {b.warmups?.length ? <p>Warm-ups: {b.warmups.map(w=> `${w.reps}×${w.weightKg||'bw'}${w.note?` (${w.note})`:''}`).join(' • ')}</p> : null}
+                      {b.warmups?.length ? (warmupsSkipped(gymPrefs, b.exerciseId)
+                        ? <p>Warm-ups skipped for this lift.</p>
+                        : <p>Warm-ups: {b.warmups.map(w=> `${w.reps}×${w.weightKg||'bw'}${w.note?` (${w.note})`:''}`).join(' • ')}</p>) : null}
+                      {b.warmups?.length && onSetWarmupSkip ? <button type="button" data-testid={`warmup-skip-${b.exerciseId}`} aria-pressed={warmupsSkipped(gymPrefs, b.exerciseId)} onClick={()=> onSetWarmupSkip(b.exerciseId, !warmupsSkipped(gymPrefs, b.exerciseId))} className="min-h-11 text-xs font-bold px-3 rounded-full border border-line bg-surface2">{warmupsSkipped(gymPrefs, b.exerciseId) ? 'Bring warm-ups back' : 'Always skip warm-ups for this lift'}</button> : null}
                     {b.restSec ? <p>Rest {formatRest(b.restSec)} · load hint: {b.loadHint || '—'}</p> : null}
                       {b.why && <p className="italic">Prescribed: {b.why}</p>}
                       {recommendation?.confidence && <p>{confidenceLanguage(recommendation.confidence.band, recommendation.confidence.band === 'high' ? 'repeated performance at this load supports the prescription' : recommendation.confidence.band === 'medium' ? 'your recent sessions show a consistent pattern' : 'few comparable sessions so far — this is a cautious estimate')}</p>}
