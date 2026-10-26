@@ -552,7 +552,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       }
       // Auto-start the rest countdown unless the user turned it off
       // (preferences.autoRest, default on). Manual Start rest stays as override.
-      if(preferences?.autoRest !== false && appPrefs?.autoRest !== false && hasUnfinishedSet(blocks,bi,si)) startRest(effortAdjustedRest(restPresetFor(gymPrefs, block.exerciseId, block.restSec) || block.restSec, { rir: set.rir, rpe: set.rpe }, { hasUserPreset: hasUserRestPreset(gymPrefs, block.exerciseId) }), EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId, block.exerciseId);
+      if(preferences?.autoRest !== false && appPrefs?.autoRest !== false && hasUnfinishedSet(blocks,bi,si)) startRest(effortAdjustedRest(restPresetFor(gymPrefs, block.exerciseId, block.restSec) || block.restSec, { rir: set.rir, rpe: set.rpe, reps: set.reps, minReps: parseInt(String(block.reps ?? '').split(/[-–]/)[0], 10) || null }, { hasUserPreset: hasUserRestPreset(gymPrefs, block.exerciseId) }), EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId, block.exerciseId);
     }else{
       // Undoing a completion is a correction, recorded as its own fact so
       // friction metrics can count undos without guessing from missing rows.
