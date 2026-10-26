@@ -203,6 +203,15 @@ export function recommendNext({ exerciseId, history, targetReps = null, conserva
     return plateAware({ load, reps, reason: `Hold load because last session had noisy context (${noisy.join(', ')}) — need a clean exposure before progressing.`, noisy, strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version }, plateConfig, exerciseId);
   }
 
+  // Fatigue fade: the best set can look fine while the last two sets of that
+  // session collapsed under the rep floor (the same signal Gym Mode's
+  // stop-early advice acts on). Progressing off the single best set would add
+  // load to a lift the lifter could not sustain, so hold for one clean exposure.
+  const fade = fatigueFadeInLastSession(history, exerciseId, lo, asOfDateISO);
+  if(fade){
+    return plateAware({ load, reps, reason: `Your last two sets last time fell under ${lo} reps (${fade.reps.join(' and ')}) — hold ${load > 0 ? `${load} kg` : 'the same target'} and get every set to ${lo}+ before progressing.`, fatigueFade: fade, strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version }, plateConfig, exerciseId);
+  }
+
   // Assisted progression (e.g. pull-up with band/assist): add reps first, then REDUCE assist.
   const assist = last.assistedKg != null && last.assistedKg !== '' ? Number(last.assistedKg) : null;
   if(assist != null && assist > 0){
@@ -693,6 +702,22 @@ export function noisyFlagsForLastSession(history, exerciseId, config = null, asO
     }
   }
   return flags;
+}
+
+// Last session's trailing two logged sets both under the rep floor (or failed),
+// with at least 3 sets logged so one bad set or a short session never counts.
+export function fatigueFadeInLastSession(history, exerciseId, lo, asOfDateISO = null){
+  const sessions = orderedHistory(history).filter(h=> !asOfDateISO || String(h?.dateISO || '') <= String(asOfDateISO));
+  for(let i = sessions.length - 1; i >= 0; i--){
+    const sets = (sessions[i].blocks||[]).filter(b=> b.exerciseId===exerciseId).flatMap(b=> b.sets||[]).filter(x=> !x.skipped);
+    if(!sets.length) continue;
+    if(sets.length < 3) return null;
+    const tail = sets.slice(-2);
+    const repsOf = x=> Number(String(x.reps).match(/\d+/)?.[0] || x.reps) || 0;
+    if(tail.every(x=> x.failed || repsOf(x) < lo)) return { reps: tail.map(repsOf), sets: sets.length };
+    return null;
+  }
+  return null;
 }
 
 function parseLow(s, config = null){ const m=String(s).match(/\d+/); return m? Number(m[0]) : resolveArisePriors(config).progression.defaultLowReps; }
