@@ -421,7 +421,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       const plannedMin = predictSessionDuration(blocks.map(b=> ({ sets: b.sets.length, restSec: b.restSec, warmups: effectiveWarmups(b, gymPrefs) })));
       return sessionPace({ startedAtMs: Date.parse(startedAtRef.current), nowMs: clock, completedSets, totalSets, plannedMin });
     }catch{ return null; }
-  },[blocks, clock, completedSets, totalSets]);
+  },[blocks, clock, completedSets, totalSets, gymPrefs]);
   const paceLabel = pace ? `About ${pace.remainingMin} minutes left, estimated finish ${new Date(pace.etaMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${pace.aheadBehind === 'ahead' ? ', ahead of plan' : pace.aheadBehind === 'behind' ? ', behind plan' : ''}` : null;
 
   // Gym Mode skip-to: index into the full block list for the first match.
