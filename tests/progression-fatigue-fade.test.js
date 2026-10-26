@@ -25,3 +25,16 @@ test('two failed sets count as a fade; skipped sets are ignored', ()=>{
 test('two-set sessions never trigger', ()=>{
   assert.equal(fatigueFadeInLastSession([sess('2026-10-15', [[40, 6], [40, 6]])], 'lat-pulldown', 8), null);
 });
+
+test('two fades in a row at the same load step the load down ~10%', ()=>{
+  const h = [sess('2026-10-10', [[40, 10, 8], [40, 7, 9], [40, 6, 10]]), sess('2026-10-15', [[40, 10, 8], [40, 7, 9], [40, 6, 10]])];
+  const r = rec(h);
+  assert.ok(r.load < 40 && r.load >= 34, String(r.load));
+  assert.equal(r.fadeStreak, 2);
+  assert.match(r.reason, /last two sessions/i);
+});
+
+test('fades at different loads do not chain, and one fade still just holds', ()=>{
+  const h = [sess('2026-10-10', [[37.5, 10, 8], [37.5, 7, 9], [37.5, 6, 10]]), sess('2026-10-15', [[40, 10, 8], [40, 7, 9], [40, 6, 10]])];
+  assert.equal(rec(h).load, 40);
+});

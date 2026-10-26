@@ -209,6 +209,13 @@ export function recommendNext({ exerciseId, history, targetReps = null, conserva
   // load to a lift the lifter could not sustain, so hold for one clean exposure.
   const fade = fatigueFadeInLastSession(history, exerciseId, lo, asOfDateISO);
   if(fade){
+    const fs = fatigueFadeStreak(history, exerciseId, lo, asOfDateISO);
+    if(fs.streak >= 2 && load > 0){
+      const lower = snapLoad(load * 0.9, cfg);
+      if(lower > 0 && lower < load){
+        return plateAware({ load: lower, reps: lo, reason: `Your last two sessions at ${load} kg both faded under ${lo} reps — drop to ${lower} kg and rebuild: it is the load, not effort, that is too heavy right now.`, fatigueFade: fade, fadeStreak: fs.streak, deload: true, strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version }, plateConfig, exerciseId);
+      }
+    }
     return plateAware({ load, reps, reason: `Your last two sets last time fell under ${lo} reps (${fade.reps.join(' and ')}) — hold ${load > 0 ? `${load} kg` : 'the same target'} and get every set to ${lo}+ before progressing.`, fatigueFade: fade, strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version }, plateConfig, exerciseId);
   }
 
@@ -718,6 +725,25 @@ export function fatigueFadeInLastSession(history, exerciseId, lo, asOfDateISO = 
     return null;
   }
   return null;
+}
+
+// Consecutive most-recent sessions (same lift) that each ended in a fade. One
+// fade holds the load; two in a row at the same load mean the load itself is
+// too heavy to sustain for the prescribed sets, so the engine steps it down.
+export function fatigueFadeStreak(history, exerciseId, lo, asOfDateISO = null){
+  const sessions = orderedHistory(history).filter(h=> !asOfDateISO || String(h?.dateISO || '') <= String(asOfDateISO));
+  const repsOf = x=> Number(String(x.reps).match(/\d+/)?.[0] || x.reps) || 0;
+  let streak = 0, load = null;
+  for(let i = sessions.length - 1; i >= 0; i--){
+    const sets = (sessions[i].blocks||[]).filter(b=> b.exerciseId===exerciseId).flatMap(b=> b.sets||[]).filter(x=> !x.skipped);
+    if(!sets.length) continue;
+    const tail = sets.slice(-2);
+    if(sets.length < 3 || !tail.every(x=> x.failed || repsOf(x) < lo)) break;
+    const w = Math.max(...sets.map(x=> Number(x.weightKg)||0));
+    if(load !== null && w !== load) break;
+    load = w; streak++;
+  }
+  return { streak, load };
 }
 
 function parseLow(s, config = null){ const m=String(s).match(/\d+/); return m? Number(m[0]) : resolveArisePriors(config).progression.defaultLowReps; }
