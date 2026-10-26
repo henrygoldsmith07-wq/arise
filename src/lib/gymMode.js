@@ -227,6 +227,7 @@ export function parseRepRange(reps){
   return n ? { min: Number(n[1]), max: Number(n[1]) } : null;
 }
 
+export const COARSE_JUMP_FRACTION = 0.15;
 export function nextSetAdvice(block, { equipment = 'machine', config = null } = {}){
   const sets = Array.isArray(block?.sets) ? block.sets : [];
   const range = parseRepRange(block?.reps);
@@ -252,6 +253,17 @@ export function nextSetAdvice(block, { equipment = 'machine', config = null } = 
   if(!dir) return null;
   const target = Number(adjacentLoad(load, dir, { equipment, config }));
   if(!Number.isFinite(target) || target === load || target <= 0) return null;
+  // A step up bigger than COARSE_JUMP_FRACTION of the load (a 10 kg pin on a
+  // 30 kg stack is +33%) would drop the next set under the rep floor: advise
+  // holding the load and chasing reps instead of offering the jump.
+  if(dir > 0 && (target - load) / load > COARSE_JUMP_FRACTION){
+    return {
+      setIndex: nextIdx,
+      direction: 'hold',
+      loadKg: load,
+      reason: `Set ${nextIdx} hit ${reps} reps with ${rirN} left, but the next ${Math.round((target - load) * 100) / 100} kg step is a big jump on ${load} kg.`,
+    };
+  }
   return {
     setIndex: nextIdx,
     direction: dir < 0 ? 'down' : 'up',
