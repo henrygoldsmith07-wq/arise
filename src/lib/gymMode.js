@@ -186,3 +186,48 @@ export function visiblePrescriptionIndexes({ gymMode = false, focusIdx = 0, bloc
   if(!gymMode) return Array.from({ length: count }, (_, i)=> i);
   return focusIdx >= 0 && focusIdx < count ? [focusIdx] : [];
 }
+
+// ── In-session next-set advice ──────────────────────────────────────────────
+// After a completed set, compare its reps with the planned range and say what
+// to do with the NEXT set of the same lift. It never rewrites anything: the
+// lifter taps "Use" to accept. Reps below the range floor → one increment
+// lighter (a bad first set is the usual signal the opening load was too high);
+// reps at/above the ceiling with room left (RIR ≥ 2, or RIR unknown →
+// no bump) → one increment heavier. Failed sets count as a drop.
+export function parseRepRange(reps){
+  const m = String(reps ?? '').match(/(\d+)\s*[–\-]\s*(\d+)/);
+  if(m) return { min: Number(m[1]), max: Number(m[2]) };
+  const n = String(reps ?? '').match(/^\s*(\d+)\s*$/);
+  return n ? { min: Number(n[1]), max: Number(n[1]) } : null;
+}
+
+export function nextSetAdvice(block, { equipment = 'machine', config = null } = {}){
+  const sets = Array.isArray(block?.sets) ? block.sets : [];
+  const range = parseRepRange(block?.reps);
+  if(!range) return null;
+  const nextIdx = sets.findIndex(s => !s.completed && !s.failed);
+  if(nextIdx <= 0) return null;
+  const prev = sets[nextIdx - 1];
+  if(!prev || !(prev.completed || prev.failed)) return null;
+  const load = Number(prev.weightKg);
+  if(!Number.isFinite(load) || load <= 0) return null;
+  const nextLoad = Number(sets[nextIdx].weightKg);
+  if(Number.isFinite(nextLoad) && nextLoad > 0 && nextLoad !== load) return null; // already adjusted by the user
+  const reps = prev.failed ? 0 : Number(prev.reps);
+  if(!Number.isFinite(reps)) return null;
+  const rirN = prev.rir === '' || prev.rir == null ? NaN : Number(prev.rir);
+  let dir = 0;
+  if(reps < range.min) dir = -1;
+  else if(reps >= range.max && Number.isFinite(rirN) && rirN >= 2) dir = 1;
+  if(!dir) return null;
+  const target = Number(adjacentLoad(load, dir, { equipment, config }));
+  if(!Number.isFinite(target) || target === load || target <= 0) return null;
+  return {
+    setIndex: nextIdx,
+    direction: dir < 0 ? 'down' : 'up',
+    loadKg: target,
+    reason: dir < 0
+      ? `Set ${nextIdx} gave ${reps} reps, under the ${range.min}–${range.max} range.`
+      : `Set ${nextIdx} hit ${reps} reps with ${rirN} left in the tank.`,
+  };
+}

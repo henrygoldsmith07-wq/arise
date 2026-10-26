@@ -12,6 +12,10 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Gym Mode: next-set advice
+- After a set finishes under the rep range (or fails), the next set of a loaded lift offers a one-tap lighter load; at the top of the range with 2+ reps in reserve it offers a heavier one. Never auto-applied, hidden once you change the load yourself.
+
+
 - Onboarding asks how many days a week you ride or train; 4+ pins the 2-day Rider Upper plan on the shelf (stored as rideDaysPerWeek on the device).
 
 ### Guided Mode: first-lift weight finder
