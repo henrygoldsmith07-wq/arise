@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Gym Mode: remember "skip warm-ups" per lift
+- A lift's details now have "Always skip warm-ups for this lift"; the choice is stored in `gymPrefs.skipWarmups`, drops that lift's ramp sets and shortens the predicted session time.
+
 ### Gym Mode: rest after a rep shortfall
 - When you log fewer reps than the bottom of the target and skip RIR/RPE, the auto rest adds 30 s (capped at 5 min). Your own saved rest preset still wins.
 ### Gym Mode: next-set advice
