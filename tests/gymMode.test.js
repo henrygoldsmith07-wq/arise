@@ -188,7 +188,7 @@ describe('effortAdjustedRest', () => {
   });
 });
 
-import { stopEarlyAdvice } from '../src/lib/gymMode.js';
+import { stopEarlyAdvice, extraSetAdvice } from '../src/lib/gymMode.js';
 describe('stopEarlyAdvice', () => {
   it('ignores skipped sets as pending and null reps as low', () => {
     assert.equal(stopEarlyAdvice(mk([{completed:true,reps:5},{completed:true,reps:5},{skipped:true}])), null);
@@ -232,5 +232,21 @@ describe('warm-up skip memory', () => {
     assert.equal(effectiveWarmups(block, { skipWarmups: { a: true } }).length, 0);
     assert.equal(effectiveWarmups(block, { skipWarmups: { b: true } }).length, 1);
     assert.deepEqual(effectiveWarmups({ exerciseId: 'a' }, null), []);
+  });
+});
+
+describe('extraSetAdvice', () => {
+  const mk = (sets, reps='8-12') => ({ reps, sets });
+  const d = (reps, rir) => ({ completed:true, reps, rir });
+  it('offers one more set when all sets topped the range with 3+ RIR', () => {
+    assert.ok(extraSetAdvice(mk([d(12,3),d(12,3),d(12,4)])));
+  });
+  it('stays quiet with sets pending, low effort, unknown RIR, fixed reps or the cap', () => {
+    assert.equal(extraSetAdvice(mk([d(12,3),{}])), null);
+    assert.equal(extraSetAdvice(mk([d(12,3),d(12,2)])), null);
+    assert.equal(extraSetAdvice(mk([d(12,3),d(12,'')])), null);
+    assert.equal(extraSetAdvice(mk([d(10,3),d(12,3)])), null);
+    assert.equal(extraSetAdvice(mk([d(5,3),d(5,3)], '5')), null);
+    assert.equal(extraSetAdvice(mk([d(12,3),d(12,3),d(12,3),d(12,3)])), null);
   });
 });

@@ -12,6 +12,8 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+- Gym Mode: after every planned set hits the top of the range with 3+ reps left, an "Add 1 set" suggestion appears (max 4 sets).
+
 ### Progress: rides vs lifting overlay
 - New "Rides vs lifting" card on Progress (needs key ride days set): per week, lift days vs ride days and how many leg sets landed on a ride day or the day before. `rideLiftOverlay` in rideAwareSchedule.js; tests/ride-lift-overlay.test.js.
 ### Engine: fatigue fade holds the load
