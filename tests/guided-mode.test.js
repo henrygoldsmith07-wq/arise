@@ -188,3 +188,29 @@ describe('guidedMode — save payload', () => {
     assert.ok(ids.includes('pain-discomfort'));
   });
 });
+
+import { applyFoundLoadToBlock } from '../src/lib/guidedMode.js';
+import { needsWorkingWeight } from '../src/lib/workingWeight.js';
+
+describe('guidedMode — first-lift finder', () => {
+  it('applies the found load to pending sets only and swaps the warm-ups', () => {
+    const blocks = [{ exerciseId: 'a', sets: [{ completed: true, weightKg: '10' }, { skipped: true, weightKg: '' }, { weightKg: '' }, { weightKg: '5' }] }];
+    const out = applyFoundLoadToBlock(blocks, 0, 22.5, [{ kg: 10 }]);
+    assert.deepEqual(out[0].sets.map(s => s.weightKg), ['10', '', '22.5', '22.5']);
+    assert.deepEqual(out[0].warmups, [{ kg: 10 }]);
+    assert.notEqual(out, blocks);
+  });
+  it('ignores bad input and other blocks', () => {
+    const blocks = [{ sets: [{ weightKg: '' }] }, { sets: [{ weightKg: '' }] }];
+    assert.equal(applyFoundLoadToBlock(blocks, 5, 20), blocks);
+    assert.equal(applyFoundLoadToBlock(blocks, 0, ''), blocks);
+    const out = applyFoundLoadToBlock(blocks, 1, 20);
+    assert.equal(out[0], blocks[0]);
+    assert.equal(out[1].sets[0].weightKg, '20');
+  });
+  it('a guided first-ever loaded lift needs the finder; one with a load does not', () => {
+    const b = { exerciseId: 'chest-press-machine', sets: [{ weightKg: '' }] };
+    assert.equal(needsWorkingWeight({ block: b, history: [], takesLoad: true }), true);
+    assert.equal(needsWorkingWeight({ block: { ...b, sets: [{ weightKg: '30' }] }, history: [], takesLoad: true }), false);
+  });
+});

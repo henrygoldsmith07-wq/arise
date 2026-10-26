@@ -14,6 +14,8 @@ the history is the changelog; this file is its human-readable index.
 
 - Onboarding asks how many days a week you ride or train; 4+ pins the 2-day Rider Upper plan on the shelf (stored as rideDaysPerWeek on the device).
 
+### Guided Mode: first-lift weight finder
+- A guided step for a loaded lift you have never logged now offers "Not sure what weight? Find it": one easy trial set fills the load for every remaining set of that exercise and builds the warm-up ramp.
 
 ### Gym Mode: coarse-jump chip
 - When the stack's next step is a >20% jump, the target row shows "Stay at 20 kg — add reps up to 15" as a 44px chip instead of leaving the held load unexplained.

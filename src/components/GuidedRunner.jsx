@@ -12,6 +12,7 @@ import {
   buildGuidedPayload,
   withGuidedStepPrescription,
   applyGuidedTreatment,
+  applyFoundLoadToBlock,
 } from '../lib/guidedMode.js';
 import { recordEvent, trackFieldFocus, fieldCommitted } from '../lib/telemetry.js';
 import { POLICY_ORDER } from '../lib/progressionPolicies.js';
@@ -29,6 +30,8 @@ import { useWorkoutClock, useWorkoutDraftPersistence, useWorkoutWakeLock } from 
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
 import { RestDock, WeightInput } from './GymModePanel.jsx';
 import { asUnit, fmtWeight } from '../lib/units.ts';
+import WorkingWeightFinder from './WorkingWeightFinder.jsx';
+import { needsWorkingWeight, warmupsFromFoundLoad } from '../lib/workingWeight.js';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
 const TeachingPanel = lazy(() => import('./TeachingPanel.jsx'));
 
@@ -425,6 +428,16 @@ export default function GuidedRunner({ session, history = [], availableEquipment
                     {currentBlock.loadHint ? <span className="text-ink3"> · {currentBlock.loadHint}</span> : null}
                   </p>
                   {(h=> h && <p className="text-[11px] text-ink2 mt-1">{h}</p>)(firstLoadHint({ takesLoad: takesExternalLoad(currentExercise), weightKg: currentSet?.weightKg }))}
+                  {needsWorkingWeight({ block: currentBlock, history, recommendation: activeRec, takesLoad: takesExternalLoad(currentExercise) }) && (
+                    <div className="mt-2" data-testid="guided-weight-finder">
+                      <WorkingWeightFinder exerciseId={currentBlock.exerciseId} targetReps={currentBlock.reps} unit={unit} plateConfig={plateConfig}
+                        onUse={(kg)=> {
+                          markUserEdited();
+                          const ramp = warmupsFromFoundLoad({ exerciseId: currentBlock.exerciseId, loadKg: kg, targetReps: currentBlock.reps });
+                          setBlocks(prev=> applyFoundLoadToBlock(prev, step.blockIndex, kg, ramp));
+                        }} />
+                    </div>
+                  )}
                   {currentExercise?.cues?.[0] && <p className="text-[11px] text-ink3 mt-1">Cue: {currentExercise.cues[0]}</p>}
                   {activeArm && activeRec && (
                     <p className="text-[11px] text-ink3 mt-1">
