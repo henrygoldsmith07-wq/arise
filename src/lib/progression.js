@@ -213,7 +213,7 @@ export function recommendNext({ exerciseId, history, targetReps = null, conserva
     if(fs.streak >= 2 && load > 0){
       const lower = snapLoad(load * 0.9, cfg);
       if(lower > 0 && lower < load){
-        return { load: lower, reps: lo, reason: `Your last two sessions at ${load} kg both faded under ${lo} reps — drop to ${lower} kg and rebuild: it is the load, not effort, that is too heavy right now.`, fatigueFade: fade, fadeStreak: fs.streak, deload: true, strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version };
+        return plateAware({ load: lower, reps: lo, reason: `Your last two sessions at ${load} kg both faded under ${lo} reps — drop to ${lower} kg and rebuild: it is the load, not effort, that is too heavy right now.`, fatigueFade: fade, fadeStreak: fs.streak, deload: true, strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version }, plateConfig, exerciseId);
       }
     }
     return plateAware({ load, reps, reason: `Your last two sets last time fell under ${lo} reps (${fade.reps.join(' and ')}) — hold ${load > 0 ? `${load} kg` : 'the same target'} and get every set to ${lo}+ before progressing.`, fatigueFade: fade, strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version }, plateConfig, exerciseId);
