@@ -287,3 +287,21 @@ export function stopEarlyAdvice(block){
     reason: `Two sets in a row came in under ${range.min} reps. More sets now add fatigue, not much stimulus.`,
   };
 }
+
+// ── Extra-set advice ────────────────────────────────────────────────────────
+// Every planned set is done, each reached the top of the rep range and the last
+// one still had 3+ reps in reserve: the lift was clearly too easy for its volume.
+// Offer ONE more set (capped at 4 sets) so a short plan does not waste a fresh
+// session. Advice only; never fires with sets pending or unknown effort.
+export const EXTRA_SET_CAP = 4;
+export function extraSetAdvice(block){
+  const sets = Array.isArray(block?.sets) ? block.sets : [];
+  const range = parseRepRange(block?.reps);
+  if(!range || range.min === range.max || sets.length < 2 || sets.length >= EXTRA_SET_CAP) return null;
+  if(!sets.every(s => s.completed && !s.failed && !s.skipped)) return null;
+  if(!sets.every(s => Number.isFinite(Number(s.reps)) && s.reps !== '' && Number(s.reps) >= range.max)) return null;
+  const last = sets[sets.length - 1];
+  const rir = last.rir === '' || last.rir == null ? NaN : Number(last.rir);
+  if(!Number.isFinite(rir) || rir < 3) return null;
+  return { reason: `All ${sets.length} sets hit ${range.max} reps with ${rir} left in the tank. One more set will still count.` };
+}

@@ -12,6 +12,7 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+- Gym Mode: after every planned set hits the top of the range with 3+ reps left, an "Add 1 set" suggestion appears (max 4 sets).
 ### Gym Mode: step down after a grinder opening set
 - When set 1 lands on the rep floor with nothing left (RIR 0) and two or more sets remain, the next-set advice offers one load step down so later sets stay in range instead of triggering stop-early.
 
