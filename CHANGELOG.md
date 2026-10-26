@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Progress: rides vs lifting overlay
+- New "Rides vs lifting" card on Progress (needs key ride days set): per week, lift days vs ride days and how many leg sets landed on a ride day or the day before. `rideLiftOverlay` in rideAwareSchedule.js; tests/ride-lift-overlay.test.js.
+
 ### Gym Mode: rest after a rep shortfall
 - When you log fewer reps than the bottom of the target and skip RIR/RPE, the auto rest adds 30 s (capped at 5 min). Your own saved rest preset still wins.
 ### Gym Mode: next-set advice
