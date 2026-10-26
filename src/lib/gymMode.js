@@ -248,10 +248,10 @@ export function stopEarlyAdvice(block){
   const range = parseRepRange(block?.reps);
   if(!range) return null;
   const done = sets.filter(s => s.completed || s.failed);
-  const pendingIdx = sets.map((s, i) => (!s.completed && !s.failed) ? i : -1).filter(i => i >= 0);
+  const pendingIdx = sets.map((s, i) => (!s.completed && !s.failed && !s.skipped) ? i : -1).filter(i => i >= 0);
   if(done.length < 2 || !pendingIdx.length) return null;
   const lastTwo = done.slice(-2);
-  const low = s => s.failed || (Number.isFinite(Number(s.reps)) && s.reps !== '' && Number(s.reps) < range.min);
+  const low = s => s.failed || (s.reps != null && s.reps !== '' && Number.isFinite(Number(s.reps)) && Number(s.reps) < range.min);
   if(!lastTwo.every(low)) return null;
   // Only the tail of the list may be pending; a skipped middle set means the user is reordering.
   const lastDoneIdx = sets.lastIndexOf(lastTwo[1]);

@@ -187,6 +187,10 @@ describe('effortAdjustedRest', () => {
 
 import { stopEarlyAdvice } from '../src/lib/gymMode.js';
 describe('stopEarlyAdvice', () => {
+  it('ignores skipped sets as pending and null reps as low', () => {
+    assert.equal(stopEarlyAdvice(mk([{completed:true,reps:5},{completed:true,reps:5},{skipped:true}])), null);
+    assert.equal(stopEarlyAdvice(mk([{completed:true,reps:5},{completed:true,reps:null},{}])), null);
+  });
   const mk = (sets, reps='8-12') => ({ reps, sets });
   it('fires after two low sets with sets pending', () => {
     const a = stopEarlyAdvice(mk([{completed:true,reps:7},{completed:true,reps:6},{},{}]));
