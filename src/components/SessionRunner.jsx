@@ -965,10 +965,14 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                 <div className="hidden sm:grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] gap-1.5 text-[10px] font-bold uppercase tracking-widest text-ink3 px-1">
                   <span>#</span><span>Load {unit}</span><span>Reps</span><span className="flex items-center normal-case">RIR<JargonHelp term="RIR" /></span><span>{b.unilateral?'L/R':''}</span><span>Done</span><span></span>
                 </div>
-                {(()=>{ const adv = supportsWeighted ? nextSetAdvice(b, { equipment: ex?.equipment?.[0] || 'machine' }) : null; return adv ? (
+                {(()=>{ const adv = supportsWeighted ? nextSetAdvice(b, { equipment: ex?.equipment?.[0] || 'machine', config: plateConfig }) : null; return adv ? (
                   <div data-testid="next-set-advice" role="status" className="flex items-center gap-2 flex-wrap rounded-xl border border-line bg-surface2 px-3 py-2 text-[11px] text-ink2">
+                    {adv.direction === 'hold' ? (
+                      <span className="min-w-0 flex-1">{adv.reason} Keep {fmtWeight(adv.loadKg, unit)} and add reps instead.</span>
+                    ) : (<>
                     <span className="min-w-0 flex-1">{adv.reason} Next set: {adv.direction === 'down' ? 'a bit lighter' : 'a bit heavier'} — {fmtWeight(adv.loadKg, unit)}?</span>
                     <button type="button" onClick={()=> updateSet(bi, adv.setIndex, { weightKg: String(adv.loadKg) })} className="min-h-11 min-w-11 px-3 rounded-full border border-ink text-xs font-bold">Use {fmtWeight(adv.loadKg, unit)}</button>
+                    </>)}
                   </div>
                 ) : null; })()}
                 {(()=>{ const stop = stopEarlyAdvice(b); return stop ? (

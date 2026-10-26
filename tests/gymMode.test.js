@@ -265,3 +265,22 @@ describe('nextSetAdvice: opening set at the floor with RIR 0', () => {
     assert.equal(nextSetAdviceRir0(mk(3, { ...first, rir: 1 }), { equipment: 'machine' }), null);
   });
 });
+
+import { nextSetAdvice as nsaCoarse } from '../src/lib/gymMode.js';
+describe('nextSetAdvice: coarse stacks and the lifter\'s own config', () => {
+  const blk = (w) => ({ reps: '8–12', sets: [{ completed: true, weightKg: w, reps: 12, rir: 3 }, { weightKg: w }] });
+  it('holds the load instead of offering a +33% jump on a 10 kg pin', () => {
+    const a = nsaCoarse(blk(30), { equipment: 'machine', config: { machineIncrementKg: 10 } });
+    assert.equal(a.direction, 'hold');
+    assert.equal(a.loadKg, 30);
+  });
+  it('still offers a step up when it is small relative to the load', () => {
+    const a = nsaCoarse(blk(60), { equipment: 'machine', config: { machineIncrementKg: 5 } });
+    assert.equal(a.direction, 'up');
+    assert.equal(a.loadKg, 65);
+  });
+  it('uses the configured increment rather than the default', () => {
+    const a = nsaCoarse(blk(100), { equipment: 'machine', config: { machineIncrementKg: 10 } });
+    assert.equal(a.loadKg, 115); // pin stack is anchored at its minimum weight, so the 10 kg grid is 5, 15, …
+  });
+});
