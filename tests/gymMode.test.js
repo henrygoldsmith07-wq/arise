@@ -248,6 +248,9 @@ describe('extraSetAdvice', () => {
     assert.equal(extraSetAdvice(mk([d(10,3),d(12,3)])), null);
     assert.equal(extraSetAdvice(mk([d(5,3),d(5,3)], '5')), null);
     assert.equal(extraSetAdvice(mk([d(12,3),d(12,3),d(12,3),d(12,3)])), null);
+  });
+});
+
 import { nextSetAdvice as nextSetAdviceRir0 } from '../src/lib/gymMode.js';
 describe('nextSetAdvice: opening set at the floor with RIR 0', () => {
   const mk = (n, first) => ({ reps: '8–12', sets: Array.from({ length: n }, (_, i) => i === 0 ? first : { weightKg: 50 }) });
