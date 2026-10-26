@@ -12,6 +12,8 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Progress: rides vs lifting overlay
+- New "Rides vs lifting" card on Progress (needs key ride days set): per week, lift days vs ride days and how many leg sets landed on a ride day or the day before. `rideLiftOverlay` in rideAwareSchedule.js; tests/ride-lift-overlay.test.js.
 ### Engine: fatigue fade holds the load
 - If the last two sets of a lift's previous session fell under the rep floor (or failed), the next-session prescription holds the load instead of progressing off the single best set. Matches the Gym Mode stop-early advice. `fatigueFadeInLastSession` in `src/lib/progression.js`; tests in `tests/progression-fatigue-fade.test.js`.
 

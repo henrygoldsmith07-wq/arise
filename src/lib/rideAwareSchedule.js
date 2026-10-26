@@ -93,3 +93,40 @@ export function suggestLiftDays(rideDays, count = 3){
   }
   return chosen.sort((a, b) => order.indexOf(a) - order.indexOf(b));
 }
+
+/**
+ * Ride-vs-lift overlay: for each of the last `weeks` Monday-start weeks, how
+ * many logged sessions were lifting days, how many leg sets were done on a key
+ * ride day or the day before (the clash that hurts rides), and the total.
+ * Pure; returns [] without ride days or history. Newest week last.
+ */
+export function rideLiftOverlay(history, rideDays, { weeks = 4, todayISO = null } = {}){
+  const days = normaliseRideDays(rideDays);
+  if(!days.length || !Array.isArray(history) || !history.length) return [];
+  const mondayOf = iso => { const w = weekday(iso); return toISO(toMs(iso) - ((w + 6) % 7) * DAY); };
+  const latest = todayISO || history.map(h => h.dateISO).filter(Boolean).sort().pop();
+  if(!latest) return [];
+  const thisMon = toMs(mondayOf(latest));
+  const out = [];
+  for(let i = weeks - 1; i >= 0; i--){
+    const start = thisMon - i * 7 * DAY;
+    const end = start + 7 * DAY;
+    const row = { weekStart: toISO(start), liftDays: 0, legSets: 0, clashLegSets: 0, rideDays: days.length };
+    const lifted = new Set();
+    for(const h of history){
+      const t = h.dateISO ? toMs(h.dateISO) : NaN;
+      if(!(t >= start && t < end)) continue;
+      lifted.add(h.dateISO);
+      const clash = rideClash(h.dateISO, days);
+      for(const b of h.blocks || []){
+        if(!LOWER.has(EXERCISE_BY_ID[b.exerciseId]?.muscle)) continue;
+        const n = (b.sets || []).length;
+        row.legSets += n;
+        if(clash) row.clashLegSets += n;
+      }
+    }
+    row.liftDays = lifted.size;
+    out.push(row);
+  }
+  return out;
+}

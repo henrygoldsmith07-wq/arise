@@ -20,6 +20,7 @@ import { strengthTrends, workCapacity, consistencyReport, confidenceLanguage, pe
 import { totalVolumeKg } from '../lib/store.js';
 import { fmtWeight } from '../lib/units.ts';
 import { EXERCISE_BY_ID } from '../lib/data.js';
+import { rideLiftOverlay } from '../lib/rideAwareSchedule.js';
 import { weeklyVolume, frequencyByMuscleSync, volumeLandmarks, volumeDistribution, strengthSeries, extractNoteRecommendations, plannedVsCompletedStats, volumeBalanceAdvice } from '../lib/analytics.js';
 import { linearRegressionIntervals } from '../lib/statistics.js';
 import { strengthTrendWithConfidence, classifyPR, isUnilateralExercise, sideImbalance } from '../lib/progression.js';
@@ -75,6 +76,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
   const changes = useMemo(()=> whatChangedSummary({ schedule: store.activeSchedule, history }), [store.activeSchedule, history]);
   const prs = useMemo(()=> computePRs(history), [history]);
   const wv = useMemo(()=> weeklyVolume(history), [history]);
+  const rideOverlay = useMemo(()=> rideLiftOverlay(history, store.activeSchedule?.keyRideDays, { weeks: 4, todayISO: today }), [history, store.activeSchedule?.keyRideDays, today]);
   // Evidence-gated “Am I improving?” assessment. Volume is only supporting
   // context inside the assessment; the verdict needs repeated-exercise
   // performance plus prescription follow-through.
@@ -658,6 +660,22 @@ export default function ProgressView({ store, setStore = null, onStart = null })
         )}
         {!!wv.length && <p className="text-xs text-ink3 mt-2"><JargonHelp term="RPE" /><JargonHelp term="RIR" /> {wv[wv.length-1]?.vol> (wv[wv.length-2]?.vol||0)*1.2 ? `Volume up ${Math.round((wv[wv.length-1].vol/(wv[wv.length-2]?.vol||1)-1)*100)}% vs last week — hold steady or deload if RPE was high.` : wv[wv.length-1]?.vol < (wv[wv.length-2]?.vol||0)*0.8 ? 'Volume dipped — good if planned deload, otherwise add a session.' : 'Trends look steady — keep progressing where RIR ≥2.'}</p>}
       </section>
+
+      {rideOverlay.some(r => r.liftDays > 0) && (
+        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="Rides and lifting" data-testid="ride-overlay">
+          <h3 className="text-sm font-bold">Rides vs lifting</h3>
+          <p className="text-xs text-ink2">Leg sets done on a key ride day or the day before are what tend to blunt rides.</p>
+          <ul className="space-y-1.5">
+            {rideOverlay.map(r => (
+              <li key={r.weekStart} className="flex items-center gap-2 text-xs">
+                <span className="w-16 font-bold">Wk {r.weekStart.slice(5)}</span>
+                <span className="tabular-nums text-ink2">{r.liftDays} lift day{r.liftDays === 1 ? '' : 's'} · {r.rideDays} ride day{r.rideDays === 1 ? '' : 's'}</span>
+                <span className={`ml-auto rounded-full border px-2 py-0.5 text-[10px] font-bold ${r.clashLegSets > 0 ? 'border-review bg-reviewsoft text-ink' : 'border-line bg-surface2 text-ink2'}`}>{r.clashLegSets > 0 ? `${r.clashLegSets} leg set${r.clashLegSets === 1 ? '' : 's'} near a ride` : 'Legs clear'}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Advanced analytics, gated exactly like "Volume landmarks" above:
           standard users get the headline signals, expert users get the
