@@ -10,6 +10,7 @@ import {
   setWarmupSkip,
   effectiveWarmups,
   adjacentLoad,
+  longerRestAdvice,
   equipmentIncrement,
   REST_PRESET_CHOICES,
   defaultRestPreset,
@@ -282,5 +283,23 @@ describe('nextSetAdvice: coarse stacks and the lifter\'s own config', () => {
   it('uses the configured increment rather than the default', () => {
     const a = nsaCoarse(blk(100), { equipment: 'machine', config: { machineIncrementKg: 10 } });
     assert.equal(a.loadKg, 115); // pin stack is anchored at its minimum weight, so the 10 kg grid is 5, 15, …
+  });
+});
+
+describe('longerRestAdvice', () => {
+  const d = reps => ({ completed:true, reps });
+  const mk = (sets, restSec=90) => ({ restSec, sets });
+  it('suggests a longer remembered rest after a 3+ rep drop on short rest', () => {
+    const a = longerRestAdvice(mk([d(12),d(8),{}]));
+    assert.equal(a.seconds, 120);
+  });
+  it('stays quiet without a big drop, pending sets, short data or on long rest', () => {
+    assert.equal(longerRestAdvice(mk([d(12),d(10),{}])), null);
+    assert.equal(longerRestAdvice(mk([d(12),d(8)])), null);
+    assert.equal(longerRestAdvice(mk([d(12),{},{}])), null);
+    assert.equal(longerRestAdvice(mk([d(12),d(8),{}], 150)), null);
+  });
+  it('never overrides the lifter own preset', () => {
+    assert.equal(longerRestAdvice(mk([d(12),d(8),{}]), { hasUserPreset:true }), null);
   });
 });
