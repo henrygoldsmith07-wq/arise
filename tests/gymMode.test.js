@@ -173,6 +173,12 @@ describe('effortAdjustedRest', () => {
     assert.equal(effortAdjustedRest(90, { rir: 2 }), 90);
     assert.equal(effortAdjustedRest(0, { rir: 0 }), 0);
   });
+  it('adds 30s on a rep shortfall when effort was not logged', () => {
+    assert.equal(effortAdjustedRest(90, { reps: 5, minReps: 8 }), 120);
+    assert.equal(effortAdjustedRest(90, { reps: 8, minReps: 8 }), 90);
+    assert.equal(effortAdjustedRest(90, { reps: 5, minReps: 8 }, { hasUserPreset: true }), 90);
+    assert.equal(effortAdjustedRest(90, { reps: 5, minReps: 8, rir: 2 }), 90);
+  });
   it('detects stored presets', () => {
     assert.equal(hasUserRestPreset({ restPresets: { a: 60 } }, 'a'), true);
     assert.equal(hasUserRestPreset({}, 'a'), false);
