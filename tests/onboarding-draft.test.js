@@ -7,6 +7,12 @@ import {
 const mem = ()=>{ const m = new Map(); return { getItem:k=> m.has(k)?m.get(k):null, setItem:(k,v)=>m.set(k,String(v)), removeItem:k=>m.delete(k), m }; };
 
 describe('onboarding draft', ()=>{
+  it('keeps the ride-days answer', ()=>{
+    const storage = mem();
+    saveDraft({ sport:'cycling', rideDaysPerWeek:4 }, { storage, now:1000 });
+    assert.equal(loadDraft({ storage, now:2000 }).rideDaysPerWeek, 4);
+    assert.equal(draftDiffers({ rideDaysPerWeek:4 }, { rideDaysPerWeek:0 }), true);
+  });
   it('round-trips answers', ()=>{
     const storage = mem();
     const d = { goal:'strength', equipment:['machine','cable'], days:3, minutes:50, step:2, dumbbellsInput:'10 12' };

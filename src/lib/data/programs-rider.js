@@ -142,7 +142,9 @@ export const RIDER_UPPER_2X_HISTORY = [
 ];
 
 // Which rider plan fits: 2 gym days a week, or 4+ ride days, gets the 2-day one.
-export function riderPlanIdFor({ daysPerWeek = null, rideDays = [] } = {}){
-  const rides = new Set(Array.isArray(rideDays) ? rideDays : []).size;
+export function riderPlanIdFor({ daysPerWeek = null, rideDays = [], rideDaysPerWeek = null } = {}){
+  const marked = new Set(Array.isArray(rideDays) ? rideDays : []).size;
+  const stated = Number.isFinite(Number(rideDaysPerWeek)) ? Math.max(0, Math.min(7, Math.floor(Number(rideDaysPerWeek)))) : 0;
+  const rides = Math.max(marked, stated);
   return (daysPerWeek === 2 || rides >= 4) ? RIDER_UPPER_2X.id : RIDER_UPPER_3X.id;
 }

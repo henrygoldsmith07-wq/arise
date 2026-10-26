@@ -35,3 +35,16 @@ it('onboarding draft keeps the sport answer', ()=>{
   _sd({ goal:'general', sport:'cycling' }, { storage });
   assert.equal(_ld({ storage }).sport, 'cycling');
 });
+
+describe('stated ride days per week picks the variant', () => {
+  it('4+ stated ride days pins the 2-day plan', () => {
+    const shelf = programShelf({ onboarding:{ ...BASE, sport:'cycling', rideDaysPerWeek:5 }, availableEquipment:GYM });
+    assert.equal(shelf.items[0].programId, 'rider-upper-2x');
+  });
+  it('2-3 stated ride days keeps the 3-day plan, junk values ignored', () => {
+    for(const r of [2, 3, 'x', -4, null]){
+      const shelf = programShelf({ onboarding:{ ...BASE, sport:'cycling', rideDaysPerWeek:r }, availableEquipment:GYM });
+      assert.equal(shelf.items[0].programId, 'rider-upper-3x');
+    }
+  });
+});
