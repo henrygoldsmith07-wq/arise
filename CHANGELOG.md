@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Gym Mode: step down after a grinder opening set
+- When set 1 lands on the rep floor with nothing left (RIR 0) and two or more sets remain, the next-set advice offers one load step down so later sets stay in range instead of triggering stop-early.
+
 ### Progress: rides vs lifting overlay
 - New "Rides vs lifting" card on Progress (needs key ride days set): per week, lift days vs ride days and how many leg sets landed on a ride day or the day before. `rideLiftOverlay` in rideAwareSchedule.js; tests/ride-lift-overlay.test.js.
 ### Engine: fatigue fade holds the load
