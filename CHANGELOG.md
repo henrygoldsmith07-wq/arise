@@ -15,6 +15,8 @@ the history is the changelog; this file is its human-readable index.
 ### Gym Mode: next-set advice
 - After a set finishes under the rep range (or fails), the next set of a loaded lift offers a one-tap lighter load; at the top of the range with 2+ reps in reserve it offers a heavier one. Never auto-applied, hidden once you change the load yourself.
 
+### Hevy import: fewer skipped exercises
+- Hevy names that aren't in the curated map now match a library exercise when the words are the same in any order ("Bench Press (Dumbbell)" = "Dumbbell Bench Press") and the match is unique; ambiguous or different-equipment lifts stay in the "skipped" list, never guessed.
 
 - Onboarding asks how many days a week you ride or train; 4+ pins the 2-day Rider Upper plan on the shelf (stored as rideDaysPerWeek on the device).
 

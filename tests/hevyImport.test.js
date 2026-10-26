@@ -1,7 +1,7 @@
-import { describe, it } from 'node:test';
+import { describe, it, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAppCsv, rowsToHistory } from '../src/lib/appCsvImport.js';
-import { isHevyCsv, parseCsvRecords, hevyDate, parseHevyCsv, HEVY_EXERCISE_MAP } from '../src/lib/hevyCsvImport.js';
+import { exerciseTokenKey, stemToken, isHevyCsv, parseCsvRecords, hevyDate, parseHevyCsv, HEVY_EXERCISE_MAP } from '../src/lib/hevyCsvImport.js';
 import { EXERCISE_BY_ID } from '../src/lib/data.js';
 import { importAppCsv } from '../src/services/restoreService.js';
 
@@ -87,4 +87,12 @@ describe('imported sessions survive the merge (regression: id-less entries were 
     assert.equal(b.store.history.length, 1);
     assert.match(b.store.history[0].id, /^hevy-2026-10-23-/);
   });
+});
+
+test('exerciseTokenKey keeps words ending in ss intact and stems plurals', async () => {
+  assert.equal(stemToken('press'), 'press');
+  assert.equal(stemToken('curls'), 'curl');
+  assert.equal(stemToken('benches'), 'bench');
+  assert.ok(exerciseTokenKey('Bench Press (Dumbbell)').includes('press'));
+  assert.equal(exerciseTokenKey('Bench Press (Dumbbell)'), exerciseTokenKey('Dumbbell Bench Press'));
 });
