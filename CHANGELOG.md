@@ -12,6 +12,10 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Gym Mode: step up after an easy opening set
+- A first set with 4+ reps in reserve, even mid-range, now offers the next load step for the remaining sets instead of waiting for the top of the range.
+
+
 - Gym Mode: when set 1 lands 3+ reps over the top of the range and no effort was logged, the next-set chip now offers the step up (previously it needed an RIR entry).
 
 
