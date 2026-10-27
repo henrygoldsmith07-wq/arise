@@ -11,8 +11,10 @@ the network off.
 
 **Is my training data private?** It never leaves the device automatically.
 It travels only when you export it, enable the optional WebDAV sync to *your
-own* storage, or explicitly use a consent-gated integration — the NVIDIA AI
-coach (aggregated numbers + engine findings only), classifier.dev (redacted
+own* storage, or explicitly use a consent-gated integration — the AI
+coach (local-first: a localhost loopback endpoint by default, or any
+OpenAI-compatible API you configure; aggregated numbers + engine findings
+only), classifier.dev (redacted
 feedback or a redacted coach question, off by default), or Pulse. Telemetry
 is off by default and stays on-device. Details: `docs/PRIVACY.md`.
 
