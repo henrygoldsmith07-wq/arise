@@ -494,7 +494,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     const set=block?.sets?.[si];
     if(!set) return;
     const completing=!set.completed;
-    updateSet(bi,si,{ completed: completing });
+    updateSet(bi,si,{ completed: completing, doneAtMs: completing ? Date.now() : undefined });
     if(completing){
       const now=Date.now();
       recordEvent('complete-set', {

@@ -543,3 +543,52 @@ export function observedPrescriptionFollowThrough(history){
     note: governedTargets ? 'Scored against the prescription revision governing each set slot — never reconstructed, never double-counted.' : 'No stored prescriptions yet — legacy sessions are excluded, never fabricated.',
   };
 }
+
+// Rest actually taken between consecutive completed sets of one exercise,
+// from the per-set completion stamp (`doneAtMs`) the Gym Mode runner records.
+// Gaps under 10 s (double tap) or over 15 min (left the gym floor) are noise.
+// Returns per-lift median seconds vs the prescribed rest, and flags a lift
+// whose median is under 60% of prescribed across >= 4 measured gaps.
+export function restTakenByExercise(history, { minGaps = 4 } = {}) {
+  const acc = new Map();
+  for (const w of Array.isArray(history) ? history : []) {
+    for (const b of w?.blocks || []) {
+      const presc = Number(b?.restSec);
+      if (!b?.exerciseId || !Number.isFinite(presc) || presc <= 0) continue;
+      const sets = (b.sets || []).filter(
+        (s) => s?.completed && Number(s.doneAtMs) > 0,
+      );
+      for (let i = 1; i < sets.length; i++) {
+        const gap =
+          (Number(sets[i].doneAtMs) - Number(sets[i - 1].doneAtMs)) / 1000;
+        if (gap < 10 || gap > 900) continue;
+        const e = acc.get(b.exerciseId) || {
+          exerciseId: b.exerciseId,
+          gaps: [],
+          prescribed: [],
+        };
+        e.gaps.push(gap);
+        e.prescribed.push(presc);
+        acc.set(b.exerciseId, e);
+      }
+    }
+  }
+  const med = (a) => {
+    const x = [...a].sort((p, q) => p - q),
+      m = x.length >> 1;
+    return x.length % 2 ? x[m] : (x[m - 1] + x[m]) / 2;
+  };
+  return [...acc.values()]
+    .map((e) => {
+      const medianSec = Math.round(med(e.gaps)),
+        prescribedSec = Math.round(med(e.prescribed));
+      return {
+        exerciseId: e.exerciseId,
+        gaps: e.gaps.length,
+        medianSec,
+        prescribedSec,
+        tooShort: e.gaps.length >= minGaps && medianSec < prescribedSec * 0.6,
+      };
+    })
+    .sort((a, b) => Number(b.tooShort) - Number(a.tooShort) || b.gaps - a.gaps);
+}
