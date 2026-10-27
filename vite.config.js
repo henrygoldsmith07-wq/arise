@@ -15,6 +15,12 @@ export default defineConfig({
     // browser-specific down-transforms without narrowing the app to a bleeding-
     // edge target. Keep bundle budgets fixed; new runtime code must fit them.
     target: 'es2020',
+    // Boot keeps its <link rel="modulepreload"> tags (hostType 'html'), but
+    // dynamic imports no longer carry per-chunk dependency preload lists
+    // (__vite__mapDeps). Every lazy route is precached by the service worker
+    // (scripts/gen-sw.cjs), so those lists only bought a cold first-visit
+    // overlap while costing ~2 kB gz of file-name strings across 20+ chunks.
+    modulePreload: { resolveDependencies: (_file, deps, { hostType }) => (hostType === 'html' ? deps : []) },
     minify: 'terser',
     terserOptions: { format: { comments: false }, compress: { passes: 2, pure_getters: true } },
     rollupOptions: {
@@ -41,6 +47,11 @@ export default defineConfig({
           if(/\/src\/lib\/(longitudinal|longitudinalCore|evaluation|trainingExperiments|export|exportPolicy)\.js$/.test(id)) return 'evidence';
           if(/\/src\/lib\/(progression|progressionModel|substitutions)\.js$/.test(id)) return 'engine';
           if(/\/src\/lib\/(priors|study)\.js$/.test(id)) return 'evidence-core';
+          // Dependency-free leaves each reached only from lazy routes/services.
+          // As ten separate chunks every one paid its own gzip warm-up and
+          // import/export headers; one shared chunk is several kB smaller in
+          // total. Boot is unchanged (no boot module imports them statically).
+          if(/\/src\/lib\/(storageQuota|backupState|quotaGuard|cryptoBackup|crossTabStore|xp|exercisePicker|rideAwareSchedule|readinessLog|stallDeload|demoData)\.js$/.test(id)) return 'leaves';
           // Small settings leaves that always open together from More: one chunk
           // instead of four, each repeating gzip + import/export overhead.
           if(/\/src\/components\/(settings\/(FeedbackSettings|GuidedSettings|AppearanceAccessibilitySettings)|InstallCard)\.jsx$/.test(id)) return 'settings-lite';

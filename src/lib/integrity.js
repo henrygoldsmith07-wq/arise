@@ -55,6 +55,16 @@ export function repairStore(store){
   if(fixed.gymPrefs && (fixed.gymPrefs.restPresets == null || typeof fixed.gymPrefs.restPresets !== 'object' || Array.isArray(fixed.gymPrefs.restPresets))) fixed.gymPrefs.restPresets = {};
   if(!Array.isArray(fixed.tombstones)) fixed.tombstones = [];
   if(fixed.activeSchedule != null && (typeof fixed.activeSchedule !== 'object' || Array.isArray(fixed.activeSchedule))) fixed.activeSchedule = null;
+  // My Programme override layer (programmeEditor.js): sessions are already
+  // materialised, so a damaged layer is dropped — the programme survives, only
+  // reset/undo history is lost.
+  if(fixed.activeSchedule?.programmeEdits != null){
+    const pe = fixed.activeSchedule.programmeEdits;
+    const okDays = (days)=> days && typeof days === 'object' && !Array.isArray(days)
+      && Object.values(days).every(d=> d && Array.isArray(d.blocks) && d.blocks.every(b=> b && typeof b.exerciseId === 'string' && b.exerciseId));
+    const okEdits = typeof pe === 'object' && !Array.isArray(pe) && okDays(pe.days) && (pe.undo == null || okDays(pe.undo.days));
+    if(!okEdits){ fixed.activeSchedule = { ...fixed.activeSchedule }; delete fixed.activeSchedule.programmeEdits; }
+  }
   if(!Array.isArray(fixed.eventHistory)) fixed.eventHistory = [];
   if(!Array.isArray(fixed.evaluationLedger)) fixed.evaluationLedger = [];
   if(!Array.isArray(fixed.readinessLog)) fixed.readinessLog = [];

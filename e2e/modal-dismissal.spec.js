@@ -63,7 +63,8 @@ test('Escape closes the template builder without saving it', async ({ page }) =>
   await expect(builder).toBeHidden();
 
   await expect(page.getByRole('button', { name: '+ New template' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Edit /i })).toHaveCount(0);
+  // ("Edit programme" on the current-programme card is not a template entry.)
+  await expect(page.getByRole('button', { name: /^Edit (?!programme)/i })).toHaveCount(0);
 });
 
 test('Escape is inert outside a modal', async ({ page }) => {
