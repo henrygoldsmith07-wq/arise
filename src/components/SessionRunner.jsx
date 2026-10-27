@@ -1016,7 +1016,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                 ) : null; })()}
                 {(()=>{ const nt = nextTimePreview(b, { exerciseId: b.exerciseId, history, dateISO: session?.dateISO, plateConfig }); return nt ? (
                   <div data-testid="next-time-preview" role="status" className="rounded-xl border border-line bg-surface2 px-3 py-2 text-[11px] text-ink2">
-                    <span className="font-bold text-ink">Next time: {nt.label}.</span> {nt.reason}
+                    <span className="font-bold text-ink">Next time: {nt.label}.</span>{nt.deltaLabel ? <span data-testid="next-time-delta" data-change={nt.change} className="ml-1 inline-block rounded-full border border-line px-2 py-0.5 font-bold text-ink">{nt.deltaLabel}</span> : null} {nt.reason}
                   </div>
                 ) : null; })()}
                 {b.sets.map((s,si)=> (

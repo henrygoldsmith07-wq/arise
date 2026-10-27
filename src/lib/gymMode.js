@@ -420,5 +420,9 @@ export function nextTimePreview(block, { exerciseId, history = [], dateISO = nul
   if(!rec || !(Number(rec.reps) > 0)) return null;
   const load = Number(rec.load);
   const label = load > 0 ? `${load} kg × ${rec.reps}` : `${rec.reps} reps`;
-  return { load: load > 0 ? load : null, reps: Number(rec.reps), label, reason: rec.reason || '' };
+  const lastLoad = Number(finished[finished.length - 1].weightKg);
+  const deltaKg = load > 0 && lastLoad > 0 ? Math.round((load - lastLoad) * 100) / 100 : null;
+  const change = deltaKg == null ? null : deltaKg > 0 ? 'up' : deltaKg < 0 ? 'down' : 'same';
+  const deltaLabel = change === 'up' ? `+${deltaKg} kg` : change === 'down' ? `${deltaKg} kg` : change === 'same' ? 'same load' : '';
+  return { load: load > 0 ? load : null, reps: Number(rec.reps), label, reason: rec.reason || '', deltaKg, change, deltaLabel };
 }
