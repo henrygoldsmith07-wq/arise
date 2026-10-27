@@ -14,6 +14,7 @@ the history is the changelog; this file is its human-readable index.
 
 ### Today: low-readiness trim
 - When today's check-in scores 40/100 or lower, Today offers "Trim one set per lift" (one set off every lift with 3+ sets, never below 2; timed blocks untouched). You choose; undo is one tap.
+- Gym Mode: after a failed or under-floor final set, offer one back-off set about 10% lighter (snapped to your kit).
 
 ### Added
 - Progress shows "Rest you actually took": median rest between sets per lift vs prescribed, flagged when under 60% over 4+ gaps (set completion times are now stored on the device as `doneAtMs`; `restTakenByExercise`).

@@ -314,6 +314,15 @@ export function addUserSetToBlock(block, makeId) {
   };
 }
 
+export function addBackoffSetToBlock(block, loadKg, makeId) {
+  const withSet = addUserSetToBlock(block, makeId);
+  const i = withSet.sets.length - 1;
+  return {
+    ...withSet,
+    sets: withSet.sets.map((s, k) => (k === i ? { ...s, weightKg: String(loadKg) } : s)),
+  };
+}
+
 export function duplicateUnilateralSetInBlock(block, makeId) {
   if (!block?.unilateral) return block;
   const last = block.sets[block.sets.length - 1];
