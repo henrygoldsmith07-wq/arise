@@ -17,6 +17,7 @@ the history is the changelog; this file is its human-readable index.
 - Gym Mode: after a failed or under-floor final set, offer one back-off set about 10% lighter (snapped to your kit).
 
 ### Added
+- Progression: a top-of-range set logged at RPE 10 (a grind) now repeats the load instead of adding weight.
 - Progress shows "Rest you actually took": median rest between sets per lift vs prescribed, flagged when under 60% over 4+ gaps (set completion times are now stored on the device as `doneAtMs`; `restTakenByExercise`).
 - Gym Mode offers a shorter remembered rest (never under 90 s) when two sets held their reps with 3+ in reserve on a long rest you did not choose (`shorterRestAdvice`).
 - Today shows a heads-up when the next session has leg work on a key ride day or the day before (`legRideWarning`, `withoutLegBlocks` in `rideAwareSchedule.js`).
