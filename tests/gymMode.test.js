@@ -324,3 +324,27 @@ describe('shorterRestAdvice', () => {
     assert.equal(shorterRestAdvice(mk([d(12,3),d(12,3),{}]), { hasUserPreset:true }), null);
   });
 });
+
+import { backoffSetAdvice } from '../src/lib/gymMode.js';
+import { addBackoffSetToBlock } from '../src/lib/sessionRunnerModel.js';
+describe('backoffSetAdvice', () => {
+  const mk = (sets, reps = '8-12') => ({ reps, sets });
+  const done = (reps, w = 50, extra = {}) => ({ completed: true, reps, weightKg: w, ...extra });
+  it('offers a ~10% lighter set after a failed final set', () => {
+    const a = backoffSetAdvice(mk([done(10), done(9), { failed: true, weightKg: 50 }]));
+    assert.ok(a && a.loadKg < 50 && a.loadKg >= 44);
+  });
+  it('offers it after a final set under the rep floor', () => {
+    assert.ok(backoffSetAdvice(mk([done(10), done(9), done(6)])));
+  });
+  it('stays quiet when sets are pending, reps hold, or at the set cap', () => {
+    assert.equal(backoffSetAdvice(mk([done(10), { weightKg: 50 }])), null);
+    assert.equal(backoffSetAdvice(mk([done(10), done(9), done(8)])), null);
+    assert.equal(backoffSetAdvice(mk([done(10), done(9), done(8), done(5)])), null);
+  });
+  it('addBackoffSetToBlock appends a user set at the chosen load', () => {
+    const b = addBackoffSetToBlock(mk([done(10), done(6)]), 45, () => 'id');
+    assert.equal(b.sets.length, 3);
+    assert.equal(String(b.sets[2].weightKg), '45');
+  });
+});
