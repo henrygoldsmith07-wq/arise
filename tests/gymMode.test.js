@@ -10,7 +10,7 @@ import {
   setWarmupSkip,
   effectiveWarmups,
   adjacentLoad,
-  longerRestAdvice,
+  longerRestAdvice, shorterRestAdvice,
   equipmentIncrement,
   REST_PRESET_CHOICES,
   defaultRestPreset,
@@ -301,5 +301,26 @@ describe('longerRestAdvice', () => {
   });
   it('never overrides the lifter own preset', () => {
     assert.equal(longerRestAdvice(mk([d(12),d(8),{}]), { hasUserPreset:true }), null);
+  });
+});
+
+describe('shorterRestAdvice', () => {
+  const d = (reps, rir) => ({ completed:true, reps, rir });
+  const mk = (sets, restSec=180) => ({ restSec, sets });
+  it('offers a shorter remembered rest when reps hold with 3+ in reserve on long rest', () => {
+    const a = shorterRestAdvice(mk([d(12,3),d(12,4),{}]));
+    assert.equal(a.seconds, 120);
+    assert.equal(shorterRestAdvice(mk([d(10,3),d(11,3),{}], 150)).seconds, 120);
+  });
+  it('never goes under 90 s and stays quiet on tough or unknown effort', () => {
+    assert.equal(shorterRestAdvice(mk([d(12,3),d(12,3),{}], 120)), null);
+    assert.equal(shorterRestAdvice(mk([d(12,3),d(12,1),{}])), null);
+    assert.equal(shorterRestAdvice(mk([d(12,3),d(12,'' ),{}])), null);
+    assert.equal(shorterRestAdvice(mk([d(12,3),d(9,3),{}])), null);
+  });
+  it('needs pending sets, two done sets and no chosen preset', () => {
+    assert.equal(shorterRestAdvice(mk([d(12,3),d(12,3)])), null);
+    assert.equal(shorterRestAdvice(mk([d(12,3),{},{}])), null);
+    assert.equal(shorterRestAdvice(mk([d(12,3),d(12,3),{}]), { hasUserPreset:true }), null);
   });
 });
