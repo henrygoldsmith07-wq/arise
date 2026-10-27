@@ -81,6 +81,8 @@ rebuilding it as a template.
 
 ## Reading your progress
 
+Mistyped a set? Progress → **Edit logged workouts** lets you fix the load, reps or RPE, delete a set, or delete a whole session. It stays on your device.
+
 - **Progress** shows weekly volume, estimated strength trend, streak and
   consistency, PRs (with fake-PR filtering — jitter and technique-change PRs
   are flagged, not celebrated), and per-muscle volume-balance advice.
