@@ -317,3 +317,23 @@ export function extraSetAdvice(block){
   if(!Number.isFinite(rir) || rir < 3) return null;
   return { reason: `All ${sets.length} sets hit ${range.max} reps with ${rir} left in the tank. One more set will still count.` };
 }
+
+// ── Longer-rest advice ──────────────────────────────────────────────────────
+// Reps fell by 3+ between the last two finished sets while sets remain and the
+// lift runs on a short rest the lifter never chose: under-recovery is the likely
+// cause. Offer to remember a rest one preset longer (max 180 s) for this lift.
+// Never fires when the lifter already set their own preset or the rest is ≥ 150 s.
+export const REST_DROP_REPS = 3;
+export function longerRestAdvice(block, { restSec = null, hasUserPreset = false } = {}){
+  if(hasUserPreset) return null;
+  const rest = Number(restSec ?? block?.restSec);
+  if(!Number.isFinite(rest) || rest <= 0 || rest >= 150) return null;
+  const sets = Array.isArray(block?.sets) ? block.sets : [];
+  const done = sets.filter(s => s.completed && !s.failed);
+  if(done.length < 2 || !sets.some(s => !s.completed && !s.failed && !s.skipped)) return null;
+  const [a, b] = done.slice(-2).map(s => (s.reps === '' || s.reps == null) ? NaN : Number(s.reps));
+  if(!Number.isFinite(a) || !Number.isFinite(b) || a - b < REST_DROP_REPS) return null;
+  const seconds = REST_PRESET_CHOICES.find(c => c >= rest + 30 && c <= 180);
+  if(!seconds) return null;
+  return { seconds, reason: `Reps fell from ${a} to ${b} on ${Math.round(rest)} s rest. A little longer between sets usually holds the reps up.` };
+}

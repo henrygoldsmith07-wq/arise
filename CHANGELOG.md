@@ -14,6 +14,8 @@ the history is the changelog; this file is its human-readable index.
 
 ### Added
 - Today shows a heads-up when the next session has leg work on a key ride day or the day before (`legRideWarning`, `withoutLegBlocks` in `rideAwareSchedule.js`).
+### Gym Mode: longer-rest suggestion
+- When reps fall by 3+ between two sets on a short rest you never chose, Gym Mode offers to remember a rest one step longer (up to 3 min) for that lift.
 
 - Gym Mode: next-set advice now uses your own machine increment and, when the next step would be a jump over 15% of the load, says to keep the weight and add reps.
 
