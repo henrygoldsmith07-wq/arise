@@ -348,3 +348,20 @@ describe('backoffSetAdvice', () => {
     assert.equal(String(b.sets[2].weightKg), '45');
   });
 });
+
+import { nextTimePreview } from '../src/lib/gymMode.js';
+describe('nextTimePreview', () => {
+  const d = (reps, w = 50, extra = {}) => ({ completed: true, reps, weightKg: w, ...extra });
+  it('is null while a set is pending or nothing was logged', () => {
+    assert.equal(nextTimePreview({ reps: '8-12', sets: [d(10), { weightKg: 50 }] }, { exerciseId: 'chest-press-machine' }), null);
+    assert.equal(nextTimePreview({ reps: '8-12', sets: [] }, { exerciseId: 'chest-press-machine' }), null);
+  });
+  it('previews a heavier load after topping the rep range with reps in reserve', () => {
+    const p = nextTimePreview({ reps: '8-12', sets: [d(12, 50, { rir: 3 }), d(12, 50, { rir: 3 }), d(12, 50, { rir: 3 })] }, { exerciseId: 'chest-press-machine', dateISO: '2026-10-27' });
+    assert.ok(p && p.load > 50, JSON.stringify(p));
+  });
+  it('previews a rep target at the same load when mid-range', () => {
+    const p = nextTimePreview({ reps: '8-12', sets: [d(9, 50), d(8, 50)] }, { exerciseId: 'chest-press-machine', dateISO: '2026-10-27' });
+    assert.ok(p && p.reps > 0 && p.load <= 50, JSON.stringify(p));
+  });
+});

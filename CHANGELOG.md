@@ -12,6 +12,10 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Next-time preview in the session runner
+- Once every set of a lift is done, a chip shows what Arise will prescribe next session (load × reps and why), computed from your history plus the sets you just logged. Advice only.
+
+
 - Gym Mode: after a failed or under-floor final set, offer one back-off set about 10% lighter (snapped to your kit).
 
 ### Added
