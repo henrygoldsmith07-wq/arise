@@ -13,6 +13,7 @@ the history is the changelog; this file is its human-readable index.
 ## Unreleased
 
 ### Added
+- Gym Mode offers a shorter remembered rest (never under 90 s) when two sets held their reps with 3+ in reserve on a long rest you did not choose (`shorterRestAdvice`).
 - Today shows a heads-up when the next session has leg work on a key ride day or the day before (`legRideWarning`, `withoutLegBlocks` in `rideAwareSchedule.js`).
 ### Gym Mode: longer-rest suggestion
 - When reps fall by 3+ between two sets on a short rest you never chose, Gym Mode offers to remember a rest one step longer (up to 3 min) for that lift.
