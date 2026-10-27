@@ -60,7 +60,9 @@ export function repairStore(store){
   // reset/undo history is lost.
   if(fixed.activeSchedule?.programmeEdits != null){
     const pe = fixed.activeSchedule.programmeEdits;
-    const okEdits = typeof pe === 'object' && !Array.isArray(pe) && pe.days && typeof pe.days === 'object' && !Array.isArray(pe.days) && Object.values(pe.days).every(d=> d && Array.isArray(d.blocks));
+    const okDays = (days)=> days && typeof days === 'object' && !Array.isArray(days)
+      && Object.values(days).every(d=> d && Array.isArray(d.blocks) && d.blocks.every(b=> b && typeof b.exerciseId === 'string' && b.exerciseId));
+    const okEdits = typeof pe === 'object' && !Array.isArray(pe) && okDays(pe.days) && (pe.undo == null || okDays(pe.undo.days));
     if(!okEdits){ fixed.activeSchedule = { ...fixed.activeSchedule }; delete fixed.activeSchedule.programmeEdits; }
   }
   if(!Array.isArray(fixed.eventHistory)) fixed.eventHistory = [];

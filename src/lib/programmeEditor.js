@@ -408,18 +408,22 @@ export function setExerciseSets(schedule, key, index, sets){
 }
 
 export function setExerciseRepRange(schedule, key, index, { min, max }){
+  // Unit and side marker come from the block being edited inside the commit,
+  // so a batched/stale caller can never stamp another block's unit.
+  const rangeFor = (block)=> {
+    const parsed = parseRepRange(block?.reps);
+    const unit = parsed?.unit || (EXERCISE_BY_ID[block?.exerciseId]?.progression === 'time' ? 'seconds' : 'reps');
+    return { unit, each: parsed?.each || false, min: Number(min), max: Number(max) };
+  };
   const block0 = currentDay(schedule, key)?.blocks?.[index];
-  const parsed0 = parseRepRange(block0?.reps);
-  const unit = parsed0?.unit || (EXERCISE_BY_ID[block0?.exerciseId]?.progression === 'time' ? 'seconds' : 'reps');
-  const each = parsed0?.each || false;
-  const range = { unit, each, min: Number(min), max: Number(max) };
   return commit(schedule, key, (draft)=> {
     const block = blockAt(draft, index);
     if(!block) return GONE;
+    const range = rangeFor(block);
     const problem = validateRepRange(range);
     if(problem) return problem;
     block.reps = formatRepRange(range);
-  }, `${nameOf(block0?.exerciseId)}: ${formatRepRange(range)}`);
+  }, `${nameOf(block0?.exerciseId)}: ${formatRepRange(rangeFor(block0))}`);
 }
 
 export function renameDay(schedule, key, title){

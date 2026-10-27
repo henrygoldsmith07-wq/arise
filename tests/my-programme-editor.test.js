@@ -403,6 +403,10 @@ describe('persistence', ()=>{
     const fixed = repairStore({ activeSchedule: bad });
     assert.equal(fixed.activeSchedule.programmeEdits, undefined);
     assert.equal(fixed.activeSchedule.sessions[0].blocks[0].exerciseId, 'incline-dumbbell-press');
+    const noId = { ...edited(), programmeEdits: { ...edited().programmeEdits, days: { 1: { title: 'x', blocks: [{ sets: 3 }] } } } };
+    assert.equal(repairStore({ activeSchedule: noId }).activeSchedule.programmeEdits, undefined, 'blocks without exerciseId are rejected');
+    const badUndo = { ...edited(), programmeEdits: { ...edited().programmeEdits, undo: { days: { 1: { blocks: [null] } } } } };
+    assert.equal(repairStore({ activeSchedule: badUndo }).activeSchedule.programmeEdits, undefined, 'a damaged undo snapshot is rejected too');
     const good = repairStore({ activeSchedule: edited() });
     assert.ok(good.activeSchedule.programmeEdits.days['1']);
   });
