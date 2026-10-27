@@ -366,6 +366,21 @@ describe('nextTimePreview', () => {
   });
 });
 
+describe('nextTimePreview load change', () => {
+  const d = (reps, w, extra = {}) => ({ completed: true, reps, weightKg: w, ...extra });
+  it('reports a positive delta when the load goes up', () => {
+    const p = nextTimePreview({ reps: '8-12', sets: [d(12, 50, { rir: 3 }), d(12, 50, { rir: 3 }), d(12, 50, { rir: 3 })] }, { exerciseId: 'chest-press-machine', dateISO: '2026-10-27' });
+    assert.equal(p.change, 'up');
+    assert.ok(p.deltaKg > 0);
+    assert.match(p.deltaLabel, /^\+\d/);
+  });
+  it('reports same load mid-range', () => {
+    const p = nextTimePreview({ reps: '8-12', sets: [d(9, 50), d(8, 50)] }, { exerciseId: 'chest-press-machine', dateISO: '2026-10-27' });
+    assert.ok(['same', 'down'].includes(p.change));
+    assert.equal(p.deltaKg, Math.round((p.load - 50) * 100) / 100);
+  });
+});
+
 import { nextSetAdvice as _nsa, pendingSameLoadIndexes } from '../src/lib/gymMode.js';
 describe('apply advice to all remaining sets', () => {
   const mk = (sets) => ({ reps: '8-12', sets });
