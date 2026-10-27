@@ -385,3 +385,16 @@ describe('apply advice to all remaining sets', () => {
     assert.deepEqual(adv.applyIndexes, [1, 2]);
   });
 });
+
+import { nextSetAdvice as nsa, OVERSHOOT_REPS } from '../src/lib/gymMode.js';
+describe('nextSetAdvice overshoot without RIR', () => {
+  const blk = (reps) => ({ reps: '8-12', sets: [{ completed: true, reps, weightKg: 40 }, { weightKg: 40 }, { weightKg: 40 }] });
+  it('offers a step up when reps pass the range by 3+ with no RIR', () => {
+    const a = nsa(blk(12 + OVERSHOOT_REPS));
+    assert.ok(a && a.direction === 'up' && a.loadKg > 40);
+  });
+  it('stays quiet at the top of the range with no RIR, or just 2 over', () => {
+    assert.equal(nsa(blk(12)), null);
+    assert.equal(nsa(blk(14)), null);
+  });
+});
