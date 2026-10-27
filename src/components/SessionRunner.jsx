@@ -9,7 +9,7 @@ import { substitutionOptions } from '../lib/substitutions.js';
 import { recordEvent, trackFieldFocus, fieldCommitted } from '../lib/telemetry.js';
 import { markRecommendationOverride } from '../lib/longitudinal.js';
 import { buildRunnerRecommendationMeta, recordProspectiveRecommendation, runnerStudy } from '../lib/runnerRecommendations.js';
-import { quickJumps, applyQuickJump, skipTo, restPresetFor, nextSetAdvice, stopEarlyAdvice, extraSetAdvice, longerRestAdvice, shorterRestAdvice, effortAdjustedRest, hasUserRestPreset, visiblePrescriptionIndexes, warmupsSkipped, effectiveWarmups } from '../lib/gymMode.js';
+import { quickJumps, applyQuickJump, skipTo, restPresetFor, nextSetAdvice, stopEarlyAdvice, extraSetAdvice, backoffSetAdvice, longerRestAdvice, shorterRestAdvice, effortAdjustedRest, hasUserRestPreset, visiblePrescriptionIndexes, warmupsSkipped, effectiveWarmups } from '../lib/gymMode.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
 import { needsWorkingWeight, warmupsFromFoundLoad } from '../lib/workingWeight.js';
 import WorkingWeightFinder from './WorkingWeightFinder.jsx';
@@ -34,6 +34,7 @@ import { asUnit, fmtWeight, weightInputToKg } from '../lib/units.ts';
 
 import {
   addUserSetToBlock,
+  addBackoffSetToBlock,
   applyAllRecommendations as applyAllRunnerRecommendations,
   applyRecommendationToBlock,
   buildRunnerSwapTransition,
@@ -572,6 +573,11 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     const current = parseRunnerNumber(blocks[bi]?.sets?.[si]?.reps);
     updateSet(bi, si, { reps: String(Math.max(0, current + delta)) });
   };
+  const addBackoffSet = (bi, loadKg)=>{
+    markUserEdited();
+    try{ recordEvent('add-set', { sessionId:session.id, exerciseId:blocks[bi]?.exerciseId, mode: gymMode ? 'gym' : 'standard' }); }catch{}
+    setBlocks(prev=> prev.map((b,i)=> i!==bi ? b : addBackoffSetToBlock(b, loadKg, makeSetId)));
+  };
   const duplicateUnilateral = (bi)=>{
     markUserEdited();
     try{ recordEvent('add-set', { sessionId:session.id, exerciseId:blocks[bi]?.exerciseId, mode: gymMode ? 'gym' : 'standard' }); }catch{}
@@ -997,6 +1003,12 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                   <div data-testid="extra-set-advice" role="status" className="flex items-center gap-2 flex-wrap rounded-xl border border-line bg-surface2 px-3 py-2 text-[11px] text-ink2">
                     <span className="min-w-0 flex-1">{extra.reason}</span>
                     <button type="button" onClick={()=> addSet(bi)} className="min-h-11 min-w-11 px-3 rounded-full border border-ink text-xs font-bold">Add 1 set</button>
+                  </div>
+                ) : null; })()}
+                {(()=>{ const bo = supportsWeighted ? backoffSetAdvice(b, { equipment: ex?.equipment?.[0] || 'machine', config: plateConfig }) : null; return bo ? (
+                  <div data-testid="backoff-set-advice" role="status" className="flex items-center gap-2 flex-wrap rounded-xl border border-line bg-surface2 px-3 py-2 text-[11px] text-ink2">
+                    <span className="min-w-0 flex-1">{bo.reason}</span>
+                    <button type="button" onClick={()=> addBackoffSet(bi, bo.loadKg)} className="min-h-11 min-w-11 px-3 rounded-full border border-ink text-xs font-bold">Add back-off set</button>
                   </div>
                 ) : null; })()}
                 {b.sets.map((s,si)=> (

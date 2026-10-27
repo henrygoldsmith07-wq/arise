@@ -318,6 +318,34 @@ export function extraSetAdvice(block){
   return { reason: `All ${sets.length} sets hit ${range.max} reps with ${rir} left in the tank. One more set will still count.` };
 }
 
+// ── Back-off set advice ─────────────────────────────────────────────────────
+// The final planned set was failed (or ground out under the rep floor) and
+// nothing is pending: offer ONE extra set ~10% lighter, snapped to a load the
+// equipment can actually be set to, so the lift ends on a productive set
+// instead of a miss. Never offers a set at the same load, never past the cap.
+export const BACKOFF_FRACTION = 0.10;
+export function backoffSetAdvice(block, { equipment = 'machine', config = null } = {}){
+  const sets = Array.isArray(block?.sets) ? block.sets : [];
+  const range = parseRepRange(block?.reps);
+  if(!range || sets.length < 2 || sets.length >= EXTRA_SET_CAP) return null;
+  if(sets.some(s => !s.completed && !s.failed && !s.skipped)) return null;
+  const last = sets[sets.length - 1];
+  if(!last || last.skipped || !(last.completed || last.failed)) return null;
+  const reps = last.failed ? 0 : (last.reps === '' || last.reps == null ? NaN : Number(last.reps));
+  if(!Number.isFinite(reps) || reps >= range.min) return null;
+  const load = Number(last.weightKg);
+  if(!Number.isFinite(load) || load <= 0) return null;
+  let target = NaN;
+  try{ target = Number(nearestAchievableLoad(load * (1 - BACKOFF_FRACTION), { equipment, config: config || {} })?.loadKg); }catch{}
+  if(!Number.isFinite(target) || target <= 0) target = Math.round(load * (1 - BACKOFF_FRACTION) * 2) / 2;
+  if(target >= load){
+    const down = Number(adjacentLoad(load, -1, { equipment, config }));
+    if(!Number.isFinite(down) || down <= 0 || down >= load) return null;
+    target = down;
+  }
+  return { loadKg: target, reason: `The last set ${last.failed ? 'was missed' : `gave ${reps} reps`}. One lighter set at ${target} kg ends the lift on a good one.` };
+}
+
 // ── Longer-rest advice ──────────────────────────────────────────────────────
 // Reps fell by 3+ between the last two finished sets while sets remain and the
 // lift runs on a short rest the lifter never chose: under-recovery is the likely
