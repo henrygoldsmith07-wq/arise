@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+- Gym Mode: when set 1 lands 3+ reps over the top of the range and no effort was logged, the next-set chip now offers the step up (previously it needed an RIR entry).
+
+
 ### Today: low-readiness trim
 - When today's check-in scores 40/100 or lower, Today offers "Trim one set per lift" (one set off every lift with 3+ sets, never below 2; timed blocks untouched). You choose; undo is one tap.
 ### Gym Mode: apply next-set load advice to all remaining sets

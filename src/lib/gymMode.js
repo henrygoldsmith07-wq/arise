@@ -243,6 +243,7 @@ export function pendingSameLoadIndexes(block, fromIdx){
   }
   return out;
 }
+export const OVERSHOOT_REPS = 3;
 export function nextSetAdvice(block, { equipment = 'machine', config = null } = {}){
   const sets = Array.isArray(block?.sets) ? block.sets : [];
   const range = parseRepRange(block?.reps);
@@ -261,6 +262,9 @@ export function nextSetAdvice(block, { equipment = 'machine', config = null } = 
   let dir = 0;
   if(reps < range.min) dir = -1;
   else if(reps >= range.max && Number.isFinite(rirN) && rirN >= 2) dir = 1;
+  // Reps well past the top of the range with no effort logged: the load is
+  // plainly too light (most lifters skip RIR mid-session), so offer the step up.
+  else if(!Number.isFinite(rirN) && reps >= range.max + OVERSHOOT_REPS) dir = 1;
   // Opening set ground out at the rep floor with nothing left (RIR 0) and two or
   // more sets still to do: the same load will push the rest under the floor and
   // trigger stop-early. Offer one step down now to keep the work sets productive.
@@ -288,6 +292,8 @@ export function nextSetAdvice(block, { equipment = 'machine', config = null } = 
       ? `Set 1 took everything for ${reps} reps. A small drop keeps the next sets in the ${range.min}–${range.max} range.`
       : dir < 0
       ? `Set ${nextIdx} gave ${reps} reps, under the ${range.min}–${range.max} range.`
+      : !Number.isFinite(rirN)
+      ? `Set ${nextIdx} gave ${reps} reps, well past the top of the ${range.min}–${range.max} range.`
       : `Set ${nextIdx} hit ${reps} reps with ${rirN} left in the tank.`,
   };
 }
