@@ -18,6 +18,9 @@ import { programShelf } from '../lib/programShelf.js';
 // real answer from the scorer's own stored reasons instead of a marketing
 // glance. Lazy: the coaching graph must never ride the Train chunk.
 const CoachPanel = lazy(() => import('./CoachPanel.jsx'));
+// My Programme editor: its own chunk, fetched only when "Edit programme" is
+// tapped, so neither boot nor the Train chunk grows.
+const ProgrammeEditor = lazy(() => import('./ProgrammeEditor.jsx'));
 import { asUnit } from '../lib/units.ts';
 
 const EMPTY_DAY = { title: '', exercises: [{ exerciseId: '', sets: 3, reps: '8–12', restSec: 90 }] };
@@ -35,6 +38,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
   const unit = asUnit(store.preferences?.units);
   const [programId,setProgramId]=useState(store.activeSchedule?.programId || PROGRAMS[0].id);
   const [builderOpen,setBuilderOpen]=useState(false);
+  const [editorOpen,setEditorOpen]=useState(false);
   const dialogs = useDialogs();
   // Modal focus capture/trap/restore for the template builder.
   const builderA11y = useDialogA11y({ active: builderOpen, onClose: ()=> setBuilderOpen(false) });
@@ -88,20 +92,40 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
   const [browseOpen, setBrowseOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
 
-  const startRecommendation = ()=>{
+  // Switching programme replaces activeSchedule, and the My Programme edits
+  // live on it. Edits are per-programme by design, so say so before they go.
+  const customisedDays = Object.keys(store.activeSchedule?.programmeEdits?.days || {}).length;
+  const confirmDropEdits = async ()=>{
+    if(!customisedDays) return true;
+    return dialogs.confirm({
+      title:'Replace your customised programme?',
+      description:`You have edited ${customisedDays} day${customisedDays === 1 ? '' : 's'} of your current programme. Starting a different one clears those edits. Your logged sessions and progression history are kept.`,
+      confirmLabel:'Replace programme',
+      destructive:true,
+    });
+  };
+  const clearSchedule = async ()=>{
+    if(!(await confirmDropEdits())) return;
+    setStore({...store, activeSchedule:null});
+  };
+
+  const startRecommendation = async ()=>{
+    if(!(await confirmDropEdits())) return;
     const result = generateProgrammeFromProfile(store);
     if(!result.programId) return;
     setProgramId(result.programId);
     setStore(result.store);
   };
 
-  const start = ()=>{
+  const start = async ()=>{
+    if(!(await confirmDropEdits())) return;
     const result = startProgramme({ store, programId, availableEquipment });
     if(result.started) setStore(result.store);
   };
   // Shelf start: same path as the browse selection, with the selection state
   // following the tap so Browse opens on the same programme.
-  const startShelfItem = (shelfProgramId)=>{
+  const startShelfItem = async (shelfProgramId)=>{
+    if(!(await confirmDropEdits())) return;
     setProgramId(shelfProgramId);
     const result = startProgramme({ store, programId: shelfProgramId, availableEquipment });
     if(result.started) setStore(result.store);
@@ -212,7 +236,8 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
     if(adaptation?.changed) setStore(applyEquipmentAdaptation(store, adaptation));
   };
 
-  const generateFromProfile = ()=>{
+  const generateFromProfile = async ()=>{
+    if(!(await confirmDropEdits())) return;
     const result = generateProgrammeFromProfile(store);
     if(!result.programId) return;
     setProgramId(result.programId);
@@ -238,8 +263,17 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
                 Week {adherence?.sessions ? currentWeek(adherence) : '?'} of {programMeta(active.programId)?.mesocycle?.weeks || '?'} · {adherence?.completed || 0}/{active.sessions.length} sessions
               </p>
             </div>
+            {customisedDays > 0 && <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full border border-success/30 text-success" data-testid="programme-customised-badge">Customised</span>}
             <span className="shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-full bg-successsoft text-success border border-success/30 tabular-nums">{adherence?.rate != null ? `${Math.round(adherence.rate * 100)}%` : 'active'}</span>
           </div>
+          <button onClick={()=> setEditorOpen(true)} className="btn btn-primary w-full min-h-11 rounded-xl text-sm" aria-haspopup="dialog">
+            Edit programme{customisedDays ? ` · ${customisedDays} day${customisedDays === 1 ? '' : 's'} customised` : ''}
+          </button>
+          {editorOpen && (
+            <Suspense fallback={<p className="text-xs text-ink3" role="status">Opening editor…</p>}>
+              <ProgrammeEditor store={store} setStore={setStore} availableEquipment={availableEquipment} onClose={()=> setEditorOpen(false)} />
+            </Suspense>
+          )}
           <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
             <summary className="text-xs font-bold cursor-pointer">View programme</summary>
             <p className="text-[11px] text-ink3 mt-1.5">Start: {active.startDateISO} • {active.sessions.length} sessions • {adherence?.missed || 0} missed</p>
@@ -262,7 +296,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
             plateConfig={store.onboarding?.plateConfig || null}
             unit={unit}
           />
-          <button onClick={()=> setStore({...store, activeSchedule:null})} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs">Clear schedule</button>
+          <button onClick={clearSchedule} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs">Clear schedule</button>
         </section>
       )}
 

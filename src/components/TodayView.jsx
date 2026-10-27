@@ -283,9 +283,10 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
             {shownSession.blocks.slice(0, 4).map((b,i)=>{
               const ex = EXERCISE_BY_ID[b.exerciseId];
               return (
-                <li key={i} className="flex items-center gap-2 px-3 py-2 text-sm">
+                <li key={i} className="flex items-center gap-2 px-3 py-2 text-sm" data-testid="today-block">
                   <span className="text-ink3 tabular-nums w-14 shrink-0 text-xs">{b.sets}× {b.reps}</span>
                   <span className="font-medium truncate">{ex?.name || b.exerciseId}</span>
+                  {b.userSwapFrom && <span className="text-[10px] font-bold uppercase text-success shrink-0">your swap</span>}
                   <span className="ml-auto text-xs text-ink3 shrink-0">{b.loadHint}</span>
                 </li>
               );
