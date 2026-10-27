@@ -7,8 +7,6 @@ import {
   setExerciseSets, setExerciseRepRange, renameDay, resetDay, resetAllEdits, undoLastEdit,
   parseRepRange, REP_BOUNDS, MIN_SETS, MAX_SETS, MAX_DAY_TITLE,
 } from '../lib/programmeEditor.js';
-import { musclesIn } from '../lib/exercisePicker.js';
-import { EXERCISES } from '../lib/data.js';
 
 // "My Programme" editor — lazy-loaded from Train so the boot and Train chunks
 // never pay for it. Every change goes through the pure programmeEditor.js
@@ -39,8 +37,7 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
   const [openKey, setOpenKey] = useState(null);
   const [status, setStatus] = useState('');
   const [query, setQuery] = useState('');
-  const [muscle, setMuscle] = useState('all');
-  const back = ()=> { setView({ kind: 'days' }); setQuery(''); setMuscle('all'); };
+  const back = ()=> { setView({ kind: 'days' }); setQuery(''); };
   const a11y = useDialogA11y({ active: true, onClose: view.kind === 'days' ? onClose : back });
 
   const days = useMemo(()=> editableDays(schedule), [schedule]);
@@ -53,43 +50,44 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
   };
   const activeKey = openKey ?? days[0]?.key ?? null;
 
-  const run = (result, done)=> {
+  // Status line reads the engine's own undo label ("Swap A → B"), so the
+  // announcement and the Undo button can never disagree.
+  const run = (result, msg)=> {
     if(result.error){ setStatus(result.error); return false; }
     setStore({ ...store, activeSchedule: result.schedule });
-    setStatus(done);
+    setStatus(msg || `Saved: ${result.schedule.programmeEdits?.undo?.label}.`);
     return true;
   };
 
   const rename = async (day)=> {
     const title = await dialogs.prompt({
       title: `Rename ${day.title}`,
-      description: 'The new name shows on Today and in Gym Mode for every upcoming session of this day.',
       fieldLabel: 'Day name',
       placeholder: day.title,
       confirmLabel: 'Rename',
       validate: (v)=> !v.trim() ? 'Give the day a name.' : v.trim().length > MAX_DAY_TITLE ? `Keep it under ${MAX_DAY_TITLE} characters.` : null,
     });
-    if(title) run(renameDay(schedule, day.key, title), `Renamed to ${title.trim()}.`);
+    if(title) run(renameDay(schedule, day.key, title));
   };
 
   const confirmResetDay = async (day)=> {
     const ok = await dialogs.confirm({
       title: `Reset ${day.title}?`,
-      description: 'Puts this day back to the programme’s exercises, sets and reps. Your logged history is kept. You can undo straight after.',
+      description: 'Back to the programme’s version. History is kept; you can undo.',
       confirmLabel: 'Reset day',
       destructive: true,
     });
-    if(ok) run(resetDay(schedule, day.key), `${day.templateTitle} reset to the programme.`);
+    if(ok) run(resetDay(schedule, day.key));
   };
 
   const confirmResetAll = async ()=> {
     const ok = await dialogs.confirm({
       title: 'Reset all edits?',
-      description: 'Every day goes back to the programme as generated. Logged sessions and progression history are kept. You can undo straight after.',
+      description: 'Every day goes back to the programme’s version. History is kept; you can undo.',
       confirmLabel: 'Reset all',
       destructive: true,
     });
-    if(ok) run(resetAllEdits(schedule), 'Programme reset to the template.');
+    if(ok) run(resetAllEdits(schedule));
   };
 
   if(!schedule?.sessions?.length){
@@ -106,7 +104,7 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
         <div>
           <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Swap in {day?.title}</p>
           <h4 className="text-base font-black">Replace {block?.name}</h4>
-          <p className="text-[11px] text-ink3">Ranked by same muscle and movement, filtered to your kit. Avoided exercises are never offered. History stays with each exercise, so swapping back picks up where you left off.</p>
+          <p className="text-[11px] text-ink3">Closest matches that fit your kit. Avoided lifts are hidden; history stays with each lift.</p>
         </div>
         {options.length === 0 && <p className="text-sm text-ink3">No alternative fits your kit right now.</p>}
         <ul className="space-y-2">
@@ -114,7 +112,7 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
             <li key={opt.id}>
               <button
                 type="button"
-                onClick={()=> { if(run(swapExercise(schedule, view.key, view.index, opt.id), `Swapped ${block.name} for ${opt.name}.`)) back(); }}
+                onClick={()=> { if(run(swapExercise(schedule, view.key, view.index, opt.id))) back(); }}
                 className="w-full min-h-11 text-left rounded-xl border border-line bg-surface2 px-3 py-2"
                 aria-label={`Swap to ${opt.name}`}
               >
@@ -133,31 +131,24 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
     );
   } else if(view.kind === 'add'){
     const day = days.find(d=> d.key === view.key);
-    const results = addCandidates(schedule, view.key, { ...prefs, query, muscle });
-    const muscles = musclesIn(EXERCISES);
+    const results = addCandidates(schedule, view.key, { ...prefs, query });
     body = (
       <section aria-label="Add exercise" className="space-y-3">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Add to {day?.title}</p>
           <h4 className="text-base font-black">Add an exercise</h4>
-          <p className="text-[11px] text-ink3">Only exercises your kit supports. Liked ones first; avoided ones are hidden.</p>
+
         </div>
         <label htmlFor="programme-add-search" className="sr-only">Search exercises</label>
         <input id="programme-add-search" type="search" value={query} onChange={(e)=> setQuery(e.target.value)}
-          placeholder="Search (e.g. row, db, rdl)" autoComplete="off"
+          placeholder="Search exercises" autoComplete="off"
           className="min-h-11 w-full rounded-xl border border-line bg-surface px-3 text-sm" />
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by muscle">
-          {['all', ...muscles].map(m=> (
-            <button key={m} type="button" aria-pressed={muscle === m} onClick={()=> setMuscle(m)}
-              className={`min-h-11 rounded-xl border px-3 text-xs font-bold ${muscle === m ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink3'}`}>{m === 'all' ? 'All' : m}</button>
-          ))}
-        </div>
         <ul className="space-y-2" aria-live="polite">
           {results.length === 0 && <li className="text-sm text-ink3">No match. Try another word or muscle.</li>}
           {results.map(opt=> (
             <li key={opt.id}>
               <button type="button" aria-label={`Add ${opt.name}`}
-                onClick={()=> { if(run(addExercise(schedule, view.key, opt.id), `Added ${opt.name} to ${day?.title}.`)) back(); }}
+                onClick={()=> { if(run(addExercise(schedule, view.key, opt.id))) back(); }}
                 className="w-full min-h-11 text-left rounded-xl border border-line bg-surface2 px-3 py-2">
                 <span className="flex items-center gap-2"><span className="font-bold text-sm">{opt.name}</span>{opt.liked && <span className={`${PILL} border-line text-ink3`}>Liked</span>}</span>
                 <span className="block text-[11px] text-ink3">{opt.muscle} · {opt.equipment.join(', ')}</span>
@@ -192,7 +183,7 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
               {day.blocks.map((block, i)=> {
                 const range = parseRepRange(block.reps);
                 const bounds = REP_BOUNDS[range?.unit] || REP_BOUNDS.reps;
-                const setRange = (min, max)=> run(setExerciseRepRange(schedule, day.key, i, { min, max }), `${block.name}: ${min === max ? min : `${min}–${max}`}.`);
+                const setRange = (min, max)=> run(setExerciseRepRange(schedule, day.key, i, { min, max }));
                 return (
                   <li key={block.exerciseId} className="rounded-xl border border-line bg-surface p-2.5 space-y-2" data-testid="programme-exercise">
                     <div className="flex items-start gap-2">
@@ -204,8 +195,8 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
                     </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                       <Stepper label={`sets for ${block.name}`} value={`${block.sets} sets`}
-                        onDown={()=> run(setExerciseSets(schedule, day.key, i, block.sets - 1), `${block.name}: ${block.sets - 1} sets.`)}
-                        onUp={()=> run(setExerciseSets(schedule, day.key, i, block.sets + 1), `${block.name}: ${block.sets + 1} sets.`)}
+                        onDown={()=> run(setExerciseSets(schedule, day.key, i, block.sets - 1))}
+                        onUp={()=> run(setExerciseSets(schedule, day.key, i, block.sets + 1))}
                         downDisabled={block.sets <= MIN_SETS} upDisabled={block.sets >= MAX_SETS} />
                       {range && (
                         <>
@@ -222,9 +213,9 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       <button type="button" onClick={()=> setView({ kind: 'swap', key: day.key, index: i })} aria-label={`Swap ${block.name}`} className="btn btn-secondary min-h-11 rounded-xl px-3 text-xs">Swap</button>
-                      <button type="button" onClick={()=> run(moveExercise(schedule, day.key, i, -1), `Moved ${block.name} up.`)} disabled={i === 0} aria-label={`Move ${block.name} up`} className={ICON}>↑</button>
-                      <button type="button" onClick={()=> run(moveExercise(schedule, day.key, i, 1), `Moved ${block.name} down.`)} disabled={i === day.blocks.length - 1} aria-label={`Move ${block.name} down`} className={ICON}>↓</button>
-                      <button type="button" onClick={()=> run(removeExercise(schedule, day.key, i), `Removed ${block.name}.`)} disabled={day.blocks.length <= 1} aria-label={`Remove ${block.name}`} className={`${ICON} text-danger`}>✕</button>
+                      <button type="button" onClick={()=> run(moveExercise(schedule, day.key, i, -1))} disabled={i === 0} aria-label={`Move ${block.name} up`} className={ICON}>↑</button>
+                      <button type="button" onClick={()=> run(moveExercise(schedule, day.key, i, 1))} disabled={i === day.blocks.length - 1} aria-label={`Move ${block.name} down`} className={ICON}>↓</button>
+                      <button type="button" onClick={()=> run(removeExercise(schedule, day.key, i))} disabled={day.blocks.length <= 1} aria-label={`Remove ${block.name}`} className={`${ICON} text-danger`}>✕</button>
                     </div>
                   </li>
                 );
@@ -258,7 +249,7 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
           <button ref={a11y.closeRef} type="button" onClick={view.kind === 'days' ? onClose : back} aria-label={view.kind === 'days' ? 'Close programme editor' : 'Back to programme'} className="ml-auto min-h-11 min-w-11 grid place-items-center rounded-full border border-line">✕</button>
         </div>
         {summary.canUndo && view.kind === 'days' && (
-          <button type="button" onClick={()=> run(undoLastEdit(schedule), `Undid: ${summary.undoLabel}.`)} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs" aria-label={`Undo ${summary.undoLabel}`}>
+          <button type="button" onClick={()=> run(undoLastEdit(schedule), 'Undone.')} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs" aria-label={`Undo ${summary.undoLabel}`}>
             ↶ Undo: {summary.undoLabel}
           </button>
         )}

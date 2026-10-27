@@ -37,7 +37,6 @@
 import { EXERCISES, EXERCISE_BY_ID, exerciseFitsEquipment } from './data.js';
 import { substitutionOptions } from './substitutions.js';
 import { isDeprecated } from './exerciseTaxonomy.js';
-import { filterExercises } from './exercisePicker.js';
 
 export const EDITS_VERSION = 1;
 export const MIN_SETS = 1;
@@ -347,12 +346,13 @@ function blockAt(draft, index){
 }
 
 const nameOf = (id)=> EXERCISE_BY_ID[id]?.name || id;
+const GONE = 'That exercise is no longer in this day.';
 
 // ── Operations ──────────────────────────────────────────────────────────
 export function swapExercise(schedule, key, index, toId){
   return commit(schedule, key, (draft)=> {
     const block = blockAt(draft, index);
-    if(!block) return 'That exercise is no longer in this day.';
+    if(!block) return GONE;
     if(!EXERCISE_BY_ID[toId]) return 'Unknown exercise.';
     if(block.exerciseId === toId) return 'That is already the exercise in this slot.';
     if(draft.blocks.some(b=> b.exerciseId === toId)) return `${nameOf(toId)} is already in this day.`;
@@ -380,7 +380,7 @@ export function addExercise(schedule, key, exerciseId, { sets = 3, reps = null, 
 export function removeExercise(schedule, key, index){
   const id = currentDay(schedule, key)?.blocks?.[index]?.exerciseId;
   return commit(schedule, key, (draft)=> {
-    if(!blockAt(draft, index)) return 'That exercise is no longer in this day.';
+    if(!blockAt(draft, index)) return GONE;
     if(draft.blocks.length <= 1) return 'A day needs at least one exercise — swap it instead.';
     draft.blocks.splice(index, 1);
   }, `Remove ${nameOf(id)}`);
@@ -400,7 +400,7 @@ export function setExerciseSets(schedule, key, index, sets){
   const id = currentDay(schedule, key)?.blocks?.[index]?.exerciseId;
   return commit(schedule, key, (draft)=> {
     const block = blockAt(draft, index);
-    if(!block) return 'That exercise is no longer in this day.';
+    if(!block) return GONE;
     const n = Number(sets);
     if(!Number.isInteger(n) || n < MIN_SETS || n > MAX_SETS) return `Sets must be ${MIN_SETS}–${MAX_SETS}.`;
     block.sets = n;
@@ -412,14 +412,14 @@ export function setExerciseRepRange(schedule, key, index, { min, max }){
   const parsed0 = parseRepRange(block0?.reps);
   const unit = parsed0?.unit || (EXERCISE_BY_ID[block0?.exerciseId]?.progression === 'time' ? 'seconds' : 'reps');
   const each = parsed0?.each || false;
+  const range = { unit, each, min: Number(min), max: Number(max) };
   return commit(schedule, key, (draft)=> {
     const block = blockAt(draft, index);
-    if(!block) return 'That exercise is no longer in this day.';
-    const range = { unit, each, min: Number(min), max: Number(max) };
+    if(!block) return GONE;
     const problem = validateRepRange(range);
     if(problem) return problem;
     block.reps = formatRepRange(range);
-  }, `${nameOf(block0?.exerciseId)}: ${formatRepRange({ min, max, unit, each })}`);
+  }, `${nameOf(block0?.exerciseId)}: ${formatRepRange(range)}`);
 }
 
 export function renameDay(schedule, key, title){
@@ -504,16 +504,17 @@ export function swapCandidates(schedule, key, index, { availableEquipment = null
 
 // Searchable list for "Add exercise": kit-filtered, avoided and deprecated
 // movements removed, nothing already in the day, liked ones first.
-export function addCandidates(schedule, key, { query = '', muscle = 'all', availableEquipment = null, preferredExerciseIds = [], dislikedExerciseIds = [], limit = 30 } = {}){
-  const day = currentDay(schedule, key);
-  const inDay = new Set((day?.blocks || []).map(b=> b.exerciseId));
+export function addCandidates(schedule, key, { query = '', availableEquipment = null, preferredExerciseIds = [], dislikedExerciseIds = [], limit = 30 } = {}){
+  const inDay = new Set((currentDay(schedule, key)?.blocks || []).map(b=> b.exerciseId));
   const kit = kitOf(availableEquipment);
-  const has = kit ? new Set(kit) : null;
+  const has = kit && new Set(kit);
   const avoid = new Set(dislikedExerciseIds || []);
   const liked = new Set(preferredExerciseIds || []);
-  const pool = EXERCISES.filter(ex=> !inDay.has(ex.id) && !avoid.has(ex.id) && !isDeprecated(ex) && (!has || exerciseFitsEquipment(ex, has)));
-  return filterExercises(pool, { query, muscle })
+  const words = String(query).toLowerCase().split(/\s+/).filter(Boolean);
+  return EXERCISES
+    .filter(ex=> !inDay.has(ex.id) && !avoid.has(ex.id) && !isDeprecated(ex) && (!has || exerciseFitsEquipment(ex, has))
+      && words.every(w=> `${ex.name} ${ex.muscle} ${(ex.equipment || []).join(' ')} ${ex.id}`.toLowerCase().includes(w)))
     .map(ex=> ({ id: ex.id, name: ex.name, muscle: ex.muscle, equipment: ex.equipment || [], liked: liked.has(ex.id) }))
-    .sort((a, b)=> Number(b.liked) - Number(a.liked) || a.name.localeCompare(b.name))
+    .sort((a, b)=> b.liked - a.liked || a.name.localeCompare(b.name))
     .slice(0, limit);
 }
