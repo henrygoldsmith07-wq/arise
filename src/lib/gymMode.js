@@ -13,6 +13,7 @@
 
 import { nearestAchievableLoad, minimumAchievableJump, DEFAULT_PLATE_DENOMINATIONS_KG, DEFAULT_DUMBBELL_WEIGHTS_KG, DEFAULT_MACHINE_INCREMENT_KG } from './plates.js';
 import { EXERCISE_BY_ID } from './data.js';
+import { recommendNext } from './progression.js';
 
 // The smallest real jump for a piece of equipment, derived from the plate /
 // dumbbell / machine-pin configuration (falling back to the defaults). Every
@@ -228,6 +229,20 @@ export function parseRepRange(reps){
 }
 
 export const COARSE_JUMP_FRACTION = 0.15;
+// Indexes of every still-pending set from `fromIdx` that carries the same load
+// as the set before it (i.e. not hand-edited), so one tap can move them all.
+export function pendingSameLoadIndexes(block, fromIdx){
+  const sets = Array.isArray(block?.sets) ? block.sets : [];
+  const base = Number(sets[fromIdx]?.weightKg);
+  const out = [];
+  for(let i = fromIdx; i < sets.length; i++){
+    const s = sets[i];
+    if(s.completed || s.failed || s.skipped) break;
+    if(Number(s.weightKg) !== base) break;
+    out.push(i);
+  }
+  return out;
+}
 export function nextSetAdvice(block, { equipment = 'machine', config = null } = {}){
   const sets = Array.isArray(block?.sets) ? block.sets : [];
   const range = parseRepRange(block?.reps);
@@ -268,6 +283,7 @@ export function nextSetAdvice(block, { equipment = 'machine', config = null } = 
     setIndex: nextIdx,
     direction: dir < 0 ? 'down' : 'up',
     loadKg: target,
+    applyIndexes: pendingSameLoadIndexes(block, nextIdx),
     reason: dir < 0 && reps === range.min && rirN === 0
       ? `Set 1 took everything for ${reps} reps. A small drop keeps the next sets in the ${range.min}–${range.max} range.`
       : dir < 0
@@ -387,4 +403,22 @@ export function shorterRestAdvice(block, { restSec = null, hasUserPreset = false
   const seconds = [...REST_PRESET_CHOICES].reverse().find(c => c <= rest - 30 && c >= 90);
   if(!seconds) return null;
   return { seconds, reason: `Both sets held ${reps[1]} reps with ${rirs[1]} left on ${Math.round(rest)} s rest. You can rest a bit less and finish sooner.` };
+}
+
+// ── "Next time" preview ─────────────────────────────────────────────────────
+// Once every set of a lift is done, show what the engine will prescribe next
+// session, computed from history plus this just-finished block. Advice only;
+// null while sets are pending, nothing logged, or the engine has no load.
+export function nextTimePreview(block, { exerciseId, history = [], dateISO = null, plateConfig = null, config = null } = {}){
+  const sets = Array.isArray(block?.sets) ? block.sets : [];
+  const finished = sets.filter(s => s.completed && !s.failed && Number(s.reps) > 0);
+  if(!exerciseId || !sets.length || !finished.length) return null;
+  if(sets.some(s => !s.completed && !s.failed && !s.skipped)) return null;
+  const entry = { dateISO: dateISO || new Date().toISOString().slice(0, 10), blocks: [{ exerciseId, sets: finished.map(s => ({ reps: String(s.reps), weightKg: s.weightKg ?? '', rpe: s.rpe ?? '', rir: s.rir ?? '' })) }] };
+  let rec;
+  try{ rec = recommendNext({ exerciseId, history: [...history, entry], targetReps: block.reps || null, plateConfig, config }); }catch{ return null; }
+  if(!rec || !(Number(rec.reps) > 0)) return null;
+  const load = Number(rec.load);
+  const label = load > 0 ? `${load} kg × ${rec.reps}` : `${rec.reps} reps`;
+  return { load: load > 0 ? load : null, reps: Number(rec.reps), label, reason: rec.reason || '' };
 }

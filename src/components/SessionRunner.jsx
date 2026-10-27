@@ -9,7 +9,7 @@ import { substitutionOptions } from '../lib/substitutions.js';
 import { recordEvent, trackFieldFocus, fieldCommitted } from '../lib/telemetry.js';
 import { markRecommendationOverride } from '../lib/longitudinal.js';
 import { buildRunnerRecommendationMeta, recordProspectiveRecommendation, runnerStudy } from '../lib/runnerRecommendations.js';
-import { quickJumps, applyQuickJump, skipTo, restPresetFor, nextSetAdvice, stopEarlyAdvice, extraSetAdvice, backoffSetAdvice, longerRestAdvice, shorterRestAdvice, effortAdjustedRest, hasUserRestPreset, visiblePrescriptionIndexes, warmupsSkipped, effectiveWarmups } from '../lib/gymMode.js';
+import { quickJumps, applyQuickJump, skipTo, restPresetFor, nextSetAdvice, stopEarlyAdvice, extraSetAdvice, backoffSetAdvice, nextTimePreview, longerRestAdvice, shorterRestAdvice, effortAdjustedRest, hasUserRestPreset, visiblePrescriptionIndexes, warmupsSkipped, effectiveWarmups } from '../lib/gymMode.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
 import { needsWorkingWeight, warmupsFromFoundLoad } from '../lib/workingWeight.js';
 import WorkingWeightFinder from './WorkingWeightFinder.jsx';
@@ -978,6 +978,9 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     ) : (<>
                     <span className="min-w-0 flex-1">{adv.reason} Next set: {adv.direction === 'down' ? 'a bit lighter' : 'a bit heavier'} — {fmtWeight(adv.loadKg, unit)}?</span>
                     <button type="button" onClick={()=> updateSet(bi, adv.setIndex, { weightKg: String(adv.loadKg) })} className="min-h-11 min-w-11 px-3 rounded-full border border-ink text-xs font-bold">Use {fmtWeight(adv.loadKg, unit)}</button>
+                    {adv.applyIndexes && adv.applyIndexes.length > 1 && (
+                      <button type="button" data-testid="next-set-advice-all" onClick={()=> adv.applyIndexes.forEach(i=> updateSet(bi, i, { weightKg: String(adv.loadKg) }))} className="min-h-11 min-w-11 px-3 rounded-full border border-line text-xs font-bold">Use for all {adv.applyIndexes.length} remaining</button>
+                    )}
                     </>)}
                   </div>
                 ) : null; })()}
@@ -1009,6 +1012,11 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                   <div data-testid="backoff-set-advice" role="status" className="flex items-center gap-2 flex-wrap rounded-xl border border-line bg-surface2 px-3 py-2 text-[11px] text-ink2">
                     <span className="min-w-0 flex-1">{bo.reason}</span>
                     <button type="button" onClick={()=> addBackoffSet(bi, bo.loadKg)} className="min-h-11 min-w-11 px-3 rounded-full border border-ink text-xs font-bold">Add back-off set</button>
+                  </div>
+                ) : null; })()}
+                {(()=>{ const nt = nextTimePreview(b, { exerciseId: b.exerciseId, history, dateISO: session?.dateISO, plateConfig }); return nt ? (
+                  <div data-testid="next-time-preview" role="status" className="rounded-xl border border-line bg-surface2 px-3 py-2 text-[11px] text-ink2">
+                    <span className="font-bold text-ink">Next time: {nt.label}.</span> {nt.reason}
                   </div>
                 ) : null; })()}
                 {b.sets.map((s,si)=> (

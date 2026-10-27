@@ -14,6 +14,13 @@ the history is the changelog; this file is its human-readable index.
 
 ### Today: low-readiness trim
 - When today's check-in scores 40/100 or lower, Today offers "Trim one set per lift" (one set off every lift with 3+ sets, never below 2; timed blocks untouched). You choose; undo is one tap.
+### Gym Mode: apply next-set load advice to all remaining sets
+- When the next-set chip suggests a heavier or lighter load, a second button, "Use for all N remaining", moves every untouched pending set at once instead of one tap per set.
+
+### Next-time preview in the session runner
+- Once every set of a lift is done, a chip shows what Arise will prescribe next session (load × reps and why), computed from your history plus the sets you just logged. Advice only.
+
+
 - Gym Mode: after a failed or under-floor final set, offer one back-off set about 10% lighter (snapped to your kit).
 
 ### Added

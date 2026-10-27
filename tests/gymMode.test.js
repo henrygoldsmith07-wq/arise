@@ -348,3 +348,40 @@ describe('backoffSetAdvice', () => {
     assert.equal(String(b.sets[2].weightKg), '45');
   });
 });
+
+import { nextTimePreview } from '../src/lib/gymMode.js';
+describe('nextTimePreview', () => {
+  const d = (reps, w = 50, extra = {}) => ({ completed: true, reps, weightKg: w, ...extra });
+  it('is null while a set is pending or nothing was logged', () => {
+    assert.equal(nextTimePreview({ reps: '8-12', sets: [d(10), { weightKg: 50 }] }, { exerciseId: 'chest-press-machine' }), null);
+    assert.equal(nextTimePreview({ reps: '8-12', sets: [] }, { exerciseId: 'chest-press-machine' }), null);
+  });
+  it('previews a heavier load after topping the rep range with reps in reserve', () => {
+    const p = nextTimePreview({ reps: '8-12', sets: [d(12, 50, { rir: 3 }), d(12, 50, { rir: 3 }), d(12, 50, { rir: 3 })] }, { exerciseId: 'chest-press-machine', dateISO: '2026-10-27' });
+    assert.ok(p && p.load > 50, JSON.stringify(p));
+  });
+  it('previews a rep target at the same load when mid-range', () => {
+    const p = nextTimePreview({ reps: '8-12', sets: [d(9, 50), d(8, 50)] }, { exerciseId: 'chest-press-machine', dateISO: '2026-10-27' });
+    assert.ok(p && p.reps > 0 && p.load <= 50, JSON.stringify(p));
+  });
+});
+
+import { nextSetAdvice as _nsa, pendingSameLoadIndexes } from '../src/lib/gymMode.js';
+describe('apply advice to all remaining sets', () => {
+  const mk = (sets) => ({ reps: '8-12', sets });
+  const done = { completed: true, reps: '12', rir: '3', weightKg: '40' };
+  it('lists every pending set still at the same load', () => {
+    const b = mk([done, { weightKg: '40' }, { weightKg: '40' }, { weightKg: '40' }]);
+    assert.deepEqual(pendingSameLoadIndexes(b, 1), [1, 2, 3]);
+  });
+  it('stops at a hand-edited or finished set', () => {
+    const b = mk([done, { weightKg: '40' }, { weightKg: '45' }, { weightKg: '40' }]);
+    assert.deepEqual(pendingSameLoadIndexes(b, 1), [1]);
+  });
+  it('nextSetAdvice exposes applyIndexes', () => {
+    const b = mk([done, { weightKg: '40' }, { weightKg: '40' }]);
+    const adv = _nsa(b, { equipment: 'cable' });
+    assert.ok(adv && adv.direction === 'up');
+    assert.deepEqual(adv.applyIndexes, [1, 2]);
+  });
+});
