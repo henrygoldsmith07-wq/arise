@@ -4,7 +4,8 @@ import ProgrammeLifecycle from './ProgrammeLifecycle.jsx';
 import WhyExplainer from './WhyExplainer.jsx';
 import { Suspense, lazy, useMemo, useRef, useState } from 'react';
 import { PROGRAM_BY_ID, EXERCISE_BY_ID, LOCATIONS, EQUIPMENT } from '../lib/data.js';
-import { isoToday, replanSchedule, shortWorkoutMode } from '../lib/programming.js';
+import { isoToday, replanSchedule, shortWorkoutMode, readinessTrimPlan } from '../lib/programming.js';
+import { readinessOn } from '../lib/readinessLog.js';
 import { backupRecency as computeBackupRecency, backupRecencyLabel, readBackupState } from '../lib/backupState.js';
 import WhatChangedPanel from './WhatChangedPanel.jsx';
 import { isSimpleView } from '../lib/experienceMode.js';
@@ -88,7 +89,13 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
     ()=> (timeBudget && heroSession ? shortWorkoutMode(heroSession, { minutes: timeBudget }) : null),
     [timeBudget, heroSession]
   );
-  const shownSession = timePlan?.session || heroSession;
+  const [trimOn, setTrimOn] = useState(false);
+  const trimPlan = useMemo(
+    ()=> (heroSession ? readinessTrimPlan(timePlan?.session || heroSession, readinessOn(store.readinessLog, isoToday())) : null),
+    [heroSession, timePlan, store.readinessLog]
+  );
+  const trimApplied = Boolean(trimOn && trimPlan?.changed);
+  const shownSession = trimApplied ? trimPlan.session : (timePlan?.session || heroSession);
   const shownIds = new Set((shownSession?.blocks || []).map(b=> b.exerciseId));
   const shownPrescriptions = prescriptions.filter(p=> shownIds.has(p.block.exerciseId));
   const fullMinutes = coach.nextSession?.estimatedDurationMin ?? null;
@@ -145,7 +152,7 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
 
   const startStandard = ()=>{
     if(!heroSession) return;
-    const target = timePlan?.session || heroSession;
+    const target = trimApplied ? trimPlan.session : (timePlan?.session || heroSession);
     // A compressed start records WHY the session differs from the plan — the
     // adaptation travels with the session and its history entry, so a
     // shortened workout is never a silent truncation.
@@ -307,6 +314,17 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
           {/* One dominant CTA. The standard session is the default action —
               short and guided stay one interaction away under Options. */}
           <div className="space-y-1.5 pt-1">
+            {trimPlan?.changed && (
+              <div className="rounded-xl border border-line bg-surface2 px-3 py-2 space-y-1.5" role="status" data-testid="today-readiness-trim">
+                <p className="text-xs font-bold">Low readiness today</p>
+                <p className="text-[11px] text-ink3 leading-snug">{trimPlan.reason}</p>
+                <button
+                  onClick={()=> setTrimOn(v=> !v)}
+                  aria-pressed={trimOn}
+                  className={`min-h-11 px-3 rounded-full border text-xs font-bold ${trimOn ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink3'}`}
+                >{trimOn ? 'Trimmed — tap to undo' : 'Trim one set per lift'}</button>
+              </div>
+            )}
             <button onClick={startStandard} className="btn btn-primary w-full min-h-14 rounded-xl text-base font-extrabold uppercase tracking-wide">
               {today ? 'Start workout' : 'Start this session'}
             </button>

@@ -748,3 +748,33 @@ export function recommendationCalibration(history = [], { minimumSamples = null,
       : `Need ${Math.max(0, minimum - samples)} more next-session comparison${minimum - samples === 1 ? '' : 's'} before tuning the rule.`,
   };
 }
+
+/** Readiness score (0-100) at or below which Today offers to trim volume. */
+export const LOW_READINESS_TRIM_SCORE = 40;
+
+/**
+ * Low-readiness trim: when today's check-in scored low, offer to drop ONE set
+ * from every resistance block that has 3+ sets (never below 2). Timed blocks
+ * and 1-2 set blocks are untouched. Advice only: returns a new session and the
+ * reason; the user chooses whether to start it.
+ */
+export function readinessTrimPlan(session, readinessEntry, { threshold = LOW_READINESS_TRIM_SCORE } = {}){
+  const score = Number(readinessEntry?.score);
+  if(!session?.blocks?.length || !Number.isFinite(score) || score > threshold){
+    return { session, changed: false, setsRemoved: 0, reason: '' };
+  }
+  let setsRemoved = 0;
+  const blocks = session.blocks.map(block=>{
+    const sets = Math.round(Number(block.sets));
+    if(parseTimeMinutes(block.reps) != null || !Number.isFinite(sets) || sets < 3) return block;
+    setsRemoved += 1;
+    return { ...block, sets: sets - 1, readinessOriginalSets: sets };
+  });
+  if(!setsRemoved) return { session, changed: false, setsRemoved: 0, reason: '' };
+  return {
+    session: { ...session, blocks, readinessTrim: { score, setsRemoved } },
+    changed: true,
+    setsRemoved,
+    reason: `Readiness is ${score}/100 today, so one set comes off each lift with 3+ sets (${setsRemoved} fewer). Same exercises, same loads.`,
+  };
+}
