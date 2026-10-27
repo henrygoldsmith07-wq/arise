@@ -134,7 +134,7 @@ export function rideLiftOverlay(history, rideDays, { weeks = 4, todayISO = null 
 /**
  * Heads-up for the session the lifter is about to do: names the leg exercises
  * and says which ride they would cost. Returns null when there is no clash.
- * `swapSuggestion` lists upper-body-only block ids so the UI can offer to skip legs.
+ * `upperBlockIds` lists upper-body-only block ids so the UI can offer to skip legs.
  */
 export function legRideWarning(session, dateISO, rideDays){
   if(!session || !dateISO || !hasLegWork(session)) return null;
