@@ -365,3 +365,23 @@ describe('nextTimePreview', () => {
     assert.ok(p && p.reps > 0 && p.load <= 50, JSON.stringify(p));
   });
 });
+
+import { nextSetAdvice as _nsa, pendingSameLoadIndexes } from '../src/lib/gymMode.js';
+describe('apply advice to all remaining sets', () => {
+  const mk = (sets) => ({ reps: '8-12', sets });
+  const done = { completed: true, reps: '12', rir: '3', weightKg: '40' };
+  it('lists every pending set still at the same load', () => {
+    const b = mk([done, { weightKg: '40' }, { weightKg: '40' }, { weightKg: '40' }]);
+    assert.deepEqual(pendingSameLoadIndexes(b, 1), [1, 2, 3]);
+  });
+  it('stops at a hand-edited or finished set', () => {
+    const b = mk([done, { weightKg: '40' }, { weightKg: '45' }, { weightKg: '40' }]);
+    assert.deepEqual(pendingSameLoadIndexes(b, 1), [1]);
+  });
+  it('nextSetAdvice exposes applyIndexes', () => {
+    const b = mk([done, { weightKg: '40' }, { weightKg: '40' }]);
+    const adv = _nsa(b, { equipment: 'cable' });
+    assert.ok(adv && adv.direction === 'up');
+    assert.deepEqual(adv.applyIndexes, [1, 2]);
+  });
+});

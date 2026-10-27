@@ -978,6 +978,9 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     ) : (<>
                     <span className="min-w-0 flex-1">{adv.reason} Next set: {adv.direction === 'down' ? 'a bit lighter' : 'a bit heavier'} — {fmtWeight(adv.loadKg, unit)}?</span>
                     <button type="button" onClick={()=> updateSet(bi, adv.setIndex, { weightKg: String(adv.loadKg) })} className="min-h-11 min-w-11 px-3 rounded-full border border-ink text-xs font-bold">Use {fmtWeight(adv.loadKg, unit)}</button>
+                    {adv.applyIndexes && adv.applyIndexes.length > 1 && (
+                      <button type="button" data-testid="next-set-advice-all" onClick={()=> adv.applyIndexes.forEach(i=> updateSet(bi, i, { weightKg: String(adv.loadKg) }))} className="min-h-11 min-w-11 px-3 rounded-full border border-line text-xs font-bold">Use for all {adv.applyIndexes.length} remaining</button>
+                    )}
                     </>)}
                   </div>
                 ) : null; })()}
