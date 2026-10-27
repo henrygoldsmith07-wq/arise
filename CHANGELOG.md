@@ -12,6 +12,13 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### My Programme: edit the programme you are running
+- **Train → Edit programme** opens an editor for the active programme: swap an exercise (ranked alternatives that fit your kit, never an avoided one, liked ones first), add or remove exercises, move them up/down, change sets (1–8) and the rep range, rename a day.
+- Edits apply to every upcoming session of that day, so Today, Gym Mode and the load engine run them immediately; completed sessions are never rewritten and history stays with each exercise, so swapping back resumes it.
+- Edited days/exercises are badged, Undo reverses the last change, and Reset day / Reset all restore the programme exactly (with confirmation).
+- Edits live on the programme in local storage and ride backup, export/import, sync and cross-tab refresh; a damaged edit layer is dropped by integrity repair without touching the sessions. Starting another programme or clearing the schedule warns that edits will be cleared.
+- Bundle: the editor is its own lazy chunk. To stay inside the unchanged 405 kB total budget, ten dependency-free lazy helpers now share one chunk, and dynamic imports no longer embed per-chunk preload lists (boot keeps its HTML modulepreload tags; every lazy chunk is precached by the service worker).
+
 ### Gym Mode: step up after an easy opening set
 - A first set with 4+ reps in reserve, even mid-range, now offers the next load step for the remaining sets instead of waiting for the top of the range.
 

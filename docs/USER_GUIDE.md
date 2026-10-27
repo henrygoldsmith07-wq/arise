@@ -51,6 +51,34 @@ progress → taking care of your data.
 - Notes are free-text; quick tags capture pain, soreness and session quality
   in one tap. Pain/discomfort tags actively soften future recommendations.
 
+## My programme: edit the plan you are running
+
+Tap **Train → Edit programme** to make the running programme yours without
+rebuilding it as a template.
+
+- Pick a day (its tab shows **•** once edited). Each exercise shows its
+  **sets × reps**, with controls to **Swap**, change **sets** (1–8) and the
+  **rep range** (bottom/top steppers; timed holds step in 5-second jumps),
+  **move up/down** and **remove** (a day always keeps at least one exercise).
+- **Swap** lists the closest alternatives your kit supports (same muscle and
+  movement first, liked exercises lifted, avoided ones never shown). After a
+  swap the original is always first in the list, so swapping back is one tap.
+- **+ Add exercise** searches the exercises your kit supports; **Rename day**
+  changes the name everywhere it shows.
+- Changes apply to **every upcoming session of that day**, across all weeks.
+  Completed sessions are never rewritten. Values you did not touch keep each
+  week's own template progression (week 2's extra reps survive a swap).
+- Customised days and exercises carry an **Edited** badge; the Train card
+  says **Customised**, and Today marks **your swap**.
+- **Undo** reverses the last change. **Reset this day** or **Reset all to
+  template** puts the programme back exactly as generated (with confirmation,
+  and undoable).
+- Progress and the load engine follow the **exercise**, not the slot: history
+  logged on a lift is still there when you swap back to it.
+- Edits belong to this programme. Starting a different programme (or
+  clearing the schedule) asks first, because it clears them. They are stored
+  on this device with the programme and travel in backups, exports and sync.
+
 ## Reading your progress
 
 - **Progress** shows weekly volume, estimated strength trend, streak and
