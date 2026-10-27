@@ -13,6 +13,7 @@
 
 import { nearestAchievableLoad, minimumAchievableJump, DEFAULT_PLATE_DENOMINATIONS_KG, DEFAULT_DUMBBELL_WEIGHTS_KG, DEFAULT_MACHINE_INCREMENT_KG } from './plates.js';
 import { EXERCISE_BY_ID } from './data.js';
+import { recommendNext } from './progression.js';
 
 // The smallest real jump for a piece of equipment, derived from the plate /
 // dumbbell / machine-pin configuration (falling back to the defaults). Every
@@ -387,4 +388,22 @@ export function shorterRestAdvice(block, { restSec = null, hasUserPreset = false
   const seconds = [...REST_PRESET_CHOICES].reverse().find(c => c <= rest - 30 && c >= 90);
   if(!seconds) return null;
   return { seconds, reason: `Both sets held ${reps[1]} reps with ${rirs[1]} left on ${Math.round(rest)} s rest. You can rest a bit less and finish sooner.` };
+}
+
+// ── "Next time" preview ─────────────────────────────────────────────────────
+// Once every set of a lift is done, show what the engine will prescribe next
+// session, computed from history plus this just-finished block. Advice only;
+// null while sets are pending, nothing logged, or the engine has no load.
+export function nextTimePreview(block, { exerciseId, history = [], dateISO = null, plateConfig = null, config = null } = {}){
+  const sets = Array.isArray(block?.sets) ? block.sets : [];
+  const finished = sets.filter(s => s.completed && !s.failed && Number(s.reps) > 0);
+  if(!exerciseId || !sets.length || !finished.length) return null;
+  if(sets.some(s => !s.completed && !s.failed && !s.skipped)) return null;
+  const entry = { dateISO: dateISO || new Date().toISOString().slice(0, 10), blocks: [{ exerciseId, sets: finished.map(s => ({ reps: String(s.reps), weightKg: s.weightKg ?? '', rpe: s.rpe ?? '', rir: s.rir ?? '' })) }] };
+  let rec;
+  try{ rec = recommendNext({ exerciseId, history: [...history, entry], targetReps: block.reps || null, plateConfig, config }); }catch{ return null; }
+  if(!rec || !(Number(rec.reps) > 0)) return null;
+  const load = Number(rec.load);
+  const label = load > 0 ? `${load} kg × ${rec.reps}` : `${rec.reps} reps`;
+  return { load: load > 0 ? load : null, reps: Number(rec.reps), label, reason: rec.reason || '' };
 }
