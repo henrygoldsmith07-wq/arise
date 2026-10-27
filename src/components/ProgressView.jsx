@@ -21,7 +21,7 @@ import { totalVolumeKg } from '../lib/store.js';
 import { fmtWeight } from '../lib/units.ts';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { rideLiftOverlay } from '../lib/rideAwareSchedule.js';
-import { weeklyVolume, frequencyByMuscleSync, volumeLandmarks, volumeDistribution, strengthSeries, extractNoteRecommendations, plannedVsCompletedStats, volumeBalanceAdvice } from '../lib/analytics.js';
+import { weeklyVolume, frequencyByMuscleSync, volumeLandmarks, volumeDistribution, strengthSeries, extractNoteRecommendations, plannedVsCompletedStats, volumeBalanceAdvice, restTakenByExercise } from '../lib/analytics.js';
 import { linearRegressionIntervals } from '../lib/statistics.js';
 import { strengthTrendWithConfidence, classifyPR, isUnilateralExercise, sideImbalance } from '../lib/progression.js';
 import { exerciseHistorySummary, plateauDetection, programAdherence, recommendationCalibration, validateDeloadLogic } from '../lib/programming.js';
@@ -76,6 +76,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
   const changes = useMemo(()=> whatChangedSummary({ schedule: store.activeSchedule, history }), [store.activeSchedule, history]);
   const prs = useMemo(()=> computePRs(history), [history]);
   const wv = useMemo(()=> weeklyVolume(history), [history]);
+  const restTaken = useMemo(()=> restTakenByExercise(history).slice(0, 4), [history]);
   const rideOverlay = useMemo(()=> rideLiftOverlay(history, store.activeSchedule?.keyRideDays, { weeks: 4, todayISO: today }), [history, store.activeSchedule?.keyRideDays, today]);
   // Evidence-gated “Am I improving?” assessment. Volume is only supporting
   // context inside the assessment; the verdict needs repeated-exercise
@@ -660,6 +661,20 @@ export default function ProgressView({ store, setStore = null, onStart = null })
         )}
         {!!wv.length && <p className="text-xs text-ink3 mt-2"><JargonHelp term="RPE" /><JargonHelp term="RIR" /> {wv[wv.length-1]?.vol> (wv[wv.length-2]?.vol||0)*1.2 ? `Volume up ${Math.round((wv[wv.length-1].vol/(wv[wv.length-2]?.vol||1)-1)*100)}% vs last week — hold steady or deload if RPE was high.` : wv[wv.length-1]?.vol < (wv[wv.length-2]?.vol||0)*0.8 ? 'Volume dipped — good if planned deload, otherwise add a session.' : 'Trends look steady — keep progressing where RIR ≥2.'}</p>}
       </section>
+
+      {restTaken.length > 0 && (
+        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="Rest you took" data-testid="rest-taken">
+          <h3 className="text-sm font-bold">Rest you actually took</h3>
+          <ul className="space-y-1.5">
+            {restTaken.map(r => (
+              <li key={r.exerciseId} className="flex items-center gap-2 text-xs">
+                <span className="font-bold">{EXERCISE_BY_ID[r.exerciseId]?.name || r.exerciseId}</span>
+                <span className="ml-auto tabular-nums text-ink2">{r.medianSec} s of {r.prescribedSec} s{r.tooShort ? ' — cutting rest short' : ''}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {rideOverlay.some(r => r.liftDays > 0) && (
         <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="Rides and lifting" data-testid="ride-overlay">

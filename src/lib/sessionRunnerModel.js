@@ -662,6 +662,7 @@ export function buildSessionHistoryPayload({
     blocks: blocks.map((block, index) => ({
       exerciseId: block.exerciseId,
       exerciseOrder: index,
+      ...(Number(block.restSec) > 0 ? { restSec: Number(block.restSec) } : {}),
       ...(block.substitutionFrom
         ? {
             substitutionFrom: block.substitutionFrom,
@@ -690,6 +691,8 @@ export function buildSessionHistoryPayload({
           failed,
         };
         if (set.setId) out.setId = set.setId;
+        if (completed && Number.isFinite(Number(set.doneAtMs)) && Number(set.doneAtMs) > 0)
+          out.doneAtMs = Math.round(Number(set.doneAtMs));
         if (set.origin) out.origin = set.origin;
         if (Number.isInteger(set.plannedSlot))
           out.plannedSlot = set.plannedSlot;
