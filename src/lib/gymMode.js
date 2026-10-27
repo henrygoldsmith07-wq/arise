@@ -244,6 +244,7 @@ export function pendingSameLoadIndexes(block, fromIdx){
   return out;
 }
 export const OVERSHOOT_REPS = 3;
+export const EASY_OPENER_RIR = 4;
 export function nextSetAdvice(block, { equipment = 'machine', config = null } = {}){
   const sets = Array.isArray(block?.sets) ? block.sets : [];
   const range = parseRepRange(block?.reps);
@@ -269,6 +270,9 @@ export function nextSetAdvice(block, { equipment = 'machine', config = null } = 
   // more sets still to do: the same load will push the rest under the floor and
   // trigger stop-early. Offer one step down now to keep the work sets productive.
   else if(nextIdx === 1 && reps === range.min && rirN === 0 && sets.length - nextIdx >= 2) dir = -1;
+  // Opening set mid-range but with 4+ reps in reserve: the load is far too light
+  // for the target, and waiting for the top of the range wastes the remaining sets.
+  else if(nextIdx === 1 && Number.isFinite(rirN) && rirN >= EASY_OPENER_RIR && reps >= range.min && sets.length - nextIdx >= 1) dir = 1;
   if(!dir) return null;
   const target = Number(adjacentLoad(load, dir, { equipment, config }));
   if(!Number.isFinite(target) || target === load || target <= 0) return null;
@@ -292,6 +296,8 @@ export function nextSetAdvice(block, { equipment = 'machine', config = null } = 
       ? `Set 1 took everything for ${reps} reps. A small drop keeps the next sets in the ${range.min}–${range.max} range.`
       : dir < 0
       ? `Set ${nextIdx} gave ${reps} reps, under the ${range.min}–${range.max} range.`
+      : reps < range.max && rirN >= EASY_OPENER_RIR
+      ? `Set 1 gave ${reps} reps with ${rirN} left in the tank, so this load is well under what you can lift for ${range.min}–${range.max}.`
       : !Number.isFinite(rirN)
       ? `Set ${nextIdx} gave ${reps} reps, well past the top of the ${range.min}–${range.max} range.`
       : `Set ${nextIdx} hit ${reps} reps with ${rirN} left in the tank.`,

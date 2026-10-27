@@ -413,3 +413,20 @@ describe('nextSetAdvice overshoot without RIR', () => {
     assert.equal(nsa(blk(14)), null);
   });
 });
+
+import { nextSetAdvice, EASY_OPENER_RIR } from '../src/lib/gymMode.js';
+describe('gym mode — easy opener step-up', () => {
+  const mk = (reps, rir, n = 3) => ({ reps: '8-12', sets: Array.from({ length: n }, (_, i) => i === 0 ? { weightKg: 40, reps, rir, completed: true } : { weightKg: 40, reps: '', completed: false }) });
+  it('offers a step up after a mid-range first set with 4+ RIR', () => {
+    const a = nextSetAdvice(mk(9, 4), { equipment: 'machine' });
+    assert.equal(EASY_OPENER_RIR, 4);
+    assert.equal(a.direction, 'up');
+    assert.ok(a.loadKg > 40);
+    assert.match(a.reason, /well under/);
+  });
+  it('stays quiet with 3 RIR mid-range or on a later set', () => {
+    assert.equal(nextSetAdvice(mk(9, 3), { equipment: 'machine' }), null);
+    const later = mk(9, 4); later.sets[1] = { weightKg: 40, reps: 9, rir: 4, completed: true };
+    assert.equal(nextSetAdvice(later, { equipment: 'machine' }), null);
+  });
+});
