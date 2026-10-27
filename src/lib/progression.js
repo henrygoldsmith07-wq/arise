@@ -279,6 +279,11 @@ export function recommendNext({ exerciseId, history, targetReps = null, conserva
     }
     return plateAware({ load, reps: Math.min(hi, reps + 1), reason: `Hard set (RIR ~${effortRir}) and not at ${hi} reps yet — keep ${load} kg and earn one more rep (${reps}→${Math.min(hi, reps+1)}) before adding weight.`, hardHold: true, strategy: strat, personalised: prate, trainingAge }, plateConfig, exerciseId);
   }
+  // A true grind (RPE 10 / RIR 0) at the top of the range proves the reps, not
+  // readiness for more weight: repeat the load and aim for a cleaner top set.
+  if(load > 0 && rir === 0){
+    return plateAware({ load, reps: hi, reason: `You hit ${hi} reps at ${load} kg but it was a grind (RPE 10) — repeat ${load} kg and aim for ${hi} reps with 1+ in reserve before adding weight.`, grindHold: true, strategy: strat, personalised: prate, trainingAge, priorsVersion: cfg.version }, plateConfig, exerciseId);
+  }
   const nextLoad = load > 0 ? bumpLoad(load, load * ((conservative || rir === null) ? (1 + incPct) : (1 + incPct*cfg.progression.nonConservativeMultiplier)), cfg, trainingAge) : 0;
   // Coarse stacks: when the next achievable load is a huge jump (a 5 kg pin on a
   // 20 kg cable is +25%), stretch the reps past the range ceiling first so the
