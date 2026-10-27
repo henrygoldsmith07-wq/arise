@@ -337,3 +337,26 @@ export function longerRestAdvice(block, { restSec = null, hasUserPreset = false 
   if(!seconds) return null;
   return { seconds, reason: `Reps fell from ${a} to ${b} on ${Math.round(rest)} s rest. A little longer between sets usually holds the reps up.` };
 }
+
+// ── Shorter-rest advice ─────────────────────────────────────────────────────
+// The mirror of longerRestAdvice: the last two finished sets held the same reps
+// (within 1), both left 3+ in reserve, sets remain and the lift runs on a long
+// rest (≥ 150 s) the lifter never chose. Recovery is not the limiter, so offer
+// to remember a rest one preset shorter (never under 90 s) and save session time.
+export const SHORT_REST_MIN_RIR = 3;
+export function shorterRestAdvice(block, { restSec = null, hasUserPreset = false } = {}){
+  if(hasUserPreset) return null;
+  const rest = Number(restSec ?? block?.restSec);
+  if(!Number.isFinite(rest) || rest < 150) return null;
+  const sets = Array.isArray(block?.sets) ? block.sets : [];
+  const done = sets.filter(s => s.completed && !s.failed);
+  if(done.length < 2 || !sets.some(s => !s.completed && !s.failed && !s.skipped)) return null;
+  const last = done.slice(-2);
+  const reps = last.map(s => (s.reps === '' || s.reps == null) ? NaN : Number(s.reps));
+  const rirs = last.map(s => (s.rir === '' || s.rir == null) ? NaN : Number(s.rir));
+  if(reps.some(r => !Number.isFinite(r)) || rirs.some(r => !Number.isFinite(r) || r < SHORT_REST_MIN_RIR)) return null;
+  if(Math.abs(reps[0] - reps[1]) > 1) return null;
+  const seconds = [...REST_PRESET_CHOICES].reverse().find(c => c <= rest - 30 && c >= 90);
+  if(!seconds) return null;
+  return { seconds, reason: `Both sets held ${reps[1]} reps with ${rirs[1]} left on ${Math.round(rest)} s rest. You can rest a bit less and finish sooner.` };
+}
