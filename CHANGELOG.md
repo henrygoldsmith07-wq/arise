@@ -12,6 +12,8 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Today: low-readiness trim
+- When today's check-in scores 40/100 or lower, Today offers "Trim one set per lift" (one set off every lift with 3+ sets, never below 2; timed blocks untouched). You choose; undo is one tap.
 ### Gym Mode: apply next-set load advice to all remaining sets
 - When the next-set chip suggests a heavier or lighter load, a second button, "Use for all N remaining", moves every untouched pending set at once instead of one tap per set.
 
