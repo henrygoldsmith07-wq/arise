@@ -229,6 +229,20 @@ export function parseRepRange(reps){
 }
 
 export const COARSE_JUMP_FRACTION = 0.15;
+// Indexes of every still-pending set from `fromIdx` that carries the same load
+// as the set before it (i.e. not hand-edited), so one tap can move them all.
+export function pendingSameLoadIndexes(block, fromIdx){
+  const sets = Array.isArray(block?.sets) ? block.sets : [];
+  const base = Number(sets[fromIdx]?.weightKg);
+  const out = [];
+  for(let i = fromIdx; i < sets.length; i++){
+    const s = sets[i];
+    if(s.completed || s.failed || s.skipped) break;
+    if(Number(s.weightKg) !== base) break;
+    out.push(i);
+  }
+  return out;
+}
 export function nextSetAdvice(block, { equipment = 'machine', config = null } = {}){
   const sets = Array.isArray(block?.sets) ? block.sets : [];
   const range = parseRepRange(block?.reps);
@@ -269,6 +283,7 @@ export function nextSetAdvice(block, { equipment = 'machine', config = null } = 
     setIndex: nextIdx,
     direction: dir < 0 ? 'down' : 'up',
     loadKg: target,
+    applyIndexes: pendingSameLoadIndexes(block, nextIdx),
     reason: dir < 0 && reps === range.min && rirN === 0
       ? `Set 1 took everything for ${reps} reps. A small drop keeps the next sets in the ${range.min}–${range.max} range.`
       : dir < 0

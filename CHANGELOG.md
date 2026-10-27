@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Gym Mode: apply next-set load advice to all remaining sets
+- When the next-set chip suggests a heavier or lighter load, a second button, "Use for all N remaining", moves every untouched pending set at once instead of one tap per set.
+
 ### Next-time preview in the session runner
 - Once every set of a lift is done, a chip shows what Arise will prescribe next session (load × reps and why), computed from your history plus the sets you just logged. Advice only.
 
