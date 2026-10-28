@@ -138,10 +138,42 @@ export function consistencyReport({ history = [], schedule = null, today = null 
   const done = new Set(logged.map((s)=> s.dateISO));
   const planned = (schedule?.sessions || []).filter((s)=> s.dateISO && s.dateISO <= (today || new Date().toISOString().slice(0, 10)));
   const onTime = planned.filter((s)=> s.status === 'done' || done.has(s.dateISO));
-  const completed = planned.filter((p)=>
-    onTime.includes(p)
-    || logged.some((s)=> s.title === p.title && dayDelta(s.dateISO, p.dateISO) <= 7 && s.dateISO >= p.dateISO)
-  );
+  // Make-up matching is ONE-TO-ONE: a single logged session can satisfy at
+  // most one planned session. The old `logged.some(...)` scan let one log
+  // match every same-title planned session within its 7-day window, so one
+  // workout reported 100% adherence against two planned sessions. Logs that
+  // already satisfied a planned session's exact date are consumed by that
+  // onTime match and are never re-used as a make-up.
+  const usedLogs = new Set();
+  for(const plannedSession of planned){
+    if(!(plannedSession.status === 'done' || done.has(plannedSession.dateISO))) continue;
+    for(let i = 0; i < logged.length; i++){
+      if(logged[i].dateISO === plannedSession.dateISO){ usedLogs.add(i); break; }
+    }
+  }
+  const makeUpCandidates = [];
+  for(const p of planned){
+    if(onTime.includes(p)) continue;
+    let bestIdx = -1, bestDist = Infinity;
+    for(let i = 0; i < logged.length; i++){
+      if(usedLogs.has(i)) continue;
+      const s = logged[i];
+      if(s.title !== p.title) continue;
+      if(s.dateISO < p.dateISO || dayDelta(s.dateISO, p.dateISO) > 7) continue;
+      const dist = dayDelta(s.dateISO, p.dateISO);
+      if(dist < bestDist){ bestDist = dist; bestIdx = i; }
+    }
+    if(bestIdx !== -1) makeUpCandidates.push({ planned: p, logIndex: bestIdx, dist: bestDist });
+  }
+  // Nearest planned date claims its log first, so a farther planned session
+  // never steals a log that a closer one needs.
+  makeUpCandidates.sort((a, b)=> a.dist - b.dist || String(a.planned.dateISO).localeCompare(String(b.planned.dateISO)));
+  const completed = [...onTime];
+  for(const candidate of makeUpCandidates){
+    if(usedLogs.has(candidate.logIndex)) continue;
+    usedLogs.add(candidate.logIndex);
+    completed.push(candidate.planned);
+  }
   const missed = planned.filter((s)=> !completed.includes(s) && s.dateISO < (today || new Date().toISOString().slice(0, 10)));
   const adherencePct = planned.length ? Math.round((completed.length / planned.length) * 100) : null;
 
