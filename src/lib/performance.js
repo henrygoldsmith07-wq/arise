@@ -232,7 +232,7 @@ export function personalBests({ history = [], limit = 5 } = {}){
           const verdict = prior == null
             ? { meaningful:true, techniqueChange:false, reason:'First comparable performance on this exercise.' }
             : classifyPR({ priorBestE1rm: prior.e1rm, newE1rm: value, note: set.note, priorNote: prior.note });
-          bestByExercise.set(block.exerciseId, { e1rm:value, note:set.note || null, dateISO: session.dateISO });
+          bestByExercise.set(block.exerciseId, { e1rm:value, note:set.note || null, dateISO: session.dateISO, set });
           if(verdict.meaningful && prior != null){
             prs.push({
               exerciseId: block.exerciseId,

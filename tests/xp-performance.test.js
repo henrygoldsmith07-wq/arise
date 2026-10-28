@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { deriveXp, xpAwards, xpForLevel, levelForXp, XP_SOURCES } from '../src/lib/xp.js';
-import { strengthTrends, workCapacity, consistencyReport, confidenceLanguage } from '../src/lib/performance.js';
+import { strengthTrends, workCapacity, consistencyReport, confidenceLanguage, personalBests } from '../src/lib/performance.js';
 
 function session(id, dateISO, sets, title = id){
   return { id, dateISO, title, blocks:[{ exerciseId:'bench-press-dumbbell', sets }] };
@@ -192,6 +192,22 @@ describe('performance metrics: evidence or honest silence', ()=>{
     assert.equal(both.missed, 0);
     assert.equal(both.adherencePct, 100);
     assert.equal(both.onTime, 0);
+  });
+
+  it('personalBests names which dimension moved: rep PR at same load beats the generic label', ()=>{
+    // compareSets reads the PRIOR set, which bestByExercise never stored, so
+    // every PR degraded to 'Estimated 1RM PR' regardless of what improved.
+    const history = [
+      { dateISO:'2026-01-01', blocks:[{ exerciseId:'bench-press-dumbbell', sets:[{ reps:'8', weightKg:'100' }] }] },
+      { dateISO:'2026-01-08', blocks:[{ exerciseId:'bench-press-dumbbell', sets:[{ reps:'9', weightKg:'100' }] }] },
+      { dateISO:'2026-01-15', blocks:[{ exerciseId:'bench-press-dumbbell', sets:[{ reps:'9', weightKg:'105' }] }] },
+    ];
+    const prs = personalBests({ history });
+    const byDate = new Map(prs.map(p=> [p.dateISO, p]));
+    assert.equal(byDate.get('2026-01-08').kind, 'Rep PR at same load',
+      'same load, more reps must be named as a rep PR');
+    assert.equal(byDate.get('2026-01-15').kind, 'Load PR at comparable reps',
+      'more load at equal reps must be named as a load PR');
   });
 
   it('translates confidence into human language at every level', ()=>{
