@@ -522,3 +522,13 @@ export function addCandidates(schedule, key, { query = '', availableEquipment = 
     .sort((a, b)=> b.liked - a.liked || a.name.localeCompare(b.name))
     .slice(0, limit);
 }
+
+// ── Save edits as a reusable template ───────────────────────────────────
+// Builds a templateEditor-shaped input from the CURRENT (edited) days so the
+// lifter can keep their tweaks for the next block. Pure: caller passes the
+// result to buildEditorTemplate and stores it in customTemplates.
+export const editsAsTemplateInput = (schedule, { name } = {})=> ({
+  name: String(name || '').trim() || 'My edits',
+  level: 'beginner', goal: 'general',
+  days: editableDays(schedule).map(d=> ({ title: d.title, exercises: d.blocks })),
+});

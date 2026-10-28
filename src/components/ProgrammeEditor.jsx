@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useDialogA11y } from '../lib/a11y.js';
 import { useDialogs } from './Dialog.jsx';
+import { saveCustomTemplate } from '../services/programmeService.js';
 import {
-  editableDays, editSummary, swapCandidates, addCandidates,
+  editsAsTemplateInput, editableDays, editSummary, swapCandidates, addCandidates,
   swapExercise, addExercise, removeExercise, moveExercise,
   setExerciseSets, setExerciseRepRange, renameDay, resetDay, resetAllEdits, undoLastEdit,
   parseRepRange, REP_BOUNDS, MIN_SETS, MAX_SETS, MAX_DAY_TITLE,
@@ -57,6 +58,15 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
     setStore({ ...store, activeSchedule: result.schedule });
     setStatus(msg || `Saved: ${result.schedule.programmeEdits?.undo?.label}.`);
     return true;
+  };
+
+  const saveAsTemplate = async ()=> {
+    const name = await dialogs.prompt({ title: 'Save as template', fieldLabel: 'Name', placeholder: 'My edits' });
+    if(name === null || name === undefined) return;
+    try{
+      setStore(saveCustomTemplate({ store, form: editsAsTemplateInput(schedule, { name }) }).store);
+      setStatus('Saved to My templates in Train.');
+    }catch(e){ setStatus(e.message); }
   };
 
   const rename = async (day)=> {
@@ -229,7 +239,10 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
           </section>
         ))}
         {summary.days > 0 && (
+          <>
+          <button type="button" onClick={saveAsTemplate} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs">Save edits as template</button>
           <button type="button" onClick={confirmResetAll} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs text-danger">Reset all to template</button>
+          </>
         )}
       </>
     );
