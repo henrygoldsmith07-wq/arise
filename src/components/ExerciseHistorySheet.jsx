@@ -6,6 +6,10 @@ import { fmtWeight } from '../lib/units.ts';
 
 // Last five exposures of the current lift, with a best-e1RM sparkline.
 export default function ExerciseHistorySheet({ exerciseId, name, history, unit = 'kg', onClose }){
+  // Escape closes, Tab is trapped, and focus returns to the opener — the same
+  // dialog contract every other sheet in the app gets from useDialogA11y.
+  // This sheet was the one dialog that opened without it, so a keyboard user
+  // could reach it but not leave it.
   const a11y = useDialogA11y({ active: true, onClose });
   const sessions = useMemo(()=> exerciseSessionHistory(history, exerciseId, 5), [history, exerciseId]);
   const points = sparklinePoints(sessions);
@@ -14,7 +18,9 @@ export default function ExerciseHistorySheet({ exerciseId, name, history, unit =
       <div ref={a11y.rootRef} onKeyDown={a11y.trapTab} role="dialog" aria-modal="true" aria-label={`${name} history`}
         onClick={e=> e.stopPropagation()} className="w-full max-w-md max-h-[80vh] overflow-y-auto rounded-t-2xl border border-line bg-surface p-4 space-y-3">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-bold text-ink">{name}: last {sessions.length || 5} sessions</h2>
+          {/* State the real count: "last 5 sessions" while the list is empty
+              promised sessions that do not exist. One logged session says so. */}
+          <h2 className="text-sm font-bold text-ink">{sessions.length === 1 ? `${name}: last session` : `${name}: last ${sessions.length || 5} sessions`}</h2>
           <button ref={a11y.closeRef} type="button" onClick={onClose} className="min-h-11 min-w-11 text-xs font-bold px-3 rounded-full border border-line">Close</button>
         </div>
         {sessions.length === 0 && <p className="text-xs text-ink3">Nothing logged for this lift yet. Your first session becomes the baseline.</p>}
