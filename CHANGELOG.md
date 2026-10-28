@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Training days
+- Pick the weekdays you train; upcoming sessions re-date onto them (ride days avoided). Move any single session to another day from Train; sessions swap if the day is taken.
+
 ### Edit or delete a logged workout
 - **Progress → Edit logged workouts** lists your last 30 sessions. Correct a set's load, reps or RPE, delete one set, or delete a whole session (with confirmation).
 - Corrections feed the next suggestion immediately; edited sets are marked. Deleting a session leaves a tombstone so a restore or sync cannot resurrect it, and re-opens its slot in your programme.
