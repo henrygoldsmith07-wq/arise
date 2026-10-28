@@ -51,7 +51,7 @@ export default defineConfig({
           // As ten separate chunks every one paid its own gzip warm-up and
           // import/export headers; one shared chunk is several kB smaller in
           // total. Boot is unchanged (no boot module imports them statically).
-          if(/\/src\/lib\/(storageQuota|backupState|quotaGuard|cryptoBackup|crossTabStore|xp|exercisePicker|rideAwareSchedule|readinessLog|stallDeload|demoData)\.js$/.test(id)) return 'leaves';
+          if(/\/src\/lib\/(storageQuota|backupState|quotaGuard|cryptoBackup|crossTabStore|xp|exercisePicker|rideAwareSchedule|readinessLog|stallDeload|demoData|historyEditor|programmeEditor|programmeName|mesocycle|schedule|snapshots)\.js$/.test(id)) return 'leaves';
           // Small settings leaves that always open together from More: one chunk
           // instead of four, each repeating gzip + import/export overhead.
           if(/\/src\/components\/(settings\/(FeedbackSettings|GuidedSettings|AppearanceAccessibilitySettings)|InstallCard)\.jsx$/.test(id)) return 'settings-lite';
