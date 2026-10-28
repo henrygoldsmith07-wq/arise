@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import JargonHelp from './JargonHelp.jsx';
 import { deriveXp } from '../lib/xp.js';
 const CoachPanel = lazy(() => import('./CoachPanel.jsx'));
+const HistoryEditSheet = lazy(() => import('./HistoryEditSheet.jsx'));
 
 // The check-in channel's user-facing line: plain “what the trend says”
 // wording, honest about direction AND about absence. Not a component — so
@@ -46,6 +47,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
   // evidence. Nothing here claims fitness from logging volume.
   const today = todayISO();
   const xp = useMemo(()=> deriveXp({ history: store.history, schedule: store.activeSchedule, milestones: milestoneState(store.history || []) }), [store.history, store.activeSchedule]);
+  const [editingHistory, setEditingHistory] = useState(false);
   const perf = useMemo(()=>{
     const history = store.history || [];
     const recentExercises = [...new Set(history.slice(-6).flatMap(s=> (s.blocks||[]).map(b=> b.exerciseId)))];
@@ -370,6 +372,12 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       {/* programmeWhy is the same stored provenance coachingState derives:
           the first-plan reasons, only while that programme is still active. */}
       <Suspense fallback={null}><CoachPanel store={store} programmeWhy={(store.onboarding?.firstPlan && (!store.activeSchedule || store.onboarding.firstPlan.programId === store.activeSchedule.programId)) ? store.onboarding.firstPlan : null} /></Suspense>
+      {setStore && history.length > 0 && (
+        <>
+          <button type="button" onClick={()=> setEditingHistory(true)} className="min-h-11 w-full rounded-full border border-line text-xs font-bold">Edit logged workouts</button>
+          {editingHistory && <Suspense fallback={null}><HistoryEditSheet store={store} setStore={setStore} onClose={()=> setEditingHistory(false)} /></Suspense>}
+        </>
+      )}
 
       {/* ── The five questions (P2.9): interpretation before any chart ──
           What improved / What stalled / Why might it be happening — answered

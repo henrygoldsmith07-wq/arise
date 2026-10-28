@@ -12,6 +12,10 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Edit or delete a logged workout
+- **Progress → Edit logged workouts** lists your last 30 sessions. Correct a set's load, reps or RPE, delete one set, or delete a whole session (with confirmation).
+- Corrections feed the next suggestion immediately; edited sets are marked. Deleting a session leaves a tombstone so a restore or sync cannot resurrect it, and re-opens its slot in your programme.
+
 ### My Programme: edit the programme you are running
 - **Train → Edit programme** opens an editor for the active programme: swap an exercise (ranked alternatives that fit your kit, never an avoided one, liked ones first), add or remove exercises, move them up/down, change sets (1–8) and the rep range, rename a day.
 - Edits apply to every upcoming session of that day, so Today, Gym Mode and the load engine run them immediately; completed sessions are never rewritten and history stays with each exercise, so swapping back resumes it.
