@@ -69,6 +69,4 @@ export function moveSession(schedule, sessionId, newISO, todayISO) {
   return { schedule: { ...schedule, rev: (schedule.rev || 1) + 1, updatedAt: new Date().toISOString(), sessions: next }, error: null, swapped: clash?.id || null };
 }
 
-export function weekdayLabel(d) {
-  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d] || '';
-}
+export const weekdayLabel = (d) => 'Sun Mon Tue Wed Thu Fri Sat'.split(' ')[d] || '';
