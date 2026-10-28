@@ -79,6 +79,10 @@ rebuilding it as a template.
   clearing the schedule) asks first, because it clears them. They are stored
   on this device with the programme and travel in backups, exports and sync.
 
+## Choose your training days
+
+On Train, the weekday card lets you pick which days you lift. Upcoming sessions re-date onto those days and avoid your ride days. Tap Move on any session to shift it to another day; if that day is taken, the two sessions swap.
+
 ## Reading your progress
 
 Mistyped a set? Progress → **Edit logged workouts** lets you fix the load, reps or RPE, delete a set, or delete a whole session. It stays on your device.
