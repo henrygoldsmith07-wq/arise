@@ -60,8 +60,15 @@ export function stepRir(rir, delta) {
 }
 
 export function formatRest(seconds) {
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
+  // The rest countdown is a whole number of seconds. This is the standard
+  // runner's twin of guidedMode.fmtRest (fail-closed there since round 2):
+  // a non-finite or negative restSec rendered "NaNs" / "-1:-30", and a
+  // fractional value printed float tails ("1:30.75"). Clamp to 0+ and floor.
+  const n = Number(seconds);
+  if (!Number.isFinite(n)) return "0s";
+  const whole = Math.max(0, Math.floor(n));
+  const minutes = Math.floor(whole / 60);
+  const remainder = whole % 60;
   return minutes
     ? `${minutes}:${String(remainder).padStart(2, "0")}`
     : `${remainder}s`;
