@@ -47,9 +47,9 @@ export default function ProgressView({ store, setStore = null, onStart = null })
   // evidence. Nothing here claims fitness from logging volume.
   const today = todayISO();
   const xp = useMemo(()=> deriveXp({ history: store.history, schedule: store.activeSchedule, milestones: milestoneState(store.history || []) }), [store.history, store.activeSchedule]);
+  const [editingHistory, setEditingHistory] = useState(false);
   const perf = useMemo(()=>{
     const history = store.history || [];
-  const [editingHistory, setEditingHistory] = useState(false);
     const recentExercises = [...new Set(history.slice(-6).flatMap(s=> (s.blocks||[]).map(b=> b.exerciseId)))];
     return {
       strength: strengthTrends({ history, exerciseIds: recentExercises }),
