@@ -119,14 +119,14 @@ Mistyped a set? Progress → **Edit logged workouts** lets you fix the load, rep
 
 ## Settings that matter (More)
 
-| Setting | Effect |
-|---|---|
-| Sound cues / voice coach / speech rate | Rest-countdown audio; voice announces exercise and rep targets |
-| Haptics | Vibration patterns (Android; iOS Safari has no vibration API) |
-| Gym mode preferences | Focus mode, auto rest start, wake lock |
-| Units, theme | kg/lb; system / light / dark |
-| Consent center | Telemetry (off by default), Pulse, health summary — each independent, revocable |
-| Accessibility | Large text, high contrast, reduced motion |
+| Setting                                | Effect                                                                          |
+| -------------------------------------- | ------------------------------------------------------------------------------- |
+| Sound cues / voice coach / speech rate | Rest-countdown audio; voice announces exercise and rep targets                  |
+| Haptics                                | Vibration patterns (Android; iOS Safari has no vibration API)                   |
+| Gym mode preferences                   | Focus mode, auto rest start, wake lock                                          |
+| Units, theme                           | kg/lb; system / light / dark                                                    |
+| Consent center                         | Telemetry (off by default), Pulse, health summary — each independent, revocable |
+| Accessibility                          | Large text, high contrast, reduced motion                                       |
 
 ## Where to go deeper
 
