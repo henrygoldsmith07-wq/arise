@@ -109,6 +109,8 @@ Train → **Block plan** lays out every week of your current block: the sessions
 
 On Train, the weekday card lets you pick which days you lift. Upcoming sessions re-date onto those days and avoid your ride days. Tap Move on any session to shift it to another day; if that day is taken, the two sessions swap.
 
+**Add to calendar.** Under the weekday card, pick a start time and reminder, then tap Add to calendar. You get a calendar file with your next planned sessions (exercises, sets, reps, estimated length). Moved a session? Export again: your calendar updates the same events rather than adding copies.
+
 ## Reading your progress
 
 Mistyped a set? Progress → **Edit logged workouts** lets you fix the load, reps or RPE, delete a set, or delete a whole session. It stays on your device.

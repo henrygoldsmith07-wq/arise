@@ -12,6 +12,10 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Add training to your calendar
+- Train → **Add to calendar** exports your next planned sessions as an `.ics` file (shared through your phone's share sheet where available, otherwise downloaded). Choose a start time and a reminder; each event carries the exercises with sets and reps and an estimated length.
+- Every event keeps a stable ID, so after you move a session (or change training weekdays) exporting again updates the same events in your calendar instead of duplicating them. The file is built on your device; nothing is uploaded.
+
 ### Per-lift setup notes
 - **Add setup** on any lift (Gym Mode, session runner, Guided mode): seat, pin/stack, grip, bench or back angle and one free note, saved per exercise and shown under the target next session so you stop re-finding the machine settings.
 - Each logged block remembers the setup used; the lift's history sheet shows it per session, and the runner says "Changed since last time (was …)" when today's note differs from the last logged one.

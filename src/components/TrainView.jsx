@@ -11,6 +11,7 @@ import { applyEquipmentAdaptation, duplicateCustomTemplate, fallbackProgrammeId,
 import ProgressionPreview from './ProgressionPreview.jsx';
 import RideDaysCard from './RideDaysCard.jsx';
 import WeekdayPlanCard from './WeekdayPlanCard.jsx';
+const CalendarExportCard = lazy(() => import('./CalendarExportCard.jsx'));
 import { programShelf } from '../lib/programShelf.js';
 
 // Evaluator time-to-first-value: the recommendation hero is where a new user
@@ -321,6 +322,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
           </details>
           <RideDaysCard store={store} setStore={setStore} />
           <WeekdayPlanCard store={store} setStore={setStore} />
+          <Suspense fallback={null}><CalendarExportCard store={store} setStore={setStore} /></Suspense>
           <ProgressionPreview
             program={programMeta(active.programId)}
             history={store.history || []}
