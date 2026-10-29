@@ -60,7 +60,7 @@ export function generateSession({ goal="general", availableEquipment=[], history
   blocks = fatigueAwareOrder(blocks, EXERCISE_BY_ID, { priorityMuscles: weak });
   // Superset scoring (best compatible pairs)
   const supersets = bestSupersets(blocks, EXERCISE_BY_ID);
-  const estimatedDurationMin = predictSessionDuration(blocks.map(b=> ({ sets: b.sets, restSec: b.restSec, warmups: b.warmups })));
+  const estimatedDurationMin = predictSessionDuration(blocks.map(b=> ({ exerciseId: b.exerciseId, supersetWith: b.supersetWith, sets: b.sets, restSec: b.restSec, warmups: b.warmups })));
   return { blocks, supersets, estimatedDurationMin };
 }
 

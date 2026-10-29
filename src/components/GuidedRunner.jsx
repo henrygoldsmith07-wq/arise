@@ -252,7 +252,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   // Live pace vs the pre-session plan — display-only, never telemetered.
   const pace = useMemo(()=>{
     try{
-      const plannedMin = predictSessionDuration(blocks.map(b=> ({ sets: b.sets.length, restSec: b.restSec, warmups: b.warmups })));
+      const plannedMin = predictSessionDuration(blocks.map(b=> ({ exerciseId: b.exerciseId, supersetWith: b.supersetWith, sets: b.sets.length, restSec: b.restSec, warmups: b.warmups })));
       return sessionPace({ startedAtMs: Date.parse(startedAtRef.current), nowMs: clock, completedSets: progress.completed + progress.skipped, totalSets: progress.total, plannedMin });
     }catch{ return null; }
   },[blocks, clock, progress]);

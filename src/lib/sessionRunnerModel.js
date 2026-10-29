@@ -3,6 +3,7 @@
 // that are easiest to regression-test and most dangerous to duplicate inline.
 
 import { EXERCISE_BY_ID, isLoadedKitLift } from "./data.js";
+import { supersetPartner } from "./superset.js";
 import { lastExerciseSets } from "./store.js";
 import {
   applySwapToBlocks,
@@ -133,6 +134,14 @@ export function normaliseRunnerBlock(
       ? source.removedSlots
       : null,
     prescriptionOverridden: source.prescriptionOverridden === true,
+    // Superset pairing (programme editor): kept so Gym Mode can alternate.
+    ...(typeof source.supersetWith === "string" && source.supersetWith
+      ? { supersetWith: source.supersetWith }
+      : {}),
+    // A rest set in the programme editor is used to the second (no snapping).
+    ...(source.userEdited === true || source.restExact === true
+      ? { restExact: true }
+      : {}),
     prescription: source.prescription || null,
     prescriptionHistory: Array.isArray(source.prescriptionHistory)
       ? source.prescriptionHistory
@@ -351,6 +360,14 @@ export function removeRunnerSet(block, setIndex) {
 
 export function nextActionableBlockIndex(blocks, currentIndex) {
   if (!blocks.length) return currentIndex;
+  // Supersets: an open partner always comes next, so a pair alternates
+  // A1 → B1 → A2 → B2 instead of running A's sets back to back.
+  const partner = supersetPartner(blocks, currentIndex);
+  if (
+    partner != null &&
+    blocks[partner]?.sets.some((set) => !set.completed && !set.failed)
+  )
+    return partner;
   for (let step = 1; step <= blocks.length; step++) {
     const next = (currentIndex + step) % blocks.length;
     if (blocks[next]?.sets.some((set) => !set.completed && !set.failed))

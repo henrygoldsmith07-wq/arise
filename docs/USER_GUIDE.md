@@ -63,6 +63,15 @@ rebuilding it as a template.
 - **Swap** lists the closest alternatives your kit supports (same muscle and
   movement first, liked exercises lifted, avoided ones never shown). After a
   swap the original is always first in the list, so swapping back is one tap.
+- **Rest** has its own stepper per exercise (15-second steps, 15 s to 5 min).
+  The rest timer in the session uses exactly that value (a rest you saved
+  for a lift in Gym Mode still wins).
+- **Pair with next** turns an exercise and the one below it into a
+  **superset** (shown as Superset A / B; **Unpair** splits them). In the
+  session and Gym Mode you alternate A1 → B1, then get **one rest** (the
+  longer of the two rests), then A2 → B2, and so on. Moving or removing one
+  half splits the pair; swapping either half keeps it. Session-length
+  estimates count one rest per round.
 - **+ Add exercise** searches the exercises your kit supports; **Rename day**
   changes the name everywhere it shows.
 - Changes apply to **every upcoming session of that day**, across all weeks.

@@ -37,12 +37,17 @@
 import { EXERCISES, EXERCISE_BY_ID, exerciseFitsEquipment } from './data.js';
 import { substitutionOptions } from './substitutions.js';
 import { isDeprecated } from './exerciseTaxonomy.js';
+import { normalisePairs, supersetPartner } from './superset.js';
+
+export { normalisePairs, supersetPartner };
 
 export const EDITS_VERSION = 1;
 export const MIN_SETS = 1;
 export const MAX_SETS = 8;
 export const MAX_EXERCISES_PER_DAY = 12;
 export const MAX_DAY_TITLE = 40;
+// Per-exercise rest (seconds): the editor's rest stepper moves in 15 s steps.
+export const REST_BOUNDS = Object.freeze({ min: 15, max: 300, step: 15 });
 
 // Rep-range bounds per unit. Reps stay human-sized; seconds cover holds and
 // carries; minutes cover conditioning blocks the templates already ship.
@@ -122,9 +127,12 @@ function cleanBlock(block){
     restSec: Number.isFinite(Number(block.restSec)) ? Math.max(0, Math.min(600, Math.round(Number(block.restSec)))) : 90,
   };
   if(block.swappedFrom) out.swappedFrom = block.swappedFrom;
+  if(typeof block.supersetWith === 'string' && block.supersetWith) out.supersetWith = block.supersetWith;
   return out;
 }
 
+// Supersets (pair helpers) live in superset.js, shared with the runner and
+// the duration estimate.
 function clampSets(sets){
   const n = Math.round(Number(sets));
   if(!Number.isFinite(n)) return 3;
@@ -172,7 +180,8 @@ export function hasProgrammeEdits(schedule){
 function blockEdited(block, templateBlocks){
   const orig = templateBlocks.find(b=> b.exerciseId === block.exerciseId);
   if(!orig) return true;
-  return orig.sets !== block.sets || String(orig.reps) !== String(block.reps);
+  return orig.sets !== block.sets || String(orig.reps) !== String(block.reps)
+    || Number(orig.restSec) !== Number(block.restSec) || (orig.supersetWith || null) !== (block.supersetWith || null);
 }
 
 // Editor view-model: every day that still has an upcoming session.
@@ -264,6 +273,7 @@ function materialiseSession(session, day, version, tpl, snapshot){
       delete out.adaptation;
     }
     if(dayBlock.swappedFrom) out.userSwapFrom = dayBlock.swappedFrom; else delete out.userSwapFrom;
+    if(dayBlock.supersetWith) out.supersetWith = dayBlock.supersetWith; else delete out.supersetWith;
     out.userEdited = true;
     return out;
   });
@@ -318,7 +328,8 @@ function writeDay(schedule, e, key, day){
 
 function sameDay(a, b){
   if(!a || !b || a.title !== b.title || a.blocks.length !== b.blocks.length) return false;
-  return a.blocks.every((blk, i)=> blk.exerciseId === b.blocks[i].exerciseId && blk.sets === b.blocks[i].sets && String(blk.reps) === String(b.blocks[i].reps));
+  return a.blocks.every((blk, i)=> blk.exerciseId === b.blocks[i].exerciseId && blk.sets === b.blocks[i].sets && String(blk.reps) === String(b.blocks[i].reps)
+    && Number(blk.restSec) === Number(b.blocks[i].restSec) && (blk.supersetWith || null) === (b.blocks[i].supersetWith || null));
 }
 
 function commit(schedule, key, mutate, label){
@@ -328,7 +339,7 @@ function commit(schedule, key, mutate, label){
   const draft = { title: day.title, blocks: day.blocks.map(b=> ({ ...b })) };
   const result = mutate(draft);
   if(typeof result === 'string') return { schedule, error: result };
-  const next = { title: String(draft.title).trim(), blocks: draft.blocks.map(cleanBlock) };
+  const next = { title: String(draft.title).trim(), blocks: normalisePairs(draft.blocks.map(cleanBlock)) };
   const errors = validateDay(next);
   if(errors.length) return { schedule, error: errors[0] };
   const e = edits(schedule);
@@ -364,6 +375,8 @@ export function swapExercise(schedule, key, index, toId){
       ...(origin === toId ? { swappedFrom: undefined } : { swappedFrom: origin }),
     };
     if(origin === toId) delete draft.blocks[index].swappedFrom;
+    // Swapping the second half of a pair keeps the pair.
+    if(index > 0 && draft.blocks[index - 1].supersetWith === block.exerciseId) draft.blocks[index - 1].supersetWith = toId;
   }, `Swap ${nameOf(blockAt(currentDay(schedule, key) || { blocks: [] }, index)?.exerciseId)} → ${nameOf(toId)}`);
 }
 
@@ -424,6 +437,49 @@ export function setExerciseRepRange(schedule, key, index, { min, max }){
     if(problem) return problem;
     block.reps = formatRepRange(range);
   }, `${nameOf(block0?.exerciseId)}: ${formatRepRange(rangeFor(block0))}`);
+}
+
+export function setExerciseRest(schedule, key, index, restSec){
+  const id = currentDay(schedule, key)?.blocks?.[index]?.exerciseId;
+  const n = Math.round(Number(restSec));
+  return commit(schedule, key, (draft)=> {
+    const block = blockAt(draft, index);
+    if(!block) return GONE;
+    if(!Number.isFinite(n) || n < REST_BOUNDS.min || n > REST_BOUNDS.max) return `Rest must be ${REST_BOUNDS.min} s – ${REST_BOUNDS.max / 60} min.`;
+    block.restSec = n;
+  }, `${nameOf(id)}: rest ${formatRestShort(n)}`);
+}
+
+export function formatRestShort(sec){
+  const n = Math.max(0, Math.round(Number(sec) || 0));
+  const m = Math.floor(n / 60), r = n % 60;
+  return m ? `${m}:${String(r).padStart(2, '0')}` : `${r}s`;
+}
+
+export function pairWithNext(schedule, key, index){
+  const day = currentDay(schedule, key);
+  const a = day?.blocks?.[index]?.exerciseId, b = day?.blocks?.[index + 1]?.exerciseId;
+  return commit(schedule, key, (draft)=> {
+    const block = blockAt(draft, index);
+    const next = blockAt(draft, index + 1);
+    if(!block) return GONE;
+    if(!next) return 'There is no next exercise to pair with.';
+    if(supersetPartner(draft.blocks, index) != null) return `${nameOf(block.exerciseId)} is already in a superset.`;
+    if(supersetPartner(draft.blocks, index + 1) != null) return `${nameOf(next.exerciseId)} is already in a superset.`;
+    block.supersetWith = next.exerciseId;
+  }, `Superset ${nameOf(a)} + ${nameOf(b)}`);
+}
+
+export function unpairExercise(schedule, key, index){
+  const day = currentDay(schedule, key);
+  const partner = day ? supersetPartner(day.blocks, index) : null;
+  const first = partner == null ? index : Math.min(index, partner);
+  return commit(schedule, key, (draft)=> {
+    if(!blockAt(draft, index)) return GONE;
+    const p = supersetPartner(draft.blocks, index);
+    if(p == null) return 'That exercise is not in a superset.';
+    delete draft.blocks[Math.min(index, p)].supersetWith;
+  }, `Unpair ${nameOf(day?.blocks?.[first]?.exerciseId)}`);
 }
 
 export function renameDay(schedule, key, title){
@@ -559,7 +615,7 @@ export function editsAsTemplateInput(schedule, { name, level = 'Beginner', goal 
     weeks: programmeWeekCount(schedule),
     days: programmeDaysForTemplate(schedule).map(d=> ({
       title: d.title,
-      exercises: d.blocks.map(b=> ({ exerciseId: b.exerciseId, sets: b.sets, reps: String(b.reps), restSec: b.restSec })),
+      exercises: d.blocks.map(b=> ({ exerciseId: b.exerciseId, sets: b.sets, reps: String(b.reps), restSec: b.restSec, ...(b.supersetWith ? { supersetWith: b.supersetWith } : {}) })),
     })),
   };
 }

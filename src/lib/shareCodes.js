@@ -39,7 +39,7 @@ export function templateToSharePayload(template){
   if(!t) throw new Error('Nothing to share');
   const days = (t.weeks?.[0]?.workouts || []).map(w => ({
     title: w.title,
-    blocks: (w.blocks || []).map(b => ({ exerciseId: b.exerciseId, sets: b.sets, reps: b.reps, restSec: b.restSec })),
+    blocks: (w.blocks || []).map(b => ({ exerciseId: b.exerciseId, sets: b.sets, reps: b.reps, restSec: b.restSec, ...(b.supersetWith ? { supersetWith: b.supersetWith } : {}) })),
   }));
   return {
     name: t.name, tagline: t.tagline || t.description || '', level: t.level,

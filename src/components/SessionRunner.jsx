@@ -9,8 +9,9 @@ import { substitutionOptions } from '../lib/substitutions.js';
 import { recordEvent, trackFieldFocus, fieldCommitted } from '../lib/telemetry.js';
 import { markRecommendationOverride } from '../lib/longitudinal.js';
 import { buildRunnerRecommendationMeta, recordProspectiveRecommendation, runnerStudy } from '../lib/runnerRecommendations.js';
-import { quickJumps, applyQuickJump, skipTo, restPresetFor, nextSetAdvice, stopEarlyAdvice, extraSetAdvice, backoffSetAdvice, nextTimePreview, longerRestAdvice, shorterRestAdvice, effortAdjustedRest, hasUserRestPreset, visiblePrescriptionIndexes, warmupsSkipped, effectiveWarmups } from '../lib/gymMode.js';
+import { quickJumps, applyQuickJump, skipTo, restPresetFor, nextSetAdvice, stopEarlyAdvice, extraSetAdvice, backoffSetAdvice, nextTimePreview, longerRestAdvice, shorterRestAdvice, effortAdjustedRest, hasUserRestPreset, restForBlock, visiblePrescriptionIndexes, warmupsSkipped, effectiveWarmups } from '../lib/gymMode.js';
 import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
+import { supersetStep, pairRestSec, supersetPartner } from '../lib/superset.js';
 import { needsWorkingWeight, warmupsFromFoundLoad } from '../lib/workingWeight.js';
 import WorkingWeightFinder from './WorkingWeightFinder.jsx';
 import { announce, useDialogA11y } from '../lib/a11y.js';
@@ -419,7 +420,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   // from actual logging speed. Display-only — never telemetered.
   const pace = useMemo(()=>{
     try{
-      const plannedMin = predictSessionDuration(blocks.map(b=> ({ sets: b.sets.length, restSec: b.restSec, warmups: effectiveWarmups(b, gymPrefs) })));
+      const plannedMin = predictSessionDuration(blocks.map(b=> ({ exerciseId: b.exerciseId, supersetWith: b.supersetWith, sets: b.sets.length, restSec: b.restSec, warmups: effectiveWarmups(b, gymPrefs) })));
       return sessionPace({ startedAtMs: Date.parse(startedAtRef.current), nowMs: clock, completedSets, totalSets, plannedMin });
     }catch{ return null; }
   },[blocks, clock, completedSets, totalSets, gymPrefs]);
@@ -553,7 +554,20 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       }
       // Auto-start the rest countdown unless the user turned it off
       // (preferences.autoRest, default on). Manual Start rest stays as override.
-      if(preferences?.autoRest !== false && appPrefs?.autoRest !== false && hasUnfinishedSet(blocks,bi,si)) startRest(effortAdjustedRest(restPresetFor(gymPrefs, block.exerciseId, block.restSec) || block.restSec, { rir: set.rir, rpe: set.rpe, reps: set.reps, minReps: parseInt(String(block.reps ?? '').split(/[-–]/)[0], 10) || null }, { hasUserPreset: hasUserRestPreset(gymPrefs, block.exerciseId) }), EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId, block.exerciseId);
+      // Supersets: the first half of a round goes straight to the partner (no
+      // rest); finishing the round earns ONE rest — the longer of the pair's
+      // two rests — then focus returns to the first exercise.
+      const afterDone = blocks.map((b,i)=> i!==bi ? b : { ...b, sets: b.sets.map((x,j)=> j===si ? { ...x, completed: true } : x) });
+      const step = supersetStep(afterDone, bi);
+      if(step.focus != null){
+        setFocusIdx(step.focus);
+        if(!gymMode) requestAnimationFrame(()=> rootRef.current?.querySelector(`#block-${step.focus}`)?.scrollIntoView?.({ behavior:'smooth', block:'start' }));
+      }
+      const restOf = (b)=> restForBlock(gymPrefs, b);
+      const partnerBlock = step.focus != null ? blocks[step.focus] : null;
+      const baseRest = step.rest === 'pair' ? pairRestSec(restOf(block), restOf(partnerBlock)) : restOf(block);
+      const restName = step.rest === 'pair' ? `${EXERCISE_BY_ID[partnerBlock.exerciseId]?.name || partnerBlock.exerciseId} + ${EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId}` : (EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId);
+      if(step.rest !== 'none' && preferences?.autoRest !== false && appPrefs?.autoRest !== false && hasUnfinishedSet(blocks,bi,si)) startRest(effortAdjustedRest(baseRest, { rir: set.rir, rpe: set.rpe, reps: set.reps, minReps: parseInt(String(block.reps ?? '').split(/[-–]/)[0], 10) || null }, { hasUserPreset: hasUserRestPreset(gymPrefs, block.exerciseId) || Boolean(block.restExact) }), restName, block.exerciseId);
     }else{
       // Undoing a completion is a correction, recorded as its own fact so
       // friction metrics can count undos without guessing from missing rows.
@@ -844,6 +858,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                 <ExerciseIllustration exerciseId={b.exerciseId} size="md" />
                 <div className="min-w-0">
                   <p className="text-sm font-bold">{ex?.name || b.exerciseId} {b.unilateral ? <span className="text-xs font-semibold text-ink3">(per side — L/R)</span> : null}</p>
+                  {(()=>{ const pi = supersetPartner(blocks, bi); if(pi == null) return null;
+                    const letter = bi < pi ? 'A' : 'B';
+                    const round = Math.min(b.sets.length, b.sets.filter(x=> x.completed || x.failed).length + 1);
+                    return <p data-testid="superset-badge" className="mt-0.5 text-[11px] font-bold text-ink2"><span className="px-1.5 py-0.5 rounded-full bg-ink text-bg tabular-nums">{letter}{round}</span> Superset with {EXERCISE_BY_ID[blocks[pi].exerciseId]?.name || blocks[pi].exerciseId} · one rest after the pair</p>; })()}
 
                   {/* One clear target */}
                   <div className="mt-1.5 flex items-center gap-2 flex-wrap">
@@ -936,7 +954,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                   </details>
                 </div>
                 <div className="flex gap-1.5 shrink-0 flex-wrap justify-end max-w-[190px]">
-                  {b.restSec ? <button onClick={()=> startRest(restPresetFor(gymPrefs, b.exerciseId, b.restSec) || b.restSec, ex?.name || b.exerciseId, b.exerciseId)} className="relative min-h-11 text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">Start rest</button> : null}
+                  {b.restSec ? <button onClick={()=> startRest(restForBlock(gymPrefs, b), ex?.name || b.exerciseId, b.exerciseId)} className="relative min-h-11 text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">Start rest</button> : null}
                   {voiceSupportedInput && (
                     <button onClick={()=> toggleDictation(bi)} aria-pressed={dictating===bi} title="Dictate a set — say the load, then the reps"
                       className={`relative min-h-11 min-w-11 text-xs font-bold px-3 py-1.5 rounded-full border before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-[''] ${dictating===bi ? 'bg-ink text-bg border-ink' : 'border-line bg-surface2'}`}>🎙️</button>
