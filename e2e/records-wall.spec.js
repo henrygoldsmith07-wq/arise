@@ -56,6 +56,6 @@ test("records wall lists lifts with rep-band bests, searches and closes", async 
   await chips.nth(1).click();
   await expect(chips.nth(1)).toHaveAttribute("aria-pressed", "true");
 
-  await wall.getByRole("button", { name: "Done" }).click();
+  await page.keyboard.press("Escape");
   await expect(wall).toBeHidden();
 });
