@@ -132,6 +132,10 @@ Mistyped a set? Progress → **Edit logged workouts** lets you fix the load, rep
 - Attributes (Strength / Endurance / Consistency / Technique) derive only
   from your logged history — never from program labels.
 
+## Body weight and strength for your size
+
+Progress → **Body weight** is optional. Log a weigh-in (or type it in the Today check-in) and Arise shows the trend and, for each lift you trained lately, your estimated max as a multiple of your body weight, compared with the 8 weeks before. That answers "did I get stronger, or just heavier?" — handy when you also ride or run and weight matters. Pull-ups, chin-ups and dips count your body weight plus any added load minus assistance. Machine and cable stacks are not comparable between gyms, so treat the multiple as a way to compare yourself with you. Day-to-day swings of 1–2 kg are water; the trend waits for entries a week apart. Stays on your device; Export and sync carry it.
+
 ## Your data
 
 - **More → Data:** export (JSON backup, optionally passphrase-encrypted;

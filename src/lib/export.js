@@ -9,6 +9,7 @@ import { ensureStudyParticipantId } from './studyIdentity.js';
 import { buildEnvelope, applyFieldPolicy, EXPORT_VERSION } from './exportPolicy.js';
 import { withProvenance, ensureSourceTags, importLedgerProvenance, mergeTombstones, applyTombstones, canonicalJson, rowTimestamp } from './domain.js';
 import { validateStoreData } from './storeValidation.js';
+import { mergeBodyweightLogs } from './bodyweightLog.js';
 import { readCanonicalLedger } from './evaluationLedgerBridge.js';
 import { mergeSetupNotes } from './setupNotes.js';
 
@@ -175,7 +176,7 @@ export async function parseBackupFile(textOrEnvelope){
 // Anything else in a hand-edited backup is dropped rather than persisted forever.
 // studyParticipantId is the pseudonymous study identity (studyIdentity.js) —
 // preserved so repeated exports fold into ONE field-study participant.
-const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','archivedHistory','preferences','gymPrefs','readinessLog','programHistory','evaluationLedger','customTemplates','experiments','studyParticipantId','studyEnrollment','studyStatus','studyStatusChangedAtISO','tombstones'];
+const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','archivedHistory','preferences','gymPrefs','readinessLog','bodyweightLog','programHistory','evaluationLedger','customTemplates','experiments','studyParticipantId','studyEnrollment','studyStatus','studyStatusChangedAtISO','tombstones'];
 
 // ── Import hardening (malicious/hostile JSON) ───────────────────────────────
 // Imports are untrusted input. Beyond schema validation, three structural
@@ -322,6 +323,7 @@ export function mergeStores(current, imported, strategy='merge'){
         : {}),
     },
     readinessLog: [...(currentStore.readinessLog||[]), ...(importedStore.readinessLog||[])].filter((v,i,a)=> a.findIndex(x=> x.dateISO===v.dateISO && x.at===v.at)===i),
+    bodyweightLog: mergeBodyweightLogs(currentStore.bodyweightLog, importedStore.bodyweightLog),
     evaluationLedger: mergeEvaluationLedgers(currentStore.evaluationLedger, importedStore.evaluationLedger),
     customTemplates: applyTombstones(mergeCustomTemplates(currentStore.customTemplates, importedStore.customTemplates), tombstones, 'templates'),
     experiments: mergeExperiments(currentStore.experiments, importedStore.experiments),

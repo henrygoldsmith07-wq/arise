@@ -35,6 +35,7 @@ import { STORE_SCHEMA_VERSION, mergeCustomTemplates } from "./store.js";
 import { mergeEvaluationLedgers } from "./longitudinal.js";
 import { mergeExperiments } from "./trainingExperiments.js";
 import { mergeTombstones, applyTombstones, canonicalJson } from "./domain.js";
+import { mergeBodyweightLogs } from "./bodyweightLog.js";
 import { mergeSetupNotes } from "./setupNotes.js";
 
 
@@ -240,6 +241,7 @@ export function mergeStoresWithConflicts(current, imported){
     eventHistory: unionBy([...(cur.eventHistory||[]), ...(imp.eventHistory||[])].filter(e=>e?.id), e=>e.id).sort((a,b)=> String(a.at||'').localeCompare(String(b.at||''))),
     healthSummary: cur.healthSummary || imp.healthSummary || null,
     readinessLog: unionBy([...(imp.readinessLog||[]), ...(cur.readinessLog||[])], r=>`${r.dateISO}|${r.at||r.score}`).sort((a,b)=> String(a?.dateISO||'').localeCompare(String(b?.dateISO||''))),
+    bodyweightLog: mergeBodyweightLogs(cur.bodyweightLog, imp.bodyweightLog),
     evaluationLedger: mergeEvaluationLedgers(cur.evaluationLedger, imp.evaluationLedger),
     customTemplates: applyTombstones(mergeCustomTemplates(cur.customTemplates, imp.customTemplates), tombstones, 'templates'),
     experiments: mergeExperiments(cur.experiments, imp.experiments),

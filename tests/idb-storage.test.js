@@ -25,6 +25,7 @@ function fullStore(){
     ],
     eventHistory: [ { id:'e1', type:'session:complete', at:'2026-01-05T10:00:00Z' } ],
     readinessLog: [ { dateISO:'2026-01-05', score:75 } ],
+    bodyweightLog: [ { dateISO:'2026-01-05', kg:68.5, updatedAt:'2026-01-05T08:00:00.000Z' } ],
     evaluationLedger: [
       { id:'r-open', recommendation:{ load:22, reps:8 }, outcome:null, exerciseId:'bench-press-dumbbell' },
       { id:'r-done', recommendation:{ load:20, reps:8 }, outcome:{ metTarget:true }, exerciseId:'bench-press-dumbbell' },
@@ -68,6 +69,7 @@ describe('indexeddb canonical storage', ()=>{
     assert.equal(composed.evaluationLedger.length, 2); // open + resolved unioned by id
     assert.equal(composed.customTemplates[0].id, 'custom-x');
     assert.equal(composed.readinessLog.length, 1);
+    assert.deepEqual(composed.bodyweightLog.map(r=> [r.dateISO, r.kg]), [['2026-01-05', 68.5]], 'body-weight log survives IndexedDB round trip');
     assert.equal(composed.eventHistory.length, 2);
     assert.deepEqual(new Set(composed.eventHistory.map(row=> row.id)), new Set(['e1','legacy-event']));
     assert.deepEqual(composed.onboarding, { goal:'muscle', equipment:['dumbbells'], location:'home' });

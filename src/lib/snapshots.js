@@ -116,6 +116,7 @@ export function recomposeSnapshotPayload(payload){
     programHistory: programme?.programHistory || [],
     eventHistory: Array.isArray(p.events) ? p.events : [],
     readinessLog: readiness?.log ?? [],
+    bodyweightLog: readiness?.bodyweightLog ?? [],
     customTemplates: Array.isArray(p.templates) ? p.templates : [],
     experiments: Array.isArray(p.experiments) ? p.experiments : [],
     tombstones: Array.isArray(p.tombstones) ? p.tombstones : [],
