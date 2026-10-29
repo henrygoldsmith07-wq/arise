@@ -44,7 +44,7 @@ export default function HevyExportSheet({ history = [], units = 'kg', onClose })
           <h2 className="text-sm font-bold text-ink">Export for Hevy</h2>
           <button ref={a11y.closeRef} type="button" onClick={onClose} className="min-h-11 min-w-11 text-xs font-bold px-3 rounded-full border border-line">Close</button>
         </div>
-        <p className="text-[11px] text-ink3">Your workouts as a CSV in Hevy's own export layout. Built on this device, never uploaded. If Hevy won't take it, any spreadsheet will open it.</p>
+        <p className="text-[11px] text-ink3">Your workouts as a CSV in Hevy's own layout. Built on this device, never uploaded.</p>
 
         <div role="group" aria-label="Which workouts" className="grid grid-cols-2 gap-1.5">
           {HEVY_RANGES.filter((r) => r.id !== 'since-last' || mark).map((r) => (
@@ -66,7 +66,7 @@ export default function HevyExportSheet({ history = [], units = 'kg', onClose })
                 <strong className="text-ink">{result.workouts} workout{result.workouts === 1 ? '' : 's'}</strong> · {result.sets} sets · {result.exercises} exercise{result.exercises === 1 ? '' : 's'}
                 <span className="block text-ink3">{result.firstDate} to {result.lastDate}</span>
               </>
-            : <>Nothing to export for this choice{result.fromHevy ? `` : ''}. Try a longer range.</>}
+            : <>Nothing to export. Try a longer range.</>}
         </div>
         {result.customExercises.length > 0 && (
           <p className="text-[11px] text-ink3" data-testid="hevy-custom-note">
