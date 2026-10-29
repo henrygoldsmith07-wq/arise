@@ -332,15 +332,8 @@ export function validateContent(){
       if(!Array.isArray(e.aliases) || e.aliases.some(a => typeof a !== 'string' || !a.trim())) errors.push(`Exercise ${e.id} has a malformed aliases array`);
       else for(const alias of e.aliases){ if(names.has(alias)) errors.push(`Alias "${alias}" on ${e.id} collides with the name of ${names.get(alias)}`); }
     }
-    // Instruction and mistake lists: optional but strictly shaped — the
-    // detail view renders them as sentences, so free-form junk would show.
-    for(const [field, min] of [['instructions', 2], ['mistakes', 1]]){
-      if(e[field] !== undefined){
-        if(!Array.isArray(e[field]) || e[field].length < min || e[field].some(s => typeof s !== 'string' || s.trim().length < 8)){
-          errors.push(`Exercise ${e.id} has a malformed ${field} array (need ${min}+ meaningful sentences)`);
-        }
-      }
-    }
+    // Instruction and mistake text lives in data/exercise-text.json (an
+    // on-demand asset); exerciseText.validateExerciseText checks its shape.
     // Deprecation: supersededBy must point at a DIFFERENT, existing, active
     // exercise; chains must terminate (a cycle would make resolveExerciseId
     // loop) and deprecated rows must stay out of program definitions.

@@ -280,6 +280,11 @@ const CHUNK_BUDGET_KB = 34;
 // and failed the next change by default. It now carries ~2% headroom; boot
 // (110.6 ≤ 120) and largest-lazy (26.4 ≤ 34) remain the strict gates for what
 // users actually wait on. Measured total 397.4.
+//
+// Headroom cut (budget unchanged at 405): long-form exercise text — setup
+// steps, common mistakes and every cue after the first — moved out of the
+// catalogue chunk into data/exercise-text.json, a hashed non-JS asset the SW
+// precaches and the teaching surfaces fetch on first open. 404.8 → 397.4 kB.
 const TOTAL_BUDGET_KB = 405;
 
 function gzipSize(file){

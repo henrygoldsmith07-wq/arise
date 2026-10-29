@@ -13,6 +13,7 @@
 // progressions and equipment variations are always real library ids.
 
 import { EXERCISES, EXERCISE_BY_ID, EQUIPMENT } from './data.js';
+import { exerciseText } from './exerciseText.js';
 
 export const TEACHING_SECTIONS = ['setup', 'execution', 'breathing', 'mistakes', 'safety', 'regressions', 'progressions', 'equipmentVariations'];
 
@@ -107,7 +108,21 @@ const PATTERN_SAFETY = {
   'unknown': 'Progress slowly — the last reps stay as clean as the first.',
 };
 
+// Long-form sentences ship as an on-demand JSON asset (exerciseText.js);
+// before it loads, the cue-derived fallbacks below keep every section filled.
+function textOf(ex){
+  const t = exerciseText(ex.id);
+  return {
+    instructions: Array.isArray(ex.instructions) ? ex.instructions : t?.instructions,
+    mistakes: Array.isArray(ex.mistakes) ? ex.mistakes : t?.mistakes,
+    // The catalogue keeps only the first cue (what the runners show); the
+    // full list rides in the JSON asset.
+    cues: Array.isArray(t?.cues) && t.cues.length ? t.cues : ex.cues,
+  };
+}
+
 function genericExecution(ex){
+  ex = { ...ex, ...textOf(ex) };
   if(Array.isArray(ex.instructions) && ex.instructions.length > 1) return ex.instructions.slice(1);
   if(Array.isArray(ex.instructions) && ex.instructions.length === 1) return [ex.instructions[0]];
   if(ex.cues?.length) return [ `Work through: ${ex.cues.join('; ')}.` ];
@@ -124,7 +139,8 @@ export function teachingFor(exerciseId){
   if(!ex) return null;
   const override = OVERRIDES[exerciseId] || {};
   const pattern = override.pattern || ex.movementPattern || ex.movement || 'unknown';
-  const instructions = Array.isArray(ex.instructions) && ex.instructions.length ? ex.instructions : null;
+  const text = textOf(ex);
+  const instructions = Array.isArray(text.instructions) && text.instructions.length ? text.instructions : null;
   const level = ex.level || 'Beginner';
   const neighbors = neighborsFor(ex);
   const regressions = neighbors.filter(n => LEVEL_ORDER.indexOf(n.level || 'Beginner') < LEVEL_ORDER.indexOf(level))
@@ -142,7 +158,7 @@ export function teachingFor(exerciseId){
     setup: instructions ? instructions[0] : `Set up for the ${ex.name.toLowerCase()} with a comfortable, controlled start position — ${ex.cues?.[0] || 'steady and tall'}.`,
     execution: genericExecution(ex),
     breathing: override.breath || PATTERN_BREATH[pattern] || PATTERN_BREATH.unknown,
-    mistakes: Array.isArray(ex.mistakes) && ex.mistakes.length ? ex.mistakes : (ex.cues?.length ? [`Watch the basics: ${ex.cues.join('; ')}.`] : []),
+    mistakes: Array.isArray(text.mistakes) && text.mistakes.length ? text.mistakes : (text.cues?.length ? [`Watch the basics: ${text.cues.join('; ')}.`] : []),
     safety: override.safety || PATTERN_SAFETY[pattern] || PATTERN_SAFETY.unknown,
     regressions,
     progressions,
