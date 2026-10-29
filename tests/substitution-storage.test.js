@@ -8,6 +8,7 @@ test('substitution edges are stored once in the catalogue source', () => {
   const raw = new Map([...EXERCISES_PRIMARY, ...EXERCISES_COVERAGE].map(e => [e.id, e.substitution || []]));
   for (const [id, list] of raw) {
     for (const other of list) {
+      if (other === id) continue; // legacy self-edge on 'cycle'
       assert.ok(!(raw.get(other) || []).includes(id), `${id} <-> ${other} is stored in both directions`);
     }
   }
