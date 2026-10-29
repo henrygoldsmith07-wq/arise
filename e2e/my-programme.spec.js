@@ -197,6 +197,10 @@ test.describe('My Programme editor', () => {
     await editor.getByRole('button', { name: 'Close programme editor' }).click();
 
     await page.getByRole('button', { name: 'Clear schedule' }).click();
+    // First the offer to keep the edits as a template, then the warning.
+    const keep = page.getByRole('dialog', { name: 'Keep your programme edits?' });
+    await expect(keep).toBeVisible();
+    await keep.getByRole('button', { name: 'Not now' }).click();
     const warn = page.getByRole('alertdialog', { name: 'Replace your customised programme?' });
     await expect(warn).toBeVisible();
     await warn.getByRole('button', { name: 'Cancel' }).click();

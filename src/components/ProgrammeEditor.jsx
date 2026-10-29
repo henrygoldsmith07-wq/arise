@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useDialogA11y } from '../lib/a11y.js';
 import { useDialogs } from './Dialog.jsx';
-import { saveCustomTemplate } from '../services/programmeService.js';
+import { saveEditsAsTemplate } from '../services/programmeService.js';
+import { encodeShareCode } from '../lib/shareCodes.js';
 import {
-  editsAsTemplateInput, editableDays, editSummary, swapCandidates, addCandidates,
+  editableDays, editSummary, swapCandidates, addCandidates,
   swapExercise, addExercise, removeExercise, moveExercise,
   setExerciseSets, setExerciseRepRange, renameDay, resetDay, resetAllEdits, undoLastEdit,
   parseRepRange, REP_BOUNDS, MIN_SETS, MAX_SETS, MAX_DAY_TITLE,
@@ -60,13 +61,28 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
     return true;
   };
 
+  // "Save as my template": every day as it stands now (edits included), for
+  // every week of this block, lands in My templates in Train. A share code is
+  // offered afterwards, never forced.
+  const [saved, setSaved] = useState(null);
   const saveAsTemplate = async ()=> {
-    const name = await dialogs.prompt({ title: 'Save as template', fieldLabel: 'Name', placeholder: 'My edits' });
+    const name = await dialogs.prompt({ title: 'Save as my template', fieldLabel: 'Template name', placeholder: 'My programme', confirmLabel: 'Save' });
     if(name === null || name === undefined) return;
     try{
-      setStore(saveCustomTemplate({ store, form: editsAsTemplateInput(schedule, { name }) }).store);
-      setStatus('Saved to My templates in Train.');
+      const result = saveEditsAsTemplate({ store, name });
+      setStore(result.store);
+      setSaved(result.template);
+      setStatus(`Saved “${result.template.name}” to My templates in Train.`);
     }catch(e){ setStatus(e.message); }
+  };
+  const copyShareCode = ()=> {
+    if(!saved) return;
+    try{
+      const code = encodeShareCode(saved);
+      const done = ()=> setStatus(`Share code for “${saved.name}” copied.`);
+      if(navigator.clipboard?.writeText) navigator.clipboard.writeText(code).then(done, ()=> setStatus(code));
+      else setStatus(code);
+    }catch(e){ setStatus(e.message || 'Could not build a share code.'); }
   };
 
   const rename = async (day)=> {
@@ -238,11 +254,14 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
             {day.edited && <button type="button" onClick={()=> confirmResetDay(day)} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs">Reset this day</button>}
           </section>
         ))}
+        {days.length > 0 && (
+          <div className="grid grid-cols-1 gap-2">
+            <button type="button" onClick={saveAsTemplate} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs">Save as my template</button>
+            {saved && <button type="button" onClick={copyShareCode} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs">Copy share code</button>}
+          </div>
+        )}
         {summary.days > 0 && (
-          <>
-          <button type="button" onClick={saveAsTemplate} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs">Save edits as template</button>
           <button type="button" onClick={confirmResetAll} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs text-danger">Reset all to template</button>
-          </>
         )}
       </>
     );
