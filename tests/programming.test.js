@@ -222,5 +222,9 @@ describe('programming layer', ()=>{
     const calibration = recommendationCalibration([]);
     assert.equal(calibration.status, 'insufficient');
     assert.equal(calibration.samples, 0);
+    // The heavy replay engine is no longer shipped: the check is the light
+    // point-in-time validation (same leak-safe slicing), with a hit rate.
+    assert.equal('backtest' in calibration, false);
+    assert.ok('hitRate' in calibration && 'meanAbsErrorKg' in calibration);
   });
 });

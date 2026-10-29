@@ -68,6 +68,7 @@ export function repairStore(store){
   if(!Array.isArray(fixed.eventHistory)) fixed.eventHistory = [];
   if(!Array.isArray(fixed.evaluationLedger)) fixed.evaluationLedger = [];
   if(!Array.isArray(fixed.readinessLog)) fixed.readinessLog = [];
+  if(!Array.isArray(fixed.bodyweightLog)) fixed.bodyweightLog = [];
   if(!Array.isArray(fixed.programHistory)) fixed.programHistory = [];
   if(!Array.isArray(fixed.customTemplates)) fixed.customTemplates = [];
   if(!Array.isArray(fixed.experiments)) fixed.experiments = [];

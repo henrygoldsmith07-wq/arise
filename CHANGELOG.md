@@ -16,6 +16,12 @@ the history is the changelog; this file is its human-readable index.
 - Train → **Add to calendar** exports your next planned sessions as an `.ics` file (shared through your phone's share sheet where available, otherwise downloaded). Choose a start time and a reminder; each event carries the exercises with sets and reps and an estimated length.
 - Every event keeps a stable ID, so after you move a session (or change training weekdays) exporting again updates the same events in your calendar instead of duplicating them. The file is built on your device; nothing is uploaded.
 
+### Body weight and strength for your size
+- Progress → **Body weight**: log a weigh-in (kg or lb), see the latest value, a sparkline and a week-average trend that refuses to call a direction until entries are a week apart. Remove any day; removal syncs and survives restore. The Today check-in also takes an optional weight, so it is one tap with the rest of your morning.
+- **Strength for your size** per lift: best estimated max ÷ body weight over the last 8 weeks against the 8 before, with the absolute change next to it ("max +4 kg, body +6 kg → about the same"). Pull-ups, chin-ups and dips count body weight + added − assistance, so an assisted and a weighted pull-up sit on one scale. Machine stacks differ between gyms, so it only compares you with you.
+- `bodyweightLog` rides export, backup, sync and the three-way store reconcile (newest edit per day wins, deletions stick). Nothing leaves the device.
+- Bundle: the expert-only **Historical recommendation check** on Progress now rebuilds each recommendation with the same leak-safe point-in-time replay but no longer ships the multi-metric replay engine (Brier scores, plateau accuracy). It shows samples, load/rep error and hit rate. That frees ~6.5 kB gz for this feature; `backtesting.js` stays in the repo for scripts and tests.
+
 ### Per-lift setup notes
 - **Add setup** on any lift (Gym Mode, session runner, Guided mode): seat, pin/stack, grip, bench or back angle and one free note, saved per exercise and shown under the target next session so you stop re-finding the machine settings.
 - Each logged block remembers the setup used; the lift's history sheet shows it per session, and the runner says "Changed since last time (was …)" when today's note differs from the last logged one.
