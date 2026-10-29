@@ -61,6 +61,10 @@ export default defineConfig({
           // Small lazy sheets/panels: one chunk instead of eight, each of which
           // repeated its own gzip warm-up and import/export headers.
           if(/\/src\/components\/(SetupNote|LiftGoalsCard|LiftGoalNudge|BodyweightCard|CalendarExportCard|ExerciseHistorySheet|settings\/TrainingPolicySettings|HistoryEditSheet|JargonHelp|ExerciseBrowser)\.jsx$/.test(id)) return 'sheets';
+          // Rarely-opened exports and the background sync trigger: one chunk instead of three.
+          if(/\/src\/lib\/(printReport|studyExport|autoSync)\.js$/.test(id)) return 'rare';
+          // CSV in/out (generic + Hevy import, Hevy export and its sheet) open together from More → Data.
+          if(/\/src\/(lib\/(appCsvImport|hevyCsvImport|hevyCsvExport)\.js|components\/HevyExportSheet\.jsx)$/.test(id)) return 'csv-tools';
           return undefined;
         },
       },

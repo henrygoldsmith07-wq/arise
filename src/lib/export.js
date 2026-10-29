@@ -4,6 +4,7 @@
 import { runMigrations, STORE_SCHEMA_VERSION, mergeCustomTemplates, normaliseHistory } from './store.js';
 import { mergeExperiments } from './trainingExperiments.js';
 import { getEventHistory } from './telemetry.js';
+import { saveBlob } from './nativeShare.js';
 import { loadEvaluationLedger, mergeEvaluationLedgers } from './longitudinal.js';
 import { ensureStudyParticipantId } from './studyIdentity.js';
 import { buildEnvelope, applyFieldPolicy, EXPORT_VERSION } from './exportPolicy.js';
@@ -81,11 +82,7 @@ export function buildPartialExportPayload(store, kind){
 }
 
 export function downloadJson(filename, obj){
-  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
-  setTimeout(()=> URL.revokeObjectURL(url), 2000);
+  saveBlob(new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' }), filename);
 }
 
 // ── Study export ────────────────────────────────────────────────────────────
@@ -160,11 +157,7 @@ export async function decompressPayload(envelope){
 /** Serialize (+compress when possible) and trigger a file download. */
 export async function downloadBackup(payload, filename = 'arise-backup.arise'){
   const { envelope } = await compressPayload(payload);
-  const blob = new Blob([JSON.stringify(envelope)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
-  setTimeout(()=> URL.revokeObjectURL(url), 2000);
+  saveBlob(new Blob([JSON.stringify(envelope)], { type: 'application/json' }), filename);
 }
 
 /** Accepts plain JSON text or a compressed envelope object. */

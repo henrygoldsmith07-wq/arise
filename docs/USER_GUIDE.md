@@ -111,6 +111,8 @@ On Train, the weekday card lets you pick which days you lift. Upcoming sessions 
 
 **Add to calendar.** Under the weekday card, pick a start time and reminder, then tap Add to calendar. You get a calendar file with your next planned sessions (exercises, sets, reps, estimated length). Moved a session? Export again: your calendar updates the same events rather than adding copies.
 
+**Export for Hevy.** More → Data → Export for Hevy turns your Arise workouts into a CSV in Hevy's own layout. Choose how far back to go (or everything since your last export), then share or download the file. Workouts you imported from Hevy stay out unless you tick them in, so Hevy never gets its own sessions back as duplicates. Lifts Hevy has no name for are listed first; Hevy will show them as custom exercises. Nothing is uploaded, and if Hevy won't take the file any spreadsheet will open it.
+
 ## Reading your progress
 
 Mistyped a set? Progress → **Edit logged workouts** lets you fix the load, reps or RPE, delete a set, or delete a whole session. It stays on your device.

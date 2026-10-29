@@ -12,6 +12,12 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Send your workouts back to Hevy
+- More → Data → **Export for Hevy** writes your Arise workouts as a CSV in Hevy's own export layout (one row per set, Hevy exercise names, RPE, failure sets, your weight unit), so a lifter who logs in both apps can keep the two logs in step. Built on your phone, never uploaded; shared through the share sheet or downloaded.
+- Pick Since my last export, Last 30 / 90 days or Everything. Workouts that were imported from Hevy are held back by default so Hevy is not sent its own sessions as duplicates; deleted and fully skipped sessions never go out.
+- Lifts Hevy has no mapped name for keep their Arise name and are listed before you export, because Hevy will treat them as custom exercises. Hevy's own importer may not accept its export; the file also opens in any spreadsheet and re-imports into Arise (the round trip is unit-tested).
+- Bundle: exercise-illustration registry stores the upstream slug only when it differs from the Arise id, one shared file-download helper replaces six copies, and small rarely-opened chunks are grouped.
+
 ### Lift goals with a projected date
 - Progress has a Lift goals card: pick a lift you have logged, set a target (for example 100 kg × 8) and an optional date, and Arise shows whether your last 12 weeks of e1RM gets you there. Status is ahead, on track, behind, flat or not enough data, with a milestone bar at 25/50/75%.
 - A goal is only "hit" by a real logged set at the target load and reps, never by an estimate; Today shows a one-time "Goal hit" card.
