@@ -2,8 +2,9 @@ import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { downloadJson, portableCsv, deletionPreview, buildPartialExportPayload } from '../lib/export.js';
 import { applyImportPreview as applyImport, importAppCsv, previewBackupFile, previewBackupPayload } from '../services/restoreService.js';
 import { buildCoachExport, renderCoachMarkdown } from '../lib/coachExport.js';
-import { shareTextAsFile } from '../lib/nativeShare.js';
+import { shareTextAsFile, saveBlob } from '../lib/nativeShare.js';
 const SyncPanel = lazy(() => import('./SyncPanel.jsx'));
+const HevyExportSheet = lazy(() => import('./HevyExportSheet.jsx'));
 import { clearTelemetry, telemetrySummary, getEventHistory, recordEvent, getErrorEvents, clearErrorEvents } from '../lib/telemetry.js';
 import { mergeHealthSummary, pullHealthSummary } from '../lib/health.js';
 import { LOCATIONS, GOALS } from '../lib/data.js';
@@ -60,6 +61,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
   const [healthMsg,setHealthMsg]=useState(null);
 
   const prefs = store.preferences || {};
+  const [hevyOpen, setHevyOpen] = useState(false);
   const setPreference = (patch)=> setStore({ ...store, preferences: { ...prefs, ...patch } });
   // Gym Mode writes stamp updatedAt so portable sync merges by recency.
   const setGymPref = (patch)=> setStore({ ...store, gymPrefs: { ...(store.gymPrefs||{}), ...patch, updatedAt: new Date().toISOString() } });
@@ -159,10 +161,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
   };
   const exportCsv = ()=>{
     const csv = portableCsv(store.history||[]);
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href=url; a.download=`arise-history-${new Date().toISOString().slice(0,10)}.csv`; a.click();
-    setTimeout(()=> URL.revokeObjectURL(url), 2000);
+    saveBlob(new Blob([csv], { type: 'text/csv' }), `arise-history-${new Date().toISOString().slice(0,10)}.csv`);
   };
 
   const exportEvents = ()=>{
@@ -195,10 +194,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
   const exportCoach = ()=>{
     const data = buildCoachExport(store, { sections: coachSections, weeks: 8 });
     const md = renderCoachMarkdown(data);
-    const blob = new Blob([md], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `arise-coach-${new Date().toISOString().slice(0,10)}.md`; a.click();
-    setTimeout(()=> URL.revokeObjectURL(url), 2000);
+    saveBlob(new Blob([md], { type: 'text/markdown' }), `arise-coach-${new Date().toISOString().slice(0,10)}.md`);
     flashMsg('Coach summary downloaded — it contains only the sections ticked below.', 5000);
   };
 
@@ -551,6 +547,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
             <button onClick={exportNow} disabled={store.demo === true} className="btn btn-primary min-h-10 rounded-xl px-4 disabled:opacity-40">Export JSON</button>
             <button onClick={exportEncrypted} disabled={store.demo === true} className="btn btn-primary min-h-10 rounded-xl px-4 disabled:opacity-40">Export encrypted</button>
             <button onClick={exportCsv} className="btn btn-secondary min-h-10 rounded-xl px-4">Export CSV</button>
+            <button onClick={()=> setHevyOpen(true)} disabled={store.demo === true} data-testid="hevy-export-open" className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-40" title="Your workouts in Hevy's own CSV layout">Export for Hevy</button>
             <label className="btn btn-secondary min-h-10 rounded-xl px-4 cursor-pointer">
               Import backup
               <input ref={fileRef} type="file" accept=".arise,.json,application/json" className="hidden" onChange={onPickFile} />
@@ -654,6 +651,11 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
         </section>
 
         <section id="sec-sync" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+          {hevyOpen && (
+            <Suspense fallback={null}>
+              <HevyExportSheet history={store.history||[]} units={prefs.units} onClose={()=> setHevyOpen(false)} />
+            </Suspense>
+          )}
           <p className="text-xs text-ink3">Cross-device sync merges deterministically (newest session wins per id via savedAt; archived history travels too; deletions propagate via tombstones; active workout/schedule and Gym rest presets converge by recency). Either sync direction reaches the same result.</p>
           <Suspense fallback={<p className="text-xs text-ink3">Loading sync settings…</p>}>
             <SyncPanel store={store} setStore={setStore} setMsg={setMsg} />
