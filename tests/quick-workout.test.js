@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   QUICK_MAX, QUICK_PROGRAM_ID, isQuickSession, buildQuickSession, quickCandidates, sameAsLastTime,
-  daysSinceByMuscle, restedMuscleLifts, upperBodyLifts, moveId,
+  daysSinceByMuscle, restedMuscleLifts, upperBodyLifts,
 } from '../src/lib/quickWorkout.js';
 import { completeWorkout } from '../src/services/workoutService.js';
 import { EXERCISES, EXERCISE_BY_ID, scheduleProgram } from '../src/lib/data.js';
@@ -134,11 +134,7 @@ describe('quickCandidates', () => {
   });
 });
 
-describe('moveId and data trim', () => {
-  it('moves within bounds only', () => {
-    assert.deepEqual(moveId(['a', 'b', 'c'], 0, 1), ['b', 'a', 'c']);
-    assert.deepEqual(moveId(['a', 'b'], 0, 5), ['a', 'b']);
-  });
+describe('data trim', () => {
   it('coverage fills still derive weighted/assisted from the id', () => {
     assert.equal(EXERCISE_BY_ID['weighted-dip'].supportsWeighted, true);
     assert.equal(EXERCISE_BY_ID['assisted-pull-up'].supportsAssisted, true);

@@ -143,12 +143,3 @@ export function buildQuickSession({ exerciseIds, history = [], now = new Date(),
     status: 'planned',
   };
 }
-
-/** Reorder helper for the picked list. */
-export function moveId(ids, from, to){
-  if(from === to || from < 0 || to < 0 || from >= ids.length || to >= ids.length) return ids;
-  const next = [...ids];
-  const [item] = next.splice(from, 1);
-  next.splice(to, 0, item);
-  return next;
-}

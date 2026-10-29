@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { useDialogA11y } from '../lib/a11y.js';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { MUSCLE_ORDER } from '../lib/exercisePicker.js';
-import { QUICK_MAX, buildQuickSession, moveId, quickCandidates, restedMuscleLifts, sameAsLastTime, upperBodyLifts } from '../lib/quickWorkout.js';
+import { QUICK_MAX, buildQuickSession, quickCandidates, restedMuscleLifts, sameAsLastTime, upperBodyLifts } from '../lib/quickWorkout.js';
 
 const chip = 'min-h-11 rounded-full border px-3 text-xs font-bold';
 
@@ -25,9 +25,8 @@ export default function QuickWorkoutSheet({ store, onStart, onClose }) {
   );
   const add = (id) => setIds((cur) => (cur.includes(id) || cur.length >= QUICK_MAX ? cur : [...cur, id]));
   const preset = (found, label) => {
-    if (!found.ids.length) { setNote('Nothing to suggest yet — pick lifts below.'); return; }
     setIds(found.ids);
-    setNote(label);
+    setNote(found.ids.length ? label : 'Nothing to suggest yet.');
   };
   const start = () => {
     const session = buildQuickSession({ exerciseIds: ids, history });
@@ -43,7 +42,7 @@ export default function QuickWorkoutSheet({ store, onStart, onClose }) {
           <h2 className="text-sm font-bold text-ink">Quick workout</h2>
           <button ref={a11y.closeRef} type="button" onClick={onClose} className="min-h-11 min-w-11 text-xs font-bold px-3 rounded-full border border-line">Close</button>
         </div>
-        <p className="text-[11px] text-ink3">An extra or unplanned session. It counts toward your progress, and your programme stays exactly as it is.</p>
+        <p className="text-[11px] text-ink3">Counts toward your progress; your programme stays as it is.</p>
 
         <div className="flex flex-wrap gap-2" role="group" aria-label="Shortcuts">
           {last && <button type="button" data-testid="quick-last" className={`${chip} border-line`} onClick={() => preset(last, `Same lifts as ${last.title} (${last.dateISO}).`)}>Same as last time</button>}
@@ -55,11 +54,9 @@ export default function QuickWorkoutSheet({ store, onStart, onClose }) {
         {note && <p role="status" className="text-[11px] text-ink2" data-testid="quick-note">{note}</p>}
 
         <ol className="space-y-1.5" aria-label="Your lifts" data-testid="quick-picked">
-          {ids.map((id, i) => (
+          {ids.map((id) => (
             <li key={id} className="flex items-center gap-1.5 rounded-xl border border-line px-2 py-1">
               <span className="min-w-0 flex-1 truncate text-xs font-bold">{EXERCISE_BY_ID[id]?.name || id}</span>
-              <button type="button" aria-label={`Move ${EXERCISE_BY_ID[id]?.name} up`} disabled={i === 0} className="min-h-11 min-w-11 text-xs disabled:opacity-30" onClick={() => setIds((c) => moveId(c, i, i - 1))}>↑</button>
-              <button type="button" aria-label={`Move ${EXERCISE_BY_ID[id]?.name} down`} disabled={i === ids.length - 1} className="min-h-11 min-w-11 text-xs disabled:opacity-30" onClick={() => setIds((c) => moveId(c, i, i + 1))}>↓</button>
               <button type="button" aria-label={`Remove ${EXERCISE_BY_ID[id]?.name}`} className="min-h-11 min-w-11 text-xs font-bold" onClick={() => setIds((c) => c.filter((x) => x !== id))}>✕</button>
             </li>
           ))}
@@ -82,9 +79,7 @@ export default function QuickWorkoutSheet({ store, onStart, onClose }) {
               </button>
             </li>
           ))}
-          {!results.length && <li className="text-xs text-ink3">No lift matches. Try fewer letters.</li>}
         </ul>
-        {full && <p className="text-[11px] text-ink3">That is {QUICK_MAX} lifts — plenty for one session.</p>}
 
         <button type="button" disabled={!ids.length} onClick={start} data-testid="quick-start" className="btn btn-primary w-full min-h-12 rounded-xl disabled:opacity-40">
           {ids.length ? `Start ${ids.length} lift${ids.length === 1 ? '' : 's'}` : 'Pick at least one lift'}
