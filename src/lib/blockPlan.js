@@ -25,7 +25,6 @@
 
 import { EXERCISE_BY_ID, PROGRAM_BY_ID } from './data.js';
 import { resolveArisePriors } from './priors.js';
-import { predictSessionDuration } from './warmup.js';
 import { mondayKeyISO } from './dateOnly.js';
 
 export const BLOCK_PLAN_VERSION = 1;
@@ -46,7 +45,7 @@ const obj = (v)=> (v && typeof v === 'object' ? v : {});
 
 function plan(schedule){
   const p = schedule?.blockPlan;
-  return { version: BLOCK_PLAN_VERSION, deload: obj(p?.deload), cuts: obj(p?.cuts), extended: Array.isArray(p?.extended) ? p.extended : [] };
+  return { deload: obj(p?.deload), cuts: obj(p?.cuts), extended: Array.isArray(p?.extended) ? p.extended : [] };
 }
 
 function commit(schedule, sessions, blockPlan){
@@ -66,16 +65,13 @@ function programmeDeloadWeek(schedule){
 
 // Is `week` a deload? Explicit user choice wins; otherwise the weekly review's
 // own cuts (≥ half the blocks stamped weekly-deload) or the programme's
-// declared deload week. Returns { deload, source }.
+// declared deload week. Returns { deload }.
 export function weekDeloadState(schedule, week){
-  const p = plan(schedule);
-  if(p.deload[week] === true) return { deload: true, source: 'you' };
-  if(p.deload[week] === false) return { deload: false, source: null };
+  const chosen = plan(schedule).deload[week];
+  if(typeof chosen === 'boolean') return { deload: chosen };
   const blocks = (schedule?.sessions || []).filter(s=> s.week === week).flatMap(s=> s.blocks || []).filter(b=> Number(b.sets) > 0);
   const stamped = blocks.filter(b=> b.adaptation?.kind === 'weekly-deload').length;
-  if(blocks.length && stamped >= Math.ceil(blocks.length / 2)) return { deload: true, source: 'review' };
-  if(programmeDeloadWeek(schedule) != null && week === programmeDeloadWeek(schedule)) return { deload: true, source: 'programme' };
-  return { deload: false, source: null };
+  return { deload: Boolean((blocks.length && stamped >= Math.ceil(blocks.length / 2)) || week === programmeDeloadWeek(schedule)) };
 }
 
 export function setsByMuscle(sessions){
@@ -107,7 +103,6 @@ export function planWeeks(schedule, todayISO = null){
     return {
       week,
       deload: state.deload,
-      deloadSource: state.source,
       extended: p.extended.includes(week),
       current: Boolean(todayISO && list.some(s=> mondayKeyISO(s.dateISO) === mondayKeyISO(todayISO))),
       sessions: list.map(s=> ({
@@ -116,7 +111,6 @@ export function planWeeks(schedule, todayISO = null){
         dateISO: s.dateISO,
         status: isDone(s) ? 'done' : 'planned',
         sets: (s.blocks || []).reduce((n, b)=> n + (Number(b.sets) || 0), 0),
-        minutes: predictSessionDuration(s.blocks || []),
       })),
       totalSets: Object.values(byMuscle).reduce((a, b)=> a + b, 0),
       byMuscle,
@@ -144,25 +138,15 @@ export function volumeFlags(weeks){
 // Bar tone for a muscle's weekly sets.
 export function muscleTone(muscle, sets){
   if(!GUIDED_MUSCLES.includes(muscle)) return 'neutral';
-  return sets > VOLUME_GUIDE.high ? 'high' : sets < VOLUME_GUIDE.low ? 'low' : 'ok';
+  return sets > VOLUME_GUIDE.high ? 'high' : 'ok';
 }
 
 // ── Deload toggle ───────────────────────────────────────────────────────
 
-function previousBuildSets(sessions, session, exerciseId, schedule){
-  for(let w = session.week - 1; w >= 1; w--){
-    if(weekDeloadState(schedule, w).deload) continue;
-    const match = sessions.find(s=> s.week === w && String(s.day) === String(session.day) && s.id !== session.id);
-    const block = match?.blocks?.find(b=> b.exerciseId === exerciseId);
-    if(block) return Number(block.sets) || null;
-  }
-  return null;
-}
-
 export function setWeekDeload(schedule, week, on, { programmed = false } = {}){
   const sessions = schedule?.sessions || [];
   const inWeek = sessions.filter(s=> s.week === week);
-  if(!inWeek.length) return { schedule, error: 'That week is not in this block.' };
+  if(!inWeek.length) return { schedule, error: 'No such week.' };
   const targets = inWeek.filter(s=> !isDone(s));
   if(!targets.length) return { schedule, error: 'That week is already finished.' };
   const p = plan(schedule);
@@ -173,7 +157,7 @@ export function setWeekDeload(schedule, week, on, { programmed = false } = {}){
   for(const s of targets){
     if(on){
       if(!cuts[s.id]) cuts[s.id] = (s.blocks || []).map(b=> Number(b.sets) || 0);
-      const reason = `${programmed ? 'Programmed deload week' : 'Deload week you chose in Block plan'}: volume cut about ${Math.round((1 - cutFactor) * 100)}%.`;
+      const reason = `${programmed ? 'Programmed' : 'Chosen'} deload week: volume cut about ${Math.round((1 - cutFactor) * 100)}%.`;
       const blocks = (s.blocks || []).map((b, i)=> {
         if((Number(b.sets) || 0) <= 1) return b;
         return { ...b, sets: Math.max(1, Math.round((cuts[s.id][i] || b.sets) * cutFactor)), why: reason, adaptation: { kind: 'weekly-deload', reason, basisKey: 'plan:deload' } };
@@ -181,13 +165,11 @@ export function setWeekDeload(schedule, week, on, { programmed = false } = {}){
       byId.set(s.id, { ...s, blocks });
     } else {
       const saved = cuts[s.id];
+      if(!saved && s.blocks?.some(b=> b.adaptation?.kind === 'weekly-deload')) return { schedule, error: 'The weekly review cut this week; adjust sets in Edit programme.' };
       const blocks = (s.blocks || []).map((b, i)=> {
         const stamped = b.adaptation?.kind === 'weekly-deload';
-        let restored = null;
-        if(saved && Number.isFinite(saved[i]) && saved[i] > 0) restored = saved[i];
-        else if(stamped) restored = previousBuildSets(sessions, s, b.exerciseId, schedule);
         const out = { ...b };
-        if(restored != null) out.sets = restored;
+        if(saved?.[i] > 0) out.sets = saved[i];
         if(stamped){ delete out.adaptation; delete out.why; }
         return out;
       });
@@ -201,12 +183,6 @@ export function setWeekDeload(schedule, week, on, { programmed = false } = {}){
 
 // ── Extend the block ────────────────────────────────────────────────────
 
-export function lastBuildWeek(schedule){
-  const weeks = planWeeks(schedule);
-  for(let i = weeks.length - 1; i >= 0; i--) if(!weeks[i].deload) return weeks[i].week;
-  return weeks.length ? weeks[weeks.length - 1].week : null;
-}
-
 // Add one more week after the last: a copy of the latest non-deload week, same
 // weekdays, planned, with per-session coaching stamps stripped (the engine
 // re-prescribes loads from history). Progressive load is the engine's job.
@@ -216,7 +192,7 @@ export function extendBlock(schedule){
   const weeks = planWeeks(schedule);
   const lastWeek = weeks[weeks.length - 1].week;
   if(weeks.length >= MAX_BLOCK_WEEKS) return { schedule, error: `A block can hold at most ${MAX_BLOCK_WEEKS} weeks.` };
-  const sourceWeek = lastBuildWeek(schedule);
+  const sourceWeek = ([...weeks].reverse().find(w=> !w.deload) || weeks[weeks.length - 1]).week;
   const source = sessions.filter(s=> s.week === sourceWeek).sort((a, b)=> String(a.dateISO).localeCompare(String(b.dateISO)));
   if(!source.length) return { schedule, error: 'Nothing to copy.' };
   const newWeek = lastWeek + 1;
@@ -242,7 +218,6 @@ export function extendBlock(schedule){
       dateISO: toISO(toMs(s.dateISO) + shiftDays * DAY_MS),
       status: 'planned',
       blocks,
-      extendedFrom: s.id,
     };
   });
   const taken = new Set(sessions.map(s=> s.id));
@@ -266,7 +241,7 @@ export function canRemoveWeek(schedule){
 // Remove the most recently added week (only a week the lifter added, with no
 // finished sessions).
 export function removeExtendedWeek(schedule){
-  if(!canRemoveWeek(schedule)) return { schedule, error: 'Only a week you added, with nothing finished, can be removed.' };
+  if(!canRemoveWeek(schedule)) return { schedule, error: 'Only an added week with nothing done can be removed.' };
   const weeks = planWeeks(schedule);
   const last = weeks[weeks.length - 1].week;
   const p = plan(schedule);

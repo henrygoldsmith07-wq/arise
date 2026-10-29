@@ -96,6 +96,14 @@ rebuilding it as a template.
   my edits**: it saves the template and starts a fresh block from it in one
   tap, so the next block begins with your changes already in place.
 
+## Block plan: see the whole block
+
+Train → **Block plan** lays out every week of your current block: the sessions, their sets, and how many hard sets each muscle gets that week (main muscle of each exercise only; a rough 6–20 range is shown as a guide, not a rule).
+
+- **Make deload week** cuts that week's planned sets by the same factor the weekly review uses and leaves your loads alone. **Make normal week** puts the exact original sets back. Weeks you have already finished cannot be changed.
+- **Add a week** copies your latest normal week onto the same weekdays when the block runs out. **Remove the week I added** takes it back while nothing in it is done.
+- A build week with more than about 20 sets for one muscle is flagged. Low volume is not: it is the right call when you are protecting a muscle on purpose, such as legs before big rides.
+
 ## Choose your training days
 
 On Train, the weekday card lets you pick which days you lift. Upcoming sessions re-date onto those days and avoid your ride days. Tap Move on any session to shift it to another day; if that day is taken, the two sessions swap.

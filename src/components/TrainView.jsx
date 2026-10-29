@@ -293,9 +293,9 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
           <button onClick={()=> setEditorOpen(true)} className="btn btn-primary w-full min-h-11 rounded-xl text-sm" aria-haspopup="dialog">
             Edit programme{customisedDays ? ` · ${customisedDays} day${customisedDays === 1 ? '' : 's'} customised` : ''}
           </button>
-          <button onClick={()=> setPlanOpen(true)} className="btn btn-secondary w-full min-h-11 rounded-xl text-sm" aria-haspopup="dialog">Block plan · weeks, volume, deload</button>
+          <button onClick={()=> setPlanOpen(true)} className="btn btn-secondary w-full min-h-11 rounded-xl text-sm" aria-haspopup="dialog">Block plan</button>
           {planOpen && (
-            <Suspense fallback={<p className="text-xs text-ink3" role="status">Opening block plan…</p>}>
+            <Suspense fallback={<p className="text-xs text-ink3" role="status">Opening…</p>}>
               <BlockPlan store={store} setStore={setStore} onClose={()=> setPlanOpen(false)} />
             </Suspense>
           )}

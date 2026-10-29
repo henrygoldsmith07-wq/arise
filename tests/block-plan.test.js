@@ -20,7 +20,7 @@ describe('planWeeks', () => {
     assert.ok(weeks[0].current);
     assert.ok(!weeks[1].current);
     assert.equal(weeks[0].totalSets, Object.values(weeks[0].byMuscle).reduce((a, b) => a + b, 0));
-    assert.ok(weeks[0].sessions.every(s => s.minutes >= 8));
+    assert.ok(weeks[0].sessions.every(s => s.sets > 0));
   });
   it('excludes cardio blocks from muscle volume', () => {
     const byMuscle = setsByMuscle([{ blocks: [{ exerciseId: 'brisk-walk', sets: 1 }, { exerciseId: 'push-up', sets: 3 }] }]);
@@ -65,7 +65,7 @@ describe('setWeekDeload', () => {
     const bad = setWeekDeload(finished, 1, true);
     assert.match(bad.error, /already finished/);
     assert.equal(bad.schedule, finished);
-    assert.match(setWeekDeload(fresh(), 9, true).error, /not in this block/);
+    assert.match(setWeekDeload(fresh(), 9, true).error, /No such week/);
   });
   it('is idempotent when the week is already set', () => {
     const on = setWeekDeload(fresh(), 2, true).schedule;
@@ -77,6 +77,17 @@ describe('setWeekDeload', () => {
     const r = setWeekDeload(fresh(), 1, true);
     const walk = r.schedule.sessions.flatMap(s => s.blocks).find(b => b.exerciseId === 'brisk-walk');
     assert.equal(walk.sets, 1);
+  });
+});
+
+describe('review-made deloads', () => {
+  it('refuses to guess the original sets of a week the weekly review cut', () => {
+    const base = fresh();
+    base.sessions.filter(s => s.week === 2).forEach(s => s.blocks.forEach(b => { b.adaptation = { kind: 'weekly-deload', reason: 'x' }; }));
+    assert.equal(weekDeloadState(base, 2).deload, true);
+    const r = setWeekDeload(base, 2, false);
+    assert.match(r.error, /weekly review/);
+    assert.equal(r.schedule, base);
   });
 });
 
@@ -145,10 +156,9 @@ describe('volumeFlags', () => {
     assert.deepEqual(flags.map(f => `${f.week}:${f.muscle}:${f.kind}`), ['1:Chest:high']);
     assert.ok(flags[0].message.includes('week 1'));
   });
-  it('tone names the three bands', () => {
+  it('tone flags only high volume', () => {
     assert.equal(muscleTone('Chest', 25), 'high');
     assert.equal(muscleTone('Chest', 12), 'ok');
-    assert.equal(muscleTone('Chest', 3), 'low');
     assert.equal(muscleTone('Core', 40), 'neutral');
   });
 });
