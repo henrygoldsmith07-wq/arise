@@ -5,6 +5,7 @@ import {
   fmtRest,
   initGuidedBlocks,
   nextGuidedStep,
+  guidedRestAfter,
   guidedProgress,
   guidedVolumeKg,
   sessionElapsedMs,
@@ -318,7 +319,17 @@ export default function GuidedRunner({ session, history = [], availableEquipment
       } catch {}
       lastStepAtRef.current = new Date(now).toISOString();
     }
-    if(!skipped && block.restSec && nextGuidedStep(blocks)) startRestWithCues(restPresetFor(gymPrefs, block.exerciseId, block.restSec) || block.restSec, EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId, block.exerciseId);
+    if(!skipped && block.restSec){
+      // Supersets: no rest between A and B; one rest (the longer of the two)
+      // after the round. Straight sets keep their own preset.
+      const afterBlocks = blocks.map((b,bi)=> bi!==step.blockIndex ? b : { ...b, sets: b.sets.map((s,si)=> si!==step.setIndex ? s : { ...s, completed: true }) });
+      const rest = guidedRestAfter(afterBlocks, step.blockIndex, (b)=> restPresetFor(gymPrefs, b.exerciseId, b.restSec) || b.restSec);
+      if(rest && rest.seconds > 0){
+        const partner = rest.pair ? afterBlocks.find((b,i)=> i!==step.blockIndex && (b.supersetWith === block.exerciseId || block.supersetWith === b.exerciseId)) : null;
+        const label = partner ? `${EXERCISE_BY_ID[partner.exerciseId]?.name || partner.exerciseId} + ${EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId}` : (EXERCISE_BY_ID[block.exerciseId]?.name || block.exerciseId);
+        startRestWithCues(rest.seconds, label, block.exerciseId);
+      }
+    }
     haptic(skipped ? 'failedSet' : 'restComplete');
   };
 

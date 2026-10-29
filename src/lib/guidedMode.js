@@ -8,6 +8,7 @@ import { lastExerciseSets } from './store.js';
 import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, attributePrescribedSets } from './progression.js';
 import { NOTE_PROMPTS } from './sessionNotes.js';
 import { localDateISO } from './dateOnly.js';
+import { supersetPartner, pairRestSec } from './superset.js';
 export { NOTE_PROMPTS } from './sessionNotes.js';
 
 function parseNum(v){ const n=Number(v); return Number.isFinite(n)? n : 0; }
@@ -53,6 +54,8 @@ export function initGuidedBlocks(session, history = [], draftBlocks = null){
       reps: source.reps || '',
       sets,
       restSec: Number(source.restSec) || 0,
+      // Superset pairing from My programme: kept so guided steps alternate.
+      ...(typeof source.supersetWith === 'string' && source.supersetWith ? { supersetWith: source.supersetWith } : {}),
       unilateral,
       loadHint: source.loadHint || '',
       why: source.why || '',
@@ -130,15 +133,39 @@ export function applyGuidedTreatment(blocks, activeIndex, assignedArm, recommend
 }
 
 // The current step: the first set that is neither completed nor skipped.
+const guidedOpenIndex = (block)=> (block?.sets || []).findIndex(s=> !s.completed && !s.skipped);
+const guidedDone = (block)=> (block?.sets || []).filter(s=> s.completed || s.skipped).length;
+
 export function nextGuidedStep(blocks){
   for(let bi=0; bi<(blocks||[]).length; bi++){
-    const sets = blocks[bi]?.sets || [];
-    for(let si=0; si<sets.length; si++){
-      const s = sets[si];
-      if(!s.completed && !s.skipped) return { blockIndex: bi, setIndex: si };
+    const si = guidedOpenIndex(blocks[bi]);
+    if(si < 0) continue;
+    // Supersets alternate A1 → B1 → A2 → B2: while the first open block is
+    // the A half of a pair, its partner takes the step whenever it is a
+    // round behind.
+    const partner = supersetPartner(blocks, bi);
+    if(partner != null && partner > bi){
+      const pi = guidedOpenIndex(blocks[partner]);
+      if(pi >= 0 && guidedDone(blocks[partner]) < guidedDone(blocks[bi])) return { blockIndex: partner, setIndex: pi };
     }
+    return { blockIndex: bi, setIndex: si };
   }
   return null;
+}
+
+/**
+ * Rest after a guided step, given the blocks AFTER that step was logged.
+ * Straight sets rest their own time; the first half of a superset round goes
+ * straight to the partner (0); finishing the round earns one rest, the longer
+ * of the pair's two. Returns null when nothing is left to do.
+ */
+export function guidedRestAfter(afterBlocks, blockIndex, restOf = (b)=> Number(b?.restSec) || 0){
+  const next = nextGuidedStep(afterBlocks);
+  if(!next) return null;
+  const partner = supersetPartner(afterBlocks, blockIndex);
+  if(partner == null || next.blockIndex !== partner) return { seconds: restOf(afterBlocks[blockIndex]), pair: false };
+  if(partner > blockIndex) return { seconds: 0, pair: false };
+  return { seconds: pairRestSec(restOf(afterBlocks[blockIndex]), restOf(afterBlocks[partner])), pair: true };
 }
 
 export function guidedProgress(blocks){

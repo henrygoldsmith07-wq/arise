@@ -240,3 +240,51 @@ describe('UI wiring (source level)', ()=>{
     assert.match(runner, /data-testid="superset-badge"/);
   });
 });
+
+describe('Guided mode alternates supersets', async () => {
+  const { nextGuidedStep, guidedRestAfter } = await import('../src/lib/guidedMode.js');
+  const set = (done = false) => ({ reps: '8', weightKg: '20', completed: done, skipped: false });
+  const pair = (aDone, bDone, extra = true) => [
+    { exerciseId: 'bench-press-dumbbell', supersetWith: 'dumbbell-row', restSec: 90, sets: [0, 1, 2].map((i) => set(i < aDone)) },
+    { exerciseId: 'dumbbell-row', restSec: 120, sets: [0, 1, 2].map((i) => set(i < bDone)) },
+    ...(extra ? [{ exerciseId: 'push-up', restSec: 60, sets: [set(), set()] }] : []),
+  ];
+
+  it('steps A1 → B1 → A2 → B2 instead of running A back to back', () => {
+    assert.deepEqual(nextGuidedStep(pair(0, 0)), { blockIndex: 0, setIndex: 0 });
+    assert.deepEqual(nextGuidedStep(pair(1, 0)), { blockIndex: 1, setIndex: 0 });
+    assert.deepEqual(nextGuidedStep(pair(1, 1)), { blockIndex: 0, setIndex: 1 });
+    assert.deepEqual(nextGuidedStep(pair(3, 2)), { blockIndex: 1, setIndex: 2 });
+    assert.deepEqual(nextGuidedStep(pair(3, 3)), { blockIndex: 2, setIndex: 0 });
+  });
+
+  it('a skipped set counts toward the round so the pair stays in step', () => {
+    const blocks = pair(0, 0);
+    blocks[0].sets[0] = { ...blocks[0].sets[0], skipped: true };
+    assert.deepEqual(nextGuidedStep(blocks), { blockIndex: 1, setIndex: 0 });
+  });
+
+  it('no rest between A and B, one longer rest after the round, own rest for straight sets', () => {
+    assert.deepEqual(guidedRestAfter(pair(1, 0), 0), { seconds: 0, pair: false });
+    assert.deepEqual(guidedRestAfter(pair(1, 1), 1), { seconds: 120, pair: true });
+    // Last round done → moves on to the straight-set lift with B's own rest.
+    assert.deepEqual(guidedRestAfter(pair(3, 3), 1), { seconds: 120, pair: false });
+    const tail = pair(3, 3);
+    tail[2].sets[0].completed = true;
+    assert.deepEqual(guidedRestAfter(tail, 2), { seconds: 60, pair: false });
+  });
+
+  it('nothing left means no rest at all', () => {
+    assert.equal(guidedRestAfter(pair(3, 3, false), 1), null);
+  });
+
+  it('initGuidedBlocks keeps the pairing from the programme', async () => {
+    const { initGuidedBlocks } = await import('../src/lib/guidedMode.js');
+    const blocks = initGuidedBlocks({ blocks: [
+      { exerciseId: 'bench-press-dumbbell', supersetWith: 'dumbbell-row', sets: 2, reps: '8', restSec: 90 },
+      { exerciseId: 'dumbbell-row', sets: 2, reps: '10', restSec: 90 },
+    ] }, []);
+    assert.equal(blocks[0].supersetWith, 'dumbbell-row');
+    assert.equal(blocks[1].supersetWith, undefined);
+  });
+});
