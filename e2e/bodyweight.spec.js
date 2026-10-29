@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { awaitPersisted } from "./helpers.js";
 
 // Optional body-weight log: Progress → Body weight. A weigh-in is stored on
 // device, survives a reload, rejects impossible values, and can be removed.
@@ -16,12 +17,24 @@ test("a weigh-in can be logged, survives a reload and can be removed", async ({
       }),
   );
   await page.reload();
+  // Real onboarding, not sample data: demo mode deliberately never persists,
+  // so a weigh-in logged there could not survive a reload.
   const dialog = page.getByRole("dialog", { name: "Onboarding" });
   await expect(dialog).toBeVisible({ timeout: 15_000 });
-  await dialog
-    .getByRole("button", { name: /Explore with sample data/i })
-    .click();
+  await page.getByRole("button", { name: /Get stronger/i }).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("button", { name: "Gym" }).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByLabel(/Dumbbells/i).click();
+  await page.getByLabel(/Bench/i).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("button", { name: "Intermediate" }).click();
+  await page.getByRole("button", { name: "3×" }).click();
+  await page.getByRole("button", { name: "45 min" }).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("button", { name: /Save & continue/i }).click();
   await expect(dialog).toBeHidden({ timeout: 15_000 });
+  await awaitPersisted(page);
   await page
     .getByRole("button", { name: /^Progress$/ })
     .first()
@@ -40,7 +53,11 @@ test("a weigh-in can be logged, survives a reload and can be removed", async ({
   await expect(card.getByTestId("bodyweight-latest")).toContainText("68.5");
   await expect(card.getByTestId("bodyweight-save")).toHaveText("Update");
 
-  await page.waitForTimeout(800); // let the store flush to IndexedDB
+  await awaitPersisted(page);
+  await page.evaluate(async () => {
+    const { whenPersisted } = await import("/src/lib/storage.js");
+    await whenPersisted();
+  });
   await page.reload();
   await page
     .getByRole("button", { name: /^Progress$/ })
