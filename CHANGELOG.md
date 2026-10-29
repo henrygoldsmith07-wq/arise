@@ -39,7 +39,9 @@ the history is the changelog; this file is its human-readable index.
 ### Gym Mode: step up after an easy opening set
 - A first set with 4+ reps in reserve, even mid-range, now offers the next load step for the remaining sets instead of waiting for the top of the range.
 
+
 - Gym Mode: when set 1 lands 3+ reps over the top of the range and no effort was logged, the next-set chip now offers the step up (previously it needed an RIR entry).
+
 
 ### Today: low-readiness trim
 - When today's check-in scores 40/100 or lower, Today offers "Trim one set per lift" (one set off every lift with 3+ sets, never below 2; timed blocks untouched). You choose; undo is one tap.
@@ -48,6 +50,7 @@ the history is the changelog; this file is its human-readable index.
 
 ### Next-time preview in the session runner
 - Once every set of a lift is done, a chip shows what Arise will prescribe next session (load × reps and why), computed from your history plus the sets you just logged. Advice only.
+
 
 - Gym Mode: after a failed or under-floor final set, offer one back-off set about 10% lighter (snapped to your kit).
 
@@ -100,6 +103,7 @@ When the next achievable machine/cable load would jump more than 20% (e.g. a 5 k
 ### Best lifting days around key rides
 Ride-days card now suggests the best three weekdays to lift (off ride days, away from the day before, not back-to-back).
 
+
 ### Jargon help where RIR/RPE appear
 - Tap-to-explain "?" now sits on the set-list RIR header (and a one-line RIR note on phones), the Progress volume hint (RPE/RIR) and the per-lift history sheet.
 ### Tap-to-explain jargon in Progress and lift history
@@ -121,8 +125,10 @@ Ride-days card now suggests the best three weekdays to lift (off ride days, away
 ### Stalled lift: accept the deload as your next target
 - The Progress stalled-lift card now has **Use this as my next target** (with undo). The next session shows that lift at the deload load and reps instead of the engine's usual number; once you log the lift, normal progression resumes. Local only (gymPrefs.deloadTargets).
 
+
 ### Stalled-lift deload suggestion
 - Progress now says "Stalled 3 sessions" when a lift's last three sessions haven't beaten its earlier best e1RM, and proposes the same reps at about 10% less load (snapped to a load your kit can make). New `src/lib/stallDeload.js` + tests; terser now runs two passes to keep the bundle inside budget.
+
 
 ### Onboarding exercise picker
 - The "Fine-tune preferences" step no longer shows one flat ~60-row list. Exercises are grouped by muscle in collapsible sections (each header shows "N liked · M avoided"), with a labelled search box (case/accent-insensitive, gym shorthand such as `db`, `rdl`, `lat`, `pec`), muscle filter chips, a "Show my picks" toggle, a live "Showing N of M" count and a "No exercises match…" empty state with a clear-search action.
@@ -135,11 +141,14 @@ Ride-days card now suggests the best three weekdays to lift (off ride days, away
 ### Ride-aware leg scheduling
 - Mark key ride days on the Train tab; leg sessions on a ride day or the day before are flagged and can be moved to the nearest clear day in one tap (never into the past, never onto another session).
 
+
 ### Fixed
 - A built-in programme resampled to the days you chose now carries the real day count ("Full Gym 3×Week", not "4×Week") in the Train hero and the saved schedule.
 
+
 ### Onboarding asks if you ride, run or race
 - New optional sport question on the goal step (No / Cycling / Running / Triathlon). Answering one pins Rider Upper 3×Week first on Train's programme shelf when your kit has machines or cables, with the reason shown. Stored on-device only.
+
 
 ### Hevy import that actually imports
 - More → Import from another app now understands Hevy's own "Export workout data" CSV: sets are grouped into the real workouts (titled as in Hevy), warm-up sets are left out so they cannot fake a low working load, lbs exports convert to kg, and exercise names map through an explicit table. Lifts not in the table are listed, never guessed.
@@ -161,6 +170,7 @@ Ride-days card now suggests the best three weekdays to lift (off ride days, away
 - The boot-time integrity gate imported the whole export/sync/evidence graph just to reuse one validator. The validator now lives in `src/lib/storeValidation.js` (re-exported from `export.js`, behaviour unchanged), so export, longitudinal evaluation, study, priors and progression load only with the screens that use them.
 - Rollup groups that code into three shared lazy chunks (`evidence`, `engine`, `evidence-core`), each under the largest-lazy budget. Total stays at 404.8 / 405 kB (budget unchanged); boot drops 114.4 → 60.2 kB gz.
 - New `tests/bootGraph.test.js` fails if the first-paint import graph regains any of those modules.
+
 
 ### First-session load guidance
 - Guided Mode now tells you a first-weight hint ("No load yet: start light and build.") when a loaded set has no load yet, instead of showing only "log load".
