@@ -12,6 +12,13 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Weekly volume: hard sets per muscle, week by week (MAJOR 43)
+- Progress gets a **Weekly volume** card: the last eight weeks as tappable stacked bars (hard sets per muscle), with a muscle-by-muscle list and the sessions behind whichever week you tap. Muscles are compared with the same rough 6–20 sets guide the Block plan uses, with "Below guide / In range / Above guide" on finished weeks only.
+- Counts what you actually logged: finished, non-skipped sets with reps or a load, and nothing logged under RPE 5. Each lift counts toward its main muscle; cardio, core and deleted sessions are left out.
+- Today shows a quiet "Light week for chest (3)" note when an upper-body muscle you have been training got less than the guide last week, only after a real training week (two or more sessions, not a deload). It never nags about legs (they are capped around cycling on purpose) or muscles you have not been training, and "Got it" hides it for the week on this device.
+- New `src/lib/muscleVolumeHistory.js`, `WeeklyVolumeCard.jsx` and `VolumeNudge.jsx` (all lazy), `tests/muscle-volume-history.test.js`, `e2e/weekly-volume.spec.js`. Chunking: the Block plan and volume view share one chunk, and four tiny lazy modules share another, so the 405 kB budget holds.
+
+
 ### Quick workout
 - Today has a **Quick workout** button for sessions the programme did not plan. Pick up to 10 lifts by search and muscle, or tap a shortcut: Same as last time, Rested muscles (the muscles with the longest gap since a logged set, favouring lifts you log and like) or Upper body only (no leg work, for a rider keeping legs fresh).
 - It runs in the normal workout screen. Sets and rep range follow what you last logged for each lift (3 × 8–12 for a new one) and the runner supplies the load target from your history. The saved session counts toward progression and Progress but marks, skips and moves nothing in the programme.

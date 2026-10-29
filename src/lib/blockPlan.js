@@ -35,7 +35,7 @@ export const MAX_BLOCK_WEEKS = 12;
 // individual variation — these are conservative planning bounds, not an
 // optimum (confidence: low).
 export const VOLUME_GUIDE = Object.freeze({ low: 6, high: 20 });
-const GUIDED_MUSCLES = ['Chest', 'Back', 'Shoulders', 'Arms', 'Legs', 'Glutes'];
+export const GUIDED_MUSCLES = ['Chest', 'Back', 'Shoulders', 'Arms', 'Legs', 'Glutes'];
 const DAY_MS = 86400000;
 
 const isDone = (s)=> s?.status === 'done';

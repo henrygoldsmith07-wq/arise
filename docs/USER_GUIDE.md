@@ -140,6 +140,12 @@ Mistyped a set? Progress → **Edit logged workouts** lets you fix the load, rep
 
 Progress → **Body weight** is optional. Log a weigh-in (or type it in the Today check-in) and Arise shows the trend and, for each lift you trained lately, your estimated max as a multiple of your body weight, compared with the 8 weeks before. That answers "did I get stronger, or just heavier?" — handy when you also ride or run and weight matters. Pull-ups, chin-ups and dips count your body weight plus any added load minus assistance. Machine and cable stacks are not comparable between gyms, so treat the multiple as a way to compare yourself with you. Day-to-day swings of 1–2 kg are water; the trend waits for entries a week apart. Stays on your device; Export and sync carry it.
 
+## Weekly volume: what you actually did
+
+Progress → **Weekly volume** shows the last eight weeks as bars of hard sets, split by muscle. Tap a week to see each muscle's sets and the sessions behind it. On finished weeks each muscle is marked Below guide, In range or Above guide against the same rough 6–20 sets range as the Block plan. It is a guide, not a target: fewer leg sets around cycling is fine.
+
+What counts: finished sets with reps or a load, nothing you skipped, and nothing logged under RPE 5 (warm-ups). Each lift counts toward its main muscle. If chest, back, shoulders or arms were trained recently but got under 6 sets last week (after a normal training week), Today shows a note once a week; "Got it" hides it. Everything is worked out on your device from your log.
+
 ## Quick workout
 
 On **Today**, **Quick workout** is for the day you train something the programme did not plan: a machine session while travelling, an extra upper-body day. Tap a shortcut (**Same as last time**, **Rested muscles** or **Upper body only**, which never adds leg work) or search and add up to 10 lifts, then **Start**. It runs in the normal workout screen with the usual load targets from your history, counts toward Progress and your progression, and leaves your programme exactly as it was: no scheduled session is ticked off, skipped or moved.
