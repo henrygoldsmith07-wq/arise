@@ -18,6 +18,7 @@ import { storedWorkoutMode, workoutModePatch, workoutModeLabel } from '../lib/wo
 const CoachPanel = lazy(() => import('./CoachPanel.jsx'));
 const LiftGoalNudge = lazy(() => import('./LiftGoalNudge.jsx'));
 const VolumeNudge = lazy(() => import('./VolumeNudge.jsx'));
+const NewPrCard = lazy(() => import('./NewPrCard.jsx'));
 const QuickWorkoutSheet = lazy(() => import('./QuickWorkoutSheet.jsx'));
 
 export default function TodayView({ store, setStore, onStartSession, onOpenTrain, onOpenProgress, plateConfig = null }){
@@ -383,13 +384,14 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
 
     <div className="px-4 py-5 space-y-4">
       <button type="button" onClick={()=> setQuickOpen(true)} data-testid="quick-workout-open"
-        className="btn btn-secondary w-full min-h-12 rounded-xl px-4 text-sm font-bold">Quick workout — train something unplanned</button>
+        className="btn btn-secondary w-full min-h-12 rounded-xl px-4 text-sm font-bold">Quick workout — log something unplanned</button>
       {quickOpen && <Suspense fallback={null}><QuickWorkoutSheet store={store} onClose={()=> setQuickOpen(false)} onStart={(session)=> { setQuickOpen(false); onStartSession(session); }} /></Suspense>}
       {/* Recovery input. Collapsed it is one line, so it costs nothing on the
           days the user skips it — which is the property that decides whether a
           daily check-in gets collected at all. */}
       <ReadinessCheckIn store={store} setStore={setStore} todayISO={isoToday()} />
 
+      {(store.history || []).length >= 2 && <Suspense fallback={null}><NewPrCard store={store} /></Suspense>}
       {(store.history || []).length >= 6 && <Suspense fallback={null}><VolumeNudge store={store} /></Suspense>}
       {store.gymPrefs?.liftGoals && <Suspense fallback={null}><LiftGoalNudge store={store} setStore={setStore} /></Suspense>}
 
