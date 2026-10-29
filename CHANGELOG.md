@@ -18,6 +18,11 @@ the history is the changelog; this file is its human-readable index.
 - `bodyweightLog` rides export, backup, sync and the three-way store reconcile (newest edit per day wins, deletions stick). Nothing leaves the device.
 - Bundle: the expert-only **Historical recommendation check** on Progress now rebuilds each recommendation with the same leak-safe point-in-time replay but no longer ships the multi-metric replay engine (Brier scores, plateau accuracy). It shows samples, load/rep error and hit rate. That frees ~6.5 kB gz for this feature; `backtesting.js` stays in the repo for scripts and tests.
 
+### Per-lift setup notes
+- **Add setup** on any lift (Gym Mode, session runner, Guided mode): seat, pin/stack, grip, bench or back angle and one free note, saved per exercise and shown under the target next session so you stop re-finding the machine settings.
+- Each logged block remembers the setup used; the lift's history sheet shows it per session, and the runner says "Changed since last time (was …)" when today's note differs from the last logged one.
+- Notes live in `gymPrefs.setupNotes`, ride export/import and sync (newest edit per lift wins, clears keep a small tombstone), and are cleaned on load. Nothing leaves the device.
+
 ### Block plan
 - Train → **Block plan** shows your whole block week by week: each session with its sets and estimated time, and weekly hard sets per muscle against a rough 6–20 guide (low volume is never nagged: fewer is fine on purpose, e.g. legs around cycling).
 - **Make deload week / Make normal week** on any week that still has sessions to do. Deload cuts planned sets by the engine's deload factor and leaves loads alone; turning it off restores the exact original sets. The weekly review no longer re-decides a week you set.

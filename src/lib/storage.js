@@ -203,7 +203,7 @@ export function decompose(store, { existingArchive = null } = {}){
     recommendations: ledger.filter(r => !r.outcome).map(r => ({ ...r, id: r.id })),
     outcomes: ledger.filter(r => r.outcome).map(r => ({ ...r, id: r.id })),
     events: store.eventHistory || [],
-    readiness: { id: READINESS_ID, log: store.readinessLog || [] },
+    readiness: { id: READINESS_ID, log: store.readinessLog || [], bodyweightLog: store.bodyweightLog || [] },
     // Soft-deleted templates stay in the store (deletedAt on the row) so the
     // deletion is recoverable locally; consumers filter on deletedAt, and
     // tombstones carry the deletion to other devices at sync time.
@@ -347,6 +347,7 @@ export async function loadStoreFromIdb(){
     programHistory: programme?.programHistory || [],
     eventHistory: events || [],
     readinessLog: readiness?.log || [],
+    bodyweightLog: readiness?.bodyweightLog || [],
     customTemplates: templates || [],
     experiments: experiments || [],
     tombstones: tombstones || [],

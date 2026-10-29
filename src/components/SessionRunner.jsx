@@ -64,9 +64,10 @@ import {
 // Teaching opens on a deliberate tap, so the panel + its derived content
 // ride their own lazy chunk — boot logging weight is untouched.
 const ExerciseHistorySheet = lazy(() => import('./ExerciseHistorySheet.jsx'));
+const SetupNote = lazy(() => import('./SetupNote.jsx'));
 const TeachingPanel = lazy(() => import('./TeachingPanel.jsx'));
 
-export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, appPrefs = null, gymPrefs = null, onSetRestPreset = null, onSetWarmupSkip = null, studyEnrollment = null, participantId = null, onDraftChange, onSave, onCancel }){
+export default function SessionRunner({ session, history = [], availableEquipment = [], plateConfig = null, draft = null, measurementConsent = false, preferences = null, appPrefs = null, gymPrefs = null, onSetRestPreset = null, onSetWarmupSkip = null, onSetSetupNote = null, studyEnrollment = null, participantId = null, onDraftChange, onSave, onCancel }){
   const unit = asUnit(appPrefs?.units);
   // Explanation verbosity comes from the training-policy preference; the
   // reference was previously undefined (a latent crash when explanations
@@ -736,6 +737,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       quality:qualityRating,
       startedAt,
       nowISO,
+      gymPrefs,
     });
     traceEnd('session-runner:save', 'payload built');
     onSave(payload);
@@ -923,6 +925,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     {exerciseTrends.get(b.exerciseId) ? <span> · trend: {exerciseTrends.get(b.exerciseId)}</span> : null}
                   </p>
                   <p className="text-[11px]"><span className="font-bold text-ink">Goal:</span> {goalText}</p>
+                  <Suspense fallback={null}><SetupNote exerciseId={b.exerciseId} name={ex?.name || b.exerciseId} gymPrefs={gymPrefs} history={history} onSave={onSetSetupNote} className="mt-1" /></Suspense>
                   {prev && <button type="button" onClick={()=> setHistoryFor(bi)} className="min-h-11 text-xs font-bold px-3 rounded-full border border-line bg-surface2 self-start">History</button>}
                   {historyFor === bi && (
                     <Suspense fallback={null}>

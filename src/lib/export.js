@@ -11,6 +11,7 @@ import { withProvenance, ensureSourceTags, importLedgerProvenance, mergeTombston
 import { validateStoreData } from './storeValidation.js';
 import { mergeBodyweightLogs } from './bodyweightLog.js';
 import { readCanonicalLedger } from './evaluationLedgerBridge.js';
+import { mergeSetupNotes } from './setupNotes.js';
 
 export { EXPORT_VERSION };
 
@@ -317,6 +318,9 @@ export function mergeStores(current, imported, strategy='merge'){
         ...(importedStore.gymPrefs?.restPresets || {}),
         ...(currentStore.gymPrefs?.restPresets || {}),
       },
+      ...((currentStore.gymPrefs?.setupNotes || importedStore.gymPrefs?.setupNotes)
+        ? { setupNotes: mergeSetupNotes(currentStore.gymPrefs?.setupNotes, importedStore.gymPrefs?.setupNotes) }
+        : {}),
     },
     readinessLog: [...(currentStore.readinessLog||[]), ...(importedStore.readinessLog||[])].filter((v,i,a)=> a.findIndex(x=> x.dateISO===v.dateISO && x.at===v.at)===i),
     bodyweightLog: mergeBodyweightLogs(currentStore.bodyweightLog, importedStore.bodyweightLog),

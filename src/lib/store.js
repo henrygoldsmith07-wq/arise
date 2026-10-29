@@ -19,7 +19,7 @@ const DEFAULT = {
   healthSummary: null, // optional user-approved health-platform summary
   history: [], // completed sessions: see normaliseHistoryEntry for full shape
   archivedHistory: [], // sessions moved to the IndexedDB archive store: same shape as history, disjoint by id, fully portable (backup/sync/snapshot)
-  gymPrefs: null, // portable Gym Mode behaviour: { restPresets:{exerciseId:sec}, restPresetUpdatedAt:{exerciseId:ISO}, updatedAt?:ISO, focusDefault?:bool }
+  gymPrefs: null, // portable Gym Mode behaviour: { restPresets:{exerciseId:sec}, restPresetUpdatedAt:{exerciseId:ISO}, setupNotes:{exerciseId:{seat,pin,grip,angle,note,updatedAt}}, updatedAt?:ISO, focusDefault?:bool }
   // theme null follows OS; telemetry null = prompt. `accessibility` drives the
   // opt-in root classes le-studio.css already defines (large-text, high-contrast,
   // reduce-motion) — independent of the OS-level media queries.

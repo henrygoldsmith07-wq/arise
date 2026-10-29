@@ -595,7 +595,7 @@ test.describe('Experience levels', () => {
 
     // Standard (default): advanced gates closed.
     await expect(page.getByText('Deload logic check')).toHaveCount(0);
-    await expect(page.getByText('Historical recommendation backtest')).toHaveCount(0);
+    await expect(page.getByText('Historical recommendation check')).toHaveCount(0);
     await expect(page.getByText(/Next best action/)).toBeVisible();
     await expect(page.getByText(/Milestones/)).toBeVisible();
 
@@ -608,7 +608,7 @@ test.describe('Experience levels', () => {
     await page.getByRole('button', { name: /Expert Everything/i }).click();
     await tapTab(page, 'Progress');
     await expect(page.getByText('Deload logic check')).toBeVisible();
-    await expect(page.getByText('Historical recommendation backtest')).toBeVisible();
+    await expect(page.getByText('Historical recommendation check')).toBeVisible();
     await expect(page.getByText(/replayed against your own logged history/)).toBeVisible();
 
     // Simple: condensed attribution, advanced sections gone, core stays.
@@ -616,7 +616,7 @@ test.describe('Experience levels', () => {
     await page.getByRole('button', { name: /Simple The essentials/i }).click();
     await tapTab(page, 'Progress');
     await expect(page.getByText('Deload logic check')).toHaveCount(0);
-    await expect(page.getByText('Historical recommendation backtest')).toHaveCount(0);
+    await expect(page.getByText('Historical recommendation check')).toHaveCount(0);
     await expect(page.getByText(/Next best action/)).toBeVisible();
 
     // The gate is display-only: the underlying store is untouched.

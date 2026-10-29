@@ -43,6 +43,7 @@ progress → taking care of your data.
   mark a set failed, long-press to edit, and a load numpad with equipment-aware
   quick-add buttons (plates, dumbbell steps, machine increments).
 - First time on a loaded lift with no history? Tap **Not sure what weight? Find it** on the exercise: do one easy set, enter weight, reps and how many you had left, and you get a starting weight (an estimate, rounded down to what your kit can load).
+- **Setup notes**: on any lift tap **Add setup (seat, pin, grip)** to save the seat height, pin or stack position, grip and bench/back angle (plus one free note). It shows under the target the next time you do that lift in Gym Mode, the session runner and Guided mode. Each logged session remembers the setup you used, the lift's history sheet shows it, and if today's note differs from last time's you get a "Changed since last time (was …)" line. Notes stay on your device, ride along in your backup and sync (the newest edit per lift wins), and **Clear** removes one.
 - **Rest timer** auto-starts after a completed set (configurable in More).
   It announces the last seconds with sound/haptics/voice per your settings,
   keeps running in a dock while you browse, and can hold the screen awake.
