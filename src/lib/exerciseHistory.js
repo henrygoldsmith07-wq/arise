@@ -18,7 +18,7 @@ export function exerciseSessionHistory(history, exerciseId, limit = 5){
       if(est > best) best = est;
       return { weightKg: w > 0 ? w : null, reps: String(s.reps), rir: s.rir == null || s.rir === '' ? null : Number(s.rir), e1rm: est || null };
     });
-    out.push({ dateISO: sess.dateISO, title: sess.title || '', sets: rows, bestE1rm: best || null });
+    out.push({ dateISO: sess.dateISO, title: sess.title || '', sets: rows, bestE1rm: best || null, setup: typeof block.setup === 'string' ? block.setup : '' });
   }
   return out;
 }

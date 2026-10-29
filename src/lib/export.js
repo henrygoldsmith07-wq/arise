@@ -10,6 +10,7 @@ import { buildEnvelope, applyFieldPolicy, EXPORT_VERSION } from './exportPolicy.
 import { withProvenance, ensureSourceTags, importLedgerProvenance, mergeTombstones, applyTombstones, canonicalJson, rowTimestamp } from './domain.js';
 import { validateStoreData } from './storeValidation.js';
 import { readCanonicalLedger } from './evaluationLedgerBridge.js';
+import { mergeSetupNotes } from './setupNotes.js';
 
 export { EXPORT_VERSION };
 
@@ -316,6 +317,9 @@ export function mergeStores(current, imported, strategy='merge'){
         ...(importedStore.gymPrefs?.restPresets || {}),
         ...(currentStore.gymPrefs?.restPresets || {}),
       },
+      ...((currentStore.gymPrefs?.setupNotes || importedStore.gymPrefs?.setupNotes)
+        ? { setupNotes: mergeSetupNotes(currentStore.gymPrefs?.setupNotes, importedStore.gymPrefs?.setupNotes) }
+        : {}),
     },
     readinessLog: [...(currentStore.readinessLog||[]), ...(importedStore.readinessLog||[])].filter((v,i,a)=> a.findIndex(x=> x.dateISO===v.dateISO && x.at===v.at)===i),
     evaluationLedger: mergeEvaluationLedgers(currentStore.evaluationLedger, importedStore.evaluationLedger),
