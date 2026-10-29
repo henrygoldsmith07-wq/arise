@@ -19,6 +19,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
   const toKg = (value)=> Number(weightInputToKg(value, unit));
   const displayList = (values)=> (values || []).map((value)=> weightInputValue(value, unit)).join(', ');
   const [step,setStep]=useState(0);
+  const [saving,setSaving]=useState(false);
   const [goal,setGoal]=useState(initial?.goal || 'general');
   const [sport,setSport]=useState(initial?.sport || 'none');
   const [rideDaysPerWeek,setRideDaysPerWeek]=useState(Number(initial?.rideDaysPerWeek) || 0);
@@ -138,7 +139,8 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
     )].sort((a,b)=> a-b);
   };
 
-  const complete = ()=>{
+  const complete = async ()=>{
+    if(saving) return;
     const parsedDumbbells = parseDumbbellList();
     const wantsMachine = equipment.includes('machine') || equipment.includes('cable');
     let plateConfig = null;
@@ -169,8 +171,13 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
       plateConfig,
     };
     clearDraft();
-    onComplete(payload);
-    onClose();
+    // Close only once the parent has finished applying the answers (on the
+    // first completion that includes generating and starting the first
+    // plan). Closing first left a window where Today showed no programme and
+    // any write made in it was clobbered when the late plan landed.
+    setSaving(true);
+    try{ await onComplete(payload); }
+    finally{ setSaving(false); onClose(); }
   };
 
   const steps = [
@@ -451,7 +458,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
           {step < steps.length-1 ? (
             <button onClick={()=> setStep(s=> Math.min(steps.length-1,s+1))} className="btn btn-primary flex-1 min-h-11 rounded-xl">Next</button>
           ) : (
-            <button onClick={complete} className="btn btn-primary flex-1 min-h-11 rounded-xl">Save & continue</button>
+            <button onClick={complete} disabled={saving} aria-busy={saving} className="btn btn-primary flex-1 min-h-11 rounded-xl">Save & continue</button>
           )}
         </div>
       </div>

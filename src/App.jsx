@@ -416,7 +416,6 @@ export default function App(){
   },[]);
 
   const handleCompleteOnboarding = async (payload)=>{
-    let next = { ...store, onboarding: payload };
     // First-value (P2.9): GOAL → KIT → EXPERIENCE → SCHEDULE → FIRST PLAN.
     // On the FIRST completion (no profile yet, no programme yet), generate
     // and start the recommended programme so Today opens on a real session
@@ -425,9 +424,15 @@ export default function App(){
     // programme. The generator is imported lazily (same pattern as the save
     // workflow) so it never joins the boot chunk. Failures fall back to the
     // old flow: pick a programme in Train.
-    if(!store.onboarding && !store.activeSchedule){
+    //
+    // The plan lands through a functional update merged into the LATEST store
+    // (mergeOnboardingCompletion): the imports are async, so spreading the
+    // `store` captured when Save was tapped would drop anything written in the
+    // meantime and could replace a programme started in between.
+    const firstCompletion = !store.onboarding && !store.activeSchedule;
+    if(firstCompletion){
       try{
-        const [{ trainRecommendation }, { generateProgrammeFromProfile }] = await Promise.all([
+        const [{ trainRecommendation }, { generateProgrammeFromProfile, mergeOnboardingCompletion }] = await Promise.all([
           import('./lib/trainRecommendation.js'),
           import('./services/programmeService.js'),
         ]);
@@ -436,38 +441,30 @@ export default function App(){
           customTemplates: store.customTemplates || [],
           history: [],
         });
-        if(recommendation?.programId){
-          // Build the first plan with the SAME generator the Train card
-          // previews and its Start button uses, so the days/week, session
-          // length and liked/avoided movements the user just answered are
-          // applied. (Starting the raw template here ignored all three: a
-          // 3-day, 45-minute user was handed a 4-day schedule and started
-          // "missing" sessions in week one.)
-          const started = generateProgrammeFromProfile(next);
-          if(started.programId && started.store?.activeSchedule){
-            next = {
-              ...started.store,
-              onboarding: {
-                ...payload,
-                // Stored provenance: TODAY renders the scorer's verbatim
-                // reasons so the plan explains itself on day one.
-                firstPlan: {
-                  programId: recommendation.programId,
-                  name: recommendation.name || null,
-                  reasons: recommendation.reasons || [],
-                  selectionInputs: recommendation.selectionInputs || [],
-                  pickedAt: new Date().toISOString().slice(0, 10),
-                },
-              },
-            };
-          }
-        }
+        // Build the first plan with the SAME generator the Train card
+        // previews and its Start button uses, so the days/week, session
+        // length and liked/avoided movements the user just answered are
+        // applied. (Starting the raw template here ignored all three: a
+        // 3-day, 45-minute user was handed a 4-day schedule and started
+        // "missing" sessions in week one.)
+        const started = recommendation?.programId ? generateProgrammeFromProfile({ ...store, onboarding: payload }) : null;
+        // Stored provenance: TODAY renders the scorer's verbatim reasons so
+        // the plan explains itself on day one.
+        const firstPlan = started?.programId && started.store?.activeSchedule ? {
+          programId: recommendation.programId,
+          name: recommendation.name || null,
+          reasons: recommendation.reasons || [],
+          selectionInputs: recommendation.selectionInputs || [],
+          pickedAt: new Date().toISOString().slice(0, 10),
+        } : null;
+        setStore(prev=> mergeOnboardingCompletion(prev, payload, firstPlan ? { started, firstPlan } : null));
+        return;
       }catch{
         // Auto-start is best-effort: onboarding still completes and Train
         // remains the programme picker exactly as before.
       }
     }
-    setStore(next);
+    setStore(prev=> ({ ...prev, onboarding: payload }));
   };
 
   // Progress's empty-state CTA: start the scheduled session if one is due,

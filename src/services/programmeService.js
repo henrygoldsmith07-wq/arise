@@ -83,6 +83,29 @@ export function restoreCustomTemplate(store, id){
   };
 }
 
+/**
+ * Apply a finished onboarding to the LATEST store. `plan` is the first plan
+ * generated off the profile ({ started, firstPlan }) or null. The generated
+ * schedule is only adopted when the store still has no programme: a
+ * programme started (or restored) while the plan was being generated wins,
+ * and every other field written in the meantime is kept.
+ */
+export function mergeOnboardingCompletion(prev, payload, plan = null){
+  const base = prev || {};
+  const schedule = plan?.started?.store?.activeSchedule;
+  if(!schedule || base.activeSchedule) return { ...base, onboarding: payload };
+  return {
+    ...base,
+    activeSchedule: schedule,
+    programHistory: recordProgramStart(base.programHistory || [], {
+      programId: schedule.programId,
+      version: schedule.programVersion || 1,
+      startDateISO: schedule.startDateISO,
+    }),
+    onboarding: { ...payload, ...(plan.firstPlan ? { firstPlan: plan.firstPlan } : {}) },
+  };
+}
+
 export function duplicateCustomTemplate(store, template){
   const copy = duplicateEditorTemplate(template);
   if(!copy) return { store, copy:null };

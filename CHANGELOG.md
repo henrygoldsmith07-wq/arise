@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Onboarding finishes before it closes
+- Save & continue now closes onboarding only once your first plan is in place, and the plan merges into whatever changed meanwhile instead of overwriting it (a programme started or restored in that moment is kept).
+
 ### Smaller app download
 - Exercise how-to text (setup steps, common mistakes, full cue lists) now loads the first time you open a how-to guide instead of with every screen: about 7 kB less JavaScript. It is cached for offline use like the rest of the app; the first cue still shows inline during a session.
 
