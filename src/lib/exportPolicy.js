@@ -193,7 +193,7 @@ export const DENY_FIELDS = [
 // the device-local CONSENT toggles inside preferences are denied above.
 export const IMPORT_ALLOW_KEYS = [
   'onboarding', 'activeSchedule', 'activeWorkout', 'history', 'archivedHistory', 'preferences', 'gymPrefs',
-  'readinessLog', 'programHistory', 'evaluationLedger', 'customTemplates',
+  'readinessLog', 'bodyweightLog', 'programHistory', 'evaluationLedger', 'customTemplates',
   'experiments', 'eventHistory', 'studyEnrollment', 'tombstones',
   'studyParticipantId', 'healthSummary',
   'studyStatus', 'studyStatusChangedAtISO', // participation lifecycle (participation.js)

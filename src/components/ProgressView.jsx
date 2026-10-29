@@ -3,6 +3,7 @@ import JargonHelp from './JargonHelp.jsx';
 import { deriveXp } from '../lib/xp.js';
 const CoachPanel = lazy(() => import('./CoachPanel.jsx'));
 const HistoryEditSheet = lazy(() => import('./HistoryEditSheet.jsx'));
+const BodyweightCard = lazy(() => import('./BodyweightCard.jsx'));
 
 // The check-in channel's user-facing line: plain “what the trend says”
 // wording, honest about direction AND about absence. Not a component — so
@@ -182,11 +183,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
   const stallDeload = useMemo(()=> exerciseId ? stallDeloadSuggestion(history, exerciseId, { equipment: EXERCISE_BY_ID[exerciseId]?.equipment?.[0] || 'machine' }) : null, [history, exerciseId]);
   const plateau = useMemo(()=> exerciseId ? plateauDetection(history, exerciseId, { readinessLog: store.readinessLog || [] }) : null, [history, exerciseId, store.readinessLog]);
   const deloadValidation = useMemo(()=> validateDeloadLogic({ history, readinessLog: store.readinessLog || [] }), [history, store.readinessLog]);
-  const calibration = useMemo(()=> recommendationCalibration(history, {
-    readinessLog: store.readinessLog || [],
-    schedule: store.activeSchedule || null,
-    profile: { availableEquipment: store.onboarding?.equipment || [] },
-  }), [history, store.readinessLog, store.activeSchedule, store.onboarding?.equipment]);
+  const calibration = useMemo(()=> recommendationCalibration(history), [history]);
   const badAttribution = useMemo(()=> badSessionAttribution(history, { readinessLog: store.readinessLog || [] }), [history, store.readinessLog]);
   // Longitudinal evaluation runs off the main thread (analyticsWorker): it is
   // the heaviest computation on this screen and previously blocked the first
@@ -365,6 +362,9 @@ export default function ProgressView({ store, setStore = null, onStart = null })
           )}
         </section>
       )}
+
+      {/* Optional body-weight log + strength for your size (lazy). */}
+      {setStore && <Suspense fallback={null}><BodyweightCard store={store} setStore={setStore} /></Suspense>}
 
       {/* ── On-device coach (lazy): the full local coach engine, one tap deep
           right where the assessment lives. Same session-scoped, on-device
@@ -919,22 +919,16 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       {expert && (
       <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-bold">Historical recommendation backtest</h3>
+          <h3 className="text-sm font-bold">Historical recommendation check</h3>
           <span className="text-[11px] font-bold px-2 py-1 rounded-full border border-line bg-surface2">{calibration.status}</span>
         </div>
-        <p className="text-xs text-ink3">{calibration.backtest?.comparisons || 0} point-in-time comparisons, replayed against <strong className="text-ink">your own logged history</strong>. Future sessions are hidden while each recommendation is reconstructed; observed outcomes are scored afterward.</p>
+        <p className="text-xs text-ink3">{calibration.samples} point-in-time comparisons, replayed against <strong className="text-ink">your own logged history</strong>. Future sessions are hidden while each recommendation is reconstructed; what you actually lifted is scored afterward.</p>
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-          <span>{calibration.backtest?.metrics?.loadRecommendationError?.meanAbsKg == null ? '—' : `${fmtWeight(calibration.backtest.metrics.loadRecommendationError.meanAbsKg, unitsPref)} load MAE`}</span>
-          <span>{calibration.backtest?.metrics?.repRecommendationError?.meanAbsReps == null ? '—' : `${calibration.backtest.metrics.repRecommendationError.meanAbsReps} rep MAE`}</span>
-          <span>{calibration.backtest?.metrics?.completionProbability?.brier == null ? '—' : `completion Brier ${calibration.backtest.metrics.completionProbability.brier}`}</span>
-          <span>{calibration.backtest?.metrics?.progressionTiming?.actionAgreement == null ? '—' : `${Math.round(calibration.backtest.metrics.progressionTiming.actionAgreement * 100)}% timing agreement`}</span>
-          <span className="text-ink3">{calibration.backtest?.calibration?.empiricalReplacementCount || 0} empirical replacements</span>
+          <span>{calibration.meanAbsErrorKg == null ? '—' : `${fmtWeight(calibration.meanAbsErrorKg, unitsPref)} load MAE`}</span>
+          <span>{calibration.meanAbsErrorReps == null ? '—' : `${calibration.meanAbsErrorReps} rep MAE`}</span>
+          <span>{calibration.hitRate == null ? '—' : `${Math.round(calibration.hitRate * 100)}% within tolerance`}</span>
         </div>
-        <div className="text-[11px] text-ink3 space-y-1">
-          <p>Plateau accuracy: {calibration.backtest?.metrics?.plateauClassification?.accuracy == null ? '—' : `${Math.round(calibration.backtest.metrics.plateauClassification.accuracy * 100)}%`} • bad-session Brier: {calibration.backtest?.metrics?.fatigueClassification?.brier == null ? '—' : calibration.backtest.metrics.fatigueClassification.brier}</p>
-          <p>Deload evidence: {calibration.backtest?.metrics?.deloadRecommendation?.evaluable || 0} observed volume cuts • missed-session recovery: {calibration.backtest?.metrics?.missedSessionRecovery?.available ? `${Math.round((calibration.backtest.metrics.missedSessionRecovery.sequenceAdherence || 0) * 100)}% sequence adherence` : 'schedule not supplied'}</p>
-          <p>{calibration.backtest?.calibration?.note || calibration.note}</p>
-        </div>
+        <p className="text-[11px] text-ink3">{calibration.note}</p>
       </section>
       )}
 

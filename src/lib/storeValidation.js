@@ -65,6 +65,7 @@ export function validateStoreData(data){
   // Collections mergeStores/readiness consumers iterate unconditionally — a
   // non-array here would crash import/boot rather than fail validation.
   if(data.readinessLog!=null && !Array.isArray(data.readinessLog)) errors.push('Readiness log must be an array.');
+  if(data.bodyweightLog!=null && !Array.isArray(data.bodyweightLog)) errors.push('Body weight log must be an array.');
   if(data.programHistory!=null && !Array.isArray(data.programHistory)) errors.push('Program history must be an array.');
   if(data.customTemplates!=null && !Array.isArray(data.customTemplates)) errors.push('Custom templates must be an array.');
   if(data.experiments!=null && !Array.isArray(data.experiments)) errors.push('Experiments must be an array.');

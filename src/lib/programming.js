@@ -20,7 +20,6 @@ import {
 import { plateauAttribution, deloadReadinessAssessment } from './sessionQuality.js';
 import { weeklyVolume, deloadOutcomes, recommendationFollowThrough } from './analytics.js';
 import { resolveArisePriors } from './priors.js';
-import { backtestHistory } from './backtesting.js';
 import { parseReps } from './trainingMath.js';
 
 const DAY_MS = 86400000;
@@ -721,18 +720,16 @@ export function validateDeloadLogic({ history = [], readinessLog = [], config = 
   };
 }
 
-export function recommendationCalibration(history = [], { minimumSamples = null, config = null, readinessLog = [], schedule = null, profile = null } = {}){
+// Point-in-time check of the next-session recommendation against your own log
+// (validateProgression hides every later session while it rebuilds each
+// recommendation). The heavier multi-metric replay in backtesting.js is no
+// longer shipped to the app: it cost ~6.5 kB gz for expert-only Brier scores.
+export function recommendationCalibration(history = [], { minimumSamples = null, config = null } = {}){
   const cfg = resolveArisePriors(config);
   const minimum = minimumSamples == null ? cfg.backtest.minimumComparisons : minimumSamples;
-  const backtest = backtestHistory({ kind: 'real-history', history, readinessLog, schedule, profile, config: cfg });
-  const rawValidation = backtest.metrics?.recommendation || validateProgression(history, { config: cfg });
-  const validation = {
-    ...rawValidation,
-    meanAbsErrorKg: rawValidation.loadRecommendationError?.meanAbsKg ?? rawValidation.meanAbsErrorKg ?? null,
-    meanAbsErrorReps: rawValidation.repRecommendationError?.meanAbsReps ?? rawValidation.meanAbsErrorReps ?? null,
-  };
+  const validation = validateProgression(history, { config: cfg });
   const followThrough = recommendationFollowThrough(history);
-  const samples = backtest.comparisons ?? validation.n;
+  const samples = validation.n;
   const status = samples >= minimum ? 'calibrated' : samples > 0 ? 'warming' : 'insufficient';
   const confidence = samples >= minimum * 2 ? 'high' : samples >= minimum ? 'medium' : 'low';
   return {
@@ -742,7 +739,6 @@ export function recommendationCalibration(history = [], { minimumSamples = null,
     status,
     confidence,
     followThrough,
-    backtest,
     note: status === 'calibrated'
       ? `Calibration is based on ${samples} point-in-time next-session comparisons.`
       : `Need ${Math.max(0, minimum - samples)} more next-session comparison${minimum - samples === 1 ? '' : 's'} before tuning the rule.`,

@@ -12,6 +12,12 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Body weight and strength for your size
+- Progress → **Body weight**: log a weigh-in (kg or lb), see the latest value, a sparkline and a week-average trend that refuses to call a direction until entries are a week apart. Remove any day; removal syncs and survives restore. The Today check-in also takes an optional weight, so it is one tap with the rest of your morning.
+- **Strength for your size** per lift: best estimated max ÷ body weight over the last 8 weeks against the 8 before, with the absolute change next to it ("max +4 kg, body +6 kg → about the same"). Pull-ups, chin-ups and dips count body weight + added − assistance, so an assisted and a weighted pull-up sit on one scale. Machine stacks differ between gyms, so it only compares you with you.
+- `bodyweightLog` rides export, backup, sync and the three-way store reconcile (newest edit per day wins, deletions stick). Nothing leaves the device.
+- Bundle: the expert-only **Historical recommendation check** on Progress now rebuilds each recommendation with the same leak-safe point-in-time replay but no longer ships the multi-metric replay engine (Brier scores, plateau accuracy). It shows samples, load/rep error and hit rate. That frees ~6.5 kB gz for this feature; `backtesting.js` stays in the repo for scripts and tests.
+
 ### Block plan
 - Train → **Block plan** shows your whole block week by week: each session with its sets and estimated time, and weekly hard sets per muscle against a rough 6–20 guide (low volume is never nagged: fewer is fine on purpose, e.g. legs around cycling).
 - **Make deload week / Make normal week** on any week that still has sessions to do. Deload cuts planned sets by the engine's deload factor and leaves loads alone; turning it off restores the exact original sets. The weekly review no longer re-decides a week you set.

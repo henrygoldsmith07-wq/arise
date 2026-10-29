@@ -129,6 +129,7 @@ export function reconcileStoreSnapshots(baseStore, localStore, remoteStore){
   // so the newer deletion always propagates.
   merged.tombstones = mergeRows(base.tombstones, local.tombstones, remote.tombstones, row=> row?.id, row=> row?.deletedAt);
   merged.readinessLog = mergeRows(base.readinessLog, local.readinessLog, remote.readinessLog, row=> `${row?.dateISO || ''}|${row?.at || row?.score || ''}`);
+  merged.bodyweightLog = mergeRows(base.bodyweightLog, local.bodyweightLog, remote.bodyweightLog, row=> row?.dateISO);
   merged.programHistory = mergeRows(base.programHistory, local.programHistory, remote.programHistory, row=> `${row?.programId || ''}|${row?.version || ''}|${row?.startDateISO || ''}`);
   return merged;
 }

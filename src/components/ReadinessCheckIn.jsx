@@ -18,6 +18,8 @@ import {
   readinessBand, readinessFormDefaults, readinessWeekCoverage, readinessOn,
   removeReadinessEntry, scoreReadinessInputs, upsertReadinessEntry,
 } from '../lib/readinessLog.js';
+import { bodyweightOn, liveBodyweights, parseBodyweightKg, upsertBodyweight } from '../lib/bodyweightLog.js';
+import { asUnit, weightInputToKg, weightInputValue } from '../lib/units.ts';
 
 const SCALE = Array.from(
   { length: READINESS_SCALE_MAX - READINESS_SCALE_MIN + 1 },
@@ -31,12 +33,21 @@ export default function ReadinessCheckIn({ store, setStore, todayISO }){
   const [form, setForm] = useState(()=> readinessFormDefaults(log, todayISO));
   const [open, setOpen] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
+  // Optional weigh-in rides along with the check-in; blank = leave the log alone.
+  const unit = asUnit(store.preferences?.units);
+  const weighedToday = bodyweightOn(store.bodyweightLog, todayISO);
+  const [bw, setBw] = useState(()=> weightInputValue(weighedToday?.kg ?? liveBodyweights(store.bodyweightLog).pop()?.kg, unit));
 
   const previewScore = useMemo(()=> scoreReadinessInputs(form), [form]);
   const band = readinessBand(previewScore);
 
   const save = ()=>{
-    setStore({ ...store, readinessLog: upsertReadinessEntry(log, { dateISO: todayISO, ...form }) });
+    const bwKg = parseBodyweightKg(weightInputToKg(bw, unit));
+    setStore({
+      ...store,
+      readinessLog: upsertReadinessEntry(log, { dateISO: todayISO, ...form }),
+      ...(bwKg != null && bwKg !== weighedToday?.kg ? { bodyweightLog: upsertBodyweight(store.bodyweightLog, { dateISO: todayISO, kg: bwKg }) } : {}),
+    });
     setOpen(false);
     setJustSaved(true);
     setTimeout(()=> setJustSaved(false), 3000);
@@ -120,6 +131,19 @@ export default function ReadinessCheckIn({ store, setStore, todayISO }){
           </div>
         ))}
       </div>
+
+      <label className="flex items-center gap-2">
+        <span className="text-xs font-semibold w-20 shrink-0">Weight ({unit})</span>
+        <input
+          value={bw}
+          onChange={e=> setBw(e.target.value)}
+          inputMode="decimal"
+          placeholder="optional"
+          data-testid="readiness-bodyweight"
+          aria-label={`Body weight in ${unit}, optional`}
+          className="flex-1 min-h-11 rounded-xl border border-line bg-surface2 px-3 text-sm font-bold tabular-nums"
+        />
+      </label>
 
       <div className="flex items-center gap-2">
         <button
