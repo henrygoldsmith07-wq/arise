@@ -200,6 +200,14 @@ test.describe('Progress assessment', () => {
     };
     await seedAssessment(page, { history, schedule });
     const card = page.getByRole('region', { name: 'Am I improving' });
+    await page.waitForTimeout(1500);
+    const dbg = await page.evaluate(async () => {
+      const mod = await import('/src/lib/store.js');
+      const s = mod.loadStore();
+      return { today: new Date().toString(), sched: s.activeSchedule, hist: (s.history||[]).map(h=>h.id+'@'+h.dateISO), onboarding: s.onboarding, prefs: s.preferences };
+    });
+    console.log('DEBUG-DELOAD ' + JSON.stringify(dbg));
+    console.log('DEBUG-CARD ' + JSON.stringify(await card.innerText()));
     await expect(card.getByText('Likely improving')).toBeVisible();
     await expect(card.getByText(/planned deload week/)).toBeVisible();
   });
