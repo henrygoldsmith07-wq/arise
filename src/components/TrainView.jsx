@@ -22,6 +22,7 @@ const CoachPanel = lazy(() => import('./CoachPanel.jsx'));
 // My Programme editor: its own chunk, fetched only when "Edit programme" is
 // tapped, so neither boot nor the Train chunk grows.
 const ProgrammeEditor = lazy(() => import('./ProgrammeEditor.jsx'));
+const BlockPlan = lazy(() => import('./BlockPlan.jsx'));
 import { asUnit } from '../lib/units.ts';
 
 const EMPTY_DAY = { title: '', exercises: [{ exerciseId: '', sets: 3, reps: '8–12', restSec: 90 }] };
@@ -40,6 +41,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
   const [programId,setProgramId]=useState(store.activeSchedule?.programId || PROGRAMS[0].id);
   const [builderOpen,setBuilderOpen]=useState(false);
   const [editorOpen,setEditorOpen]=useState(false);
+  const [planOpen,setPlanOpen]=useState(false);
   const dialogs = useDialogs();
   // Modal focus capture/trap/restore for the template builder.
   const builderA11y = useDialogA11y({ active: builderOpen, onClose: ()=> setBuilderOpen(false) });
@@ -291,6 +293,12 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
           <button onClick={()=> setEditorOpen(true)} className="btn btn-primary w-full min-h-11 rounded-xl text-sm" aria-haspopup="dialog">
             Edit programme{customisedDays ? ` · ${customisedDays} day${customisedDays === 1 ? '' : 's'} customised` : ''}
           </button>
+          <button onClick={()=> setPlanOpen(true)} className="btn btn-secondary w-full min-h-11 rounded-xl text-sm" aria-haspopup="dialog">Block plan · weeks, volume, deload</button>
+          {planOpen && (
+            <Suspense fallback={<p className="text-xs text-ink3" role="status">Opening block plan…</p>}>
+              <BlockPlan store={store} setStore={setStore} onClose={()=> setPlanOpen(false)} />
+            </Suspense>
+          )}
           {editorOpen && (
             <Suspense fallback={<p className="text-xs text-ink3" role="status">Opening editor…</p>}>
               <ProgrammeEditor store={store} setStore={setStore} availableEquipment={availableEquipment} onClose={()=> setEditorOpen(false)} />
