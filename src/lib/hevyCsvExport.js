@@ -79,29 +79,29 @@ export function exportableSet(set){
 /** Entries that may go to Hevy under the chosen options, with why the rest were held back. */
 export function selectForHevy(history, { since = null, until = null, includeHevyOrigin = false } = {}){
   const picked = [];
-  let fromHevy = 0, deleted = 0, empty = 0;
+  let fromHevy = 0;
   for(const h of Array.isArray(history) ? history : []){
     if(!h || typeof h !== 'object' || !Array.isArray(h.blocks)) continue;
-    if(h.deletedAt){ deleted++; continue; }
+    if(h.deletedAt) continue;
     if(!/^\d{4}-\d{2}-\d{2}$/.test(String(h.dateISO || ''))) continue;
     if(since && h.dateISO < since) continue;
     if(until && h.dateISO > until) continue;
     if(!includeHevyOrigin && (/^hevy-/.test(String(h.id || '')) || /Imported from Hevy/i.test(String(h.note || '')))){ fromHevy++; continue; }
-    if(!h.blocks.some(b => (b.sets || []).some(exportableSet))){ empty++; continue; }
+    if(!h.blocks.some(b => (b.sets || []).some(exportableSet))) continue;
     picked.push(h);
   }
   picked.sort((a, b) => a.dateISO.localeCompare(b.dateISO) || String(a.startedAt || '').localeCompare(String(b.startedAt || '')));
-  return { entries: picked, fromHevy, deleted, empty };
+  return { entries: picked, fromHevy };
 }
 
 /**
  * Build the export.
  * @returns {{ csv, filename, workouts, sets, exercises, customExercises: string[],
- *   fromHevy, deleted, empty, firstDate, lastDate, units }}
+ *   fromHevy, firstDate, lastDate }}
  */
 export function buildHevyExport(history, { byId = null, units = 'kg', since = null, until = null, includeHevyOrigin = false, todayISO = null } = {}){
   const unit = units === 'lb' ? 'lb' : 'kg';
-  const { entries, fromHevy, deleted, empty } = selectForHevy(history, { since, until, includeHevyOrigin });
+  const { entries, fromHevy } = selectForHevy(history, { since, until, includeHevyOrigin });
   const header = HEVY_HEADER.map(c => (c === 'weight_kg' && unit === 'lb' ? 'weight_lbs' : c));
   const lines = [header.map(cell).join(',')];
   const exerciseIds = new Set(), custom = new Set();
@@ -133,7 +133,7 @@ export function buildHevyExport(history, { byId = null, units = 'kg', since = nu
     csv: lines.join('\n') + '\n',
     filename: `arise-for-hevy-${stamp}.csv`,
     workouts: entries.length, sets: setCount, exercises: exerciseIds.size, customExercises: [...custom],
-    fromHevy, deleted, empty, units: unit,
+    fromHevy,
     firstDate: entries.length ? entries[0].dateISO : null, lastDate: entries.length ? entries[entries.length - 1].dateISO : null,
   };
 }
@@ -164,12 +164,12 @@ const MARK_KEY = 'arise.hevyExport.v1';
 /** Device-only marker of the newest day already exported (never synced, never in backups). */
 export function readExportMark(storage = (typeof localStorage !== 'undefined' ? localStorage : null)){
   try{
-    const v = JSON.parse(storage?.getItem(MARK_KEY) || 'null');
-    return v && /^\d{4}-\d{2}-\d{2}$/.test(v.lastDateISO || '') ? v.lastDateISO : null;
+    const v = storage?.getItem(MARK_KEY) || '';
+    return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
   }catch{ return null; }
 }
 
 export function writeExportMark(lastDateISO, storage = (typeof localStorage !== 'undefined' ? localStorage : null)){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(lastDateISO || '')) return false;
-  try{ storage?.setItem(MARK_KEY, JSON.stringify({ lastDateISO })); return true; }catch{ return false; }
+  try{ storage?.setItem(MARK_KEY, lastDateISO); return true; }catch{ return false; }
 }
