@@ -68,7 +68,7 @@ rebuilding it as a template.
   for a lift in Gym Mode still wins).
 - **Pair with next** turns an exercise and the one below it into a
   **superset** (shown as Superset A / B; **Unpair** splits them). In the
-  session and Gym Mode you alternate A1 → B1, then get **one rest** (the
+  session, Gym Mode and Guided mode you alternate A1 → B1, then get **one rest** (the
   longer of the two rests), then A2 → B2, and so on. Moving or removing one
   half splits the pair; swapping either half keeps it. Session-length
   estimates count one rest per round.
