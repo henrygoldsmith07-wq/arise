@@ -12,6 +12,11 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Quick workout
+- Today has a **Quick workout** button for sessions the programme did not plan. Pick up to 10 lifts by search and muscle, or tap a shortcut: Same as last time, Rested muscles (the muscles with the longest gap since a logged set, favouring lifts you log and like) or Upper body only (no leg work, for a rider keeping legs fresh).
+- It runs in the normal workout screen. Sets and rep range follow what you last logged for each lift (3 × 8–12 for a new one) and the runner supplies the load target from your history. The saved session counts toward progression and Progress but marks, skips and moves nothing in the programme.
+- Bundle: the weighted/assisted flags on 238 coverage-fill exercises are derived from the id instead of being written out (-2.5 kB gz).
+
 ### Send your workouts back to Hevy
 - More → Data → **Export for Hevy** writes your Arise workouts as a CSV in Hevy's own export layout (one row per set, Hevy exercise names, RPE, failure sets, your weight unit), so a lifter who logs in both apps can keep the two logs in step. Built on your phone, never uploaded; shared through the share sheet or downloaded.
 - Pick Since my last export, Last 30 / 90 days or Everything. Workouts that were imported from Hevy are held back by default so Hevy is not sent its own sessions as duplicates; deleted and fully skipped sessions never go out.
