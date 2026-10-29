@@ -12,6 +12,13 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Records wall: your best load at 1, 3, 5, 8 and 12+ reps (MAJOR 44)
+- Progress → **Records** replaces the old best-estimated-max list. It shows your three most recent lifts and opens a full wall: for every lift you have logged with a load, the heaviest weight for 1, 3, 5, 8 and 12+ reps with the date, the best estimated max, how many PRs you have set and when the last one was. Search by name or filter by muscle.
+- A PR needs an earlier like-for-like set to beat (the first time you log a lift is a baseline), and has to be about 1 kg heavier than the old best for that rep band, so ties and 0.5 kg jitter are never PRs. Assisted sets, skipped or failed sets, deleted sessions and sessions whose note says ROM, paused, tempo, partial, band or technique change are not counted.
+- Today shows a **New PR** card for three days after the session that set it (heaviest rep band per lift, with the old best), dismissible.
+- Nothing is stored: the wall is read from your history each time, so fixing a typo or deleting a session in Edit workouts changes the wall straight away.
+- Bundle: each substitution edge in the exercise catalogue is stored once and made reciprocal when the app loads (-1 kB gz); the old PR list code is gone.
+
 ### Weekly volume: hard sets per muscle, week by week (MAJOR 43)
 - Progress gets a **Weekly volume** card: the last eight weeks as tappable stacked bars (hard sets per muscle), with a muscle-by-muscle list and the sessions behind whichever week you tap. Muscles are compared with the same rough 6–20 sets guide the Block plan uses, with "Below guide / In range / Above guide" on finished weeks only.
 - Counts what you actually logged: finished, non-skipped sets with reps or a load, and nothing logged under RPE 5. Each lift counts toward its main muscle; cardio, core and deleted sessions are left out.

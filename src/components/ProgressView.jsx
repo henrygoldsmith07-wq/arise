@@ -6,6 +6,7 @@ const HistoryEditSheet = lazy(() => import('./HistoryEditSheet.jsx'));
 const BodyweightCard = lazy(() => import('./BodyweightCard.jsx'));
 const LiftGoalsCard = lazy(() => import('./LiftGoalsCard.jsx'));
 const WeeklyVolumeCard = lazy(() => import('./WeeklyVolumeCard.jsx'));
+const RecordsWall = lazy(() => import('./RecordsWall.jsx'));
 
 // The check-in channel's user-facing line: plain “what the trend says”
 // wording, honest about direction AND about absence. Not a component — so
@@ -27,7 +28,7 @@ import { EXERCISE_BY_ID } from '../lib/data.js';
 import { rideLiftOverlay } from '../lib/rideAwareSchedule.js';
 import { weeklyVolume, frequencyByMuscleSync, volumeLandmarks, volumeDistribution, strengthSeries, extractNoteRecommendations, plannedVsCompletedStats, volumeBalanceAdvice, restTakenByExercise } from '../lib/analytics.js';
 import { linearRegressionIntervals } from '../lib/statistics.js';
-import { strengthTrendWithConfidence, classifyPR, isUnilateralExercise, sideImbalance } from '../lib/progression.js';
+import { strengthTrendWithConfidence, isUnilateralExercise, sideImbalance } from '../lib/progression.js';
 import { exerciseHistorySummary, plateauDetection, programAdherence, recommendationCalibration, validateDeloadLogic } from '../lib/programming.js';
 import { badSessionAttribution, plateauAttribution } from '../lib/sessionQuality.js';
 import { workoutQualityReport } from '../lib/workoutQualityReport.js';
@@ -79,7 +80,6 @@ export default function ProgressView({ store, setStore = null, onStart = null })
   const recoveryState = useMemo(()=> missedWorkoutRecovery(store.activeSchedule, history, { today }), [store.activeSchedule, history, today]);
   const nba = useMemo(()=> nextBestAction({ store, today, todaySession: todaySess, nextSess, recovery: recoveryState }), [store, today, todaySess, nextSess, recoveryState]);
   const changes = useMemo(()=> whatChangedSummary({ schedule: store.activeSchedule, history }), [store.activeSchedule, history]);
-  const prs = useMemo(()=> computePRs(history), [history]);
   const wv = useMemo(()=> weeklyVolume(history), [history]);
   const restTaken = useMemo(()=> restTakenByExercise(history).slice(0, 4), [history]);
   const rideOverlay = useMemo(()=> rideLiftOverlay(history, store.activeSchedule?.keyRideDays, { weeks: 4, todayISO: today }), [history, store.activeSchedule?.keyRideDays, today]);
@@ -786,23 +786,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
         </section>
       )}
 
-      <section className="rounded-2xl border border-line bg-surface p-4">
-        <h3 className="text-sm font-bold">Personal records — best estimated 1RM (Epley)</h3>
-        <p className="text-xs text-ink3">Weight × (1 + reps/30). PRs with ROM/technique changes are not counted as like-for-like.</p>
-        {!prs.length ? (
-          <p className="text-sm text-ink3 mt-3 border border-dashed border-line rounded-xl p-4 text-center">No loaded sets yet. Log weight to track progressive overload.</p>
-        ) : (
-          <ul className="mt-3 space-y-2">
-            {prs.slice(0,8).map(r=> (
-              <li key={r.exerciseId} className="flex items-center gap-3 text-sm border border-line rounded-xl px-3 py-2 bg-surface2">
-                <span className="font-bold truncate">{EXERCISE_BY_ID[r.exerciseId]?.name || r.exerciseId}</span>
-                <span className="ml-auto tabular-nums font-black">{fmtWeight(r.e1rm, unitsPref)}</span>
-                <span className="text-xs text-ink3 tabular-nums">{r.weight}×{r.reps} on {r.dateISO}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {history.length > 0 && <Suspense fallback={null}><RecordsWall store={store} /></Suspense>}
 
       <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
         <div className="flex items-center justify-between gap-3">
@@ -1242,23 +1226,4 @@ function ExperimentForm({ history = [], exerciseOptions = [], initial = null, on
       </div>
     </form>
   );
-}
-
-function computePRs(history){
-  const best = new Map();
-  for(const h of history) for(const b of h.blocks||[]) for(const s of b.sets||[]){
-    const w = Number(s.weightKg), r = Number(String(s.reps).match(/\d+/)?.[0] || s.reps);
-    if(!(w>0 && r>0)) continue;
-    const e1rm = w * (1 + r/30);
-    const prev = best.get(b.exerciseId);
-    if(!prev || e1rm > prev.e1rm) best.set(b.exerciseId, { exerciseId: b.exerciseId, e1rm, weight: w, reps: r, dateISO: h.dateISO, note: h.note||'' });
-  }
-  // filter like-for-like only
-  const out=[];
-  for(const v of best.values()){
-    const cls = classifyPR({ priorBestE1rm: 0, newE1rm: v.e1rm, note: v.note, priorNote: '' });
-    // keep if not techniqueChange; but for overall PR list we don't have prior to compare, so just check current note
-    if(!/rom|depth|technique|assisted|partial/.test((v.note||'').toLowerCase())) out.push(v);
-  }
-  return out.sort((a,b)=> b.e1rm - a.e1rm);
 }

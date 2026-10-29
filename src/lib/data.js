@@ -86,14 +86,28 @@ import { EXERCISES_PRIMARY } from './data/exercises-primary.js';
 import { EXERCISES_COVERAGE } from './data/exercises-coverage.js';
 import { PROGRAMS as BUILTIN_PROGRAMS, PROGRAM_VERSION_HISTORY as BUILTIN_PROGRAM_VERSION_HISTORY } from './data/programs.js';
 import { RIDER_UPPER_3X, RIDER_UPPER_3X_HISTORY, RIDER_UPPER_2X, RIDER_UPPER_2X_HISTORY } from './data/programs-rider.js';
-export const EXERCISES = [
+// Substitution edges are stored once (in the exercise listed first) and made
+// reciprocal here, which halves the catalogue's substitution data (~1.7 kB gz).
+// An edge a lister keeps stays first in its own order; reverse edges are appended.
+function symmetrizeSubstitutions(list){
+  const out = list.map(e => ({ ...e, substitution: [...(e.substitution || [])] }));
+  const byId = new Map(out.map(e => [e.id, e]));
+  for(const e of out){
+    for(const id of e.substitution){
+      const t = byId.get(id);
+      if(t && !t.substitution.includes(e.id)) t.substitution.push(e.id);
+    }
+  }
+  return out;
+}
+export const EXERCISES = symmetrizeSubstitutions([
   ...EXERCISES_PRIMARY,
   // Coverage fills derive the weighted/assisted flags from the id instead of
   // spelling the same three properties out 238 times (~2.5 kB gz).
   ...EXERCISES_COVERAGE.map(e => e.supportsWeighted === undefined
     ? { ...e, supportsWeighted: /weighted/i.test(e.id), supportsAssisted: /assisted/i.test(e.id) }
     : e),
-];
+]);
 
 export const EXERCISE_BY_ID = Object.fromEntries(EXERCISES.map(e => [e.id, e]));
 

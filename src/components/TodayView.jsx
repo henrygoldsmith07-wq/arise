@@ -18,6 +18,7 @@ import { storedWorkoutMode, workoutModePatch, workoutModeLabel } from '../lib/wo
 const CoachPanel = lazy(() => import('./CoachPanel.jsx'));
 const LiftGoalNudge = lazy(() => import('./LiftGoalNudge.jsx'));
 const VolumeNudge = lazy(() => import('./VolumeNudge.jsx'));
+const NewPrCard = lazy(() => import('./NewPrCard.jsx'));
 const QuickWorkoutSheet = lazy(() => import('./QuickWorkoutSheet.jsx'));
 
 export default function TodayView({ store, setStore, onStartSession, onOpenTrain, onOpenProgress, plateConfig = null }){
@@ -390,6 +391,7 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
           daily check-in gets collected at all. */}
       <ReadinessCheckIn store={store} setStore={setStore} todayISO={isoToday()} />
 
+      {(store.history || []).length >= 2 && <Suspense fallback={null}><NewPrCard store={store} /></Suspense>}
       {(store.history || []).length >= 6 && <Suspense fallback={null}><VolumeNudge store={store} /></Suspense>}
       {store.gymPrefs?.liftGoals && <Suspense fallback={null}><LiftGoalNudge store={store} setStore={setStore} /></Suspense>}
 

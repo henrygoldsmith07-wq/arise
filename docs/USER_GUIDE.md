@@ -140,6 +140,10 @@ Mistyped a set? Progress → **Edit logged workouts** lets you fix the load, rep
 
 Progress → **Body weight** is optional. Log a weigh-in (or type it in the Today check-in) and Arise shows the trend and, for each lift you trained lately, your estimated max as a multiple of your body weight, compared with the 8 weeks before. That answers "did I get stronger, or just heavier?" — handy when you also ride or run and weight matters. Pull-ups, chin-ups and dips count your body weight plus any added load minus assistance. Machine and cable stacks are not comparable between gyms, so treat the multiple as a way to compare yourself with you. Day-to-day swings of 1–2 kg are water; the trend waits for entries a week apart. Stays on your device; Export and sync carry it.
 
+## Records wall
+
+**Progress → Records** shows your three most recent lifts and opens the **records wall**: for every lift you have logged with a load, the heaviest weight you have lifted for 1, 3, 5, 8 and 12+ reps (a heavier set for more reps also fills the lighter columns), plus your best estimated max and your PR count. Search by name or filter by muscle. A PR has to beat an earlier like-for-like set by about 1 kg for that rep count, so the first time you log a lift is a baseline, and ties are not PRs. Assisted sets, skipped or failed sets, deleted sessions and sessions you noted as a ROM, paused, tempo, partial, band or technique change are left out. Today shows a **New PR** card for three days after the session; tap Nice to dismiss it. The wall is worked out from your history each time, so correcting a set in Edit workouts corrects your records.
+
 ## Weekly volume: what you actually did
 
 Progress → **Weekly volume** shows the last eight weeks as bars of hard sets, split by muscle. Tap a week to see each muscle's sets and the sessions behind it. On finished weeks each muscle is marked Below guide, In range or Above guide against the same rough 6–20 sets range as the Block plan. It is a guide, not a target: fewer leg sets around cycling is fine.
