@@ -12,6 +12,10 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Save My Programme edits as a template
+- Programme editor: **Save as my template** keeps your swaps, sets, reps, rest and renamed days (every week of the block) as a template in My templates, with an optional share code.
+- When a block ends with customised days, Today offers **Start next block from my edits**. Switching programme now offers to save your edits as a template before they are cleared.
+
 ### Onboarding finishes before it closes
 - Save & continue now closes onboarding only once your first plan is in place, and the plan merges into whatever changed meanwhile instead of overwriting it (a programme started or restored in that moment is kept).
 

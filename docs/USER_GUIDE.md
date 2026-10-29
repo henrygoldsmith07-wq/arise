@@ -76,8 +76,16 @@ rebuilding it as a template.
 - Progress and the load engine follow the **exercise**, not the slot: history
   logged on a lift is still there when you swap back to it.
 - Edits belong to this programme. Starting a different programme (or
-  clearing the schedule) asks first, because it clears them. They are stored
-  on this device with the programme and travel in backups, exports and sync.
+  clearing the schedule) asks first, because it clears them, and offers
+  **Save as my template** so you keep a copy. They are stored on this device
+  with the programme and travel in backups, exports and sync.
+- **Save as my template** (bottom of the editor) turns the programme as it
+  stands now (your edits included, every week of the block) into a template
+  under **Train → Build my own & my templates**. After saving, **Copy share
+  code** gives you a code a friend can import.
+- When a block ends with customised days, Today offers **Start next block from
+  my edits**: it saves the template and starts a fresh block from it in one
+  tap, so the next block begins with your changes already in place.
 
 ## Choose your training days
 

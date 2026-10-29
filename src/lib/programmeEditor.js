@@ -522,3 +522,44 @@ export function addCandidates(schedule, key, { query = '', availableEquipment = 
     .sort((a, b)=> b.liked - a.liked || a.name.localeCompare(b.name))
     .slice(0, limit);
 }
+
+// ── Save edits as a reusable template ───────────────────────────────────
+// "Save as my template" / "Start next block from my edits": the CURRENT day
+// definitions (edits where the lifter made them, the template otherwise)
+// become a templateEditor-shaped input. Unlike editableDays this includes
+// days with no upcoming session, so it still works once the block is over.
+// `weeks` carries the source block's length so the next block is as long as
+// the one being repeated (templateEditor builds one week; the service
+// repeats it). Pure: the service builds and stores the template.
+export const MAX_TEMPLATE_WEEKS = 12;
+
+export function programmeDaysForTemplate(schedule){
+  const keys = [];
+  for(const s of schedule?.sessions || []){
+    const key = dayKeyOf(s);
+    if(!keys.includes(key)) keys.push(key);
+  }
+  return keys
+    .map(key=> ({ key, day: currentDay(schedule, key) }))
+    .filter(d=> d.day && d.day.blocks.length)
+    .sort((a, b)=> (Number(a.key) || 999) - (Number(b.key) || 999))
+    .map(({ day })=> day);
+}
+
+export function programmeWeekCount(schedule){
+  const weeks = (schedule?.sessions || []).map(s=> Number(s.week)).filter(n=> Number.isInteger(n) && n > 0);
+  return Math.max(1, Math.min(MAX_TEMPLATE_WEEKS, weeks.length ? Math.max(...weeks) : 1));
+}
+
+export function editsAsTemplateInput(schedule, { name, level = 'Beginner', goal = 'general', description } = {}){
+  return {
+    name: String(name || '').trim().slice(0, 60) || 'My programme',
+    description: description || 'Saved from my programme edits.',
+    level, goal,
+    weeks: programmeWeekCount(schedule),
+    days: programmeDaysForTemplate(schedule).map(d=> ({
+      title: d.title,
+      exercises: d.blocks.map(b=> ({ exerciseId: b.exerciseId, sets: b.sets, reps: String(b.reps), restSec: b.restSec })),
+    })),
+  };
+}

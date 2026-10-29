@@ -6,6 +6,7 @@ import { generateProgramme } from '../lib/programmeGenerator.js';
 import { buildEditorTemplate, duplicateEditorTemplate } from '../lib/templateEditor.js';
 import { localDateISO } from '../lib/dateOnly.js';
 import { decodeShareCode } from '../lib/shareCodes.js';
+import { editsAsTemplateInput } from '../lib/programmeEditor.js';
 
 export function generateProgrammeFromProfile(store){
   if(!store?.onboarding) return { store, programId:null };
@@ -62,6 +63,35 @@ export function saveCustomTemplate({ store, form, editingId = null }){
     ? (store.customTemplates || []).map(t=> t.id === editingId ? template : t)
     : [...(store.customTemplates || []), template];
   return { template, store:{ ...store, customTemplates } };
+}
+
+// "Save as my template" from the programme editor: the edited days of the
+// active programme become a custom template (repeated for every week of the
+// source block). Returns { template, store }; throws a readable error.
+export function saveEditsAsTemplate({ store, name }){
+  const schedule = store?.activeSchedule;
+  if(!schedule?.sessions?.length) throw new Error('No active programme to save.');
+  const source = (store.customTemplates || []).find(t=> t.id === schedule.programId)?.program || PROGRAM_BY_ID[schedule.programId] || null;
+  const input = editsAsTemplateInput(schedule, { name, level: source?.level || store.onboarding?.level || 'Beginner', goal: store.onboarding?.goal || 'general' });
+  if(!input.days.length) throw new Error('This programme has no days to save.');
+  const built = buildEditorTemplate(input);
+  const workouts = built.program.weeks[0].workouts;
+  const weeks = Array.from({ length: input.weeks }, (_, i)=> ({ week: i + 1, workouts: workouts.map(w=> ({ ...w, blocks: w.blocks.map(b=> ({ ...b })) })) }));
+  const template = {
+    ...built,
+    savedFromProgrammeId: schedule.programId || null,
+    program: { ...built.program, weeks, mesocycle: { ...built.program.mesocycle, weeks: input.weeks } },
+  };
+  return { template, store: { ...store, customTemplates: [...(store.customTemplates || []), template] } };
+}
+
+// "Start next block from my edits": save the edits as a template, then start
+// it through the normal programme-start path (equipment adaptation and the
+// programme-history record included).
+export function startNextBlockFromEdits({ store, name, availableEquipment = [] }){
+  const saved = saveEditsAsTemplate({ store, name });
+  const started = startProgramme({ store: saved.store, programId: saved.template.id, availableEquipment });
+  return { template: saved.template, started: started.started, store: started.started ? started.store : saved.store };
 }
 
 export function softDeleteCustomTemplate(store, id){

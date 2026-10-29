@@ -428,7 +428,7 @@ describe('UI wiring (source level)', ()=>{
     assert.match(train, /Replace your customised programme\?/);
     for(const fn of ['startRecommendation', 'start', 'startShelfItem', 'generateFromProfile', 'clearSchedule']){
       const body = train.match(new RegExp(`const ${fn} = async \\([^)]*\\)=>\\{([\\s\\S]*?)\\n  \\};`))?.[1] || '';
-      assert.match(body, /await confirmDropEdits\(\)/, `${fn} confirms before dropping edits`);
+      assert.match(body, /const base = await confirmDropEdits\(\);\s*if\(!base\) return;/, `${fn} confirms before dropping edits`);
     }
   });
 

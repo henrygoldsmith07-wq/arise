@@ -7,7 +7,7 @@ import { adaptScheduleForEquipment, programAdherence, userProgramHistory } from 
 import { trainRecommendation } from '../lib/trainRecommendation.js';
 import { whyChoseBullets } from '../lib/trainSurface.js';
 import { buildEditorTemplate, moveItem, editorSubstitutionPreview } from '../lib/templateEditor.js';
-import { applyEquipmentAdaptation, duplicateCustomTemplate, fallbackProgrammeId, generateProgrammeFromProfile, installSharedTemplate, restoreCustomTemplate, saveCustomTemplate, softDeleteCustomTemplate, startProgramme } from '../services/programmeService.js';
+import { applyEquipmentAdaptation, duplicateCustomTemplate, fallbackProgrammeId, generateProgrammeFromProfile, installSharedTemplate, restoreCustomTemplate, saveCustomTemplate, saveEditsAsTemplate, softDeleteCustomTemplate, startProgramme } from '../services/programmeService.js';
 import ProgressionPreview from './ProgressionPreview.jsx';
 import RideDaysCard from './RideDaysCard.jsx';
 import WeekdayPlanCard from './WeekdayPlanCard.jsx';
@@ -96,40 +96,60 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
   // Switching programme replaces activeSchedule, and the My Programme edits
   // live on it. Edits are per-programme by design, so say so before they go.
   const customisedDays = Object.keys(store.activeSchedule?.programmeEdits?.days || {}).length;
+  // Returns the store to switch FROM (with the edits saved as a template when
+  // the lifter chose to keep them), or null when they backed out.
   const confirmDropEdits = async ()=>{
-    if(!customisedDays) return true;
-    return dialogs.confirm({
+    if(!customisedDays) return store;
+    const keep = await dialogs.confirm({
+      title:'Keep your programme edits?',
+      description:`You have edited ${customisedDays} day${customisedDays === 1 ? '' : 's'} of your current programme. Save them as a template in My templates so a later block can start from them?`,
+      confirmLabel:'Save as my template',
+      cancelLabel:'Not now',
+    });
+    let base = store;
+    if(keep){
+      try{
+        base = saveEditsAsTemplate({ store, name: `${PROGRAM_BY_ID[store.activeSchedule?.programId]?.name || 'My programme'} (my edits)`.slice(0, 60) }).store;
+      }catch{ base = store; }
+    }
+    const ok = await dialogs.confirm({
       title:'Replace your customised programme?',
-      description:`You have edited ${customisedDays} day${customisedDays === 1 ? '' : 's'} of your current programme. Starting a different one clears those edits. Your logged sessions and progression history are kept.`,
+      description:`Starting a different programme clears the edits on the current one${keep ? ' (your template copy is kept)' : ''}. Your logged sessions and progression history are kept.`,
       confirmLabel:'Replace programme',
       destructive:true,
     });
+    if(!ok){ if(base !== store) setStore(base); return null; }
+    return base;
   };
   const clearSchedule = async ()=>{
-    if(!(await confirmDropEdits())) return;
-    setStore({...store, activeSchedule:null});
+    const base = await confirmDropEdits();
+    if(!base) return;
+    setStore({...base, activeSchedule:null});
   };
 
   const startRecommendation = async ()=>{
-    if(!(await confirmDropEdits())) return;
-    const result = generateProgrammeFromProfile(store);
-    if(!result.programId) return;
+    const base = await confirmDropEdits();
+    if(!base) return;
+    const result = generateProgrammeFromProfile(base);
+    if(!result.programId){ if(base !== store) setStore(base); return; }
     setProgramId(result.programId);
     setStore(result.store);
   };
 
   const start = async ()=>{
-    if(!(await confirmDropEdits())) return;
-    const result = startProgramme({ store, programId, availableEquipment });
-    if(result.started) setStore(result.store);
+    const base = await confirmDropEdits();
+    if(!base) return;
+    const result = startProgramme({ store: base, programId, availableEquipment });
+    setStore(result.started ? result.store : base);
   };
   // Shelf start: same path as the browse selection, with the selection state
   // following the tap so Browse opens on the same programme.
   const startShelfItem = async (shelfProgramId)=>{
-    if(!(await confirmDropEdits())) return;
+    const base = await confirmDropEdits();
+    if(!base) return;
     setProgramId(shelfProgramId);
-    const result = startProgramme({ store, programId: shelfProgramId, availableEquipment });
-    if(result.started) setStore(result.store);
+    const result = startProgramme({ store: base, programId: shelfProgramId, availableEquipment });
+    setStore(result.started ? result.store : base);
   };
 
   // ── Custom template builder helpers ──────────────────────────────────
@@ -238,9 +258,10 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
   };
 
   const generateFromProfile = async ()=>{
-    if(!(await confirmDropEdits())) return;
-    const result = generateProgrammeFromProfile(store);
-    if(!result.programId) return;
+    const base = await confirmDropEdits();
+    if(!base) return;
+    const result = generateProgrammeFromProfile(base);
+    if(!result.programId){ if(base !== store) setStore(base); return; }
     setProgramId(result.programId);
     setStore(result.store);
   };

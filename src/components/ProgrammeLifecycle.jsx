@@ -17,7 +17,34 @@ import { programAdherence, isoToday } from '../lib/programming.js';
 import { weekPhaseFor } from '../lib/mesocycle.js';
 import WhatChangedPanel from './WhatChangedPanel.jsx';
 
-export default function ProgrammeLifecycle({ schedule, history = [], lastReviewAck = null }){
+// "Start next block from my edits": when a block ends with customised days,
+// those days become a template and the next block starts from it. The
+// service is imported on tap so Today never pays for it.
+export function NextBlockFromEdits({ schedule, store, setStore, className = '' }){
+  const [msg, setMsg] = useState('');
+  const editedDays = Object.keys(schedule?.programmeEdits?.days || {}).length;
+  if(!store || !setStore || (!editedDays && !msg)) return null;
+  const start = async ()=> {
+    try{
+      const { startNextBlockFromEdits } = await import('../services/programmeService.js');
+      const base = PROGRAM_BY_ID[schedule.programId]?.name || 'My programme';
+      const result = startNextBlockFromEdits({ store, name: `${base} (my edits)`.slice(0, 60), availableEquipment: store.onboarding?.equipment || [] });
+      setStore(result.store);
+      setMsg(result.started ? `Next block started from your edits. Saved as “${result.template.name}” in My templates.` : 'Saved your edits as a template; start it from Train.');
+    }catch(e){ setMsg(e?.message || 'Could not start the next block.'); }
+  };
+  return (
+    <div className={`rounded-lg border border-line bg-surface p-2 ${className}`}>
+      {editedDays > 0 && <>
+        <p className="text-[11px] text-ink2 leading-snug">Your {editedDays} customised day{editedDays === 1 ? '' : 's'} can carry straight into the next block.</p>
+        <button type="button" onClick={start} className="btn btn-primary w-full min-h-11 rounded-xl text-xs mt-2">Start next block from my edits</button>
+      </>}
+      {msg && <p role="status" className="mt-1 text-[11px] text-success">{msg}</p>}
+    </div>
+  );
+}
+
+export default function ProgrammeLifecycle({ schedule, history = [], lastReviewAck = null, store = null, setStore = null }){
   const [open, setOpen] = useState(false);
   const data = useMemo(()=>{
     if(!schedule) return null;
@@ -83,6 +110,8 @@ export default function ProgrammeLifecycle({ schedule, history = [], lastReviewA
           </li>
         ))}
       </ol>
+
+      {data.progProgress.pct >= 100 && <NextBlockFromEdits schedule={schedule} store={store} setStore={setStore} className="mt-2" />}
 
       {open && (
         <div className="mt-2 space-y-2">

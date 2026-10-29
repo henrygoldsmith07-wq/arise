@@ -1,6 +1,6 @@
 import WeeklyReviewCard from './WeeklyReviewCard.jsx';
 import ReadinessCheckIn from './ReadinessCheckIn.jsx';
-import ProgrammeLifecycle from './ProgrammeLifecycle.jsx';
+import ProgrammeLifecycle, { NextBlockFromEdits } from './ProgrammeLifecycle.jsx';
 import WhyExplainer from './WhyExplainer.jsx';
 import { Suspense, lazy, useMemo, useRef, useState } from 'react';
 import { PROGRAM_BY_ID, EXERCISE_BY_ID, LOCATIONS, EQUIPMENT } from '../lib/data.js';
@@ -371,6 +371,7 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
         <div className="rounded-3xl border border-line bg-surface p-5 space-y-3">
           <h2 className="text-2xl font-black tracking-tight">{prog ? 'Program complete' : 'No program scheduled'}</h2>
           <p className="text-sm text-ink3">{prog ? 'You finished every scheduled session — pick your next program in Train.' : 'Pick a program in Train — it becomes a dated schedule so you always know what’s next.'}</p>
+          {sched && <NextBlockFromEdits schedule={sched} store={store} setStore={setStore} />}
           <button onClick={onOpenTrain} className="btn btn-primary w-full min-h-12 rounded-xl">Choose a program</button>
         </div>
       </section>
@@ -596,7 +597,7 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
               ADAPT → REVIEW → COMPLETE → NEXT BLOCK loop, narrated from the
               records the schedule already keeps — one tap from Today instead
               of reconstructed across screens. */}
-          <ProgrammeLifecycle schedule={sched} history={store.history || []} lastReviewAck={store.lastWeeklyReviewAck || null} />
+          <ProgrammeLifecycle schedule={sched} history={store.history || []} lastReviewAck={store.lastWeeklyReviewAck || null} store={store} setStore={setStore} />
           {/* ── What changed and why: one shared, inspectable audit trail ── */}
           <WhatChangedPanel schedule={sched} history={store.history || []} compact />
         </div>
