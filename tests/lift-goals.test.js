@@ -139,6 +139,16 @@ describe('liftGoals — projection', () => {
     assert.match(describeProjection(dated, { deadlineISO: '2026-12-25' }), /flat or falling/);
   });
 
+  it('does not call a slowly rising lift "flat or falling" when a deadline is missed', () => {
+    const slow = Array.from({ length: 6 }, (_, i) => sess(new Date(Date.UTC(2026, 8, 14 + i * 7)).toISOString().slice(0, 10), 50 + i * 0.3));
+    const p = projectGoal(slow, LAT, sanitizeGoal({ kg: 200, reps: 8, deadlineISO: '2027-06-01', createdAt: 'Tue 2026-09-01 1:00 AM BST (UTC+01:00)', updatedAt: T1 }), '2026-10-20');
+    assert.equal(p.status, 'behind');
+    assert.equal(p.etaISO, null);
+    const line = describeProjection(p, { deadlineISO: '2027-06-01' });
+    assert.match(line, /rising about/);
+    assert.doesNotMatch(line, /flat or falling/);
+  });
+
   it('refuses a date more than two years out', () => {
     const slow = Array.from({ length: 6 }, (_, i) => sess(new Date(Date.UTC(2026, 8, 14 + i * 7)).toISOString().slice(0, 10), 50 + i * 0.05));
     const p = projectGoal(slow, LAT, sanitizeGoal({ kg: 200, reps: 8, createdAt: '2026-09-01T00:00:00Z', updatedAt: T1 }), '2026-10-20');

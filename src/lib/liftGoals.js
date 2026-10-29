@@ -238,7 +238,7 @@ export function describeProjection(p, goal, unit = 'kg'){
     case 'hit': return `Hit on ${when(p.hitDate)}.`;
     case 'ahead': return `Ahead of plan: on pace for ${when(p.etaISO)}, before ${when(goal.deadlineISO)}.`;
     case 'on-track': return goal.deadlineISO ? `On track: on pace for ${when(p.etaISO)} (deadline ${when(goal.deadlineISO)}).` : `Rising about ${p.perWeekKg} ${unit} e1RM a week: on pace for ${when(p.etaISO)}.`;
-    case 'behind': return p.etaISO ? `Behind: current pace reaches it ${when(p.etaISO)}, after ${when(goal.deadlineISO)}.` : `Behind: your recent trend is flat or falling, so this deadline is out of reach on current pace.`;
+    case 'behind': return p.etaISO ? `Behind: current pace reaches it ${when(p.etaISO)}, after ${when(goal.deadlineISO)}.` : (p.perWeekKg >= MIN_RISE_PER_WEEK ? `Behind: rising about ${p.perWeekKg} ${unit} e1RM a week, which is over 2 years from this target.` : `Behind: your recent trend is flat or falling, so this deadline is out of reach on current pace.`);
     case 'flat': return 'Not rising lately, so there is no honest date yet.';
     default: return 'Log this lift on 3 sessions over 2 weeks to see a projection.';
   }
