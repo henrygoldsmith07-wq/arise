@@ -51,7 +51,10 @@ export default defineConfig({
           // As ten separate chunks every one paid its own gzip warm-up and
           // import/export headers; one shared chunk is several kB smaller in
           // total. Boot is unchanged (no boot module imports them statically).
-          if(/\/src\/lib\/(storageQuota|backupState|quotaGuard|cryptoBackup|crossTabStore|xp|exercisePicker|rideAwareSchedule|readinessLog|stallDeload|demoData|historyEditor|programmeEditor|programmeName|mesocycle|schedule|snapshots)\.js$/.test(id)) return 'leaves';
+          // programmeEditor.js is NOT a leaf any more: it grew with supersets +
+          // save-as-template and rides with programmeService (Train) instead,
+          // keeping this shared chunk well under the largest-lazy budget.
+          if(/\/src\/lib\/(storageQuota|backupState|quotaGuard|cryptoBackup|crossTabStore|xp|exercisePicker|rideAwareSchedule|readinessLog|stallDeload|demoData|historyEditor|superset|programmeName|mesocycle|schedule|snapshots)\.js$/.test(id)) return 'leaves';
           // Small settings leaves that always open together from More: one chunk
           // instead of four, each repeating gzip + import/export overhead.
           if(/\/src\/components\/(settings\/(FeedbackSettings|GuidedSettings|AppearanceAccessibilitySettings)|InstallCard)\.jsx$/.test(id)) return 'settings-lite';
