@@ -12,6 +12,9 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Smaller app download
+- Exercise how-to text (setup steps, common mistakes, full cue lists) now loads the first time you open a how-to guide instead of with every screen: about 7 kB less JavaScript. It is cached for offline use like the rest of the app; the first cue still shows inline during a session.
+
 ### Training days
 - Pick the weekdays you train; upcoming sessions re-date onto them (ride days avoided). Move any single session to another day from Train; sessions swap if the day is taken.
 

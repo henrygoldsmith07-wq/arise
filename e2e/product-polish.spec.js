@@ -50,7 +50,11 @@ test('How-to guide opens inside the runner and never blocks logging', async ({ p
 
   const howTo = runner.getByRole('button', { name: /Show how to do it/ }).first();
   await expect(howTo).toBeVisible({ timeout: 5000 });
+  // Long-form setup/mistakes/cue text is an on-demand JSON asset (kept out
+  // of the JS bundle); the first How-to open fetches it.
+  const textAsset = page.waitForResponse(r => /exercise-text[^/]*\.json/.test(r.url()) && r.ok(), { timeout: 8000 });
   await howTo.click();
+  await textAsset;
   await expect(runner.getByText('Breathing & bracing').first()).toBeVisible();
   await expect(runner.getByText('Stay in control').first()).toBeVisible();
   await runner.getByRole('button', { name: /Hide how to do it/ }).first().click();

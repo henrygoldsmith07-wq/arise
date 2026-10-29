@@ -5,12 +5,15 @@
 // cue. Practical coaching language only.
 import { useState } from 'react';
 import { teachingFor } from '../lib/exerciseTeaching.js';
+import { useExerciseText } from '../lib/exerciseTextLoader.js';
 import { useDialogA11y } from '../lib/a11y.js';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
 
 export default function TeachingPanel({ exerciseId, variant = 'dialog' }){
   const [open, setOpen] = useState(false);
   const a11y = useDialogA11y({ active: open && variant !== 'inline', onClose: ()=> setOpen(false) });
+  // Long-form setup/mistakes text loads on first open (precached asset).
+  useExerciseText(open);
   const t = teachingFor(exerciseId);
   if(!t) return null;
   const trigger = (

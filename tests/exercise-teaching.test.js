@@ -2,6 +2,11 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { teachingFor, curatedExerciseCount, teachingOverrideIds, allExerciseIds, TEACHING_SECTIONS } from '../src/lib/exerciseTeaching.js';
 import { EXERCISE_BY_ID } from '../src/lib/data.js';
+import { readFileSync } from 'node:fs';
+import { setExerciseText } from '../src/lib/exerciseText.js';
+
+// Teaching reads the long-form text from the on-demand JSON asset.
+setExerciseText(JSON.parse(readFileSync(new URL('../src/lib/data/exercise-text.json', import.meta.url), 'utf8')));
 
 describe('exercise teaching covers every library exercise', ()=>{
   it('all 8 sections exist and are non-empty for every exercise', ()=>{

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { MUSCLES, LEVELS, EQUIPMENT, EXERCISE_TAGS, searchExercises, recommendExercises } from '../lib/data.js';
 import { hasExerciseImage, getExerciseMeta } from '../lib/exerciseImages.js';
 import { teachingFor } from '../lib/exerciseTeaching.js';
+import { useExerciseText } from '../lib/exerciseTextLoader.js';
 import { classifyExercise, isDeprecated } from '../lib/exerciseTaxonomy.js';
 import { substitutionOptions } from '../lib/substitutions.js';
 import { loadStore } from '../lib/store.js';
@@ -123,6 +124,9 @@ export default function ExerciseBrowser({ availableEquipment, onboarding = null,
   const [openId,setOpenId]=useState(null);
   const [howToOpen,setHowToOpen]=useState(false);
   const [subsOpen,setSubsOpen]=useState(false);
+  // Long-form setup/mistakes text is an on-demand asset: fetch it once an
+  // exercise is opened (re-renders the how-to when it lands).
+  useExerciseText(!!openId);
 
   // The browser answers "what in my programme uses it" and "how did I do on
   // it" from the canonical store — App owns the live copy and passes it down,
