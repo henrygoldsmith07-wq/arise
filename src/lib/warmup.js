@@ -75,13 +75,27 @@ export function sessionPace({ startedAtMs, nowMs, completedSets, totalSets, plan
 
 // Predict session duration (minutes) from blocks + warm-ups + rests
 export function predictSessionDuration(blocks){
-  let totalSec = 0;
-  for(const b of blocks||[]){
+  const list = blocks || [];
+  const own = (b)=> {
     const sets = Number(b.sets)||3;
-    const rest = Number(b.restSec)||90;
     const warmups = b.warmups ? b.warmups.length : 0;
+    return { sets, rest: Number(b.restSec)||90, work: sets*45 + warmups*60 };
+  };
+  let totalSec = 0;
+  for(let i = 0; i < list.length; i++){
+    const a = own(list[i]);
+    const next = list[i + 1];
+    // Superset (block.supersetWith = next exerciseId): both lifts' working
+    // time, but ONE rest per round (the longer of the two) and one transition.
+    if(next && list[i].supersetWith && list[i].supersetWith === next.exerciseId){
+      const b = own(next);
+      const rounds = Math.max(a.sets, b.sets);
+      totalSec += a.work + b.work + Math.max(0, rounds-1)*Math.max(a.rest, b.rest) + 90;
+      i++;
+      continue;
+    }
     // 45s per set execution + rest between sets + warm-up time
-    totalSec += sets*45 + Math.max(0, sets-1)*rest + warmups*60;
+    totalSec += a.work + Math.max(0, a.sets-1)*a.rest;
     totalSec += 90; // transition between exercises
   }
   return Math.max(8, Math.round(totalSec/60));

@@ -12,6 +12,10 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Supersets and per-exercise rest
+- Programme editor: **Pair with next** / **Unpair** to superset two exercises, and a **rest stepper** on every exercise.
+- Gym Mode, the session runner and Guided mode alternate a pair (A1 → B1 → rest → A2 …) with one rest per round, and the rest timer uses the rest you set. Session-length estimates account for supersets.
+
 ### Save My Programme edits as a template
 - Programme editor: **Save as my template** keeps your swaps, sets, reps, rest and renamed days (every week of the block) as a template in My templates, with an optional share code.
 - When a block ends with customised days, Today offers **Start next block from my edits**. Switching programme now offers to save your edits as a template before they are cleared.

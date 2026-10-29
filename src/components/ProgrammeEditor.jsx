@@ -6,7 +6,7 @@ import { encodeShareCode } from '../lib/shareCodes.js';
 import {
   editableDays, editSummary, swapCandidates, addCandidates,
   swapExercise, addExercise, removeExercise, moveExercise,
-  setExerciseSets, setExerciseRepRange, renameDay, resetDay, resetAllEdits, undoLastEdit,
+  setExerciseSets, setExerciseRepRange, setExerciseRest, pairWithNext, unpairExercise, supersetPartner, formatRestShort, REST_BOUNDS, renameDay, resetDay, resetAllEdits, undoLastEdit,
   parseRepRange, REP_BOUNDS, MIN_SETS, MAX_SETS, MAX_DAY_TITLE,
 } from '../lib/programmeEditor.js';
 
@@ -210,12 +210,16 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
                 const range = parseRepRange(block.reps);
                 const bounds = REP_BOUNDS[range?.unit] || REP_BOUNDS.reps;
                 const setRange = (min, max)=> run(setExerciseRepRange(schedule, day.key, i, { min, max }));
+                const partner = supersetPartner(day.blocks, i);
+                const nextFree = i < day.blocks.length - 1 && supersetPartner(day.blocks, i + 1) == null;
+                const rest = Number(block.restSec) || 0;
                 return (
-                  <li key={block.exerciseId} className="rounded-xl border border-line bg-surface p-2.5 space-y-2" data-testid="programme-exercise">
+                  <li key={block.exerciseId} className={`rounded-xl border bg-surface p-2.5 space-y-2 ${partner != null ? 'border-ink border-l-4' : 'border-line'}`} data-testid="programme-exercise">
                     <div className="flex items-start gap-2">
                       <div className="min-w-0 flex-1">
                         <p className="font-bold text-sm">{block.name}</p>
-                        <p className="text-[11px] text-ink3 tabular-nums">{block.sets} × {block.reps} · {block.muscle}</p>
+                        <p className="text-[11px] text-ink3 tabular-nums">{block.sets} × {block.reps} · rest {formatRestShort(rest)} · {block.muscle}</p>
+                        {partner != null && <p className="text-[11px] font-bold text-ink2" data-testid="programme-superset">Superset {i < partner ? 'A' : 'B'} · with {day.blocks[partner].name}</p>}
                       </div>
                       {block.edited && <span className={EDITED}>Edited</span>}
                     </div>
@@ -236,8 +240,15 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
                             downDisabled={range.max - bounds.step < range.min} upDisabled={range.max + bounds.step > bounds.max} />
                         </>
                       )}
+                      <Stepper label={`rest for ${block.name}`} value={formatRestShort(rest)}
+                        onDown={()=> run(setExerciseRest(schedule, day.key, i, rest - REST_BOUNDS.step))}
+                        onUp={()=> run(setExerciseRest(schedule, day.key, i, Math.max(REST_BOUNDS.min, rest + REST_BOUNDS.step)))}
+                        downDisabled={rest - REST_BOUNDS.step < REST_BOUNDS.min} upDisabled={rest + REST_BOUNDS.step > REST_BOUNDS.max} />
                     </div>
                     <div className="flex flex-wrap gap-1.5">
+                      {partner != null
+                        ? <button type="button" onClick={()=> run(unpairExercise(schedule, day.key, i))} aria-label={`Unpair ${block.name}`} className="btn btn-secondary min-h-11 rounded-xl px-3 text-xs">Unpair</button>
+                        : nextFree && <button type="button" onClick={()=> run(pairWithNext(schedule, day.key, i))} aria-label={`Pair ${block.name} with next`} className="btn btn-secondary min-h-11 rounded-xl px-3 text-xs">Pair with next</button>}
                       <button type="button" onClick={()=> setView({ kind: 'swap', key: day.key, index: i })} aria-label={`Swap ${block.name}`} className="btn btn-secondary min-h-11 rounded-xl px-3 text-xs">Swap</button>
                       <button type="button" onClick={()=> run(moveExercise(schedule, day.key, i, -1))} disabled={i === 0} aria-label={`Move ${block.name} up`} className={ICON}>↑</button>
                       <button type="button" onClick={()=> run(moveExercise(schedule, day.key, i, 1))} disabled={i === day.blocks.length - 1} aria-label={`Move ${block.name} down`} className={ICON}>↓</button>

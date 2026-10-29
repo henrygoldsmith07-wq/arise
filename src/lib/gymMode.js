@@ -110,6 +110,16 @@ export function restPresetFor(gymPrefs, exerciseId, fallbackSec){
   return defaultRestPreset(fallbackSec);
 }
 
+// Rest for a runner block: a remembered per-lift preset wins; otherwise a
+// rest the lifter set in the programme editor (`restExact`) is used to the
+// second; otherwise the template rest snaps to the nearest preset choice.
+export function restForBlock(gymPrefs, block){
+  if(!block) return 0;
+  if(hasUserRestPreset(gymPrefs, block.exerciseId)) return restPresetFor(gymPrefs, block.exerciseId, block.restSec);
+  if(block.restExact && Number(block.restSec) > 0) return Math.round(Number(block.restSec));
+  return restPresetFor(gymPrefs, block.exerciseId, block.restSec) || block.restSec;
+}
+
 // Effort-aware rest: when the user has NOT set their own preset for a lift,
 // a grind (RIR 0 / RPE >= 9.5) earns +30 s and an easy set (RIR >= 3 /
 // RPE <= 6) trims 15 s (never below 45 s, never above 300 s). A remembered

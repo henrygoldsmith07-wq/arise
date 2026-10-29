@@ -24,7 +24,7 @@ export function buildEditorTemplate({ name, description, level, goal, days }, ex
       .filter(e => e.exerciseId)
       .map(e => {
         for(const eq of (EXERCISE_BY_ID[e.exerciseId]?.equipment || [])) usedEquipment.add(eq);
-        return { exerciseId: e.exerciseId, sets: Math.max(1, Number(e.sets) || 3), reps: e.reps?.trim() || '8–12', restSec: EDITOR_REST_CLAMP(e.restSec ?? 90), loadHint: '' };
+        return { exerciseId: e.exerciseId, sets: Math.max(1, Number(e.sets) || 3), reps: e.reps?.trim() || '8–12', restSec: EDITOR_REST_CLAMP(e.restSec ?? 90), loadHint: '', ...(e.supersetWith ? { supersetWith: e.supersetWith } : {}) };
       }),
   }));
   const nowISO = new Date().toISOString();
