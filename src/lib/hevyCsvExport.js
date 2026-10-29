@@ -108,8 +108,8 @@ export function buildHevyExport(history, { byId = null, units = 'kg', since = nu
   let setCount = 0;
   for(const h of entries){
     const { start, end } = sessionWindow(h);
-    const title = String(h.title || 'Arise workout').replace(/\s*\(Hevy\)$/, '');
-    const description = String(h.note || '').replace(/^Imported from Hevy CSV$/, '').trim();
+    const title = String(h.title || 'Arise workout').replace(/\s*\(hevy\)$/i, '');
+    const description = String(h.note || '').replace(/^Imported from Hevy CSV$/i, '').trim();
     for(const b of h.blocks){
       const sets = (b.sets || []).filter(exportableSet);
       if(!sets.length) continue;
