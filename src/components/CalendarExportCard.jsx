@@ -5,16 +5,9 @@ import { useState } from 'react';
 import { EXERCISE_BY_ID } from '../lib/data.js';
 import { todayISO } from '../lib/schedule.js';
 import { buildIcs, normaliseTime, upcomingSessions } from '../lib/calendarExport.js';
-import { canShareFiles, shareFile } from '../lib/nativeShare.js';
+import { canShareFiles, shareFile, saveBlob } from '../lib/nativeShare.js';
 
 const REMINDERS = [[0, 'No reminder'], [30, '30 min before'], [60, '1 hour before'], [120, '2 hours before']];
-
-function download(file) {
-  const url = URL.createObjectURL(file);
-  const a = document.createElement('a');
-  a.href = url; a.download = file.name; a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 
 export default function CalendarExportCard({ store, setStore }) {
   const schedule = store.activeSchedule;
@@ -38,7 +31,7 @@ export default function CalendarExportCard({ store, setStore }) {
       if (r === 'shared') { setMsg(`Sent ${n} sessions to your calendar.`); return; }
       if (r === 'cancelled') return;
     }
-    download(file);
+    saveBlob(file);
     setMsg(`Downloaded ${n} sessions. Open the file to add them.`);
   }
 

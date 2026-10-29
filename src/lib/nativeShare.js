@@ -84,3 +84,11 @@ export async function copyToClipboard(text){
     return ok;
   }catch{ return false; }
 }
+
+/** Save a Blob/File as a download (object URL revoked after the click). */
+export function saveBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename || blob.name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
