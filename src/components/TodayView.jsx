@@ -16,6 +16,7 @@ import { storedWorkoutMode, workoutModePatch, workoutModeLabel } from '../lib/wo
 // Lazy: the panel pulls the full coaching-state graph, which must never
 // inflate this route chunk or the boot bundle (see coach-panel.test.js).
 const CoachPanel = lazy(() => import('./CoachPanel.jsx'));
+const LiftGoalNudge = lazy(() => import('./LiftGoalNudge.jsx'));
 
 export default function TodayView({ store, setStore, onStartSession, onOpenTrain, onOpenProgress, plateConfig = null }){
   const sched = store.activeSchedule;
@@ -382,6 +383,8 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
           days the user skips it — which is the property that decides whether a
           daily check-in gets collected at all. */}
       <ReadinessCheckIn store={store} setStore={setStore} todayISO={isoToday()} />
+
+      {store.gymPrefs?.liftGoals && <Suspense fallback={null}><LiftGoalNudge store={store} setStore={setStore} /></Suspense>}
 
       {showTrustBadge && (
         <p className="rounded-xl border border-line bg-surface2 px-3 py-2 text-[11px] text-ink2 leading-snug flex items-start gap-2" data-testid="today-trust-badge">

@@ -12,6 +12,11 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Lift goals with a projected date
+- Progress has a Lift goals card: pick a lift you have logged, set a target (for example 100 kg × 8) and an optional date, and Arise shows whether your last 12 weeks of e1RM gets you there. Status is ahead, on track, behind, flat or not enough data, with a milestone bar at 25/50/75%.
+- A goal is only "hit" by a real logged set at the target load and reps, never by an estimate; Today shows a one-time "Goal hit" card.
+- Goals are stored on this device, travel with backup/export and sync (newest edit wins per lift, removals stick).
+
 ### Add training to your calendar
 - Train → **Add to calendar** exports your next planned sessions as an `.ics` file (shared through your phone's share sheet where available, otherwise downloaded). Choose a start time and a reminder; each event carries the exercises with sets and reps and an estimated length.
 - Every event keeps a stable ID, so after you move a session (or change training weekdays) exporting again updates the same events in your calendar instead of duplicating them. The file is built on your device; nothing is uploaded.
