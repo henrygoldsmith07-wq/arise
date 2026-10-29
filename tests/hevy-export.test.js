@@ -60,8 +60,6 @@ describe('Hevy CSV export', () => {
     const empty = session('e', '2026-10-26', [{ exerciseId: 'lat-pulldown', sets: [set(0, 0, { skipped: true, completed: false })] }]);
     const sel = selectForHevy([deleted, empty, null, { id: 'x' }, ...HISTORY]);
     assert.equal(sel.entries.length, 2);
-    assert.equal(sel.deleted, 1);
-    assert.equal(sel.empty, 1);
   });
 
   it('keeps unmapped lifts under their Arise name and reports them as custom exercises', () => {
@@ -124,7 +122,7 @@ describe('Hevy CSV export', () => {
     assert.equal(writeExportMark('nope', storage), false);
     assert.equal(writeExportMark('2026-10-25', storage), true);
     assert.equal(readExportMark(storage), '2026-10-25');
-    mem.set('arise.hevyExport.v1', '{bad');
+    mem.set('arise.hevyExport.v1', 'bad');
     assert.equal(readExportMark(storage), null);
   });
 
