@@ -145,7 +145,10 @@ export function reviewCompletedWeek({ schedule, history = [], readinessLog = [],
   // programme definition.
   const upcomingWeekNumber = upcoming[0]?.week ?? null;
   const meso = schedule.mesocycle || program?.mesocycle || null;
-  const mesoDeloadDue = Boolean(meso?.deloadWeek && upcomingWeekNumber != null && upcomingWeekNumber >= meso.deloadWeek);
+  // Block plan: a week the lifter set explicitly (deload or normal) is never
+  // re-decided here, and once weeks have been added the programme deload is
+  // that ONE week, not every week after it.
+  const mesoDeloadDue = Boolean(schedule.blockPlan?.deload?.[upcomingWeekNumber] === undefined && mesoReached(meso?.deloadWeek, upcomingWeekNumber, schedule.blockPlan));
 
   const kit = [...new Set([...(availableEquipment || schedule.availableEquipment || []), 'bodyweight'])];
   // Point-in-time prior history: everything logged before the target week.
@@ -366,20 +369,27 @@ export function weekPhaseFor(schedule, todayISO = null){
       .filter(s => String(s.dateISO) >= today)
       .sort((a, b) => String(a.dateISO).localeCompare(String(b.dateISO)))[0];
     if(!upcoming) return null;
-    return phaseFromWeekSessions(sessions.filter(s => mondayKey(s.dateISO) === mondayKey(upcoming.dateISO)), upcoming.week, mesoDeloadWeek);
+    return phaseFromWeekSessions(sessions.filter(s => mondayKey(s.dateISO) === mondayKey(upcoming.dateISO)), upcoming.week, mesoDeloadWeek, schedule.blockPlan);
   }
-  return phaseFromWeekSessions(weekSessions, weekSessions[0]?.week, mesoDeloadWeek);
+  return phaseFromWeekSessions(weekSessions, weekSessions[0]?.week, mesoDeloadWeek, schedule.blockPlan);
 }
 
-function phaseFromWeekSessions(weekSessions, weekNumber, mesoDeloadWeek = null){
+// Has the programme's deload week arrived? Once weeks were added in Block plan
+// it is that ONE week; otherwise that week and every later one (legacy).
+function mesoReached(deloadWeek, week, blockPlan){
+  if(!deloadWeek || week == null) return false;
+  return blockPlan?.extended?.length ? week === deloadWeek : week >= deloadWeek;
+}
+
+function phaseFromWeekSessions(weekSessions, weekNumber, mesoDeloadWeek = null, blockPlan = null){
   const blocks = weekSessions.flatMap(s => s.blocks || []);
   const prescribed = blocks.filter(b => Number(b.sets) > 0);
   if(!prescribed.length) return { kind: 'build', week: weekNumber, detail: null };
   // A week is a deload when the weekly review stamped its prescriptions as
   // cuts, or the programme declares this the mesocycle deload week.
   const deloadBlocks = prescribed.filter(b => b.adaptation?.kind === 'weekly-deload');
-  const deload = deloadBlocks.length >= Math.ceil(prescribed.length / 2)
-    || Boolean(mesoDeloadWeek != null && weekNumber != null && weekNumber >= mesoDeloadWeek);
+  const chosen = weekNumber != null ? blockPlan?.deload?.[weekNumber] : undefined;
+  const deload = chosen !== undefined ? chosen : (deloadBlocks.length >= Math.ceil(prescribed.length / 2) || mesoReached(mesoDeloadWeek, weekNumber, blockPlan));
   if(deload) return { kind: 'deload', week: weekNumber, detail: null };
   const recovery = prescribed.filter(b => b.adaptation?.kind === 'weekly-recovery-session').length;
   if(recovery >= Math.ceil(prescribed.length / 2)) return { kind: 'recovery', week: weekNumber, detail: null };

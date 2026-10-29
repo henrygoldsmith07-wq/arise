@@ -12,6 +12,13 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Block plan
+- Train → **Block plan** shows your whole block week by week: each session with its sets and estimated time, and weekly hard sets per muscle against a rough 6–20 guide (low volume is never nagged: fewer is fine on purpose, e.g. legs around cycling).
+- **Make deload week / Make normal week** on any week that still has sessions to do. Deload cuts planned sets by the engine's deload factor and leaves loads alone; turning it off restores the exact original sets. The weekly review no longer re-decides a week you set.
+- **Add a week** copies your latest normal week (same weekdays) when the block runs out, up to 12 weeks; a programme's own deload week arrives already cut. **Remove the week I added** undoes it while nothing in it is finished.
+- Build weeks above ~20 sets for a muscle get a plain warning. Everything stays on the device and rides export, backup and sync inside the schedule.
+- Once weeks are added, a programme's deload is that one week rather than every week after it.
+
 ### Supersets and per-exercise rest
 - Programme editor: **Pair with next** / **Unpair** to superset two exercises, and a **rest stepper** on every exercise.
 - Gym Mode, the session runner and Guided mode alternate a pair (A1 → B1 → rest → A2 …) with one rest per round, and the rest timer uses the rest you set. Session-length estimates account for supersets.
