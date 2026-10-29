@@ -138,6 +138,10 @@ Mistyped a set? Progress → **Edit logged workouts** lets you fix the load, rep
 
 Progress → **Body weight** is optional. Log a weigh-in (or type it in the Today check-in) and Arise shows the trend and, for each lift you trained lately, your estimated max as a multiple of your body weight, compared with the 8 weeks before. That answers "did I get stronger, or just heavier?" — handy when you also ride or run and weight matters. Pull-ups, chin-ups and dips count your body weight plus any added load minus assistance. Machine and cable stacks are not comparable between gyms, so treat the multiple as a way to compare yourself with you. Day-to-day swings of 1–2 kg are water; the trend waits for entries a week apart. Stays on your device; Export and sync carry it.
 
+## Lift goals
+
+On **Progress**, **Lift goals** lets you set a target for a lift you have logged, such as 100 kg × 8 on lat pulldown, with an optional date. Arise draws a straight line through your last 12 weeks of estimated 1RM and tells you if you are **Ahead**, **On track**, **Behind** or **Flat**, with a projected date. It needs three sessions over two weeks on that lift first, and it will not give a date more than two years away. A goal counts as **Hit** only when you actually log a set at that load for those reps; Today then shows a one-time "Goal hit" card. Goals stay on your device, ride along in your backup and sync, and **Remove** deletes one.
+
 ## Your data
 
 - **More → Data:** export (JSON backup, optionally passphrase-encrypted;

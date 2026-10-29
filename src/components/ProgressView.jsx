@@ -4,6 +4,7 @@ import { deriveXp } from '../lib/xp.js';
 const CoachPanel = lazy(() => import('./CoachPanel.jsx'));
 const HistoryEditSheet = lazy(() => import('./HistoryEditSheet.jsx'));
 const BodyweightCard = lazy(() => import('./BodyweightCard.jsx'));
+const LiftGoalsCard = lazy(() => import('./LiftGoalsCard.jsx'));
 
 // The check-in channel's user-facing line: plain “what the trend says”
 // wording, honest about direction AND about absence. Not a component — so
@@ -362,6 +363,9 @@ export default function ProgressView({ store, setStore = null, onStart = null })
           )}
         </section>
       )}
+
+      {/* Lift goals with an honest projected date (lazy). */}
+      {setStore && history.length > 0 && <Suspense fallback={null}><LiftGoalsCard store={store} setStore={setStore} /></Suspense>}
 
       {/* Optional body-weight log + strength for your size (lazy). */}
       {setStore && <Suspense fallback={null}><BodyweightCard store={store} setStore={setStore} /></Suspense>}

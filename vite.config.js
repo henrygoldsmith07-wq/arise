@@ -54,13 +54,13 @@ export default defineConfig({
           // programmeEditor.js is NOT a leaf any more: it grew with supersets +
           // save-as-template and rides with programmeService (Train) instead,
           // keeping this shared chunk well under the largest-lazy budget.
-          if(/\/src\/lib\/(storageQuota|backupState|quotaGuard|cryptoBackup|crossTabStore|xp|exercisePicker|rideAwareSchedule|readinessLog|stallDeload|demoData|historyEditor|superset|programmeName|mesocycle|schedule|snapshots)\.js$/.test(id)) return 'leaves';
+          if(/\/src\/lib\/(storageQuota|backupState|quotaGuard|cryptoBackup|crossTabStore|xp|exercisePicker|rideAwareSchedule|readinessLog|stallDeload|demoData|historyEditor|liftGoals|calendarExport|superset|programmeName|mesocycle|schedule|snapshots)\.js$/.test(id)) return 'leaves';
           // Small settings leaves that always open together from More: one chunk
           // instead of four, each repeating gzip + import/export overhead.
           if(/\/src\/components\/(settings\/(FeedbackSettings|GuidedSettings|AppearanceAccessibilitySettings)|InstallCard)\.jsx$/.test(id)) return 'settings-lite';
           // Small lazy sheets/panels: one chunk instead of eight, each of which
           // repeated its own gzip warm-up and import/export headers.
-          if(/\/src\/components\/(SetupNote|ExerciseHistorySheet|settings\/TrainingPolicySettings|HistoryEditSheet|JargonHelp|ExerciseBrowser)\.jsx$/.test(id)) return 'sheets';
+          if(/\/src\/components\/(SetupNote|LiftGoalsCard|LiftGoalNudge|BodyweightCard|CalendarExportCard|ExerciseHistorySheet|settings\/TrainingPolicySettings|HistoryEditSheet|JargonHelp|ExerciseBrowser)\.jsx$/.test(id)) return 'sheets';
           return undefined;
         },
       },
