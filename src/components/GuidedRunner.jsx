@@ -35,12 +35,13 @@ import WorkingWeightFinder from './WorkingWeightFinder.jsx';
 import { needsWorkingWeight, warmupsFromFoundLoad } from '../lib/workingWeight.js';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
 const TeachingPanel = lazy(() => import('./TeachingPanel.jsx'));
+const SetupNote = lazy(() => import('./SetupNote.jsx'));
 
 // GuidedRunner — the guided workout mode: one set at a time, full-screen.
 // Reuses the same draft persistence contract as SessionRunner (onDraftChange
 // with { session, blocks, ... }), so crash recovery and cross-tab protection
 // in App.jsx work identically for both modes.
-export default function GuidedRunner({ session, history = [], availableEquipment = [], draft = null, measurementConsent = false, soundCues = true, onToggleSoundCues = null, voiceCoach = false, onToggleVoiceCoach = null, voiceRate = 1, wakeLock = false, gymPrefs = null, onSetRestPreset = null, studyEnrollment = null, participantId = null, plateConfig = null, appPrefs = null, onDraftChange, onSave, onCancel }){
+export default function GuidedRunner({ session, history = [], availableEquipment = [], draft = null, measurementConsent = false, soundCues = true, onToggleSoundCues = null, voiceCoach = false, onToggleVoiceCoach = null, voiceRate = 1, wakeLock = false, gymPrefs = null, onSetRestPreset = null, onSetSetupNote = null, studyEnrollment = null, participantId = null, plateConfig = null, appPrefs = null, onDraftChange, onSave, onCancel }){
   const unit = asUnit(appPrefs?.units);
   const startedAtRef=useRef(draft?.startedAt || new Date().toISOString());
   // Time of the last logged guided step (complete or skip), for per-step
@@ -350,6 +351,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
       noteTags,
       startedAtISO: startedAtRef.current,
       availableEquipment,
+      gymPrefs,
     });
     // buildGuidedPayload already carries the snapshot frozen at init (the
     // schedule row the guided runner walked). Save copies it unchanged — it
@@ -449,6 +451,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
                         }} />
                     </div>
                   )}
+                  <Suspense fallback={null}><SetupNote exerciseId={currentBlock.exerciseId} name={currentExercise?.name || currentBlock.exerciseId} gymPrefs={gymPrefs} history={history} onSave={onSetSetupNote} className="mt-1" /></Suspense>
                   {currentExercise?.cues?.[0] && <p className="text-[11px] text-ink3 mt-1">Cue: {currentExercise.cues[0]}</p>}
                   {activeArm && activeRec && (
                     <p className="text-[11px] text-ink3 mt-1">

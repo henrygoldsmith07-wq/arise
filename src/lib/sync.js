@@ -35,6 +35,7 @@ import { STORE_SCHEMA_VERSION, mergeCustomTemplates } from "./store.js";
 import { mergeEvaluationLedgers } from "./longitudinal.js";
 import { mergeExperiments } from "./trainingExperiments.js";
 import { mergeTombstones, applyTombstones, canonicalJson } from "./domain.js";
+import { mergeSetupNotes } from "./setupNotes.js";
 
 
 
@@ -172,13 +173,14 @@ export function mergeGymPrefs(current, imported){
   }
   const out = {};
   const aT = Date.parse(a.updatedAt || '') || 0, bT = Date.parse(b.updatedAt || '') || 0;
-  for(const k of new Set([...Object.keys(a), ...Object.keys(b)].filter((k) => k !== 'restPresets' && k !== 'restPresetUpdatedAt'))){
+  for(const k of new Set([...Object.keys(a), ...Object.keys(b)].filter((k) => k !== 'restPresets' && k !== 'restPresetUpdatedAt' && k !== 'setupNotes'))){
     const hasA = k in a, hasB = k in b;
     if(hasA !== hasB){ out[k] = hasA ? a[k] : b[k]; continue; }
     if(canonicalJson(a[k]) === canonicalJson(b[k])){ out[k] = a[k]; continue; }
     out[k] = aT !== bT ? (aT > bT ? a[k] : b[k]) : (canonicalJson(a[k]) >= canonicalJson(b[k]) ? a[k] : b[k]);
   }
   const merged = { ...out, restPresets: mergedPresets };
+  if(a.setupNotes || b.setupNotes) merged.setupNotes = mergeSetupNotes(a.setupNotes, b.setupNotes);
   if(Object.keys(mergedPresetTs).length) merged.restPresetUpdatedAt = mergedPresetTs;
   // Preserve the winner's timestamp verbatim: re-serialising through Date
   // would normalise equivalent instants and break idempotence.

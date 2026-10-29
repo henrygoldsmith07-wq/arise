@@ -52,6 +52,7 @@ import OfflineBanner from './components/OfflineBanner.jsx';
 import DemoBanner from './components/DemoBanner.jsx';
 const InstallCard = lazy(() => import('./components/InstallCard.jsx'));
 import { setRestPreset, setWarmupSkip } from './lib/gymMode.js';
+import { setSetupNote } from './lib/setupNotes.js';
 import { cancellationPlan } from './services/workoutCancellationService.js';
 import { setTelemetryConsent } from './services/settingsService.js';
 
@@ -524,6 +525,11 @@ export default function App(){
     setStoreState(prev=>({ ...prev, gymPrefs: { ...(prev.gymPrefs||{}), skipWarmups: setWarmupSkip(prev.gymPrefs, exerciseId, skip), updatedAt: new Date().toISOString() } }));
   },[]);
 
+  // Per-lift machine/bench setup: newest edit per lift wins on sync merge.
+  const handleSetSetupNote = useCallback((exerciseId, fields)=>{
+    setStoreState(prev=> ({ ...prev, gymPrefs: { ...(prev.gymPrefs||{}), ...setSetupNote(prev.gymPrefs, exerciseId, fields) } }));
+  },[]);
+
   const handleSaveSession = async (payload)=>{
     if(saveInFlightRef.current) return;
     saveInFlightRef.current = true;
@@ -811,6 +817,7 @@ export default function App(){
           wakeLock={store.preferences?.wakeLock === true}
           gymPrefs={store.gymPrefs || null}
           onSetRestPreset={handleSetRestPreset}
+          onSetSetupNote={handleSetSetupNote}
           soundCues={store.preferences?.soundCues !== false}
           onToggleSoundCues={(v)=> setStore(prev=> ({ ...prev, preferences:{ ...(prev.preferences||{}), soundCues: v } }))}
           voiceCoach={store.preferences?.voiceCoach === true}
@@ -836,6 +843,7 @@ export default function App(){
           gymPrefs={store.gymPrefs || null}
           onSetRestPreset={handleSetRestPreset}
           onSetWarmupSkip={handleSetWarmupSkip}
+          onSetSetupNote={handleSetSetupNote}
           draft={store.activeWorkout?.session?.id===activeSession.id ? store.activeWorkout : null}
           measurementConsent={store.preferences?.telemetryEnabled === true}
           studyEnrollment={store.studyEnrollment || null}

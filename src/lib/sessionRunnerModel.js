@@ -24,6 +24,7 @@ import { runnerRecommendationForBlock } from "./runnerRecommendations.js";
 import { NOTE_PROMPTS } from "./sessionNotes.js";
 import { fmtWeight, weightInputValue } from "./units.ts";
 import { localDateISO } from "./dateOnly.js";
+import { setupField } from "./setupNotes.js";
 
 export function parseRunnerNumber(value) {
   const number = Number(value);
@@ -632,6 +633,7 @@ export function buildSessionHistoryPayload({
   startedAt,
   nowISO,
   performedDateISO = null,
+  gymPrefs = null,
 }) {
   const labels = noteTags
     .map((id) => NOTE_PROMPTS.find((tag) => tag.id === id)?.label)
@@ -702,6 +704,7 @@ export function buildSessionHistoryPayload({
         ? { removedSlots: block.removedSlots }
         : {}),
       ...(block.prescriptionOverridden ? { prescriptionOverridden: true } : {}),
+      ...setupField(gymPrefs, block.exerciseId),
       ...carryPrescription(block),
       equipment: EXERCISE_BY_ID[block.exerciseId]?.equipment || null,
       sets: block.sets.map((set) => {

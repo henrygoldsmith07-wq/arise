@@ -58,6 +58,9 @@ export default defineConfig({
           // Small settings leaves that always open together from More: one chunk
           // instead of four, each repeating gzip + import/export overhead.
           if(/\/src\/components\/(settings\/(FeedbackSettings|GuidedSettings|AppearanceAccessibilitySettings)|InstallCard)\.jsx$/.test(id)) return 'settings-lite';
+          // Small lazy sheets/panels: one chunk instead of eight, each of which
+          // repeated its own gzip warm-up and import/export headers.
+          if(/\/src\/components\/(SetupNote|ExerciseHistorySheet|settings\/TrainingPolicySettings|HistoryEditSheet|JargonHelp|ExerciseBrowser)\.jsx$/.test(id)) return 'sheets';
           return undefined;
         },
       },

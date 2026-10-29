@@ -8,6 +8,7 @@ import { lastExerciseSets } from './store.js';
 import { buildPrescriptionSnapshot, attachPrescription, carryPrescription, freezePrescriptionBlock, attributePrescribedSets } from './progression.js';
 import { NOTE_PROMPTS } from './sessionNotes.js';
 import { localDateISO } from './dateOnly.js';
+import { setupField } from './setupNotes.js';
 import { supersetPartner, pairRestSec } from './superset.js';
 export { NOTE_PROMPTS } from './sessionNotes.js';
 
@@ -203,7 +204,7 @@ export function formatElapsed(ms){
 }
 
 // Save payload — identical schema to SessionRunner's, with mode: 'guided'.
-export function buildGuidedPayload({ session, blocks, note = '', noteTags = [], startedAtISO, availableEquipment = [], nowISO = new Date().toISOString(), performedDateISO = null }){
+export function buildGuidedPayload({ session, blocks, note = '', noteTags = [], startedAtISO, availableEquipment = [], nowISO = new Date().toISOString(), performedDateISO = null, gymPrefs = null }){
   const started = Date.parse(startedAtISO);
   const durationMinutes = Number.isFinite(started) ? Math.max(1, Math.round((Date.parse(nowISO) - started) / 60000)) : 1;
   const painDiscomfort = noteTags.includes('pain-discomfort');
@@ -241,6 +242,7 @@ export function buildGuidedPayload({ session, blocks, note = '', noteTags = [], 
       ...(b.substitutionFrom ? { substitutionFrom: b.substitutionFrom, substitutionReason: b.substitutionReason } : {}),
       ...(Array.isArray(b.governedSlots) && b.governedSlots.length ? { governedSlots: b.governedSlots } : {}),
       ...(Array.isArray(b.removedSlots) && b.removedSlots.length ? { removedSlots: b.removedSlots } : {}),
+      ...setupField(gymPrefs, b.exerciseId),
       ...carryPrescription(b),
       equipment: EXERCISE_BY_ID[b.exerciseId]?.equipment || null,
       sets: b.sets.map(s=>{
