@@ -17,8 +17,10 @@ import { storedWorkoutMode, workoutModePatch, workoutModeLabel } from '../lib/wo
 // inflate this route chunk or the boot bundle (see coach-panel.test.js).
 const CoachPanel = lazy(() => import('./CoachPanel.jsx'));
 const LiftGoalNudge = lazy(() => import('./LiftGoalNudge.jsx'));
+const QuickWorkoutSheet = lazy(() => import('./QuickWorkoutSheet.jsx'));
 
 export default function TodayView({ store, setStore, onStartSession, onOpenTrain, onOpenProgress, plateConfig = null }){
+  const [quickOpen, setQuickOpen] = useState(false);
   const sched = store.activeSchedule;
   // ── The Adaptive Coach layer (P1): ONE structured coaching state computed
   //    from the deterministic engines (progression, scheduling, safety,
@@ -379,6 +381,9 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
     )}
 
     <div className="px-4 py-5 space-y-4">
+      <button type="button" onClick={()=> setQuickOpen(true)} data-testid="quick-workout-open"
+        className="btn btn-secondary w-full min-h-12 rounded-xl px-4 text-sm font-bold">Quick workout — train something unplanned</button>
+      {quickOpen && <Suspense fallback={null}><QuickWorkoutSheet store={store} onClose={()=> setQuickOpen(false)} onStart={(session)=> { setQuickOpen(false); onStartSession(session); }} /></Suspense>}
       {/* Recovery input. Collapsed it is one line, so it costs nothing on the
           days the user skips it — which is the property that decides whether a
           daily check-in gets collected at all. */}

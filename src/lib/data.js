@@ -88,7 +88,11 @@ import { PROGRAMS as BUILTIN_PROGRAMS, PROGRAM_VERSION_HISTORY as BUILTIN_PROGRA
 import { RIDER_UPPER_3X, RIDER_UPPER_3X_HISTORY, RIDER_UPPER_2X, RIDER_UPPER_2X_HISTORY } from './data/programs-rider.js';
 export const EXERCISES = [
   ...EXERCISES_PRIMARY,
-  ...EXERCISES_COVERAGE,
+  // Coverage fills derive the weighted/assisted flags from the id instead of
+  // spelling the same three properties out 238 times (~2.5 kB gz).
+  ...EXERCISES_COVERAGE.map(e => e.supportsWeighted === undefined
+    ? { ...e, supportsWeighted: /weighted/i.test(e.id), supportsAssisted: /assisted/i.test(e.id) }
+    : e),
 ];
 
 export const EXERCISE_BY_ID = Object.fromEntries(EXERCISES.map(e => [e.id, e]));
