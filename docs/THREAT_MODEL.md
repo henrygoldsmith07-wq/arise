@@ -31,7 +31,7 @@ choice. The host cannot inject credentials into your app (import policy
 denies them).
 
 **Credential theft through browser storage.**
-*Defence:* the NVIDIA API key is kept in `sessionStorage` by default and only
+*Defence:* the AI-coach API key is kept in `sessionStorage` by default and only
 moves to durable browser storage after an explicit “Remember” opt-in. Legacy
 durably stored keys are demoted to the current session. Clear key removes both
 copies; exports, sync payloads and diagnostics do not include it. This reduces
@@ -39,7 +39,8 @@ exposure duration but cannot defend against code already executing with the
 origin's browser-storage privileges.
 
 **Optional cloud integrations receive more data than the user expects.**
-*Defence:* each path has a narrow adapter and independent control. NVIDIA gets
+*Defence:* each path has a narrow adapter and independent control. The AI
+coach gets
 aggregated training context + deterministic findings, not raw history/notes
 (the coach only explains — it never creates training prescriptions);
 classifier.dev gets redacted text only after its relevant consent; Pulse gets
@@ -78,7 +79,7 @@ against the inputs it was allowed to see.
   installing from the official URL; there is no code-signing story for
   plain PWAs.
 - WebDAV host availability (no SLA on someone else's NAS).
-- Retention/security policies of optional NVIDIA/classifier.dev/Pulse
+- Retention/security policies of optional classifier.dev/Pulse
   destinations after a user-authorised request leaves Arise.
 
 ## Dependency and supply-chain posture

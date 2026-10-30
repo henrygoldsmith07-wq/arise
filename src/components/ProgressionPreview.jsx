@@ -26,7 +26,7 @@ export default function ProgressionPreview({ program, history = [], plateConfig 
         Replays the same engine that writes your prescriptions, assuming one exposure of each exercise per week.
         Loads are rounded to the kit you configured. Nothing here is saved or sent anywhere.
       </p>
-      {preview && (
+      {preview && preview.exerciseCount > 0 && (
         <div className="mt-2 space-y-2">
           {preview.weeks.map(week=> (
             <div key={week.week} className="rounded-xl border border-line bg-surface px-3 py-2">
@@ -56,6 +56,12 @@ export default function ProgressionPreview({ program, history = [], plateConfig 
             <p className="text-[11px] text-ink3">…and {preview.omittedExercises} more exercises in this programme.</p>
           )}
         </div>
+      )}
+      {preview && preview.exerciseCount === 0 && (
+        // An honest empty state: a programme whose first week carries no
+        // exercises previews nothing — say so instead of drawing four
+        // empty boxes.
+        <p className="text-[11px] text-ink3 mt-2">This programme's first week has no exercises to preview yet.</p>
       )}
     </details>
   );

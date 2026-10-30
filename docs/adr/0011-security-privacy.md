@@ -23,7 +23,7 @@ with unenforced promises and three exploitable edges:
 
 1. **CSP as enforcement, not promise.** `vercel.json` (host) + `index.html`
    meta (any static host) pin `default-src 'self'`, allowlist the illustration
-   host and the NVIDIA AI-coach endpoint in `connect-src` only, and set
+   host and the AI-coach endpoint in `connect-src` only, and set
    `frame-ancestors 'none'`, `object-src 'none'`, Referrer-Policy,
    X-Content-Type-Options and a restrictive Permissions-Policy. The service
    worker mirrors the policy: it refuses every cross-origin request except the

@@ -16,7 +16,13 @@ function parseNum(v){ const n=Number(v); return Number.isFinite(n)? n : 0; }
 function firstInt(reps){ const m=String(reps).match(/\d+/); return m? m[0] : ''; }
 
 export function fmtRest(s){
-  const m=Math.floor(s/60); const r=s%60;
+  const n = Number(s);
+  // A rest countdown is a whole number of seconds. A NaN/Infinity that slipped
+  // through rendered as "NaNs"/"Infinity:NaN", and a negative rendered as
+  // "-1:-5"; clamp to the sensible 0+ range so the dock can never show that.
+  if(!Number.isFinite(n)) return '0s';
+  const sec = Math.max(0, Math.floor(n));
+  const m=Math.floor(sec/60); const r=sec%60;
   return m? `${m}:${String(r).padStart(2,'0')}` : `${r}s`;
 }
 

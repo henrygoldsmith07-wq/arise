@@ -20,9 +20,13 @@ export function nextSession(schedule){
 
 export function progress(schedule, history){
   if(!schedule) return { done:0, total:0, pct:0 };
-  const total = schedule.sessions.length;
+  // A restored or mid-migration schedule can carry no sessions array (store
+  // validation only requires activeSchedule to be an object). Read it
+  // defensively so the Today/Progress cards degrade to 0% instead of throwing.
+  const sessions = Array.isArray(schedule.sessions) ? schedule.sessions : [];
+  const total = sessions.length;
   const doneIds = new Set((history||[]).map(h=> h.id));
-  const done = schedule.sessions.filter(s=> doneIds.has(s.id) || s.status==='done').length;
+  const done = sessions.filter(s=> doneIds.has(s.id) || s.status==='done').length;
   return { done, total, pct: total? Math.round(done/total*100):0 };
 }
 
