@@ -60,7 +60,7 @@ export default defineConfig({
           if(/\/src\/components\/(settings\/(FeedbackSettings|GuidedSettings|AppearanceAccessibilitySettings)|InstallCard)\.jsx$/.test(id)) return 'settings-lite';
           // Small lazy sheets/panels: one chunk instead of eight, each of which
           // repeated its own gzip warm-up and import/export headers.
-          if(/\/src\/components\/(SetupNote|LiftGoalsCard|LiftGoalNudge|RecordsWall|NewPrCard|QuickWorkoutSheet|StorageDiagnostics|BodyweightCard|CalendarExportCard|ExerciseHistorySheet|settings\/TrainingPolicySettings|HistoryEditSheet|JargonHelp|ExerciseBrowser)\.jsx$/.test(id)) return 'sheets';
+          if(/\/src\/components\/(SetupNote|LiftGoalsCard|LiftGoalNudge|RecordsWall|NewPrCard|QuickWorkoutSheet|StorageDiagnostics|BodyweightCard|CalendarExportCard|ExerciseHistorySheet|settings\/TrainingPolicySettings|HistoryEditSheet|JargonHelp|ExerciseBrowser|NotesJournalSheet)\.jsx$/.test(id)) return 'sheets';
           // Weekly-volume view (Progress card, Today nudge) shares its set counting with the Block plan: one chunk.
           if(/\/src\/(lib\/(blockPlan|muscleVolumeHistory)\.js|components\/(BlockPlan|WeeklyVolumeCard|VolumeNudge)\.jsx)$/.test(id)) return 'volume';
           // Small lazy modules that each paid their own chunk header: one shared chunk.

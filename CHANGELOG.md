@@ -12,6 +12,11 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Training notes journal (MAJOR 45)
+- More → Training notes: one search over every session note, tag chip and machine setup note, with kind and tag filters. Built on this device, nothing uploaded.
+- Cut oversized exercise swap lists to eight entries each to pay for it within the 405 kB budget.
+
+
 ### Records wall: your best load at 1, 3, 5, 8 and 12+ reps (MAJOR 44)
 - Progress → **Records** replaces the old best-estimated-max list. It shows your three most recent lifts and opens a full wall: for every lift you have logged with a load, the heaviest weight for 1, 3, 5, 8 and 12+ reps with the date, the best estimated max, how many PRs you have set and when the last one was. Search by name or filter by muscle.
 - A PR needs an earlier like-for-like set to beat (the first time you log a lift is a baseline), and has to be about 1 kg heavier than the old best for that rep band, so ties and 0.5 kg jitter are never PRs. Assisted sets, skipped or failed sets, deleted sessions and sessions whose note says ROM, paused, tempo, partial, band or technique change are not counted.
