@@ -64,7 +64,7 @@ export default defineConfig({
           // Weekly-volume view (Progress card, Today nudge) shares its set counting with the Block plan: one chunk.
           if(/\/src\/(lib\/(blockPlan|muscleVolumeHistory)\.js|components\/(BlockPlan|WeeklyVolumeCard|VolumeNudge)\.jsx)$/.test(id)) return 'volume';
           // Small lazy modules that each paid their own chunk header: one shared chunk.
-          if(/\/src\/(lib\/(trainRecommendation|performance|workoutQualityReport|programmeGenerator)\.js|components\/(WhatChangedPanel|TeachingPanel))$/.test(id)) return 'minor';
+          if(/\/src\/(lib\/(trainRecommendation|performance|workoutQualityReport|programmeGenerator)\.js|components\/(WhatChangedPanel|TeachingPanel)\.jsx)$/.test(id)) return 'minor';
           // Rarely-opened exports and the background sync trigger: one chunk instead of three.
           if(/\/src\/lib\/(printReport|studyExport|autoSync)\.js$/.test(id)) return 'rare';
           // CSV in/out (generic + Hevy import, Hevy export and its sheet) open together from More → Data.
