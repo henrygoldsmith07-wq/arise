@@ -186,3 +186,6 @@ On **Progress**, **Lift goals** lets you set a target for a lift you have logged
 - What the app refuses to claim: `docs/CANNOT_PROVE.md`
 - Every stored field: `docs/DATA_DICTIONARY.md`
 - When things go wrong: `docs/TROUBLESHOOTING.md`
+
+## Training notes (More → Training notes)
+Search everything you have written: session notes, the tag chips you tapped (Pain / discomfort, Felt strong…) and your machine setup notes. Type words ("left shoulder", "seat 4"); every word must start a word in the note. Filter by Sessions or Machine setups, or by one tag. Everything is searched on your device.

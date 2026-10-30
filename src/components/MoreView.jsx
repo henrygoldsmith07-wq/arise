@@ -5,6 +5,7 @@ import { buildCoachExport, renderCoachMarkdown } from '../lib/coachExport.js';
 import { shareTextAsFile, saveBlob } from '../lib/nativeShare.js';
 const SyncPanel = lazy(() => import('./SyncPanel.jsx'));
 const HevyExportSheet = lazy(() => import('./HevyExportSheet.jsx'));
+const NotesJournalSheet = lazy(() => import('./NotesJournalSheet.jsx'));
 import { clearTelemetry, telemetrySummary, getEventHistory, recordEvent, getErrorEvents, clearErrorEvents } from '../lib/telemetry.js';
 import { mergeHealthSummary, pullHealthSummary } from '../lib/health.js';
 import { LOCATIONS, GOALS } from '../lib/data.js';
@@ -62,6 +63,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
 
   const prefs = store.preferences || {};
   const [hevyOpen, setHevyOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
   const setPreference = (patch)=> setStore({ ...store, preferences: { ...prefs, ...patch } });
   // Gym Mode writes stamp updatedAt so portable sync merges by recency.
   const setGymPref = (patch)=> setStore({ ...store, gymPrefs: { ...(store.gymPrefs||{}), ...patch, updatedAt: new Date().toISOString() } });
@@ -547,6 +549,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
             <button onClick={exportNow} disabled={store.demo === true} className="btn btn-primary min-h-10 rounded-xl px-4 disabled:opacity-40">Export JSON</button>
             <button onClick={exportEncrypted} disabled={store.demo === true} className="btn btn-primary min-h-10 rounded-xl px-4 disabled:opacity-40">Export encrypted</button>
             <button onClick={exportCsv} className="btn btn-secondary min-h-10 rounded-xl px-4">Export CSV</button>
+            <button onClick={()=> setNotesOpen(true)} data-testid="notes-open" className="btn btn-secondary min-h-10 rounded-xl px-4" title="Search session notes and machine setups">Training notes</button>
             <button onClick={()=> setHevyOpen(true)} disabled={store.demo === true} data-testid="hevy-export-open" className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-40" title="Your workouts in Hevy's own CSV layout">Export for Hevy</button>
             <label className="btn btn-secondary min-h-10 rounded-xl px-4 cursor-pointer">
               Import backup
@@ -651,6 +654,11 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
         </section>
 
         <section id="sec-sync" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+          {notesOpen && (
+            <Suspense fallback={null}>
+              <NotesJournalSheet history={store.history||[]} setupNotes={store.gymPrefs?.setupNotes||{}} onClose={()=> setNotesOpen(false)} />
+            </Suspense>
+          )}
           {hevyOpen && (
             <Suspense fallback={null}>
               <HevyExportSheet history={store.history||[]} units={prefs.units} onClose={()=> setHevyOpen(false)} />
