@@ -12,10 +12,13 @@ import {
   bodyweightSparkline,
   bodyweightTrend,
   liveBodyweights,
+  MEASURES,
+  measureSummary,
   parseBodyweightKg,
   relativeStrength,
   removeBodyweight,
   upsertBodyweight,
+  upsertMeasures,
 } from "../lib/bodyweightLog.js";
 
 const VERDICT = {
@@ -59,6 +62,22 @@ export default function BodyweightCard({ store, setStore }) {
     });
   }
   const unitWord = unit === "lb" ? "lb" : "kg";
+  // Measurements: canonical cm; pound users type and read inches.
+  const len = unit === "lb" ? 2.54 : 1;
+  const lenWord = unit === "lb" ? "in" : "cm";
+  const show = (d, v) => (d.pct ? `${v}%` : `${Math.round((v / len) * 10) / 10} ${lenWord}`);
+  const measures = useMemo(() => measureSummary(log), [log]);
+  const [mText, setMText] = useState({});
+  function saveMeasures() {
+    const todayM = log.find((r) => r.dateISO === today && !r.deleted)?.m || {};
+    const values = {};
+    for (const d of MEASURES) {
+      const t = mText[d.key];
+      values[d.key] = t == null ? todayM[d.key] : t === "" || d.pct ? t : Number(String(t).replace(",", ".")) * len;
+    }
+    setStore({ ...store, bodyweightLog: upsertMeasures(log, { dateISO: today, values }) });
+    setMText({});
+  }
 
   return (
     <section
@@ -163,6 +182,42 @@ export default function BodyweightCard({ store, setStore }) {
           </ul>
         </details>
       )}
+
+      <details className="text-xs" data-testid="measurements">
+        <summary className="min-h-11 flex items-center font-bold cursor-pointer">
+          Measurements{measures.length ? ` (${measures.length})` : ""}
+        </summary>
+        {measures.length > 0 && (
+          <ul className="mb-2 space-y-1">
+            {measures.map((d) => (
+              <li key={d.key} className="flex justify-between gap-2 tabular-nums">
+                <span>{d.label}</span>
+                <span>
+                  <strong>{show(d, d.latest)}</strong>
+                  {d.change != null && <span className="text-ink3"> · {d.change > 0 ? "+" : d.change < 0 ? "−" : "±"}{show(d, Math.abs(d.change))} since {d.since}</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="grid grid-cols-3 gap-2">
+          {MEASURES.map((d) => (
+            <label key={d.key} className="text-[11px] font-semibold text-ink2">
+              {d.label} ({d.pct ? "%" : lenWord})
+              <input
+                inputMode="decimal"
+                value={mText[d.key] ?? ""}
+                onChange={(e) => setMText({ ...mText, [d.key]: e.target.value })}
+                className="mt-1 min-h-11 w-full rounded-lg border border-line bg-surface2 px-2 text-base tabular-nums"
+              />
+            </label>
+          ))}
+          <button type="button" onClick={saveMeasures} className="btn btn-secondary self-end min-h-11 rounded-lg" data-testid="measurements-save">
+            Save
+          </button>
+        </div>
+        <p className="mt-1 text-[11px] text-ink3">Saves today’s entry. Boxes you don’t touch keep today’s value; empty a box and save to clear it.</p>
+      </details>
 
       <div className="space-y-1" data-testid="relative-strength">
         <h4 className="text-xs font-bold">Strength for your size</h4>
