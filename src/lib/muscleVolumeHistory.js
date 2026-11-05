@@ -154,3 +154,30 @@ export function markNudgeSeen(weekISO) {
     /* not persisted */
   }
 }
+
+// Recovery map (Fitbod-style, kept honest): each hard set adds one unit of
+// fatigue to its main muscle that fades linearly to zero over RECOVERY_HOURS;
+// FATIGUE_FULL units still fresh reads as 0% recovered. A rough guide (low
+// confidence) — sleep, food and the lift itself all move real recovery.
+export const RECOVERY_HOURS = 72;
+const FATIGUE_FULL = 10;
+
+/** Per-muscle freshness 0–100 from the last RECOVERY_HOURS of hard sets.
+ *  Muscles with no recent hard sets are 100. Sorted least-recovered first. */
+export function muscleFreshness(history, nowMs = Date.now()) {
+  const load = Object.fromEntries(GUIDED_MUSCLES.map((m) => [m, 0]));
+  for (const h of Array.isArray(history) ? history : []) {
+    if (!h || h.deleted) continue;
+    const t = Date.parse(h.finishedAt || h.savedAt || `${h.dateISO}T18:00:00`);
+    const hours = (nowMs - t) / 3600000;
+    if (!(hours >= 0 && hours < RECOVERY_HOURS)) continue;
+    for (const b of h.blocks || []) {
+      const { muscle, sets } = hardSetsIn(b);
+      if (muscle in load) load[muscle] += sets * (1 - hours / RECOVERY_HOURS);
+    }
+  }
+  return GUIDED_MUSCLES.map((muscle) => ({
+    muscle,
+    pct: Math.round(100 * Math.max(0, 1 - load[muscle] / FATIGUE_FULL)),
+  })).sort((a, b) => a.pct - b.pct);
+}

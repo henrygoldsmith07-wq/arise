@@ -62,7 +62,7 @@ export default defineConfig({
           // repeated its own gzip warm-up and import/export headers.
           if(/\/src\/components\/(SetupNote|LiftGoalsCard|LiftGoalNudge|RecordsWall|NewPrCard|QuickWorkoutSheet|StorageDiagnostics|BodyweightCard|CalendarExportCard|ExerciseHistorySheet|settings\/TrainingPolicySettings|HistoryEditSheet|JargonHelp|ExerciseBrowser|NotesJournalSheet)\.jsx$/.test(id)) return 'sheets';
           // Weekly-volume view (Progress card, Today nudge) shares its set counting with the Block plan: one chunk.
-          if(/\/src\/(lib\/(blockPlan|muscleVolumeHistory)\.js|components\/(BlockPlan|WeeklyVolumeCard|VolumeNudge)\.jsx)$/.test(id)) return 'volume';
+          if(/\/src\/(lib\/(blockPlan|muscleVolumeHistory)\.js|components\/(BlockPlan|WeeklyVolumeCard|VolumeNudge|RecoveryMap)\.jsx)$/.test(id)) return 'volume';
           // Small lazy modules that each paid their own chunk header: one shared chunk.
           if(/\/src\/(lib\/(trainRecommendation|performance|workoutQualityReport|programmeGenerator)\.js|components\/(WhatChangedPanel|TeachingPanel)\.jsx)$/.test(id)) return 'minor';
           // Rarely-opened exports and the background sync trigger: one chunk instead of three.

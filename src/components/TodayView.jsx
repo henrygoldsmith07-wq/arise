@@ -17,6 +17,7 @@ import { storedWorkoutMode, workoutModePatch, workoutModeLabel } from '../lib/wo
 // inflate this route chunk or the boot bundle (see coach-panel.test.js).
 const CoachPanel = lazy(() => import('./CoachPanel.jsx'));
 const LiftGoalNudge = lazy(() => import('./LiftGoalNudge.jsx'));
+const RecoveryMap = lazy(() => import('./RecoveryMap.jsx'));
 const VolumeNudge = lazy(() => import('./VolumeNudge.jsx'));
 const NewPrCard = lazy(() => import('./NewPrCard.jsx'));
 const QuickWorkoutSheet = lazy(() => import('./QuickWorkoutSheet.jsx'));
@@ -392,6 +393,7 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
       <ReadinessCheckIn store={store} setStore={setStore} todayISO={isoToday()} />
 
       {(store.history || []).length >= 2 && <Suspense fallback={null}><NewPrCard store={store} /></Suspense>}
+      {(store.history || []).length >= 1 && <Suspense fallback={null}><RecoveryMap store={store} /></Suspense>}
       {(store.history || []).length >= 6 && <Suspense fallback={null}><VolumeNudge store={store} /></Suspense>}
       {store.gymPrefs?.liftGoals && <Suspense fallback={null}><LiftGoalNudge store={store} setStore={setStore} /></Suspense>}
 
