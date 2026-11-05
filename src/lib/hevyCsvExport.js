@@ -111,7 +111,7 @@ export function buildHevyExport(history, { byId = null, units = 'kg', since = nu
     const title = String(h.title || 'Arise workout').replace(/\s*\(hevy\)$/i, '');
     const description = String(h.note || '').replace(/^Imported from Hevy CSV$/i, '').trim();
     for(const b of h.blocks){
-      const sets = (b.sets || []).filter(exportableSet);
+      const sets = [...(b.warmupSets || []).map(w => ({ ...w, setType: 'warmup' })), ...(b.sets || []).filter(exportableSet)];
       if(!sets.length) continue;
       const { name, custom: isCustom } = hevyNameFor(b.exerciseId, byId);
       exerciseIds.add(b.exerciseId);
@@ -122,7 +122,7 @@ export function buildHevyExport(history, { byId = null, units = 'kg', since = nu
         const rpe = s.rpe === '' || s.rpe == null ? '' : numText(Number(s.rpe));
         lines.push([
           title, formatHevyTime(start), formatHevyTime(end), description, name, '', '', i,
-          s.failed ? 'failure' : 'normal', kg > 0 ? numText(shown) : '', Number(s.reps) > 0 ? Number(s.reps) : '', '', '', rpe,
+          s.setType === 'drop' ? 'dropset' : s.setType || (s.failed ? 'failure' : 'normal'), kg > 0 ? numText(shown) : '', Number(s.reps) > 0 ? Number(s.reps) : '', '', '', rpe,
         ].map(cell).join(','));
         setCount++;
       });

@@ -410,7 +410,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   const volume = useMemo(()=>{
     let total=0;
     for(const b of blocks) for(const s of b.sets){
-      if(!s.completed) continue;
+      if(!s.completed || s.setType === 'warmup') continue;
       total += parseRunnerNumber(s.reps) * Math.max(0, parseRunnerNumber(s.weightKg) - parseRunnerNumber(s.assistedKg));
     }
     return Math.round(total);

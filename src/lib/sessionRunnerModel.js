@@ -623,6 +623,19 @@ export function sessionSaveState(blocks) {
   return { totalSets, completedSets, pendingSets, canSave, blocker };
 }
 
+// Set types (Hevy-style): a warm-up is logged but never a work set, a drop
+// set is a work set at a cut load, a failure set went to failure (RPE 10).
+export const SET_TYPES = ["", "warmup", "drop", "failure"];
+export const SET_TYPE_LABEL = { "": "Normal", warmup: "Warm-up", drop: "Drop set", failure: "To failure" };
+export const nextSetType = (t) => SET_TYPES[(SET_TYPES.indexOf(t || "") + 1) % SET_TYPES.length];
+
+function warmupField(block) {
+  const warmupSets = (block?.sets || [])
+    .filter((set) => set.setType === "warmup" && set.completed)
+    .map((set) => ({ reps: String(set.reps).trim(), weightKg: String(set.weightKg).trim() }));
+  return warmupSets.length ? { warmupSets } : {};
+}
+
 export function buildSessionHistoryPayload({
   session,
   blocks,
@@ -635,6 +648,14 @@ export function buildSessionHistoryPayload({
   performedDateISO = null,
   gymPrefs = null,
 }) {
+  // Logged warm-ups leave the work sets, so volume, fatigue, follow-through
+  // and PR math never see them; they ride along as block.warmupSets.
+  const allBlocks = blocks;
+  blocks = blocks.map((block) =>
+    block.sets.some((set) => set.setType === "warmup")
+      ? { ...block, sets: block.sets.filter((set) => set.setType !== "warmup") }
+      : block,
+  );
   const labels = noteTags
     .map((id) => NOTE_PROMPTS.find((tag) => tag.id === id)?.label)
     .filter(Boolean);
@@ -706,6 +727,7 @@ export function buildSessionHistoryPayload({
       ...(block.prescriptionOverridden ? { prescriptionOverridden: true } : {}),
       ...setupField(gymPrefs, block.exerciseId),
       ...carryPrescription(block),
+      ...warmupField(allBlocks[index]),
       equipment: EXERCISE_BY_ID[block.exerciseId]?.equipment || null,
       sets: block.sets.map((set) => {
         const completed = !!set.completed;
@@ -714,11 +736,12 @@ export function buildSessionHistoryPayload({
         const out = {
           reps: String(set.reps).trim(),
           weightKg: String(set.weightKg).trim(),
-          rpe: String(set.rpe).trim(),
+          rpe: String(set.rpe).trim() || (set.setType === "failure" && completed ? "10" : ""),
           completed,
           skipped,
           failed,
         };
+        if (set.setType === "drop" || set.setType === "failure") out.setType = set.setType;
         if (set.setId) out.setId = set.setId;
         if (completed && Number.isFinite(Number(set.doneAtMs)) && Number(set.doneAtMs) > 0)
           out.doneAtMs = Math.round(Number(set.doneAtMs));
