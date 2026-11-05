@@ -15,6 +15,9 @@ the history is the changelog; this file is its human-readable index.
 ### Training notes journal (MAJOR 45)
 - More → Training notes: one search over every session note, tag chip and machine setup note, with kind and tag filters. Built on this device, nothing uploaded.
 - Cut oversized exercise swap lists to eight entries each to pay for it within the 405 kB budget.
+- Fix: saved sessions now show their date and sort newest first (the journal read `date`/`name`; sessions are stored as `dateISO`/`title`). Same-day entries list the later one first.
+- Fix: Guided mode no longer saves tag labels twice in the session note ("Felt strong · Felt strong · …"); the journal strips the doubled prefix from older saves.
+- Search ignores accents and curly apostrophes and matches non-Latin words. Results page in 50s; tag chips hide under Machine setups (which have no tags).
 
 
 ### Records wall: your best load at 1, 3, 5, 8 and 12+ reps (MAJOR 44)

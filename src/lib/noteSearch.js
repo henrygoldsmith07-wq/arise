@@ -1,8 +1,9 @@
 // noteSearch.js — one searchable journal over everything a lifter wrote down:
 // session notes (free text + tag chips) and per-lift setup notes. Pure; the
-// data never leaves the device. Matching is case-insensitive, every typed word
-// must appear (AND), and a word matches at a word start so "shoul" finds
-// "left shoulder" but "ear" does not find "heart".
+// data never leaves the device. Matching is case- and accent-insensitive
+// ("epaule" finds "épaule"), every typed word must appear (AND), and a word
+// matches at a word start so "shoul" finds "left shoulder" but "ear" does not
+// find "heart".
 import { NOTE_PROMPTS } from "./sessionNotes.js";
 
 const TAG_LABEL = Object.fromEntries(NOTE_PROMPTS.map((p) => [p.id, p.label]));
@@ -13,7 +14,10 @@ export const TAG_FILTERS = NOTE_PROMPTS.map((p) => ({
 
 function norm(s) {
   return String(s ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
+    .replace(/[\u2018\u2019\u02bc]/g, "'")
     .replace(/[\u0000-\u001f]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -22,14 +26,16 @@ function norm(s) {
 /** Words of a query; punctuation-only input gives []. */
 export function queryWords(q) {
   return norm(q)
-    .split(/[^a-z0-9°']+/i)
+    .split(/[^\p{L}\p{N}°']+/u)
+    .map((w) => w.replace(/^'+|'+$/g, ""))
     .filter(Boolean);
 }
 
+const WORD_CHAR = /[\p{L}\p{N}]/u;
 function wordStartMatch(hay, word) {
   let i = hay.indexOf(word);
   while (i !== -1) {
-    if (i === 0 || /[^a-z0-9]/i.test(hay[i - 1])) return true;
+    if (i === 0 || !WORD_CHAR.test(hay[i - 1])) return true;
     i = hay.indexOf(word, i + 1);
   }
   return false;
@@ -37,8 +43,10 @@ function wordStartMatch(hay, word) {
 
 /**
  * Build the index. Sessions: any history item with a note or tags (the tag
- * chips are stripped from the stored note string so they are not shown twice).
- * Setup notes: any non-tombstone entry. Newest first; ties keep input order.
+ * chips are stripped from the stored note string so they are not shown twice;
+ * older Guided saves stored them twice, so every leading copy goes).
+ * Setup notes: any non-tombstone entry. Newest first; on the same date the
+ * later entry (history is oldest-first) comes first.
  */
 export function buildNoteIndex(
   history = [],
@@ -54,21 +62,24 @@ export function buildNoteIndex(
     let text = String(h.note || "").trim();
     if (/^Imported from Hevy/i.test(text)) text = "";
     const chipText = tags.map((t) => TAG_LABEL[t]).join(", ");
-    if (chipText && text.startsWith(chipText))
+    while (chipText && text.startsWith(chipText))
       text = text
         .slice(chipText.length)
         .replace(/^\s*·\s*/, "")
         .trim();
     if (!text && !tags.length) continue;
+    // Saved sessions carry dateISO/title; date/name are older/imported shapes.
+    const date = String(h.dateISO || h.date || "").slice(0, 10);
+    const title = String(h.title || h.name || h.dayName || "Session");
     out.push({
       kind: "session",
-      id: String(h.id ?? `${h.date}-${out.length}`),
+      id: `session-${h.id ?? `${date}-${out.length}`}`,
       sessionId: h.id ?? null,
-      date: String(h.date || ""),
-      title: String(h.name || h.title || h.dayName || "Session"),
+      date,
+      title,
       text,
       tags,
-      hay: norm(`${text} ${chipText} ${h.name || h.title || ""}`),
+      hay: norm(`${text} ${chipText} ${title}`),
     });
   }
   for (const [exId, e] of Object.entries(
@@ -97,7 +108,7 @@ export function buildNoteIndex(
   return out
     .map((e, i) => ({ e, i }))
     .sort((a, b) =>
-      b.e.date > a.e.date ? 1 : b.e.date < a.e.date ? -1 : a.i - b.i,
+      b.e.date > a.e.date ? 1 : b.e.date < a.e.date ? -1 : b.i - a.i,
     )
     .map((x) => x.e);
 }
