@@ -162,29 +162,29 @@ export default function WeeklyReviewCard({ store, setStore }){
   const accept = ()=>{ try{ setStore(acknowledgeWeeklyReview(store, data.ackKey)); }catch{} };
 
   return (
-    <section className="mx-4 mt-4 rounded-2xl border border-line bg-surface p-4 space-y-3" aria-label="Weekly review">
+    <section className="rounded-xl border border-line bg-surface p-3 space-y-2" aria-label="Weekly review">
       <div className="flex items-baseline gap-2">
         <p className="text-sm font-extrabold tracking-tight">Your week{data.weekNumber != null ? ` — week ${data.weekNumber}` : ''}</p>
         <span className={`ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full border ${structural.length?'border-success text-success':'border-line text-ink3'}`}>{structural.length?`${structural.length} change${structural.length===1?'':'s'} next week`:'no changes needed'}</span>
       </div>
 
       {/* 1. What did I do? */}
-      <div className="rounded-xl bg-surface2 border border-line px-3 py-2">
+      <div className="rounded-lg bg-surface2 px-3 py-2">
         <p className="text-sm font-bold">{data.completion.done}/{data.completion.total} workouts completed</p>
         <p className="text-[11px] text-ink3">{data.volumeKg.toLocaleString()} kg of work{data.volumeDelta != null ? ` · ${data.volumeDelta > 0 ? '+' : ''}${data.volumeDelta}% volume vs last week` : ''}</p>
       </div>
 
       {/* Deload as a first-class state */}
       {review.deloadDecision?.yes && (
-        <div className="rounded-xl bg-reviewsoft border border-review/30 px-3 py-2" role="status">
+        <div className="rounded-lg bg-reviewsoft border border-review/30 px-3 py-2" role="status">
           <p className="text-xs font-bold text-review">🔄 Deload week ahead</p>
           <p className="text-[11px] text-ink2 leading-snug">Next week's volume is reduced on purpose — the plan is the deload. Keep the loads honest, let the fatigue clear.</p>
         </div>
       )}
 
       {/* 2. Did I improve? */}
-      <div className="rounded-xl border border-line bg-surface2 px-3 py-2 space-y-1">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Did I improve?</p>
+      <div className="rounded-lg bg-surface2 px-3 py-2 space-y-1">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">Did I improve?</p>
         <p className="text-[10px] text-ink3">Confidence is per-row — Arise only calls a change strong when several comparable sessions agree.</p>
         {data.improved.map((row)=> (
           <p key={row.name} className="text-xs"><span className="font-semibold">{row.name}</span> <span className="text-success font-bold">↑ {row.deltaPct}%</span> <span className="text-ink3">estimated 1RM vs your last comparable session{row.conf ? ` · ${row.conf} confidence` : ''}</span></p>
@@ -202,8 +202,8 @@ export default function WeeklyReviewCard({ store, setStore }){
       </div>
 
       {/* 3. What did Arise notice? */}
-      <div className="rounded-xl border border-line bg-surface2 px-3 py-2">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">What Arise noticed</p>
+      <div className="rounded-lg bg-surface2 px-3 py-2">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">What Arise noticed</p>
         <ul className="mt-1 space-y-1">
           {data.noticed.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}
         </ul>
@@ -213,8 +213,8 @@ export default function WeeklyReviewCard({ store, setStore }){
           confidence level the engine assigned, never upgraded for morale.
           "Inconclusive" is shown as the valid result it is. */}
       {data.learned && data.learned.length > 0 && (
-        <div className="rounded-xl border border-line bg-surface2 px-3 py-2">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">What Arise learned</p>
+        <div className="rounded-lg bg-surface2 px-3 py-2">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">What Arise learned</p>
           <ul className="mt-1 space-y-1.5">
             {data.learned.map((l, i)=> (
               <li key={i} className="text-[11px] text-ink2 leading-snug">
@@ -230,9 +230,9 @@ export default function WeeklyReviewCard({ store, setStore }){
       {/* 4. What changes next week? */}
       {structural.length > 0 && (
         <div className="space-y-1">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Next week</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">Next week</p>
           {structural.map((d,i)=>(
-            <div key={i} className="rounded-xl border border-line bg-surface2 px-3 py-2">
+            <div key={i} className="rounded-lg bg-surface2 px-3 py-2">
               <button onClick={()=>setExpanded(e=>!e)} className="w-full text-left flex items-center gap-2">
                 <span className="text-xs font-bold">{fmtDir(d)}</span>
                 <span className="ml-auto text-[11px] text-ink3">{expanded?'Hide reason':'Why?'}</span>
@@ -248,8 +248,8 @@ export default function WeeklyReviewCard({ store, setStore }){
       )}
 
       <div className="flex gap-2">
-        <button onClick={accept} className="btn btn-primary flex-1 min-h-10 rounded-xl">{data.alreadyApplied ? 'Done' : 'Accept week'}</button>
-        <button onClick={()=>setExpanded(e=>!e)} className="btn btn-secondary min-h-10 rounded-xl px-4">{expanded?'Hide reasons':'Show reasons'}</button>
+        <button onClick={accept} className="btn btn-primary flex-1 min-h-10 rounded-lg">{data.alreadyApplied ? 'Done' : 'Accept week'}</button>
+        <button onClick={()=>setExpanded(e=>!e)} className="btn btn-secondary min-h-10 rounded-lg px-4">{expanded?'Hide reasons':'Show reasons'}</button>
       </div>
 
       {/* Backlog item 6: the week as a Markdown file. Built from the same

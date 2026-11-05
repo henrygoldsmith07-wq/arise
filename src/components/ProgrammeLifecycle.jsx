@@ -37,7 +37,7 @@ export function NextBlockFromEdits({ schedule, store, setStore, className = '' }
     <div className={`rounded-lg border border-line bg-surface p-2 ${className}`}>
       {editedDays > 0 && <>
         <p className="text-[11px] text-ink2 leading-snug">Your {editedDays} customised day{editedDays === 1 ? '' : 's'} can carry straight into the next block.</p>
-        <button type="button" onClick={start} className="btn btn-primary w-full min-h-11 rounded-xl text-xs mt-2">Start next block from my edits</button>
+        <button type="button" onClick={start} className="btn btn-primary w-full min-h-11 rounded-lg text-xs mt-2">Start next block from my edits</button>
       </>}
       {msg && <p role="status" className="mt-1 text-[11px] text-success">{msg}</p>}
     </div>
@@ -84,9 +84,9 @@ export default function ProgrammeLifecycle({ schedule, history = [], lastReviewA
   const { stages, currentId, prog, adaptation, weekPhase, upcoming, behaviour } = data;
 
   return (
-    <div className="rounded-xl border border-line bg-surface2 p-3" role="region" aria-label="Programme lifecycle">
+    <div className="rounded-lg bg-surface2 p-3" role="region" aria-label="Programme lifecycle">
       <button onClick={()=> setOpen(o=> !o)} aria-expanded={open} className="w-full flex items-baseline gap-2 text-left min-h-8">
-        <span className="text-[11px] font-bold uppercase tracking-widest text-ink3">Programme lifecycle</span>
+        <span className="text-[11px] font-bold uppercase tracking-wider text-ink3">Programme lifecycle</span>
         <span className="ml-auto text-[11px] text-ink3">{open ? 'Hide' : 'Where am I?'}</span>
       </button>
 

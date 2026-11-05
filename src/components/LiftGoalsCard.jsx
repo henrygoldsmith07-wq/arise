@@ -101,7 +101,7 @@ export default function LiftGoalsCard({ store, setStore }) {
 
   return (
     <section
-      className="rounded-2xl border border-line bg-surface p-4 space-y-3"
+      className="rounded-xl border border-line bg-surface p-3 space-y-3"
       aria-label="Lift goals"
       data-testid="lift-goals-card"
     >
@@ -114,7 +114,7 @@ export default function LiftGoalsCard({ store, setStore }) {
             setError("");
           }}
           data-testid="lift-goal-add"
-          className="btn btn-ghost min-h-11 rounded-xl px-3 text-xs font-bold"
+          className="btn btn-ghost min-h-11 rounded-lg px-3 text-xs font-bold"
           aria-expanded={open}
         >
           {open ? "Close" : "Set a goal"}
@@ -176,14 +176,14 @@ export default function LiftGoalsCard({ store, setStore }) {
             <button
               type="button"
               onClick={() => edit(g)}
-              className="btn btn-ghost min-h-11 rounded-xl px-3 text-xs font-bold"
+              className="btn btn-ghost min-h-11 rounded-lg px-3 text-xs font-bold"
             >
               Edit
             </button>
             <button
               type="button"
               onClick={() => remove(g.exerciseId)}
-              className="btn btn-ghost min-h-11 rounded-xl px-3 text-xs font-bold"
+              className="btn btn-ghost min-h-11 rounded-lg px-3 text-xs font-bold"
               aria-label={`Remove goal for ${nameOf(g.exerciseId)}`}
             >
               Remove
@@ -200,7 +200,7 @@ export default function LiftGoalsCard({ store, setStore }) {
               value={lift}
               onChange={(e) => setLift(e.target.value)}
               data-testid="lift-goal-lift"
-              className="mt-1 min-h-11 w-full rounded-xl border border-line bg-surface2 px-3 text-base"
+              className="mt-1 min-h-11 w-full rounded-lg border border-line bg-surface2 px-3 text-base"
             >
               <option value="">Choose a lift you have logged</option>
               {lifts.map((id) => (
@@ -218,7 +218,7 @@ export default function LiftGoalsCard({ store, setStore }) {
                 onChange={(e) => setLoad(e.target.value)}
                 inputMode="decimal"
                 data-testid="lift-goal-load"
-                className="mt-1 min-h-11 w-full rounded-xl border border-line bg-surface2 px-3 text-base font-bold tabular-nums"
+                className="mt-1 min-h-11 w-full rounded-lg border border-line bg-surface2 px-3 text-base font-bold tabular-nums"
               />
             </label>
             <label className="w-24 text-[11px] font-semibold text-ink2">
@@ -228,7 +228,7 @@ export default function LiftGoalsCard({ store, setStore }) {
                 onChange={(e) => setReps(e.target.value)}
                 inputMode="numeric"
                 data-testid="lift-goal-reps"
-                className="mt-1 min-h-11 w-full rounded-xl border border-line bg-surface2 px-3 text-base font-bold tabular-nums"
+                className="mt-1 min-h-11 w-full rounded-lg border border-line bg-surface2 px-3 text-base font-bold tabular-nums"
               />
             </label>
           </div>
@@ -240,7 +240,7 @@ export default function LiftGoalsCard({ store, setStore }) {
               min={today}
               onChange={(e) => setDeadline(e.target.value)}
               data-testid="lift-goal-deadline"
-              className="mt-1 min-h-11 w-full rounded-xl border border-line bg-surface2 px-3 text-base"
+              className="mt-1 min-h-11 w-full rounded-lg border border-line bg-surface2 px-3 text-base"
             />
           </label>
           {error && (
@@ -252,7 +252,7 @@ export default function LiftGoalsCard({ store, setStore }) {
             type="button"
             onClick={save}
             data-testid="lift-goal-save"
-            className="btn btn-primary min-h-11 w-full rounded-xl"
+            className="btn btn-primary min-h-11 w-full rounded-lg"
           >
             Save goal
           </button>

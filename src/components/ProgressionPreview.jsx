@@ -18,7 +18,7 @@ export default function ProgressionPreview({ program, history = [], plateConfig 
   if(!program?.weeks?.length) return null;
   return (
     <details
-      className="rounded-xl border border-line bg-surface2 px-3 py-2"
+      className="rounded-lg bg-surface2 px-3 py-2"
       onToggle={(e)=> setOpen(e.target.open)}
     >
       <summary className="text-xs font-bold cursor-pointer">Next 4 weeks — simulated from your history</summary>
@@ -29,7 +29,7 @@ export default function ProgressionPreview({ program, history = [], plateConfig 
       {preview && (
         <div className="mt-2 space-y-2">
           {preview.weeks.map(week=> (
-            <div key={week.week} className="rounded-xl border border-line bg-surface px-3 py-2">
+            <div key={week.week} className="rounded-lg border border-line bg-surface px-3 py-2">
               <p className="text-[11px] font-bold">
                 Week {week.week}
                 {week.entries[0]?.dateISO && !String(week.entries[0].dateISO).startsWith('preview')

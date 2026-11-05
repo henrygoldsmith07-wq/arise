@@ -41,7 +41,7 @@ export default function OfflineBanner(){
 
   if(!offline) return null;
   return (
-    <div role="status" className="rounded-xl border border-review/40 bg-reviewsoft px-3 py-2 text-xs text-center mx-4 mt-2">
+    <div role="status" className="rounded-lg border border-review/40 bg-reviewsoft px-3 py-2 text-xs text-center mx-4 mt-2">
       <span className="font-bold">Offline</span> <span className="text-ink3">— everything still works. Logging, history and programs are all local; sync resumes when you reconnect.</span>
     </div>
   );

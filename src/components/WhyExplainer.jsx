@@ -33,7 +33,7 @@ export default function WhyExplainer({ item, label = 'Why?', defaultOpen = false
   if(!hasBody && !item.expert) return null;
 
   return (
-    <details open={defaultOpen} className="rounded-xl border border-line bg-surface2/60 px-3 py-2">
+    <details open={defaultOpen} className="rounded-lg bg-surface2/60 px-3 py-2">
       <summary className="text-[11px] font-bold cursor-pointer text-ink2 select-none min-h-8 flex items-center gap-1.5">
         <span aria-hidden className="text-ink3">?</span>
         {label}
@@ -78,7 +78,7 @@ export default function WhyExplainer({ item, label = 'Why?', defaultOpen = false
             through; it is disclosure, not removal. */}
         {item.expert && (
           <details className="pt-1 border-t border-line/60">
-            <summary className="text-[10px] font-bold uppercase tracking-widest text-ink3 cursor-pointer min-h-7 flex items-center">Show the working</summary>
+            <summary className="text-[10px] font-bold uppercase tracking-wider text-ink3 cursor-pointer min-h-7 flex items-center">Show the working</summary>
             <div className="mt-1 space-y-1">
               {(item.expert.inputs || []).length > 0 && (
                 <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 text-[10px]">

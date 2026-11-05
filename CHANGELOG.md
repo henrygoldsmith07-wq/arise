@@ -12,6 +12,12 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Density pass: less chunky everywhere
+- One step down the radius scale app-wide; section cards pad 12px, not 16px; page stacks gap 12px; boxes nested inside cards lose their border (tint only); eyebrow labels track tighter.
+- Buttons default to 14px instead of the inherited 16px (any `text-*` utility still wins). Touch targets stay at 44px — only the visual weight changed.
+- Today: What's different / Why / Focus / After the workout are one divided card, not four; per-lift "Why" and "After the workout" are one tap in; the cold-start caveat shows once, not once per lift. Safety signals are one card (two shown, "N more"), not a stack of amber boxes. Start button no longer shouts; time chips sit on one row; the Level card is one line.
+- Fixes: Progress level card squeezed its text to one word per line on phones; training-model values overflowed their card; weekday chips wrapped onto two rows; the install card ran edge to edge; Weekly review was double-indented; equipment changes listed raw ids and duplicates; Progress had a second, unlabelled weekly-volume bar chart (the verdict line stays).
+
 ### Training notes journal (MAJOR 45)
 - More → Training notes: one search over every session note, tag chip and machine setup note, with kind and tag filters. Built on this device, nothing uploaded.
 - Cut oversized exercise swap lists to eight entries each to pay for it within the 405 kB budget.

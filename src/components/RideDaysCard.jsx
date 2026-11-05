@@ -21,20 +21,20 @@ export default function RideDaysCard({ store, setStore }){
     if(r.moved.length) setStore({ ...store, activeSchedule: r.schedule });
   };
   return (
-    <section className="rounded-2xl border border-line bg-surface2 p-3 space-y-2" aria-label="Key ride days">
+    <section className="border-t border-line pt-3 space-y-2" aria-label="Key ride days">
       <p className="text-xs font-bold">Key ride days</p>
       <p className="text-[11px] text-ink3">Tap the days you race or ride hard. Leg work is kept off those days and the day before.</p>
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Key ride weekdays">
+      <div className="grid grid-cols-7 gap-1" role="group" aria-label="Key ride weekdays">
         {ORDER.map(d => (
           <button key={d} type="button" aria-pressed={days.includes(d)} onClick={() => toggle(d)}
-            className={`min-h-11 min-w-11 px-2 rounded-xl border text-xs font-bold ${days.includes(d) ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink2'}`}>{WEEKDAY_LABELS[d]}</button>
+            className={`min-h-11 min-w-11 rounded-lg border text-xs font-bold ${days.includes(d) ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink2'}`}>{WEEKDAY_LABELS[d]}</button>
         ))}
       </div>
       {liftDays.length > 0 && <p className="text-[11px] text-ink2" data-testid="lift-days-hint">Best lifting days around your rides: {liftDays.map(d => WEEKDAY_LABELS[d]).join(', ')}.</p>}
       {conflicts.length > 0 && (
         <div role="status" className="space-y-1.5">
           <p className="text-[11px] text-ink2">{conflicts.length} leg session{conflicts.length > 1 ? 's' : ''} clash with a ride: {conflicts.slice(0, 3).map(c => `${c.session.title} (${c.session.dateISO})`).join(', ')}{conflicts.length > 3 ? '…' : ''}.</p>
-          <button type="button" onClick={move} className="btn btn-secondary min-h-11 rounded-xl text-xs w-full">Move them to clear days</button>
+          <button type="button" onClick={move} className="btn btn-secondary min-h-11 rounded-lg text-xs w-full">Move them to clear days</button>
         </div>
       )}
     </section>

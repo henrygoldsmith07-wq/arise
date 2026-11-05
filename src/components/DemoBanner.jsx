@@ -39,7 +39,7 @@ export default function DemoBanner({ onExitDemo }){
   return (
     <div role="region" aria-label="Demo mode banner" className="px-4 pt-2">
       {dialogs.node}
-      <div className="rounded-2xl border border-line bg-surface2 px-3 py-2.5 flex items-center gap-3">
+      <div className="rounded-xl bg-surface2 px-3 py-2.5 flex items-center gap-3">
         <span aria-hidden className="text-base">🧪</span>
         <div className="min-w-0 flex-1">
           <p className="text-xs font-bold">Demo mode — sample data</p>
@@ -48,7 +48,7 @@ export default function DemoBanner({ onExitDemo }){
           </p>
           {err && <p className="text-[11px] text-review mt-1">{err}</p>}
         </div>
-        <button onClick={exitDemo} disabled={busy} className="btn btn-secondary min-h-10 shrink-0 rounded-xl px-3 text-xs disabled:opacity-40">
+        <button onClick={exitDemo} disabled={busy} className="btn btn-secondary min-h-10 shrink-0 rounded-lg px-3 text-xs disabled:opacity-40">
           {busy ? 'Erasing…' : 'Start fresh'}
         </button>
       </div>

@@ -28,7 +28,7 @@ export default function HistoryEditSheet({ store, setStore, onClose }){
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
       <div ref={a11y.rootRef} onKeyDown={a11y.trapTab} role="dialog" aria-modal="true" aria-label="Edit workout history"
-        onClick={e=> e.stopPropagation()} className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-t-2xl border border-line bg-surface p-4 space-y-3">
+        onClick={e=> e.stopPropagation()} className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-t-xl border border-line bg-surface p-4 space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-bold text-ink">Edit logged workouts</h2>
           <button ref={a11y.closeRef} type="button" onClick={onClose} className="min-h-11 min-w-11 text-xs font-bold px-3 rounded-full border border-line">Done</button>
@@ -41,7 +41,7 @@ export default function HistoryEditSheet({ store, setStore, onClose }){
           {sessions.map((s)=> {
             const open = openId === s.id;
             return (
-              <li key={s.id} className="rounded-xl border border-line bg-surface2 p-2.5 text-xs">
+              <li key={s.id} className="rounded-lg bg-surface2 p-2.5 text-xs">
                 <button type="button" aria-expanded={open} onClick={()=> { setOpenId(open ? null : s.id); setDraft(null); setConfirm(null); }} className="min-h-11 w-full text-left font-bold text-ink">
                   {s.dateISO} · {(s.blocks || []).length} exercises
                 </button>

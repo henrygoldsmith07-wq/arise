@@ -153,34 +153,34 @@ export default function ExerciseBrowser({ availableEquipment, onboarding = null,
   }) : [], [onboarding]);
 
   return (
-    <div className="px-4 py-5 space-y-4">
+    <div className="px-4 py-5 space-y-3">
       <div>
         <h2 className="text-lg font-extrabold tracking-tight">Exercises</h2>
         <p className="text-xs text-ink3">Search and filter the library. Toggle “Only my kit” to gate by onboarding equipment.</p>
       </div>
 
-      <div className="rounded-2xl border border-line bg-surface p-3 space-y-3">
+      <div className="rounded-xl border border-line bg-surface p-3 space-y-3">
         <label className="block">
-          <span className="text-[11px] font-bold uppercase tracking-widest text-ink3">Search</span>
-          <input value={q} onChange={e=> setQ(e.target.value)} aria-label="Search exercises" placeholder="Push-up, squat, pull-up…" className="mt-1 w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm focus:outline-none focus:border-ink" />
+          <span className="text-[11px] font-bold uppercase tracking-wider text-ink3">Search</span>
+          <input value={q} onChange={e=> setQ(e.target.value)} aria-label="Search exercises" placeholder="Push-up, squat, pull-up…" className="mt-1 w-full rounded-lg border border-line bg-surface2 px-3 py-2.5 text-sm focus:outline-none focus:border-ink" />
         </label>
         <div className="grid grid-cols-2 gap-2">
           <label className="block">
             <span className="text-[11px] font-semibold text-ink3">Muscle</span>
-            <select value={muscle} onChange={e=> setMuscle(e.target.value)} className="mt-1 w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm">
+            <select value={muscle} onChange={e=> setMuscle(e.target.value)} className="mt-1 w-full rounded-lg border border-line bg-surface2 px-3 py-2.5 text-sm">
               <option value="">All</option>{MUSCLES.map(m=> <option key={m} value={m}>{m}</option>)}
             </select>
           </label>
           <label className="block">
             <span className="text-[11px] font-semibold text-ink3">Level</span>
-            <select value={level} onChange={e=> setLevel(e.target.value)} className="mt-1 w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm">
+            <select value={level} onChange={e=> setLevel(e.target.value)} className="mt-1 w-full rounded-lg border border-line bg-surface2 px-3 py-2.5 text-sm">
               <option value="">All</option>{LEVELS.map(l=> <option key={l} value={l}>{l}</option>)}
             </select>
           </label>
         </div>
         <label className="block">
           <span className="text-[11px] font-semibold text-ink3">Equipment</span>
-          <select value={equip} onChange={e=> setEquip(e.target.value)} className="mt-1 w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm">
+          <select value={equip} onChange={e=> setEquip(e.target.value)} className="mt-1 w-full rounded-lg border border-line bg-surface2 px-3 py-2.5 text-sm">
             <option value="">Any</option>{EQUIPMENT.map(e=> <option key={e.id} value={e.id}>{e.label}</option>)}
           </select>
         </label>
@@ -214,7 +214,7 @@ export default function ExerciseBrowser({ availableEquipment, onboarding = null,
       <p className="text-xs text-ink3 px-1" role="status" aria-live="polite">{results.length} exercise{results.length===1?'':'s'} • filtered in library order</p>
 
       {!!recs.length && (
-        <div className="rounded-2xl border border-line bg-surface p-3">
+        <div className="rounded-xl border border-line bg-surface p-3">
           <p className="text-xs font-bold">Recommended for you</p>
           <p className="text-[11px] text-ink3 mt-1">Based on onboarding: goal <span className="font-semibold text-ink">{onboarding.goal}</span> • location <span className="font-semibold text-ink">{onboarding.location}</span> • kit {(onboarding.equipment||[]).join(', ')}</p>
           <ul className="mt-2 grid gap-1.5">
@@ -226,11 +226,11 @@ export default function ExerciseBrowser({ availableEquipment, onboarding = null,
 
       <ul className="space-y-2">
         {results.map(ex=> (
-          <li key={ex.id} className="rounded-2xl border border-line bg-surface overflow-hidden">
+          <li key={ex.id} className="rounded-xl border border-line bg-surface overflow-hidden">
             <button onClick={()=> setOpenId(openId===ex.id?null:ex.id)} className="w-full text-left px-4 py-3 flex items-center gap-3">
               {hasExerciseImage(ex.id)
                 ? <ExerciseIllustration exerciseId={ex.id} size="sm" />
-                : <span className="w-9 h-9 grid place-items-center rounded-xl bg-surface2 border border-line text-sm">{EQUIPMENT.find(e=> e.id===ex.equipment[0])?.icon || '•'}</span>}
+                : <span className="w-9 h-9 grid place-items-center rounded-lg bg-surface2 border border-line text-sm">{EQUIPMENT.find(e=> e.id===ex.equipment[0])?.icon || '•'}</span>}
               <span className="min-w-0">
                 <span className="block text-sm font-bold truncate">{ex.name}</span>
                 <span className="block text-[11px] text-ink3">{ex.muscle} • {ex.level} • {ex.equipment.join(', ')}</span>
@@ -259,7 +259,7 @@ export default function ExerciseBrowser({ availableEquipment, onboarding = null,
                     <ClassificationChips exercise={ex} />
                   </div>
                 </div>
-                <details open={howToOpen} onToggle={e=> setHowToOpen(e.currentTarget.open)} className="rounded-xl border border-line bg-surface px-3 py-2">
+                <details open={howToOpen} onToggle={e=> setHowToOpen(e.currentTarget.open)} className="rounded-lg border border-line bg-surface px-3 py-2">
                   <summary className="text-xs font-bold cursor-pointer min-h-9 flex items-center">How to perform it</summary>
                   {(() => {
                     const t = teachingFor(ex.id);
@@ -298,7 +298,7 @@ export default function ExerciseBrowser({ availableEquipment, onboarding = null,
                   rows={recentExerciseSessions(storeSnapshot.history, ex.id, 3)}
                   onLearnHow={()=> setHowToOpen(true)}
                 />
-                <details open={subsOpen} onToggle={e=> setSubsOpen(e.currentTarget.open)} className="rounded-xl border border-line bg-surface px-3 py-2">
+                <details open={subsOpen} onToggle={e=> setSubsOpen(e.currentTarget.open)} className="rounded-lg border border-line bg-surface px-3 py-2">
                   <summary className="text-xs font-bold cursor-pointer min-h-9 flex items-center">Suitable substitutions</summary>
                   <div className="mt-1.5">
                     <SubstitutionList
@@ -314,9 +314,9 @@ export default function ExerciseBrowser({ availableEquipment, onboarding = null,
           </li>
         ))}
         {!results.length && (
-          <li className="text-sm text-ink3 border border-dashed border-line rounded-2xl p-6 text-center space-y-2">
+          <li className="text-sm text-ink3 border border-dashed border-line rounded-xl p-6 text-center space-y-2">
             <p>No matches — loosen filters or add equipment in onboarding.</p>
-            <button onClick={clearFilters} className="btn btn-secondary min-h-11 rounded-xl px-4 text-xs font-bold">Clear filters</button>
+            <button onClick={clearFilters} className="btn btn-secondary min-h-11 rounded-lg px-4 text-xs font-bold">Clear filters</button>
           </li>
         )}
       </ul>

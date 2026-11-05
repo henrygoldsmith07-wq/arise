@@ -12,7 +12,7 @@ export default function ExerciseHistorySheet({ exerciseId, name, history, unit =
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
       <div ref={a11y.rootRef} onKeyDown={a11y.trapTab} role="dialog" aria-modal="true" aria-label={`${name} history`}
-        onClick={e=> e.stopPropagation()} className="w-full max-w-md max-h-[80vh] overflow-y-auto rounded-t-2xl border border-line bg-surface p-4 space-y-3">
+        onClick={e=> e.stopPropagation()} className="w-full max-w-md max-h-[80vh] overflow-y-auto rounded-t-xl border border-line bg-surface p-4 space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-bold text-ink">{name}: last {sessions.length || 5} sessions</h2>
           <button ref={a11y.closeRef} type="button" onClick={onClose} className="min-h-11 min-w-11 text-xs font-bold px-3 rounded-full border border-line">Close</button>
@@ -28,7 +28,7 @@ export default function ExerciseHistorySheet({ exerciseId, name, history, unit =
         )}
         <ul className="space-y-2">
           {sessions.map((s, i)=> (
-            <li key={`${s.dateISO}-${i}`} className="rounded-xl border border-line bg-surface2 p-2.5 text-xs">
+            <li key={`${s.dateISO}-${i}`} className="rounded-lg bg-surface2 p-2.5 text-xs">
               <p className="font-bold text-ink">{s.dateISO}{s.bestE1rm ? <span className="font-normal text-ink3"> · e1RM {fmtWeight(s.bestE1rm, unit)}<JargonHelp term="e1RM"/></span> : null}</p>
               {s.setup ? <p className="text-ink3" data-testid="history-setup">Setup: {s.setup}</p> : null}
               <p className="text-ink2 tabular-nums">{s.sets.map(x=> `${x.weightKg ? `${fmtWeight(x.weightKg, unit)} × ` : ''}${x.reps}${x.rir != null ? ` @${x.rir}RIR` : ''}`).join(' · ')}</p>

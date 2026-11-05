@@ -33,13 +33,13 @@ export default function WeekdayPlanCard({ store, setStore }){
     setMsg(r.swapped ? 'Swapped days.' : 'Session moved.');
   };
   return (
-    <section className="rounded-2xl border border-line bg-surface2 p-3 space-y-2" aria-label="Training days" data-testid="weekday-plan">
+    <section className="border-t border-line pt-3 space-y-2" aria-label="Training days" data-testid="weekday-plan">
       <p className="text-xs font-bold">Training days</p>
       <p className="text-[11px] text-ink3">Tap the weekdays you can lift. Upcoming sessions move onto them.</p>
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Training weekdays">
+      <div className="grid grid-cols-7 gap-1" role="group" aria-label="Training weekdays">
         {ORDER.map(d => (
           <button key={d} type="button" aria-pressed={chosen.includes(d)} onClick={() => toggle(d)}
-            className={`min-h-11 min-w-11 px-2 rounded-xl border text-xs font-bold ${chosen.includes(d) ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink2'}`}>{weekdayLabel(d)}</button>
+            className={`min-h-11 min-w-11 rounded-lg border text-xs font-bold ${chosen.includes(d) ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink2'}`}>{weekdayLabel(d)}</button>
         ))}
       </div>
       <ul className="space-y-1.5">

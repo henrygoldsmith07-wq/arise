@@ -752,7 +752,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       <div className="relative shrink-0 flex items-center gap-3 px-4 py-3 border-b border-line bg-surface">
         <button ref={closeRef} onClick={requestExit} className="w-11 h-11 grid place-items-center rounded-full border border-line bg-surface2" aria-label="Close session">✕</button>
         <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">{session.mode === 'short' ? 'Short session' : 'Session'}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">{session.mode === 'short' ? 'Short session' : 'Session'}</p>
           <p className="font-bold truncate">{session.title} • {session.dateISO}</p>
         </div>
         <div className="ml-auto flex items-center gap-2 shrink-0">
@@ -776,16 +776,16 @@ export default function SessionRunner({ session, history = [], availableEquipmen
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-4 pt-5 pb-6 space-y-4 max-w-3xl w-full mx-auto">
+      <div className="flex-1 overflow-auto px-4 pt-5 pb-6 space-y-3 max-w-3xl w-full mx-auto">
         {gymMode && (
-          <div className="rounded-2xl border border-line bg-surface2 px-3 py-2 flex items-center gap-2">
+          <div className="rounded-xl bg-surface2 px-3 py-2 flex items-center gap-2">
             <span className="text-base" aria-hidden>🎯</span>
             <span className="text-xs"><strong>Focus mode:</strong> one exercise at a time. Swipe a row right to complete it, left to mark it failed, or long-press it to open the load keypad.</span>
           </div>
         )}
 
         {!gymMode && (
-        <div className="rounded-2xl border border-line bg-surface2 px-3 py-2.5 text-xs flex items-center gap-2">
+        <div className="rounded-xl bg-surface2 px-3 py-2.5 text-xs flex items-center gap-2">
           <span className="text-base" aria-hidden>⚡</span>
           <span><strong>Fast logging:</strong> previous reps and load are prefilled. Edit them directly, then tap <strong>Done</strong> once the set is complete.</span>
         </div>
@@ -795,10 +795,10 @@ export default function SessionRunner({ session, history = [], availableEquipmen
             whole session with the prescription, still counted as explicit
             acceptances in the evidence ledger. Hidden once any set is logged. */}
         {applyAllAvailable && (
-          <div className="rounded-2xl border border-line bg-surface px-3 py-2 flex items-center gap-2">
+          <div className="rounded-xl border border-line bg-surface px-3 py-2 flex items-center gap-2">
             <span className="text-base" aria-hidden>🎯</span>
             <span className="text-xs flex-1 min-w-0"><strong>Engine targets ready</strong> — one tap fills every un-started exercise with this week's prescription.</span>
-            <button onClick={applyAllRecommendations} className="btn btn-primary shrink-0 min-h-11 rounded-xl px-3 text-xs font-bold">Apply all</button>
+            <button onClick={applyAllRecommendations} className="btn btn-primary shrink-0 min-h-11 rounded-lg px-3 text-xs font-bold">Apply all</button>
           </div>
         )}
         {applyAllNote && <p role="status" className="text-[11px] font-semibold text-success px-1 -mt-2">✓ {applyAllNote}</p>}
@@ -811,13 +811,13 @@ export default function SessionRunner({ session, history = [], availableEquipmen
               onChange={e=> setSkipQuery(e.target.value)}
               placeholder="Skip to exercise…"
               aria-label="Skip to exercise"
-              className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm"
+              className="w-full rounded-lg border border-line bg-surface2 px-3 py-2.5 text-sm"
             />
             {skipQuery && (
               skipTarget ? (
                 <button
                   onClick={()=>{ setSkipQuery(''); setFocusIdx(skipTarget.blockIndex); document.getElementById(`block-${skipTarget.blockIndex}`)?.scrollIntoView({ behavior:'smooth', block:'start' }); }}
-                  className="mt-1.5 w-full rounded-xl border border-line bg-surface px-3 py-2 text-left text-xs hover:border-ink3"
+                  className="mt-1.5 w-full rounded-lg border border-line bg-surface px-3 py-2 text-left text-xs hover:border-ink3"
                 >
                   Jump to <strong>{EXERCISE_BY_ID[blocks[skipTarget.blockIndex]?.exerciseId]?.name || blocks[skipTarget.blockIndex]?.exerciseId}</strong>
                   {skipTarget.blockIndex !== focusIdx ? ' (next unfinished set highlighted)' : ''}
@@ -855,7 +855,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
             dislikedExerciseIds: preferences?.dislikedExerciseIds || [],
           }).filter(o=> o.id && o.id!==swapOrigin).slice(0,4) : [];
           return (
-            <div key={`${b.exerciseId}-${bi}`} id={`block-${bi}`} className={`rounded-2xl border bg-surface p-3 space-y-3 ${gymMode && skipQuery && skipTarget?.blockIndex === bi ? 'border-ink ring-2 ring-ink/30' : 'border-line'}`}>
+            <div key={`${b.exerciseId}-${bi}`} id={`block-${bi}`} className={`rounded-xl border bg-surface p-3 space-y-3 ${gymMode && skipQuery && skipTarget?.blockIndex === bi ? 'border-ink ring-2 ring-ink/30' : 'border-line'}`}>
               <div className="flex items-start justify-between gap-3">
                 <ExerciseIllustration exerciseId={b.exerciseId} size="md" />
                 <div className="min-w-0">
@@ -884,7 +884,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     </p>
                   )}
                   {(()=>{ const cj = coarseJumpChip(recommendation, kg=> fmtWeight(kg, unit)); return cj ? (
-                    <p data-testid="coarse-jump-chip" title={cj.detail} className="mt-1 inline-flex items-center min-h-11 rounded-full border border-line bg-surface2 px-3 text-[11px] font-bold text-ink2">↔ {cj.label}</p>
+                    <p data-testid="coarse-jump-chip" title={cj.detail} className="mt-1 inline-flex items-center min-h-11 rounded-full bg-surface2 px-3 text-[11px] font-bold text-ink2">↔ {cj.label}</p>
                   ) : null; })()}
                   {(changeChip || recommendation?.reason) && (
                     <p className="text-[11px] mt-1 leading-snug">
@@ -897,7 +897,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                       build without leaving the row. One compact line, only
                       when the engine computed a plate load for this target. */}
                   {recommendation?.plateLoad && (
-                    <p className="text-[11px] mt-1 rounded-lg border border-line bg-surface2 px-2 py-1 text-ink2 leading-snug tabular-nums">
+                    <p className="text-[11px] mt-1 rounded-lg bg-surface2 px-2 py-1 text-ink2 leading-snug tabular-nums">
                       🏋️ {recommendation.plateLoad.exact
                         ? `${fmtWeight(recommendation.plateLoad.loadKg, unit)} exact`
                         : `${fmtWeight(recommendation.plateLoad.targetKg, unit)} → ${fmtWeight(recommendation.plateLoad.loadKg, unit)} (${recommendation.plateLoad.direction})`}
@@ -915,7 +915,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     </p>
                   )}
                   {safetyMeta.maxEffort.get(b.exerciseId) && (
-                    <p role="status" className="text-[11px] mt-1 rounded-lg border border-line bg-surface2 px-2 py-1.5 text-ink2 leading-snug">
+                    <p role="status" className="text-[11px] mt-1 rounded-lg bg-surface2 px-2 py-1.5 text-ink2 leading-snug">
                       💪 {safetyMeta.maxEffort.get(b.exerciseId).title}. {safetyMeta.maxEffort.get(b.exerciseId).action}
                     </p>
                   )}
@@ -969,14 +969,14 @@ export default function SessionRunner({ session, history = [], availableEquipmen
               </div>
 
               {swapOpen===bi && (
-                <div className="rounded-xl border border-line bg-surface2 p-2.5 space-y-2" aria-label="Exercise substitutions">
+                <div className="rounded-lg bg-surface2 p-2.5 space-y-2" aria-label="Exercise substitutions">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-xs font-bold">Equipment-aware alternatives</p>
                     <button onClick={()=> setSwapOpen(null)} className="text-xs text-ink3 underline">Close</button>
                   </div>
                   <p className="text-[11px] text-ink3">Choose a close movement that matches your kit. Unfinished rows use the alternative’s previous performance when available.</p>
                   {options.length ? options.map(option=> (
-                    <button key={option.id} onClick={()=> swapBlock(bi,option)} className="w-full text-left rounded-xl border border-line bg-surface px-3 py-2 flex items-center gap-2 hover:border-ink3">
+                    <button key={option.id} onClick={()=> swapBlock(bi,option)} className="w-full text-left rounded-lg border border-line bg-surface px-3 py-2 flex items-center gap-2 hover:border-ink3">
                       <span className="min-w-0"><span className="block text-xs font-bold truncate">{option.name}</span><span className="block text-[11px] text-ink3 truncate">{option.reason} · {option.equipment.join(', ')}</span></span>
                       <span className="ml-auto text-[10px] font-bold text-ink3 shrink-0">Use</span>
                     </button>
@@ -985,15 +985,15 @@ export default function SessionRunner({ session, history = [], availableEquipmen
               )}
 
               <div className="space-y-2.5">
-                <div className="grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)] gap-1 text-[10px] font-bold uppercase tracking-widest text-ink3 px-1 sm:hidden" aria-hidden>
+                <div className="grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)] gap-1 text-[10px] font-bold uppercase tracking-wider text-ink3 px-1 sm:hidden" aria-hidden>
                   <span>#</span><span>Load {unit}</span><span>Reps</span>
                 </div>
                 <p className="sm:hidden text-[11px] text-ink3 -mt-1 px-1">RIR = reps left in the tank<JargonHelp term="RIR" /></p>
-                <div className="hidden sm:grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] gap-1.5 text-[10px] font-bold uppercase tracking-widest text-ink3 px-1">
+                <div className="hidden sm:grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] gap-1.5 text-[10px] font-bold uppercase tracking-wider text-ink3 px-1">
                   <span>#</span><span>Load {unit}</span><span>Reps</span><span className="flex items-center normal-case">RIR<JargonHelp term="RIR" /></span><span>{b.unilateral?'L/R':''}</span><span>Done</span><span></span>
                 </div>
                 {(()=>{ const adv = supportsWeighted ? nextSetAdvice(b, { equipment: ex?.equipment?.[0] || 'machine', config: plateConfig }) : null; return adv ? (
-                  <div data-testid="next-set-advice" role="status" className="flex items-center gap-2 flex-wrap rounded-xl border border-line bg-surface2 px-3 py-2 text-[11px] text-ink2">
+                  <div data-testid="next-set-advice" role="status" className="flex items-center gap-2 flex-wrap rounded-lg bg-surface2 px-3 py-2 text-[11px] text-ink2">
                     {adv.direction === 'hold' ? (
                       <span className="min-w-0 flex-1">{adv.reason} Keep {fmtWeight(adv.loadKg, unit)} and add reps instead.</span>
                     ) : (<>
@@ -1006,37 +1006,37 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                   </div>
                 ) : null; })()}
                 {(()=>{ const stop = stopEarlyAdvice(b); return stop ? (
-                  <div data-testid="stop-early-advice" role="status" className="flex items-center gap-2 flex-wrap rounded-xl border border-line bg-surface2 px-3 py-2 text-[11px] text-ink2">
+                  <div data-testid="stop-early-advice" role="status" className="flex items-center gap-2 flex-wrap rounded-lg bg-surface2 px-3 py-2 text-[11px] text-ink2">
                     <span className="min-w-0 flex-1">{stop.reason} Fine to stop this lift here.</span>
                     <button type="button" onClick={()=> [...stop.pendingIndexes].reverse().forEach(i=> removeSet(bi, i))} className="min-h-11 min-w-11 px-3 rounded-full border border-ink text-xs font-bold">Drop {stop.pendingIndexes.length} remaining {stop.pendingIndexes.length===1?'set':'sets'}</button>
                   </div>
                 ) : null; })()}
                 {(()=>{ const lr = onSetRestPreset ? longerRestAdvice(b, { restSec: restPresetFor(gymPrefs, b.exerciseId, b.restSec) || b.restSec, hasUserPreset: hasUserRestPreset(gymPrefs, b.exerciseId) }) : null; return lr ? (
-                  <div data-testid="longer-rest-advice" role="status" className="flex items-center gap-2 flex-wrap rounded-xl border border-line bg-surface2 px-3 py-2 text-[11px] text-ink2">
+                  <div data-testid="longer-rest-advice" role="status" className="flex items-center gap-2 flex-wrap rounded-lg bg-surface2 px-3 py-2 text-[11px] text-ink2">
                     <span className="min-w-0 flex-1">{lr.reason}</span>
                     <button type="button" onClick={()=> onSetRestPreset(b.exerciseId, lr.seconds)} className="min-h-11 min-w-11 px-3 rounded-full border border-ink text-xs font-bold">Rest {lr.seconds} s for this lift</button>
                   </div>
                 ) : null; })()}
                 {(()=>{ const sr = onSetRestPreset ? shorterRestAdvice(b, { restSec: restPresetFor(gymPrefs, b.exerciseId, b.restSec) || b.restSec, hasUserPreset: hasUserRestPreset(gymPrefs, b.exerciseId) }) : null; return sr ? (
-                  <div data-testid="shorter-rest-advice" role="status" className="flex items-center gap-2 flex-wrap rounded-xl border border-line bg-surface2 px-3 py-2 text-[11px] text-ink2">
+                  <div data-testid="shorter-rest-advice" role="status" className="flex items-center gap-2 flex-wrap rounded-lg bg-surface2 px-3 py-2 text-[11px] text-ink2">
                     <span className="min-w-0 flex-1">{sr.reason}</span>
                     <button type="button" onClick={()=> onSetRestPreset(b.exerciseId, sr.seconds)} className="min-h-11 min-w-11 px-3 rounded-full border border-ink text-xs font-bold">Rest {sr.seconds} s for this lift</button>
                   </div>
                 ) : null; })()}
                 {(()=>{ const extra = extraSetAdvice(b); return extra ? (
-                  <div data-testid="extra-set-advice" role="status" className="flex items-center gap-2 flex-wrap rounded-xl border border-line bg-surface2 px-3 py-2 text-[11px] text-ink2">
+                  <div data-testid="extra-set-advice" role="status" className="flex items-center gap-2 flex-wrap rounded-lg bg-surface2 px-3 py-2 text-[11px] text-ink2">
                     <span className="min-w-0 flex-1">{extra.reason}</span>
                     <button type="button" onClick={()=> addSet(bi)} className="min-h-11 min-w-11 px-3 rounded-full border border-ink text-xs font-bold">Add 1 set</button>
                   </div>
                 ) : null; })()}
                 {(()=>{ const bo = supportsWeighted ? backoffSetAdvice(b, { equipment: ex?.equipment?.[0] || 'machine', config: plateConfig }) : null; return bo ? (
-                  <div data-testid="backoff-set-advice" role="status" className="flex items-center gap-2 flex-wrap rounded-xl border border-line bg-surface2 px-3 py-2 text-[11px] text-ink2">
+                  <div data-testid="backoff-set-advice" role="status" className="flex items-center gap-2 flex-wrap rounded-lg bg-surface2 px-3 py-2 text-[11px] text-ink2">
                     <span className="min-w-0 flex-1">{bo.reason}</span>
                     <button type="button" onClick={()=> addBackoffSet(bi, bo.loadKg)} className="min-h-11 min-w-11 px-3 rounded-full border border-ink text-xs font-bold">Add back-off set</button>
                   </div>
                 ) : null; })()}
                 {(()=>{ const nt = nextTimePreview(b, { exerciseId: b.exerciseId, history, dateISO: session?.dateISO, plateConfig }); return nt ? (
-                  <div data-testid="next-time-preview" role="status" className="rounded-xl border border-line bg-surface2 px-3 py-2 text-[11px] text-ink2">
+                  <div data-testid="next-time-preview" role="status" className="rounded-lg bg-surface2 px-3 py-2 text-[11px] text-ink2">
                     <span className="font-bold text-ink">Next time: {nt.label}.</span>{nt.deltaLabel ? <span data-testid="next-time-delta" data-change={nt.change} className="ml-1 inline-block rounded-full border border-line px-2 py-0.5 font-bold text-ink">{nt.deltaLabel}</span> : null} {nt.reason}
                   </div>
                 ) : null; })()}
@@ -1088,9 +1088,9 @@ export default function SessionRunner({ session, history = [], availableEquipmen
 
         {gymMode && (
           <div className="flex gap-2">
-            <button onClick={focusModeNext} className="btn btn-secondary flex-1 min-h-12 rounded-xl">Next exercise →</button>
+            <button onClick={focusModeNext} className="btn btn-secondary flex-1 min-h-12 rounded-lg">Next exercise →</button>
             {!blocks[focusIdx] || blocks[focusIdx].sets.every(s=> s.completed || s.failed) ? null : (
-              <button onClick={()=>{ const act = blocks[focusIdx].sets.findIndex(s=> !s.completed && !s.failed); if(act !== -1) completeSet(focusIdx, act); }} className="btn btn-primary min-h-12 rounded-xl px-4">Complete next set</button>
+              <button onClick={()=>{ const act = blocks[focusIdx].sets.findIndex(s=> !s.completed && !s.failed); if(act !== -1) completeSet(focusIdx, act); }} className="btn btn-primary min-h-12 rounded-lg px-4">Complete next set</button>
             )}
           </div>
         )}
@@ -1125,13 +1125,13 @@ export default function SessionRunner({ session, history = [], availableEquipmen
               voiceRate={Number(appPrefs?.voiceRate) || 1}
             />
           )}
-          {saveBlocker && <p className="text-xs text-review bg-reviewsoft border border-review/30 rounded-xl px-3 py-2">{saveBlocker}</p>}
+          {saveBlocker && <p className="text-xs text-review bg-reviewsoft border border-review/30 rounded-lg px-3 py-2">{saveBlocker}</p>}
           <div className="flex gap-2">
             {/* Exit is one shared contract across Standard and Guided: any
                 logged work asks exactly once (the in-app alertdialog below),
                 and confirming runs the already-confirmed discard in App. */}
-            <button onClick={requestExit} className="btn btn-secondary min-h-11 rounded-xl px-4">Cancel</button>
-            <button onClick={save} disabled={!canSave} className="btn btn-primary flex-1 min-h-11 rounded-xl disabled:opacity-40">Save session</button>
+            <button onClick={requestExit} className="btn btn-secondary min-h-11 rounded-lg px-4">Cancel</button>
+            <button onClick={save} disabled={!canSave} className="btn btn-primary flex-1 min-h-11 rounded-lg disabled:opacity-40">Save session</button>
           </div>
         </div>
       </div>

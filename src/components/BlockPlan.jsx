@@ -29,7 +29,7 @@ export default function BlockPlan({ store, setStore, onClose }){
 
   return (
     <div ref={a11y.rootRef} onKeyDown={a11y.trapTab} className="fixed inset-0 z-40 bg-black/40 p-3 sm:p-4 overflow-auto" role="dialog" aria-modal="true" aria-label="Block plan">
-      <div className="max-w-xl mx-auto my-4 rounded-3xl bg-surface border border-line p-4 space-y-3">
+      <div className="max-w-xl mx-auto my-4 rounded-2xl bg-surface border border-line p-3 space-y-3">
         <div className="flex items-center gap-2">
           <div className="min-w-0">
             <h3 className="text-lg font-black tracking-tight">Block plan</h3>
@@ -40,13 +40,13 @@ export default function BlockPlan({ store, setStore, onClose }){
         <p role="status" aria-live="polite" className="text-xs text-ink3 min-h-4">{status}</p>
 
         {flags.length > 0 && (
-          <ul className="space-y-1 rounded-xl border border-danger/40 bg-dangersoft px-3 py-2">
+          <ul className="space-y-1 rounded-lg border border-danger/40 bg-dangersoft px-3 py-2">
             {flags.map(f=> <li key={`${f.week}-${f.muscle}`} className="text-xs text-danger">{f.message}</li>)}
           </ul>
         )}
 
         {weeks.map(w=> (
-          <section key={w.week} className={`rounded-2xl border p-3 space-y-2 bg-surface2 ${w.current ? 'border-success/50' : 'border-line'}`} aria-label={`Week ${w.week}`}>
+          <section key={w.week} className={`rounded-xl border p-3 space-y-2 bg-surface2 ${w.current ? 'border-success/50' : 'border-line'}`} aria-label={`Week ${w.week}`}>
             <div className="flex flex-wrap items-center gap-1.5">
               <h4 className="text-sm font-black">Week {w.week}</h4>
               {w.current && <span className={`${CHIP} border-success/40 text-success`}>This week</span>}
@@ -76,7 +76,7 @@ export default function BlockPlan({ store, setStore, onClose }){
               type="button"
               disabled={w.locked}
               onClick={()=> run(setWeekDeload(schedule, w.week, !w.deload), `Week ${w.week} updated.`)}
-              className="btn btn-secondary w-full min-h-11 rounded-xl text-xs"
+              className="btn btn-secondary w-full min-h-11 rounded-lg text-xs"
               aria-label={w.deload ? `Make week ${w.week} a normal week` : `Make week ${w.week} a deload week`}
             >
               {w.locked ? 'Finished' : w.deload ? 'Make normal week' : 'Make deload week'}
@@ -85,11 +85,11 @@ export default function BlockPlan({ store, setStore, onClose }){
         ))}
 
         <div className="grid grid-cols-1 gap-2">
-          <button type="button" disabled={weeks.length >= MAX_BLOCK_WEEKS} onClick={()=> run(extendBlock(schedule), `Added week ${weeks.length + 1}.`)} className="btn btn-primary w-full min-h-11 rounded-xl text-sm">
+          <button type="button" disabled={weeks.length >= MAX_BLOCK_WEEKS} onClick={()=> run(extendBlock(schedule), `Added week ${weeks.length + 1}.`)} className="btn btn-primary w-full min-h-11 rounded-lg text-sm">
             Add a week
           </button>
           {canRemoveWeek(schedule) && (
-            <button type="button" onClick={()=> run(removeExtendedWeek(schedule), 'Removed the week you added.')} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs">
+            <button type="button" onClick={()=> run(removeExtendedWeek(schedule), 'Removed the week you added.')} className="btn btn-secondary w-full min-h-11 rounded-lg text-xs">
               Remove added week
             </button>
           )}

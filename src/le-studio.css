@@ -198,6 +198,9 @@ html { -webkit-text-size-adjust: 100%; }
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease,
     transform 0.1s ease, box-shadow 0.15s ease;
 }
+/* Default button type is 14px, not the inherited 16px: in a layer, so any
+   text-* utility on a button still wins. */
+@layer components { .btn { font-size: 0.875rem; line-height: 1.25rem; } }
 .btn:active:not(:disabled) { transform: scale(0.98); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-primary {

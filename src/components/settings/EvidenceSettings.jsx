@@ -62,7 +62,7 @@ function StudyParticipationCard({ store, setStore, flash, dialogs }){
         : 'eligible to join';
 
   return (
-    <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2" aria-label="Study participation">
+    <div className="rounded-lg bg-surface2 px-3 py-2.5 space-y-2" aria-label="Study participation">
       <div className="flex items-center gap-2">
         <p className="text-xs font-bold">Study participation</p>
         <span className={`ml-auto rounded-full border px-2 py-0.5 text-[11px] font-semibold ${status === 'enrolled' ? 'border-success text-success' : 'border-line text-ink3'}`}>{stateLine}</span>
@@ -129,11 +129,11 @@ export default function EvidenceSettings({ store, setStore }){
     : '';
 
   return (
-    <section id="sec-evidence" className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+    <section id="sec-evidence" className="rounded-xl border border-line bg-surface p-3 space-y-2">
       {dialogs.node}
       <h3 className="text-sm font-bold">Progression evidence</h3>
       <p className="text-xs text-ink3">Arise records each recommendation before the workout (with your measurement consent) and scores it against what you actually did next — compared against simple double progression, linear progression and a flat baseline on the same sessions. Until enough participants and sessions exist, reports say <span className="font-semibold">“Insufficient real-user evidence”</span> and rank nothing — synthetic tests are never presented as real-world results.</p>
-      <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2" aria-label="Real-world study onboarding">
+      <div className="rounded-lg bg-surface2 px-3 py-2.5 space-y-2" aria-label="Real-world study onboarding">
         <p className="text-xs font-bold">Take part in the real-world study</p>
         <p className="text-[11px] text-ink3">
           Who can join: anyone training with Arise who has measurement consent on and at least 3 logged workouts. {participationCopy(store)}
@@ -145,7 +145,7 @@ export default function EvidenceSettings({ store, setStore }){
       {store.preferences?.telemetryEnabled !== true ? (
         <p className="text-xs text-ink3">Enable local measurements above to start collecting recommendation→outcome pairs. Pairs stay on this device and are included in your backup file.</p>
       ) : (
-        <details className="rounded-xl border border-line bg-surface2 px-3 py-2" onToggle={e=> setOpen(e.currentTarget.open)}>
+        <details className="rounded-lg bg-surface2 px-3 py-2" onToggle={e=> setOpen(e.currentTarget.open)}>
           <summary className="text-sm font-semibold cursor-pointer">Study status{summary ? ` — ${summary}` : ''}</summary>
           {data && (
             <div className="mt-3 space-y-3">

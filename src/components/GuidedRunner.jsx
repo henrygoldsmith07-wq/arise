@@ -379,7 +379,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
       <div className="relative shrink-0 flex items-center gap-3 px-4 py-3 border-b border-line bg-surface">
         <button ref={closeRef} onClick={requestExit} className="w-11 h-11 grid place-items-center rounded-full border border-line bg-surface2" aria-label="Close guided session">✕</button>
         <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Guided session</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">Guided session</p>
           <p className="font-bold truncate">{session.title} • {session.dateISO}</p>
         </div>
         <div className="ml-auto flex items-center gap-2 shrink-0">
@@ -400,20 +400,20 @@ export default function GuidedRunner({ session, history = [], availableEquipment
 
       <div className="flex-1 overflow-auto px-4 pt-5 pb-6 max-w-3xl w-full mx-auto">
         {celebrate || !step ? (
-          <section className="rounded-3xl border border-success/30 bg-successsoft p-6 space-y-4 text-center" aria-label="Workout complete">
+          <section className="rounded-2xl border border-success/30 bg-successsoft p-6 space-y-3 text-center" aria-label="Workout complete">
             <p className="text-5xl" aria-hidden>🎉</p>
             <p className="text-xl font-black">Workout complete</p>
             <p className="text-sm text-ink2 tabular-nums">
               {progress.completed}/{progress.total} sets • {fmtWeight(volume, unit)} volume • {formatElapsed(elapsed)}
             </p>
-            <section className="rounded-2xl border border-line bg-surface p-3 space-y-2 text-left">
+            <section className="rounded-xl border border-line bg-surface p-3 space-y-2 text-left">
               <p className="text-xs font-semibold">Session notes</p>
               <div className="flex flex-wrap gap-1.5">
                 {NOTE_PROMPTS.map(prompt=> (
                   <button key={prompt.id} onClick={()=> toggleNoteTag(prompt.id)} aria-pressed={noteTags.includes(prompt.id)} className={`text-xs font-semibold px-2.5 py-1.5 rounded-full border ${noteTags.includes(prompt.id)?'bg-ink text-bg border-ink':'bg-surface2 border-line'}`}>{prompt.label}</button>
                 ))}
               </div>
-              <textarea value={note} onChange={e=>{ markUserEdited(); setNote(e.target.value); }} rows={2} aria-label="Session notes" placeholder="How did it go? Sleep, pain, technique, ROM, load…" className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm" />
+              <textarea value={note} onChange={e=>{ markUserEdited(); setNote(e.target.value); }} rows={2} aria-label="Session notes" placeholder="How did it go? Sleep, pain, technique, ROM, load…" className="w-full rounded-lg border border-line bg-surface2 px-3 py-2.5 text-sm" />
             </section>
           </section>
         ) : (
@@ -426,11 +426,11 @@ export default function GuidedRunner({ session, history = [], availableEquipment
             </div>
 
             {/* THE current step — one exercise, one set, big and unmissable */}
-            <section className="rounded-3xl border border-line bg-surface p-5 space-y-4" aria-label="Current step">
+            <section className="rounded-2xl border border-line bg-surface p-4 space-y-3" aria-label="Current step">
               <div className="flex items-start justify-between gap-3">
                 <ExerciseIllustration exerciseId={currentBlock.exerciseId} size="md" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Step {progress.completed + progress.skipped + 1} of {progress.total} · Set {step.setIndex + 1} of {currentBlock.sets.length}</p>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">Step {progress.completed + progress.skipped + 1} of {progress.total} · Set {step.setIndex + 1} of {currentBlock.sets.length}</p>
                   <p className="text-xl font-black tracking-tight">{currentExercise?.name || currentBlock.exerciseId}{currentBlock.unilateral ? <span className="text-xs font-semibold text-ink3"> (per side — {currentSet?.side || 'L'} first)</span> : null}</p>
                   <div className="mt-1"><Suspense fallback={null}><TeachingPanel exerciseId={currentBlock.exerciseId} variant="inline" /></Suspense></div>
                   <p className="text-sm text-ink2 mt-1 tabular-nums">
@@ -463,10 +463,10 @@ export default function GuidedRunner({ session, history = [], availableEquipment
 
               <div className="grid grid-cols-2 gap-2">
                 <label className="text-[11px]">Load {unit}
-                  <WeightInput type="text" inputMode="decimal" value={currentSet?.weightKg || ''} unit={unit} onChange={v=> updateSet(step.blockIndex, step.setIndex, { weightKg: v })} onFocus={trackFieldFocus} onBlur={(e)=> { if(fieldCommitted(e)){ try{ recordEvent('load-field-commit', { sessionId: session.id, exerciseId: currentBlock.exerciseId, setIndex: step.setIndex, mode: 'guided' }); }catch{} } }} placeholder={takesExternalLoad(currentExercise) ? unit : 'bw'} aria-label={`Load in ${unit === 'lb' ? 'pounds' : 'kilograms'}`} className="mt-1 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center" />
+                  <WeightInput type="text" inputMode="decimal" value={currentSet?.weightKg || ''} unit={unit} onChange={v=> updateSet(step.blockIndex, step.setIndex, { weightKg: v })} onFocus={trackFieldFocus} onBlur={(e)=> { if(fieldCommitted(e)){ try{ recordEvent('load-field-commit', { sessionId: session.id, exerciseId: currentBlock.exerciseId, setIndex: step.setIndex, mode: 'guided' }); }catch{} } }} placeholder={takesExternalLoad(currentExercise) ? unit : 'bw'} aria-label={`Load in ${unit === 'lb' ? 'pounds' : 'kilograms'}`} className="mt-1 w-full rounded-lg border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center" />
                 </label>
                 <label className="text-[11px]">Reps
-                  <input type="number" min="0" step="1" inputMode="numeric" value={currentSet?.reps || ''} onChange={e=> updateSet(step.blockIndex, step.setIndex, { reps: e.target.value })} onFocus={trackFieldFocus} onBlur={(e)=> { if(fieldCommitted(e)){ try{ recordEvent('reps-field-commit', { sessionId: session.id, exerciseId: currentBlock.exerciseId, setIndex: step.setIndex, mode: 'guided' }); }catch{} } }} placeholder="9" aria-label="Reps" className="mt-1 w-full rounded-xl border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                  <input type="number" min="0" step="1" inputMode="numeric" value={currentSet?.reps || ''} onChange={e=> updateSet(step.blockIndex, step.setIndex, { reps: e.target.value })} onFocus={trackFieldFocus} onBlur={(e)=> { if(fieldCommitted(e)){ try{ recordEvent('reps-field-commit', { sessionId: session.id, exerciseId: currentBlock.exerciseId, setIndex: step.setIndex, mode: 'guided' }); }catch{} } }} placeholder="9" aria-label="Reps" className="mt-1 w-full rounded-lg border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                 </label>
               </div>
               {currentBlock.unilateral && (
@@ -478,13 +478,13 @@ export default function GuidedRunner({ session, history = [], availableEquipment
               )}
 
               <div className="flex gap-2">
-                <button onClick={()=> completeStep(false)} className="btn btn-primary flex-1 min-h-14 rounded-xl text-base">Done — next</button>
-                <button onClick={()=> completeStep(true)} className="btn btn-secondary min-h-14 rounded-xl px-4">Skip</button>
+                <button onClick={()=> completeStep(false)} className="btn btn-primary flex-1 min-h-14 rounded-lg text-base">Done — next</button>
+                <button onClick={()=> completeStep(true)} className="btn btn-secondary min-h-14 rounded-lg px-4">Skip</button>
               </div>
             </section>
 
             {/* Upcoming steps preview */}
-            <details className="mt-4 rounded-2xl border border-line bg-surface px-3 py-2">
+            <details className="mt-4 rounded-xl border border-line bg-surface px-3 py-2">
               <summary className="text-xs font-bold cursor-pointer">Up next ({progress.pending - 1} after this)</summary>
               <ul className="mt-2 space-y-1">
                 {blocks.flatMap((b,bi)=> b.sets.map((s,si)=> ({ b, bi, s, si })))
@@ -520,8 +520,8 @@ export default function GuidedRunner({ session, history = [], availableEquipment
             />
           )}
           <div className="flex gap-2">
-            <button onClick={requestExit} className="btn btn-secondary min-h-11 rounded-xl px-4">Cancel</button>
-            <button onClick={finish} disabled={!canFinish} className="btn btn-primary flex-1 min-h-11 rounded-xl disabled:opacity-40">Save session</button>
+            <button onClick={requestExit} className="btn btn-secondary min-h-11 rounded-lg px-4">Cancel</button>
+            <button onClick={finish} disabled={!canFinish} className="btn btn-primary flex-1 min-h-11 rounded-lg disabled:opacity-40">Save session</button>
           </div>
         </div>
       </div>

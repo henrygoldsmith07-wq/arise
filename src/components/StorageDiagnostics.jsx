@@ -61,13 +61,13 @@ export default function StorageDiagnostics({ setMsg }){
   const findings = diag?.audit?.findings || [];
 
   return (
-    <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+    <section className="rounded-xl border border-line bg-surface p-3 space-y-3">
       {dialogs.node}
       <h3 className="text-sm font-bold">Storage health & maintenance</h3>
       {!diag && <p className="text-xs text-ink3">Checking stored data…</p>}
       {diag && (
         <>
-          <div className="rounded-xl border border-line bg-surface2 px-3 py-2 text-xs space-y-1">
+          <div className="rounded-lg bg-surface2 px-3 py-2 text-xs space-y-1">
             <p>
               {findings.length === 0
                 ? 'No data problems found.'
@@ -81,16 +81,16 @@ export default function StorageDiagnostics({ setMsg }){
           </div>
           <div className="flex flex-wrap gap-2 text-xs">
             {findings.length > 0 && (
-              <button disabled={busy} onClick={run(()=> storageDiagnosticsService.repair(findings), (r)=> `Repaired: ${r.deletedSessions} sessions and ${r.deletedSets} set rows removed, ${r.neutralisedSets} values corrected.`, { reload: true })} className="btn btn-primary min-h-10 rounded-xl px-4 disabled:opacity-50">Repair issues</button>
+              <button disabled={busy} onClick={run(()=> storageDiagnosticsService.repair(findings), (r)=> `Repaired: ${r.deletedSessions} sessions and ${r.deletedSets} set rows removed, ${r.neutralisedSets} values corrected.`, { reload: true })} className="btn btn-primary min-h-10 rounded-lg px-4 disabled:opacity-50">Repair issues</button>
             )}
-            <button disabled={busy || !diag.archiveCandidates} onClick={run(()=> storageDiagnosticsService.archiveOld(365), (r)=> `Archived ${r.archived} session${r.archived === 1 ? '' : 's'} older than a year. Archived history stays in full backups and sync, and can be restored.`, { reload: true })} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Archive old sessions</button>
-            <button disabled={busy || !diag.prunePreview.pruned} onClick={run(()=> storageDiagnosticsService.pruneEvents(), (r)=> `Pruned ${r.pruned} old event${r.pruned === 1 ? '' : 's'} (telemetry only — training data untouched).`, { reload: true })} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Prune old events</button>
-            <button disabled={busy} onClick={run(()=> storageDiagnosticsService.captureSnapshot({ force: true, reason: 'manual' }), 'Snapshot captured (live + archived history). It is checked against the integrity gate before any rollback.')} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Snapshot now</button>
+            <button disabled={busy || !diag.archiveCandidates} onClick={run(()=> storageDiagnosticsService.archiveOld(365), (r)=> `Archived ${r.archived} session${r.archived === 1 ? '' : 's'} older than a year. Archived history stays in full backups and sync, and can be restored.`, { reload: true })} className="btn btn-secondary min-h-10 rounded-lg px-4 disabled:opacity-50">Archive old sessions</button>
+            <button disabled={busy || !diag.prunePreview.pruned} onClick={run(()=> storageDiagnosticsService.pruneEvents(), (r)=> `Pruned ${r.pruned} old event${r.pruned === 1 ? '' : 's'} (telemetry only — training data untouched).`, { reload: true })} className="btn btn-secondary min-h-10 rounded-lg px-4 disabled:opacity-50">Prune old events</button>
+            <button disabled={busy} onClick={run(()=> storageDiagnosticsService.captureSnapshot({ force: true, reason: 'manual' }), 'Snapshot captured (live + archived history). It is checked against the integrity gate before any rollback.')} className="btn btn-secondary min-h-10 rounded-lg px-4 disabled:opacity-50">Snapshot now</button>
             {diag.snapshots.length > 0 && (
-              <button disabled={busy} onClick={rollbackToLatest} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Roll back to snapshot</button>
+              <button disabled={busy} onClick={rollbackToLatest} className="btn btn-secondary min-h-10 rounded-lg px-4 disabled:opacity-50">Roll back to snapshot</button>
             )}
             {diag.archived > 0 && (
-              <button disabled={busy} onClick={run(()=> storageDiagnosticsService.restoreArchive(), (r)=> `Restored ${r} archived session${r === 1 ? '' : 's'} to live history.`, { reload: true })} className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-50">Restore archive</button>
+              <button disabled={busy} onClick={run(()=> storageDiagnosticsService.restoreArchive(), (r)=> `Restored ${r} archived session${r === 1 ? '' : 's'} to live history.`, { reload: true })} className="btn btn-secondary min-h-10 rounded-lg px-4 disabled:opacity-50">Restore archive</button>
             )}
           </div>
           <p className="text-xs text-ink3">

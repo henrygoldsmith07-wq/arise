@@ -39,7 +39,7 @@ export default function HevyExportSheet({ history = [], units = 'kg', onClose })
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40" onClick={onClose}>
       <div ref={a11y.rootRef} onKeyDown={a11y.trapTab} role="dialog" aria-modal="true" aria-label="Export for Hevy" data-testid="hevy-export-sheet"
-        onClick={(e) => e.stopPropagation()} className="w-full max-w-md max-h-[88vh] overflow-y-auto rounded-t-2xl border border-line bg-surface p-4 space-y-3">
+        onClick={(e) => e.stopPropagation()} className="w-full max-w-md max-h-[88vh] overflow-y-auto rounded-t-xl border border-line bg-surface p-4 space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-bold text-ink">Export for Hevy</h2>
           <button ref={a11y.closeRef} type="button" onClick={onClose} className="min-h-11 min-w-11 text-xs font-bold px-3 rounded-full border border-line">Close</button>
@@ -49,7 +49,7 @@ export default function HevyExportSheet({ history = [], units = 'kg', onClose })
         <div role="group" aria-label="Which workouts" className="grid grid-cols-2 gap-1.5">
           {HEVY_RANGES.filter((r) => r.id !== 'since-last' || mark).map((r) => (
             <button key={r.id} type="button" aria-pressed={range === r.id} data-testid={`hevy-range-${r.id}`} onClick={() => setRange(r.id)}
-              className={`min-h-11 rounded-xl border px-2 text-xs font-bold ${range === r.id ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink3'}`}>
+              className={`min-h-11 rounded-lg border px-2 text-xs font-bold ${range === r.id ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink3'}`}>
               {r.id === 'since-last' ? `After ${mark}` : r.label}
             </button>
           ))}
@@ -60,7 +60,7 @@ export default function HevyExportSheet({ history = [], units = 'kg', onClose })
           <span>Include workouts that came from Hevy{result.fromHevy ? ` (${result.fromHevy} held back)` : ''}</span>
         </label>
 
-        <div className="rounded-xl border border-line bg-surface2 px-3 py-2 text-xs text-ink2" data-testid="hevy-export-summary" role="status">
+        <div className="rounded-lg bg-surface2 px-3 py-2 text-xs text-ink2" data-testid="hevy-export-summary" role="status">
           {result.workouts
             ? <>
                 <strong className="text-ink">{result.workouts} workout{result.workouts === 1 ? '' : 's'}</strong> · {result.sets} sets · {result.exercises} exercise{result.exercises === 1 ? '' : 's'}
@@ -75,8 +75,8 @@ export default function HevyExportSheet({ history = [], units = 'kg', onClose })
         )}
 
         <div className="flex gap-2 pt-1">
-          <button type="button" disabled={!result.workouts} onClick={onShare} data-testid="hevy-share" className="btn btn-primary flex-1 min-h-11 rounded-xl disabled:opacity-40">Share file</button>
-          <button type="button" disabled={!result.workouts} onClick={onDownload} data-testid="hevy-download" className="btn btn-secondary flex-1 min-h-11 rounded-xl disabled:opacity-40">Download CSV</button>
+          <button type="button" disabled={!result.workouts} onClick={onShare} data-testid="hevy-share" className="btn btn-primary flex-1 min-h-11 rounded-lg disabled:opacity-40">Share file</button>
+          <button type="button" disabled={!result.workouts} onClick={onDownload} data-testid="hevy-download" className="btn btn-secondary flex-1 min-h-11 rounded-lg disabled:opacity-40">Download CSV</button>
         </div>
         {msg && <p role="status" className="text-xs text-ink2" data-testid="hevy-export-msg">{msg}</p>}
       </div>

@@ -60,7 +60,7 @@ export default function FeedbackSettings(){
   };
 
   return (
-    <section id="sec-feedback" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+    <section id="sec-feedback" className="rounded-xl border border-line bg-surface p-3 space-y-3">
       <h3 className="text-sm font-bold">Feedback &amp; issue triage</h3>
       <p className="text-xs text-ink3">Tell us about a problem, accessibility issue, content error, or request. Classification is local by default; when enabled, redacted feedback may be sent to classifier.dev. Categorisation never changes training, safety, study gates, or evidence.</p>
       <ToggleRow
@@ -69,24 +69,24 @@ export default function FeedbackSettings(){
         onChange={setConsent}
         hint="Off by default. When switched on, feedback text may be sent to classifier.dev after obvious personal identifiers are redacted first. Training decisions never use this service. Switching it off keeps classification local."
       />
-      <form onSubmit={e=> { e.preventDefault(); void submit(); }} className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2" aria-label="Save feedback locally">
+      <form onSubmit={e=> { e.preventDefault(); void submit(); }} className="rounded-lg border border-line bg-surface2 px-3 py-2.5 space-y-2" aria-label="Save feedback locally">
         <label htmlFor="feedback-issue" className="block text-xs font-bold">Describe the issue or request</label>
         <textarea id="feedback-issue" value={text} onChange={e=> setText(e.target.value)} maxLength={2000} rows={4}
           placeholder="What happened? Please do not include passwords or other sensitive information."
           className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm" />
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] text-ink3">{classifierEnabled ? 'Redacted feedback may be sent to classifier.dev for categorisation; developer sharing is separate.' : 'Classification stays on this device and is not sent to the developer.'}</span>
-          <button type="submit" disabled={busy} className="btn btn-primary min-h-9 rounded-xl px-3 text-xs disabled:opacity-40">{busy ? 'Categorising…' : 'Save feedback locally'}</button>
+          <button type="submit" disabled={busy} className="btn btn-primary min-h-9 rounded-lg px-3 text-xs disabled:opacity-40">{busy ? 'Categorising…' : 'Save feedback locally'}</button>
         </div>
       </form>
-      {message && <p role="status" className="text-xs rounded-xl border border-line bg-surface2 px-3 py-2">{message}</p>}
+      {message && <p role="status" className="text-xs rounded-lg bg-surface2 px-3 py-2">{message}</p>}
       {result && (
-        <div data-testid="feedback-result" role="status" aria-live="polite" className="rounded-xl border border-line bg-surface2 px-3 py-2 text-xs space-y-1">
+        <div data-testid="feedback-result" role="status" aria-live="polite" className="rounded-lg bg-surface2 px-3 py-2 text-xs space-y-1">
           <p className="font-bold">Latest category: <span data-testid="feedback-category">{result.category}</span></p>
           <p className="text-ink3">Confidence: {result.confidence == null ? 'not available' : Math.round(result.confidence * 100) + '%'} · {result.needsReview ? 'needs operator review' : 'accepted automatically'} · {result.source}</p>
         </div>
       )}
-      <div aria-label="Local feedback review queue" className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
+      <div aria-label="Local feedback review queue" className="rounded-lg bg-surface2 px-3 py-2.5 space-y-2">
         <div className="flex items-center gap-2">
           <h4 className="text-xs font-bold">Local feedback review queue</h4>
           <span className="ml-auto text-[11px] text-ink3">{records.length} stored locally</span>

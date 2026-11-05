@@ -15,7 +15,7 @@ export default function LiftGoalNudge({ store, setStore }) {
   const name = EXERCISE_BY_ID[hit.exerciseId]?.name || hit.exerciseId;
   return (
     <div
-      className="rounded-2xl border border-success/40 bg-surface p-4 space-y-2"
+      className="rounded-xl border border-success/40 bg-surface p-3 space-y-2"
       role="status"
       data-testid="lift-goal-hit"
     >
@@ -27,7 +27,7 @@ export default function LiftGoalNudge({ store, setStore }) {
       <button
         type="button"
         data-testid="lift-goal-hit-dismiss"
-        className="btn btn-ghost min-h-11 rounded-xl px-3 text-xs font-bold"
+        className="btn btn-ghost min-h-11 rounded-lg px-3 text-xs font-bold"
         onClick={() =>
           setStore({
             ...store,

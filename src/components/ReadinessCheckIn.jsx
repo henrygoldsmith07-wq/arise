@@ -72,7 +72,7 @@ export default function ReadinessCheckIn({ store, setStore, todayISO }){
   const weekBlank = !existing && !justSaved && coverage.inWeek === 0;
   if(!open){
     return (
-      <div className={`rounded-2xl p-3 ${weekBlank ? 'border border-review/40 bg-reviewsoft' : 'border border-line bg-surface'}`}>
+      <div className={`rounded-xl p-3 ${weekBlank ? 'border border-review/40 bg-reviewsoft' : 'border border-line bg-surface'}`}>
         <button
           onClick={()=> setOpen(true)}
           aria-expanded={false}
@@ -95,14 +95,14 @@ export default function ReadinessCheckIn({ store, setStore, todayISO }){
 
   return (
     <section
-      className="rounded-2xl border border-line bg-surface p-3 space-y-3"
+      className="rounded-xl border border-line bg-surface p-3 space-y-3"
       data-testid="readiness-checkin"
     >
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-bold">How are you today?</h2>
         <button
           onClick={()=> setOpen(false)}
-          className="w-11 h-11 -mr-2 -mt-2 grid place-items-center rounded-xl text-ink3"
+          className="w-11 h-11 -mr-2 -mt-2 grid place-items-center rounded-lg text-ink3"
           aria-label="Close readiness check-in"
         >✕</button>
       </div>
@@ -121,7 +121,7 @@ export default function ReadinessCheckIn({ store, setStore, todayISO }){
                     aria-pressed={active}
                     aria-label={`${signal.label} ${value} of ${READINESS_SCALE_MAX}`}
                     data-testid={`readiness-${signal.id}-${value}`}
-                    className={`flex-1 min-h-11 rounded-xl border text-sm font-bold ${
+                    className={`flex-1 min-h-11 rounded-lg border text-sm font-bold ${
                       active ? 'bg-ink text-bg border-ink' : 'bg-surface2 border-line text-ink2'
                     }`}
                   >{value}</button>
@@ -141,7 +141,7 @@ export default function ReadinessCheckIn({ store, setStore, todayISO }){
           placeholder="optional"
           data-testid="readiness-bodyweight"
           aria-label={`Body weight in ${unit}, optional`}
-          className="flex-1 min-h-11 rounded-xl border border-line bg-surface2 px-3 text-sm font-bold tabular-nums"
+          className="flex-1 min-h-11 rounded-lg border border-line bg-surface2 px-3 text-sm font-bold tabular-nums"
         />
       </label>
 
@@ -149,18 +149,18 @@ export default function ReadinessCheckIn({ store, setStore, todayISO }){
         <button
           onClick={save}
           data-testid="readiness-save"
-          className="btn btn-primary flex-1 min-h-11 rounded-xl"
+          className="btn btn-primary flex-1 min-h-11 rounded-lg"
         >{existing ? 'Update' : 'Save'}</button>
         {existing && (
           <button
             onClick={clear}
             data-testid="readiness-clear"
-            className="btn btn-secondary min-h-11 rounded-xl px-3"
+            className="btn btn-secondary min-h-11 rounded-lg px-3"
           >Clear</button>
         )}
         <button
           onClick={()=> setOpen(false)}
-          className="btn btn-secondary min-h-11 rounded-xl px-3"
+          className="btn btn-secondary min-h-11 rounded-lg px-3"
         >Cancel</button>
       </div>
 

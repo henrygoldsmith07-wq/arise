@@ -20,7 +20,7 @@ export default function TrainingProfileCard({ store }){
   if(!profile.rows.length) return null;
 
   return (
-    <section className="rounded-2xl border border-line bg-surface p-4" aria-label="Your training model">
+    <section className="rounded-xl border border-line bg-surface p-3" aria-label="Your training model">
       <div className="flex items-baseline gap-2">
         <h3 className="text-sm font-bold">Your training model</h3>
         <span className="ml-auto text-[11px] text-ink3">private · on this device</span>
@@ -29,11 +29,11 @@ export default function TrainingProfileCard({ store }){
 
       <ul className="mt-2 space-y-1.5">
         {profile.rows.map(row=> (
-          <li key={row.id} className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <li key={row.id} className="rounded-lg bg-surface2 px-3 py-2">
             <details>
               <summary className="cursor-pointer min-h-9 flex items-center gap-2">
-                <span className="text-xs font-semibold truncate">{row.label}</span>
-                <span className="ml-auto text-xs font-bold tabular-nums shrink-0">{row.value}</span>
+                <span className="min-w-0 text-xs font-semibold truncate">{row.label}</span>
+                <span className="ml-auto min-w-0 max-w-[60%] truncate text-right text-xs font-bold tabular-nums">{row.value}</span>
                 {row.confidence && (
                   <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border shrink-0 ${CONF_BADGE[row.confidence] || 'border-line text-ink3'}`}>
                     {row.confidence}

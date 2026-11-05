@@ -37,7 +37,7 @@ export default function QuickWorkoutSheet({ store, onStart, onClose }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40" onClick={onClose}>
       <div ref={a11y.rootRef} onKeyDown={a11y.trapTab} role="dialog" aria-modal="true" aria-label="Quick workout" data-testid="quick-sheet"
-        onClick={(e) => e.stopPropagation()} className="w-full max-w-md max-h-[88vh] overflow-y-auto rounded-t-2xl border border-line bg-surface p-4 space-y-3">
+        onClick={(e) => e.stopPropagation()} className="w-full max-w-md max-h-[88vh] overflow-y-auto rounded-t-xl border border-line bg-surface p-4 space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-bold text-ink">Quick workout</h2>
           <button ref={a11y.closeRef} type="button" onClick={onClose} className="min-h-11 min-w-11 text-xs font-bold px-3 rounded-full border border-line">Close</button>
@@ -55,7 +55,7 @@ export default function QuickWorkoutSheet({ store, onStart, onClose }) {
 
         <ol className="space-y-1.5" aria-label="Your lifts" data-testid="quick-picked">
           {ids.map((id) => (
-            <li key={id} className="flex items-center gap-1.5 rounded-xl border border-line px-2 py-1">
+            <li key={id} className="flex items-center gap-1.5 rounded-lg border border-line px-2 py-1">
               <span className="min-w-0 flex-1 truncate text-xs font-bold">{EXERCISE_BY_ID[id]?.name || id}</span>
               <button type="button" aria-label={`Remove ${EXERCISE_BY_ID[id]?.name}`} className="min-h-11 min-w-11 text-xs font-bold" onClick={() => setIds((c) => c.filter((x) => x !== id))}>✕</button>
             </li>
@@ -63,7 +63,7 @@ export default function QuickWorkoutSheet({ store, onStart, onClose }) {
         </ol>
 
         <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search lifts (lat, press, curl…)" aria-label="Search lifts"
-          data-testid="quick-search" className="w-full min-h-11 rounded-xl border border-line bg-surface2 px-3 text-sm" />
+          data-testid="quick-search" className="w-full min-h-11 rounded-lg border border-line bg-surface2 px-3 text-sm" />
         <div className="flex gap-1.5 overflow-x-auto pb-1" role="group" aria-label="Muscle">
           {[null, ...MUSCLE_ORDER.filter((m) => m !== 'Cardio' && m !== 'Full body')].map((m) => (
             <button key={m || 'all'} type="button" aria-pressed={muscle === m} onClick={() => setMuscle(m)}
@@ -74,14 +74,14 @@ export default function QuickWorkoutSheet({ store, onStart, onClose }) {
           {results.map((ex) => (
             <li key={ex.id}>
               <button type="button" disabled={full} onClick={() => add(ex.id)} data-testid={`quick-add-${ex.id}`}
-                className="flex w-full min-h-11 items-center justify-between gap-2 rounded-xl px-2 text-left text-xs disabled:opacity-40 hover:bg-surface2">
+                className="flex w-full min-h-11 items-center justify-between gap-2 rounded-lg px-2 text-left text-xs disabled:opacity-40 hover:bg-surface2">
                 <span className="truncate font-bold">{ex.name}</span><span className="shrink-0 text-ink3">{ex.muscle} · Add</span>
               </button>
             </li>
           ))}
         </ul>
 
-        <button type="button" disabled={!ids.length} onClick={start} data-testid="quick-start" className="btn btn-primary w-full min-h-12 rounded-xl disabled:opacity-40">
+        <button type="button" disabled={!ids.length} onClick={start} data-testid="quick-start" className="btn btn-primary w-full min-h-12 rounded-lg disabled:opacity-40">
           {ids.length ? `Start ${ids.length} lift${ids.length === 1 ? '' : 's'}` : 'Pick at least one lift'}
         </button>
       </div>

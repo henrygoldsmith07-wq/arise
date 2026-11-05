@@ -38,7 +38,7 @@ export default function ExercisePreferencePicker({ exercises, preferredIds = [],
         <label htmlFor="exercise-picker-search" className="sr-only">Search exercises</label>
         <input id="exercise-picker-search" type="search" value={query} onChange={(e)=> setQuery(e.target.value)}
           placeholder="Search (e.g. pulldown, db, rdl)" autoComplete="off"
-          className="min-h-11 min-w-0 flex-1 rounded-xl border border-line bg-surface px-3 text-sm" />
+          className="min-h-11 min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 text-sm" />
         {query && clear}
       </div>
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by muscle">
@@ -51,14 +51,14 @@ export default function ExercisePreferencePicker({ exercises, preferredIds = [],
       </p>
       <div className="max-h-80 overflow-auto space-y-1.5 pr-1">
         {!visible.length && (
-          <p className="rounded-xl border border-line bg-surface2 p-3 text-center text-xs text-ink3">
+          <p className="rounded-lg bg-surface2 p-3 text-center text-xs text-ink3">
             {query.trim() ? <>No exercises match “{query.trim()}”. {clear}</> : 'Nothing here yet.'}
           </p>
         )}
         {groupByMuscle(visible, sets).map((group)=> {
           const open = isOpen(group.muscle);
           return (
-            <section key={group.muscle} className="rounded-xl border border-line bg-surface2">
+            <section key={group.muscle} className="rounded-lg bg-surface2">
               <button type="button" onClick={()=> setOpenState((prev)=> ({ ...prev, [group.muscle]: !open }))} aria-expanded={open}
                 className="flex min-h-11 w-full items-center gap-2 px-3 text-left text-sm font-bold">
                 <span className="flex-1">{group.muscle} ({group.count})</span>

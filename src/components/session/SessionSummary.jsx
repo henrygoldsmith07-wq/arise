@@ -14,7 +14,7 @@ export default function SessionSummary({
   onQualityToggle,
 }){
   return (
-    <section className="rounded-2xl border border-line bg-surface p-3 space-y-2">
+    <section className="rounded-xl border border-line bg-surface p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold">Session notes</span>
         <span className="text-[11px] text-ink3">Optional, useful for next targets</span>
@@ -36,7 +36,7 @@ export default function SessionSummary({
           second (sr-only) copy would duplicate the text node and break
           text-based locators — aria-label is the one-node way to name a control
           whose sibling heading is not a <label>. */}
-      <textarea value={note} onChange={e=> onNoteChange(e.target.value)} rows={2} aria-label="Session notes" placeholder="What should change next time? Mention sleep, pain, technique, ROM, time or load." className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm" />
+      <textarea value={note} onChange={e=> onNoteChange(e.target.value)} rows={2} aria-label="Session notes" placeholder="What should change next time? Mention sleep, pain, technique, ROM, time or load." className="w-full rounded-lg border border-line bg-surface2 px-3 py-2.5 text-sm" />
     </section>
   );
 }

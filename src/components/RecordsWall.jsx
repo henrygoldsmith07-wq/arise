@@ -30,7 +30,7 @@ export default function RecordsWall({ store }) {
   const recent = rows.filter((r) => r.recent);
   return (
     <section
-      className="rounded-2xl border border-line bg-surface p-4 space-y-3"
+      className="rounded-xl border border-line bg-surface p-3 space-y-3"
       aria-label="Records"
       data-testid="records-card"
     >
@@ -50,7 +50,7 @@ export default function RecordsWall({ store }) {
       </ul>
       <button
         type="button"
-        className="btn btn-secondary w-full min-h-11 rounded-xl px-3 text-xs font-bold"
+        className="btn btn-secondary w-full min-h-11 rounded-lg px-3 text-xs font-bold"
         data-testid="records-open"
         onClick={() => setOpen(true)}
       >
@@ -66,7 +66,7 @@ export default function RecordsWall({ store }) {
 function Headline({ r, unit }) {
   const top = r.bestE1rm;
   return (
-    <li className="flex items-center gap-2 rounded-xl border border-line bg-surface2 px-3 py-2 text-sm">
+    <li className="flex items-center gap-2 rounded-lg bg-surface2 px-3 py-2 text-sm">
       <span className="font-bold truncate">{r.name}</span>
       {r.recent && (
         <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-black text-success">
@@ -104,7 +104,7 @@ function Wall({ rows, unit, onClose }) {
         aria-modal="true"
         aria-label="Records wall"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md max-h-[88vh] overflow-y-auto rounded-t-2xl border border-line bg-surface p-4 space-y-3"
+        className="w-full max-w-md max-h-[88vh] overflow-y-auto rounded-t-xl border border-line bg-surface p-4 space-y-3"
         data-testid="records-wall"
       >
         <div className="flex items-center justify-between gap-3">
@@ -124,7 +124,7 @@ function Wall({ rows, unit, onClose }) {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search a lift"
           aria-label="Search a lift"
-          className="min-h-11 w-full rounded-xl border border-line bg-surface2 px-3 text-sm"
+          className="min-h-11 w-full rounded-lg border border-line bg-surface2 px-3 text-sm"
         />
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Muscle">
           {["", ...muscles].map((m) => (
@@ -146,7 +146,7 @@ function Wall({ rows, unit, onClose }) {
           {shown.map((r) => (
             <li
               key={r.exerciseId}
-              className="rounded-xl border border-line bg-surface2 p-3 space-y-2"
+              className="rounded-lg bg-surface2 p-3 space-y-2"
               data-testid="records-row"
             >
               <div className="flex items-baseline justify-between gap-2">

@@ -49,7 +49,7 @@ export default function WeeklyVolumeCard({ store }) {
   if (!rows.length || !muscles.length) return null;
   return (
     <section
-      className="rounded-2xl border border-line bg-surface p-4 space-y-3"
+      className="rounded-xl border border-line bg-surface p-3 space-y-3"
       aria-label="Weekly volume"
       data-testid="weekly-volume"
     >
@@ -107,7 +107,7 @@ export default function WeeklyVolumeCard({ store }) {
         ))}
       </ul>
       <div
-        className="rounded-xl bg-surface2 p-3 space-y-2"
+        className="rounded-lg bg-surface2 p-3 space-y-2"
         data-testid="weekly-volume-detail"
       >
         <p className="text-xs font-bold">

@@ -44,7 +44,7 @@ export default function InstallCard(){
   const shared = "Everything stays on this device — install just adds the app shell.";
 
   return (
-    <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 text-xs space-y-2" data-testid="install-card">
+    <div className="mx-4 mt-3 rounded-xl border border-line bg-surface p-3 text-xs space-y-2" data-testid="install-card">
       <p className="font-bold">Install Arise as an app</p>
       {platform.isWebview ? (
         <p className="text-ink3">You are viewing this inside another app (social/browser-in-app). Open this page in your normal browser first, then install from there.</p>
@@ -63,7 +63,7 @@ export default function InstallCard(){
         <>
           <p className="text-ink3">{shared}</p>
           <div className="flex gap-2">
-            <button onClick={accept} className="btn btn-primary min-h-9 rounded-xl px-3">Install app</button>
+            <button onClick={accept} className="btn btn-primary min-h-9 rounded-lg px-3">Install app</button>
             <button onClick={() => setDismissed(true)} className="underline text-ink3 font-semibold">Not now</button>
           </div>
           {result === 'dismissed' && <p className="text-ink3">You can install later from your browser's menu.</p>}

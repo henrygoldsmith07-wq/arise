@@ -11,7 +11,7 @@ function SetupSheet({ exerciseId, name, entry, onSave, onClose }){
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40" onClick={onClose}>
       <form ref={a11y.rootRef} onKeyDown={a11y.trapTab} onSubmit={submit} role="dialog" aria-modal="true" aria-label={`${name} setup`} data-testid="setup-sheet"
-        onClick={(e)=> e.stopPropagation()} className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-t-2xl border border-line bg-surface p-4 space-y-3">
+        onClick={(e)=> e.stopPropagation()} className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-t-xl border border-line bg-surface p-4 space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-bold text-ink">{name}: your setup</h2>
           <button ref={a11y.closeRef} type="button" onClick={onClose} className="min-h-11 min-w-11 text-xs font-bold px-3 rounded-full border border-line">Cancel</button>
@@ -21,12 +21,12 @@ function SetupSheet({ exerciseId, name, entry, onSave, onClose }){
           <label key={f.key} className="block text-[11px] font-semibold text-ink2">{f.label}
             <input type="text" value={form[f.key]} maxLength={f.max} placeholder={f.placeholder} data-testid={`setup-${f.key}`}
               onChange={(e)=> setForm((prev)=> ({ ...prev, [f.key]: e.target.value }))}
-              className="mt-1 w-full min-h-11 rounded-xl border border-line bg-surface2 px-3 text-sm font-normal text-ink" />
+              className="mt-1 w-full min-h-11 rounded-lg border border-line bg-surface2 px-3 text-sm font-normal text-ink" />
           </label>
         ))}
         <div className="flex gap-2 pt-1">
-          <button type="submit" data-testid="setup-save" className="btn btn-primary flex-1 min-h-11 rounded-xl">Save setup</button>
-          {entry && <button type="button" data-testid="setup-clear" onClick={()=> { onSave(exerciseId, {}); onClose(); }} className="min-h-11 px-4 rounded-xl border border-line text-sm font-bold">Clear</button>}
+          <button type="submit" data-testid="setup-save" className="btn btn-primary flex-1 min-h-11 rounded-lg">Save setup</button>
+          {entry && <button type="button" data-testid="setup-clear" onClick={()=> { onSave(exerciseId, {}); onClose(); }} className="min-h-11 px-4 rounded-lg border border-line text-sm font-bold">Clear</button>}
         </div>
       </form>
     </div>

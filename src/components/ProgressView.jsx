@@ -306,13 +306,13 @@ export default function ProgressView({ store, setStore = null, onStart = null })
   };
 
   return (
-    <div className="px-4 py-5 space-y-4">
+    <div className="px-4 py-5 space-y-3">
       {/* ── Empty state teaches and leads somewhere — never an empty dashboard ── */}
       {!history.length && (
-        <section className="rounded-2xl border border-line bg-surface p-5 space-y-2" aria-label="Getting started">
+        <section className="rounded-xl border border-line bg-surface p-4 space-y-2" aria-label="Getting started">
           <p className="text-lg font-black tracking-tight">Complete your first workout to start measuring progress.</p>
           <p className="text-xs text-ink3">Arise measures what you actually do: strength trends need a few comparable sessions, consistency compares against your own programme, and every claim comes with its evidence. Nothing here scores you against anyone else.</p>
-          {onStart && <button onClick={onStart} className="btn btn-primary min-h-11 rounded-xl px-4">Start workout</button>}
+          {onStart && <button onClick={onStart} className="btn btn-primary min-h-11 rounded-lg px-4">Start workout</button>}
         </section>
       )}
       <div>
@@ -327,8 +327,8 @@ export default function ProgressView({ store, setStore = null, onStart = null })
 
       {/* ── Am I improving? Evidence-gated verdict, not volume alone ── */}
       {assessment && (
-        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="Am I improving">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Am I improving?</p>
+        <section className="rounded-xl border border-line bg-surface p-3 space-y-2" aria-label="Am I improving">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">Am I improving?</p>
           <p className="text-sm font-bold">{assessment.title}</p>
           <p className="text-xs text-ink3">{assessment.primaryReason}</p>
           {!simple && assessment.phaseContext && (
@@ -351,7 +351,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
             <p className="text-[11px] text-ink3">{readinessTrendLine(readinessRead)}</p>
           )}
           {expert && (
-            <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+            <details className="rounded-lg bg-surface2 px-3 py-2">
               <summary className="text-xs font-bold cursor-pointer">Evidence and calculations</summary>
               <ul className="mt-2 space-y-1">
                 {(assessment.signals || []).map((signal) => (
@@ -391,9 +391,9 @@ export default function ProgressView({ store, setStore = null, onStart = null })
           and Exercise history use below. This block interprets; detail charts
           stay underneath. ── */}
       {history.length > 0 && (
-        <section className="rounded-2xl border border-line bg-surface p-4 space-y-3" aria-label="What improved, what stalled">
+        <section className="rounded-xl border border-line bg-surface p-3 space-y-3" aria-label="What improved, what stalled">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">What improved?</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">What improved?</p>
             {improvingTrends.length ? (
               <ul className="mt-1.5 space-y-1.5">
                 {improvingTrends.slice(0, 3).map(t=> (
@@ -410,7 +410,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
           </div>
 
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">What stalled?</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">What stalled?</p>
             {plateauRows.length ? (
               <ul className="mt-1.5 space-y-1.5">
                 {plateauRows.map(row=> (
@@ -426,12 +426,12 @@ export default function ProgressView({ store, setStore = null, onStart = null })
           </div>
 
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Why might it be happening?</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">Why might it be happening?</p>
             <div className="mt-1.5 space-y-2">
               {/* Recent-session attribution: fatigue vs an isolated bad day —
                   the read the old Training-feedback section carried, kept. */}
               {expert ? (
-                <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5">
+                <div className="rounded-lg bg-surface2 px-3 py-2.5">
                   <p className="text-xs font-bold">Recent session attribution <span className="font-normal text-ink3">— {confidenceLanguage(badAttribution.confidence, badAttribution.confidence === 'high' ? 'repeated signals support this read' : badAttribution.confidence === 'medium' ? 'a consistent pattern points this way' : 'one session alone can’t say much')}</span></p>
                   <p className="text-xs mt-1">{badAttribution.reason}</p>
                   {!!badAttribution.evidence?.length && <p className="text-[11px] text-ink3 mt-1">Evidence: {badAttribution.evidence.join(' · ')}</p>}
@@ -444,7 +444,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
                 const ex = EXERCISE_BY_ID[row.exerciseId];
                 const isTop = index === 0 && row.result.kind === 'genuine';
                 return (
-                  <div key={row.exerciseId} className="rounded-xl border border-line bg-surface2 px-3 py-2.5">
+                  <div key={row.exerciseId} className="rounded-lg bg-surface2 px-3 py-2.5">
                     <div className="flex items-center gap-2">
                       <p className="text-xs font-bold truncate">{ex?.name || row.exerciseId}</p>
                       <span className={`ml-auto text-[10px] font-bold uppercase tracking-wide ${row.result.kind === 'genuine' ? 'text-review' : 'text-ink3'}`}>{stallKindLabel(row.result.kind)}</span>
@@ -474,7 +474,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
 
       {/* ── What changed: one shared, inspectable audit trail ── */}
       {changes.length > 0 && (
-        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="What changed">
+        <section className="rounded-xl border border-line bg-surface p-3 space-y-2" aria-label="What changed">
           <WhatChangedPanel schedule={store.activeSchedule} history={history} />
           <p className="text-[11px] text-ink3">Every change is a deterministic rule applied to your logged sessions — the reasons are verbatim from the decision that made it.</p>
         </section>
@@ -484,27 +484,27 @@ export default function ProgressView({ store, setStore = null, onStart = null })
           observed outcome here, so Next best action below reads as the next
           decision rather than generic advice (P1.4/P1.5). ── */}
       {history.length && lastQuality ? (
-        <section className="rounded-2xl border border-line bg-surface p-4" data-testid="last-quality-report">
+        <section className="rounded-xl border border-line bg-surface p-3" data-testid="last-quality-report">
           <div className="flex items-baseline gap-2">
             <h3 className="text-sm font-bold">Last session summary</h3>
             <span className={`ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full border ${lastQuality.beatsPrevious ? 'border-success text-success' : 'border-line text-ink3'}`}>{lastQuality.band}</span>
           </div>
-          <div className="mt-2 rounded-xl border border-line bg-surface2 px-3 py-3">
+          <div className="mt-2 rounded-lg bg-surface2 px-3 py-3">
             <p className="text-xs text-ink3">{lastQuality.target ? `${lastQuality.target.hit ? '✓' : '△'} ${lastQuality.target.detail} · ` : ''}{lastQuality.lowReadiness ? 'low-readiness day — judged gently' : ''}{lastQuality.sustainableEffort ? ' · effort kept sustainable' : ''}</p>
             {debriefConfidence && (
               <p className="text-[11px] text-ink2 mt-1"><span className="font-semibold">{debriefConfidence.label}</span> {debriefConfidence.detail}</p>
             )}
             <div className="mt-2 grid gap-2 sm:grid-cols-3">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-success">What went well</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-success">What went well</p>
                 <ul className="mt-1 space-y-0.5">{lastQuality.whatWentWell.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}</ul>
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-review">What limited you</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-review">What limited you</p>
                 <ul className="mt-1 space-y-0.5">{lastQuality.whatLimitedYou.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}</ul>
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-ink3">Next session</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-ink3">Next session</p>
                 <ul className="mt-1 space-y-0.5">{lastQuality.whatToChangeNext.map((line, i)=> <li key={i} className="text-[11px] text-ink2 leading-snug">{line}</li>)}</ul>
               </div>
             </div>
@@ -520,17 +520,17 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       ) : null}
 
       {/* ── Next best action: one piece of guidance, never a nag ── */}
-      <section className="rounded-2xl border border-line bg-surface p-4 flex items-center gap-3" aria-label="Suggested next step">
+      <section className="rounded-xl border border-line bg-surface p-3 flex items-center gap-3" aria-label="Suggested next step">
         <span aria-hidden className="text-base">🧭</span>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Next best action</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">Next best action</p>
           <p className="text-sm font-bold truncate">{nba.title}</p>
           <p className="text-xs text-ink3">{nba.detail}</p>
         </div>
       </section>
 
       {/* ── Milestones: session-count ladder — the number that never lies ── */}
-      <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+      <section className="rounded-xl border border-line bg-surface p-3 space-y-2">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-bold">Milestones</h3>
           <span className="text-xs font-bold tabular-nums px-2 py-1 rounded-full bg-surface2 border border-line">{milestones.count} sessions</span>
@@ -551,7 +551,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       </section>
 
       {/* ── Consistency: weeks-with-training, never a guilt score ── */}
-      <section className="rounded-2xl border border-line bg-surface p-4">
+      <section className="rounded-xl border border-line bg-surface p-3">
         <h3 className="text-sm font-bold">Consistency</h3>
         {consistency.rate == null ? (
           <p className="text-xs text-ink3 mt-2">Log your first session and this fills in — weeks with any training, counted kindly.</p>
@@ -564,19 +564,19 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       </section>
 
       {store.activeSchedule && (
-        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+        <section className="rounded-xl border border-line bg-surface p-3 space-y-2">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-sm font-bold">Programme adherence</h3>
             <span className="text-xs font-black tabular-nums">{programmeAdherence.toDateRate == null ? '—' : `${Math.round(programmeAdherence.toDateRate * 100)}%`}</span>
           </div>
           <p className="text-xs text-ink3">{programmeAdherence.completed} completed • {programmeAdherence.missed} missed • {programmeAdherence.upcoming} upcoming. Future sessions do not lower the rate yet.</p>
-          {programmeAdherence.missed > 0 && <p className="text-xs text-ink2 bg-reviewsoft border border-review/30 rounded-xl px-3 py-2">Missed sessions are recoverable in order. Open Today to re-plan the schedule rather than doubling the next workout.</p>}
+          {programmeAdherence.missed > 0 && <p className="text-xs text-ink2 bg-reviewsoft border border-review/30 rounded-lg px-3 py-2">Missed sessions are recoverable in order. Open Today to re-plan the schedule rather than doubling the next workout.</p>}
         </section>
       )}
 
       {/* ── Monthly digest: last month, facts only ── */}
       {digest && digest.sessions > 0 && (
-        <section className="rounded-2xl border border-line bg-surface p-4 space-y-1">
+        <section className="rounded-xl border border-line bg-surface p-3 space-y-1">
           <h3 className="text-sm font-bold">{digest.month} digest</h3>
           <p className="text-xs text-ink3">
             {digest.sessions} session{digest.sessions === 1 ? '' : 's'} · {digest.sets} sets · {fmtWeight(digest.volume, unitsPref)} volume
@@ -589,15 +589,15 @@ export default function ProgressView({ store, setStore = null, onStart = null })
 
       {/* ── Arise Level: the habit layer, grouped with the rest of the XP UI.
           P2.9 keeps Progress opening on interpretation, not a level badge. ── */}
-      <div className="rounded-2xl border border-line bg-surface p-4 flex items-center gap-4">
-        <div className="w-14 h-14 rounded-2xl bg-ink text-bg grid place-items-center font-black text-lg shrink-0">{xp.level}</div>
+      <div className="rounded-xl border border-line bg-surface p-3 grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2">
+        <div className="w-11 h-11 rounded-lg bg-ink text-bg grid place-items-center font-black shrink-0">{xp.level}</div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold truncate">Arise Level {xp.level} — {xp.title}</p>
           <p className="text-xs text-ink3">{xp.xpIntoLevel}/{xp.xpForNext} XP to level {xp.level + 1} • {history.length} sessions {adherence.total ? `• ${adherence.done}/${adherence.total} planned done` : ''}</p>
           <div className="mt-2 h-1.5 rounded-full bg-surface2 max-w-48 overflow-hidden"><div className="h-full bg-ink transition-all" style={{width:`${xp.progressPct}%`}} /></div>
           <p className="text-[11px] text-ink3 mt-1">{xp.framing}</p>
         </div>
-        <div className="ml-auto shrink-0 flex gap-4 text-xs">
+        <div className="col-span-2 flex gap-4 text-xs border-t border-line pt-2">
           <div>
             <p className="font-bold tabular-nums">{fmtWeight(vol, unitsPref)}</p>
             <p className="text-ink3">volume</p>
@@ -611,8 +611,8 @@ export default function ProgressView({ store, setStore = null, onStart = null })
 
       {/* ── Recent XP: why each point was earned ── */}
       {!!xp.recent.length && (
-        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="Recent XP">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Recent XP</p>
+        <section className="rounded-xl border border-line bg-surface p-3 space-y-2" aria-label="Recent XP">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">Recent XP</p>
           <ul className="space-y-1">
             {xp.recent.map((award, i)=> (
               <li key={i} className="text-xs flex items-baseline gap-2">
@@ -627,13 +627,13 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       )}
 
       {/* ── Performance: evidence-based, with human-readable confidence ── */}
-      <section className="rounded-2xl border border-line bg-surface p-4 space-y-3" aria-label="Performance">
+      <section className="rounded-xl border border-line bg-surface p-3 space-y-3" aria-label="Performance">
         <div>
           <h3 className="text-sm font-bold">Performance</h3>
           <p className="text-xs text-ink3">Evidence-based trends — improvement is only claimed when comparable sessions support it.</p>
         </div>
         {!!perf.pbs.length && (
-          <div className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <div className="rounded-lg bg-surface2 px-3 py-2">
             <p className="text-xs font-bold">Personal bests</p>
             <ul className="mt-1 space-y-1">
               {perf.pbs.map((pr, i)=> (
@@ -647,7 +647,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
           </div>
         )}
         {perf.strength.filter(t=> t.status !== 'insufficient').map(t=> (
-          <div key={t.exerciseId} className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <div key={t.exerciseId} className="rounded-lg bg-surface2 px-3 py-2">
             <p className="text-xs font-bold">{EXERCISE_BY_ID[t.exerciseId]?.name || t.exerciseId} <span className={`ml-1 text-[11px] font-bold ${t.status === 'improving' ? 'text-success' : t.status === 'declining' ? 'text-review' : 'text-ink3'}`}>{t.status === 'improving' ? '↑ improving' : t.status === 'declining' ? '↓ slipping' : '→ steady'}</span></p>
             <p className="text-[11px] text-ink3 mt-0.5">{t.explanation}</p>
             <p className="text-[11px] text-ink3">{confidenceLanguage(t.confidence)}</p>
@@ -656,28 +656,23 @@ export default function ProgressView({ store, setStore = null, onStart = null })
         {!perf.strength.some(t=> t.status !== 'insufficient') && (
           <p className="text-xs text-ink3">Arise needs at least 3 comparable sessions per exercise before calling a trend. Keep logging — the evidence builds fast.</p>
         )}
-        <div className="rounded-xl border border-line bg-surface2 px-3 py-2">
+        <div className="rounded-lg bg-surface2 px-3 py-2">
           <p className="text-xs font-bold">Work capacity</p>
           <p className="text-[11px] text-ink3 mt-0.5">{perf.capacity.explanation}</p>
         </div>
-        <div className="rounded-xl border border-line bg-surface2 px-3 py-2">
+        <div className="rounded-lg bg-surface2 px-3 py-2">
           <p className="text-xs font-bold">Consistency</p>
           <p className="text-[11px] text-ink3 mt-0.5">{perf.consistency.explanation}{perf.consistency.returnedAfterMiss ? ' You came back within a week of a miss — that matters more than never missing.' : ''}</p>
         </div>
       </section>
 
-      <section className="rounded-2xl border border-line bg-surface p-4">
-        <h3 className="text-sm font-bold">Weekly volume</h3>
-        {!wv.length ? <p className="text-xs text-ink3 mt-2">Log a couple sessions — then trends appear.</p> : (
-          <div className="mt-2 flex items-end gap-1 h-14">
-            {wv.slice(-8).map(w=>{ const max=Math.max(...wv.map(x=>x.vol),1); const h=Math.max(4, Math.round(w.vol/max*48)); return <div key={w.week} title={`${w.week}: ${fmtWeight(w.vol, unitsPref)} volume`} className="flex-1 rounded bg-ink" style={{height:`${h}px`}} />; })}
-          </div>
-        )}
-        {!!wv.length && <p className="text-xs text-ink3 mt-2"><JargonHelp term="RPE" /><JargonHelp term="RIR" /> {wv[wv.length-1]?.vol> (wv[wv.length-2]?.vol||0)*1.2 ? `Volume up ${Math.round((wv[wv.length-1].vol/(wv[wv.length-2]?.vol||1)-1)*100)}% vs last week — hold steady or deload if RPE was high.` : wv[wv.length-1]?.vol < (wv[wv.length-2]?.vol||0)*0.8 ? 'Volume dipped — good if planned deload, otherwise add a session.' : 'Trends look steady — keep progressing where RIR ≥2.'}</p>}
+      {/* Bars live in the Weekly volume card above; this is only the verdict. */}
+      <section className="rounded-xl border border-line bg-surface p-3" aria-label="Volume trend">
+        <p className="text-xs text-ink3"><span className="font-bold text-ink">Volume trend: </span>{!wv.length ? 'Log a couple sessions — then trends appear.' : wv[wv.length-1]?.vol> (wv[wv.length-2]?.vol||0)*1.2 ? `Volume up ${Math.round((wv[wv.length-1].vol/(wv[wv.length-2]?.vol||1)-1)*100)}% vs last week — hold steady or deload if RPE was high.` : wv[wv.length-1]?.vol < (wv[wv.length-2]?.vol||0)*0.8 ? 'Volume dipped — good if planned deload, otherwise add a session.' : 'Trends look steady — keep progressing where RIR ≥2.'} <JargonHelp term="RPE" /><JargonHelp term="RIR" /></p>
       </section>
 
       {restTaken.length > 0 && (
-        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="Rest you took" data-testid="rest-taken">
+        <section className="rounded-xl border border-line bg-surface p-3 space-y-2" aria-label="Rest you took" data-testid="rest-taken">
           <h3 className="text-sm font-bold">Rest you actually took</h3>
           <ul className="space-y-1.5">
             {restTaken.map(r => (
@@ -691,7 +686,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       )}
 
       {rideOverlay.some(r => r.liftDays > 0) && (
-        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="Rides and lifting" data-testid="ride-overlay">
+        <section className="rounded-xl border border-line bg-surface p-3 space-y-2" aria-label="Rides and lifting" data-testid="ride-overlay">
           <h3 className="text-sm font-bold">Rides vs lifting</h3>
           <p className="text-xs text-ink2">Leg sets done on a key ride day or the day before are what tend to blunt rides.</p>
           <ul className="space-y-1.5">
@@ -712,7 +707,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
           for computed-but-advanced insight, so the two new cards follow it
           rather than inventing a third convention. */}
       {expert && balance.n >= 2 && (
-        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+        <section className="rounded-xl border border-line bg-surface p-3 space-y-2">
           <h3 className="text-sm font-bold">Volume balance</h3>
           <p className="text-xs text-ink2">{balance.advice}</p>
           <ul className="mt-1 space-y-1.5">
@@ -730,7 +725,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       )}
 
       {imbalance && (
-        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+        <section className="rounded-xl border border-line bg-surface p-3 space-y-2">
           <h3 className="text-sm font-bold">Left/right balance</h3>
           <p className="text-xs text-ink2">
             {imbalance.weaker === 'L' ? 'Left' : 'Right'} side is about {imbalance.imbalancePct}% behind across your unilateral work
@@ -756,7 +751,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
           attribution and plateau output, one home, no duplicate. */}
 
       {expert && !!Object.keys(landmarks).length && (
-        <section className="rounded-2xl border border-line bg-surface p-4">
+        <section className="rounded-xl border border-line bg-surface p-3">
           <h3 className="text-sm font-bold">Volume landmarks (sets/week)</h3>
           <p className="text-xs text-ink3">Cautious, rough context — individual needs vary. Not a prescription.</p>
           <ul className="mt-2 space-y-1.5">
@@ -772,7 +767,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       )}
 
       {dist.totalSets>0 && (
-        <section className="rounded-2xl border border-line bg-surface p-4">
+        <section className="rounded-xl border border-line bg-surface p-3">
           <h3 className="text-sm font-bold">Volume distribution</h3>
           <ul className="mt-2 space-y-1">
             {dist.byMuscle.map(d=> (
@@ -788,11 +783,11 @@ export default function ProgressView({ store, setStore = null, onStart = null })
 
       {history.length > 0 && <Suspense fallback={null}><RecordsWall store={store} /></Suspense>}
 
-      <section className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+      <section className="rounded-xl border border-line bg-surface p-3 space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-bold">Exercise history</h3>
           {!!exerciseOptions.length && (
-            <select value={exerciseId || ''} onChange={e=> setSelectedExerciseId(e.target.value)} className="max-w-[58%] rounded-xl border border-line bg-surface2 px-2 py-2 text-xs font-semibold">
+            <select value={exerciseId || ''} onChange={e=> setSelectedExerciseId(e.target.value)} className="max-w-[58%] rounded-lg border border-line bg-surface2 px-2 py-2 text-xs font-semibold">
               {exerciseOptions.map(id=> <option key={id} value={id}>{EXERCISE_BY_ID[id]?.name || id}</option>)}
             </select>
           )}
@@ -808,13 +803,13 @@ export default function ProgressView({ store, setStore = null, onStart = null })
             </div>
             <p className="text-xs text-ink3">{plateau?.reason || 'Keep logging consistent sets before judging a plateau.'}</p>
             {stallDeload?.stalled && (
-              <div className="rounded-xl border border-review/40 bg-reviewsoft px-3 py-2 text-xs" data-testid="stall-deload" role="status">
+              <div className="rounded-lg border border-review/40 bg-reviewsoft px-3 py-2 text-xs" data-testid="stall-deload" role="status">
                 <strong>Stalled {stallDeload.sessions} sessions.</strong> Deload: {stallDeload.reps} reps at {fmtWeight(stallDeload.loadKg, unitsPref)} (−10% from {fmtWeight(stallDeload.fromKg, unitsPref)}), then rebuild, or swap it.
                 {typeof setStore === 'function' && (()=>{ const on = activeDeloadTarget(store.gymPrefs?.deloadTargets, exerciseId, history); return <button type="button" className="mt-2 block min-h-[44px] rounded-lg border border-line px-3 font-semibold" data-testid={on ? 'stall-deload-undo' : 'stall-deload-accept'} onClick={()=> setStore(patchGymPreferences(store, on ? clearDeloadTarget(store.gymPrefs, exerciseId) : acceptDeloadTarget(store.gymPrefs, exerciseId, stallDeload, new Date().toISOString())))}>{on ? 'Next target set — undo' : 'Use as my next target'}</button>; })()}
               </div>
             )}
             {trendBand && (
-              <figure className="rounded-xl border border-line bg-surface2 px-3 py-2">
+              <figure className="rounded-lg border border-line bg-surface2 px-3 py-2">
                 <svg viewBox="0 0 320 84" className="w-full h-20" role="img" aria-hidden="true" focusable="false">
                   {trendBand.band && <path d={trendBand.band} fill="currentColor" className="text-ink3/20" />}
                   <path d={trendBand.observedLine} fill="none" stroke="currentColor" strokeWidth="1" className="text-ink3/60" strokeLinejoin="round" strokeLinecap="round" />
@@ -843,7 +838,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
                 </figcaption>
               </figure>
             )}
-            <div className="rounded-xl border border-line bg-surface2 px-3 py-2">
+            <div className="rounded-lg bg-surface2 px-3 py-2">
               <p className="text-xs font-bold">Next step: {exerciseSummary.recommendation.reason}</p>
               <details className="mt-1">
                 <summary className="text-[11px] font-semibold cursor-pointer">Show the rule and evidence</summary>
@@ -855,7 +850,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
             </div>
             <ul className="space-y-1.5">
               {exerciseSummary.rows.slice(-5).reverse().map(row=> (
-                <li key={row.sessionId || `${row.dateISO}-${row.title}`} className="flex items-center gap-2 text-xs border border-line rounded-xl px-3 py-2 bg-surface2">
+                <li key={row.sessionId || `${row.dateISO}-${row.title}`} className="flex items-center gap-2 text-xs rounded-lg px-3 py-2 bg-surface2">
                   <span className="font-bold tabular-nums w-20">{row.dateISO}</span>
                   <span>{row.sets} sets • {fmtWeight(row.volumeKg, unitsPref)} volume</span>
                   <span className="ml-auto text-ink3">{row.best ? `${row.best.weightKg ? `${fmtWeight(row.best.weightKg, unitsPref)} × ` : ''}${row.best.reps}` : 'no loaded best'}</span>
@@ -863,7 +858,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
               ))}
             </ul>
             {investigation && (
-              <div className="rounded-xl border border-review/40 bg-reviewsoft px-3 py-2 space-y-1.5" data-testid="plateau-investigation">
+              <div className="rounded-lg border border-review/40 bg-reviewsoft px-3 py-2 space-y-1.5" data-testid="plateau-investigation">
                 <p className="text-xs font-bold text-review">🔎 Why is this stalled? — {investigation.diagnosis}</p>
                 <ul className="space-y-1">
                   {investigation.checks.map((check)=> (
@@ -882,12 +877,12 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       </section>
 
       {noteRecs.length>0 && (
-        <section className="rounded-2xl border border-line bg-surface p-4">
+        <section className="rounded-xl border border-line bg-surface p-3">
           <h3 className="text-sm font-bold">Notes → next recommendations</h3>
           <p className="text-xs text-ink3">Extracted from your session notes — review and apply next time you train that movement.</p>
           <ul className="mt-2 space-y-1.5">
             {noteRecs.slice(-5).map((r,i)=> (
-              <li key={i} className="text-xs border border-line rounded-xl px-3 py-2 bg-surface2">
+              <li key={i} className="text-xs rounded-lg px-3 py-2 bg-surface2">
                 <span className="font-bold">{r.dateISO}</span> — {r.hints.join(', ')} <span className="text-ink3">“{r.note.slice(0,80)}”</span>
               </li>
             ))}
@@ -896,7 +891,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       )}
 
       {expert && (
-      <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+      <section className="rounded-xl border border-line bg-surface p-3 space-y-2">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-bold">Deload logic check</h3>
           <span className={`text-[11px] font-bold px-2 py-1 rounded-full border ${deloadValidation.decision.yes ? 'bg-reviewsoft border-review/30 text-review' : 'bg-surface2 border-line text-ink3'}`}>{deloadValidation.decision.yes ? 'consider deload' : 'hold'} </span>
@@ -907,7 +902,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       )}
 
       {expert && (
-      <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+      <section className="rounded-xl border border-line bg-surface p-3 space-y-2">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-bold">Historical recommendation check</h3>
           <span className="text-[11px] font-bold px-2 py-1 rounded-full border border-line bg-surface2">{calibration.status}</span>
@@ -923,7 +918,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       )}
 
       {longitudinal?.calibration && (
-        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="Coaching calibration">
+        <section className="rounded-xl border border-line bg-surface p-3 space-y-2" aria-label="Coaching calibration">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-sm font-bold">Coaching calibration</h3>
             <span className={`text-[11px] font-bold px-2 py-1 rounded-full border ${coaching.active ? 'bg-successsoft border-success/30 text-ink' : 'bg-surface2 border-line text-ink3'}`}>{coaching.active ? 'calibrated' : 'gathering'}</span>
@@ -939,7 +934,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
             <span className="text-ink3">confidence {coaching.confidenceQuality}</span>
           </div>
           {expert && (
-          <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <details className="rounded-lg bg-surface2 px-3 py-2">
             <summary className="text-[11px] font-bold cursor-pointer">Segment calibration (prospective only)</summary>
             <div className="mt-2 space-y-2 text-[11px] text-ink3">
               <p><span className="font-bold text-ink">By confidence</span></p>
@@ -959,7 +954,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       )}
 
       {expert && longitudinal?.evaluation?.primaryComparison && (
-        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="Coaching evidence">
+        <section className="rounded-xl border border-line bg-surface p-3 space-y-2" aria-label="Coaching evidence">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-sm font-bold">Coaching evidence</h3>
             <span className={`text-[11px] font-bold px-2 py-1 rounded-full border ${evidence.status === 'descriptive' ? 'bg-successsoft border-success/30 text-ink' : 'bg-surface2 border-line text-ink3'}`}>{evidence.status}</span>
@@ -970,7 +965,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
             ))}
           </div>
           <p className="text-[11px] text-ink3">Across {evidence.users} assigned user{evidence.users === 1 ? '' : 's'} · {evidence.observed} assigned transitions. Assigned-arm comparison, personal calibration, retrospective replay and shadow agreement are different sources — they are never mixed.</p>
-          <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <details className="rounded-lg bg-surface2 px-3 py-2">
             <summary className="text-[11px] font-bold cursor-pointer">Evidence sources</summary>
             <div className="mt-2 space-y-1 text-[11px] text-ink3">
               <p><span className="font-bold text-ink">Assigned.</span> {evidence.evidenceKinds.assigned}</p>
@@ -982,7 +977,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
             </div>
           </details>
           {longitudinal?.fieldComparison && (
-          <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <details className="rounded-lg bg-surface2 px-3 py-2">
             <summary className="text-[11px] font-bold cursor-pointer">Prescription difficulty / decision agreement (secondary diagnostic)</summary>
             <div className="mt-2 space-y-1 text-[11px] text-ink3">
               <p>{shadow.label}</p>
@@ -999,13 +994,13 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       )}
 
       {evaluation && evaluation.totalRecords > 0 && (
-        <section className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+        <section className="rounded-xl border border-line bg-surface p-3 space-y-2">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-sm font-bold">Real-world validation (longitudinal)</h3>
             <span className="text-[11px] font-bold px-2 py-1 rounded-full border border-line bg-surface2">{evaluation.resolvedCount ?? `${evaluation.overall.resolved}/${evaluation.totalRecords}`}</span>
           </div>
           <p className="text-xs text-ink3">{evaluation.overall.resolved} resolved recommendation→outcome pair{evaluation.overall.resolved === 1 ? '' : 's'} recorded before each workout. Stored separately from training history; recommendations are never calibrated on future sessions.</p>
-          <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5">
+          <div className="rounded-lg bg-surface2 px-3 py-2.5">
             <p className="text-xs font-bold">Overall</p>
             <p className="text-[11px] text-ink3 mt-1">{formatSegment(evaluation.overall)}</p>
           </div>
@@ -1040,7 +1035,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
 
       <TrainingProfileCard store={store} />
 
-      <section className="rounded-2xl border border-line bg-surface p-4" aria-label="Training experiments">
+      <section className="rounded-xl border border-line bg-surface p-3" aria-label="Training experiments">
         <div className="flex items-baseline gap-2">
           <h3 className="text-sm font-bold">Training experiments</h3>
           {canManageExperiments ? (
@@ -1063,7 +1058,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
           />
         )}
         {!experimentFormOpen && !experimentEvaluations.length && experimentSuggestion && canManageExperiments ? (
-          <div className="mt-2 rounded-xl border border-line bg-surface2 px-3 py-2" data-testid="experiment-suggestion">
+          <div className="mt-2 rounded-lg bg-surface2 px-3 py-2" data-testid="experiment-suggestion">
             <p className="text-xs font-bold">Suggested next: {experimentSuggestion.name}</p>
             <p className="text-[11px] text-ink2 mt-0.5">{experimentSuggestion.question}</p>
             <button type="button" onClick={()=> setExperimentFormOpen(true)} className="mt-1.5 text-[11px] font-bold underline underline-offset-2">Set it up</button>
@@ -1081,7 +1076,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
                 : evaluation.phase === 'baseline' ? 'Baseline phase'
                 : `Intervention — ${daysLeft != null ? `${daysLeft} days left` : 'running'}`;
               return (
-                <li key={experiment.id} className="rounded-xl border border-line bg-surface2 px-3 py-2">
+                <li key={experiment.id} className="rounded-lg bg-surface2 px-3 py-2">
                   <div className="flex items-center gap-2">
                     <p className="text-xs font-bold truncate">{experiment.name}</p>
                     <span className={`ml-auto shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ${experiment.status === 'completed' ? 'border-success text-success' : 'border-line text-ink3'}`}>{statusLabel}</span>
@@ -1111,7 +1106,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
         ) : null}
       </section>
 
-      <section className="rounded-2xl border border-line bg-surface p-4">
+      <section className="rounded-xl border border-line bg-surface p-3">
         <h3 className="text-sm font-bold">History</h3>
         {!history.length ? <p className="text-sm text-ink3 mt-2">Your logged sessions land here — newest first, with sets, notes and the prescriptions you were given. Schedule a program in Train and run it from Today to fill this in.</p> : (
           <SessionHistoryList history={history} unitsPref={unitsPref} />
@@ -1136,14 +1131,14 @@ function SessionHistoryList({ history, unitsPref = 'kg' }){
       <p className="text-[11px] text-ink3 mt-1" role="status">Showing {visible.length} of {history.length} sessions</p>
       <ul className="mt-2 space-y-2 max-h-80 overflow-auto pr-1">
         {visible.map(h=> (
-          <li key={h.id} className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <li key={h.id} className="rounded-lg bg-surface2 px-3 py-2">
             <p className="text-sm font-bold">{h.title} <span className="text-xs text-ink3">• {h.dateISO} • W{h.week} D{h.day}</span></p>
             <p className="text-xs text-ink3">{h.blocks.map(b=> `${EXERCISE_BY_ID[b.exerciseId]?.name || b.exerciseId}: ${b.sets.map(s=> `${s.reps}${s.weightKg?`@${fmtWeight(s.weightKg, unitsPref)}`:''}${s.side?` ${s.side}`:''}${s.rom?` ${s.rom}`:''}`).join(', ')}`).join(' • ')}</p>
           </li>
         ))}
       </ul>
       {remaining > 0 && (
-        <button onClick={()=> setVisibleCount(c=> c + HISTORY_PAGE)} className="mt-2 w-full btn btn-secondary min-h-10 rounded-xl text-xs font-bold">
+        <button onClick={()=> setVisibleCount(c=> c + HISTORY_PAGE)} className="mt-2 w-full btn btn-secondary min-h-10 rounded-lg text-xs font-bold">
           Load {Math.min(HISTORY_PAGE, remaining)} older sessions ({remaining} hidden)
         </button>
       )}
@@ -1164,7 +1159,7 @@ function ExperimentForm({ history = [], exerciseOptions = [], initial = null, on
   const canSubmit = hasHistory && name.trim() && (exerciseId || metric === 'session-quality');
   return (
     <form
-      className="mt-2 rounded-xl border border-line bg-surface2 px-3 py-2 space-y-2"
+      className="mt-2 rounded-lg border border-line bg-surface2 px-3 py-2 space-y-2"
       onSubmit={(e)=> { e.preventDefault(); if(canSubmit) onSubmit({ name, question, exerciseId: exerciseId || null, interventionNote: interventionNote || null, metric }); }}
       data-testid="experiment-form"
     >
@@ -1172,7 +1167,7 @@ function ExperimentForm({ history = [], exerciseOptions = [], initial = null, on
           form. Presets are the engine's own EXPERIMENT_PRESETS — the baseline
           still comes from history that already exists. */}
       <div>
-        <span className="block text-[10px] font-bold uppercase tracking-widest text-ink3">Ask a question</span>
+        <span className="block text-[10px] font-bold uppercase tracking-wider text-ink3">Ask a question</span>
         <div className="mt-1 flex flex-wrap gap-1">
           {EXPERIMENT_PRESETS.map(preset=> (
             <button
@@ -1186,7 +1181,7 @@ function ExperimentForm({ history = [], exerciseOptions = [], initial = null, on
         <p className="text-[10px] text-ink3 mt-1">Tap a question or write your own — Arise builds the baseline from your logged history automatically.</p>
       </div>
       <div>
-        <label className="block text-[10px] font-bold uppercase tracking-widest text-ink3" htmlFor="experiment-name">What are you testing?</label>
+        <label className="block text-[10px] font-bold uppercase tracking-wider text-ink3" htmlFor="experiment-name">What are you testing?</label>
         <input
           id="experiment-name"
           value={name}
@@ -1197,7 +1192,7 @@ function ExperimentForm({ history = [], exerciseOptions = [], initial = null, on
       </div>
       {question ? <p className="text-[11px] text-ink2">Question: {question}</p> : null}
       <div>
-        <label className="block text-[10px] font-bold uppercase tracking-widest text-ink3" htmlFor="experiment-exercise">Exercise</label>
+        <label className="block text-[10px] font-bold uppercase tracking-wider text-ink3" htmlFor="experiment-exercise">Exercise</label>
         <select
           id="experiment-exercise"
           data-testid="experiment-exercise-select"
@@ -1210,7 +1205,7 @@ function ExperimentForm({ history = [], exerciseOptions = [], initial = null, on
         </select>
       </div>
       <div>
-        <label className="block text-[10px] font-bold uppercase tracking-widest text-ink3" htmlFor="experiment-note">What will you change?</label>
+        <label className="block text-[10px] font-bold uppercase tracking-wider text-ink3" htmlFor="experiment-note">What will you change?</label>
         <input
           id="experiment-note"
           value={interventionNote}
@@ -1221,7 +1216,7 @@ function ExperimentForm({ history = [], exerciseOptions = [], initial = null, on
       </div>
       {!hasHistory ? <p className="text-[11px] text-ink3">Log at least one session first — the baseline comes from history that already exists.</p> : null}
       <div className="flex gap-3">
-        <button type="submit" disabled={!canSubmit} className="btn btn-primary min-h-10 rounded-xl px-4 text-xs font-bold disabled:opacity-50" data-testid="experiment-submit">Start experiment</button>
+        <button type="submit" disabled={!canSubmit} className="btn btn-primary min-h-10 rounded-lg px-4 text-xs font-bold disabled:opacity-50" data-testid="experiment-submit">Start experiment</button>
         <button type="button" onClick={onCancel} className="text-[11px] font-bold underline underline-offset-2">Never mind</button>
       </div>
     </form>
