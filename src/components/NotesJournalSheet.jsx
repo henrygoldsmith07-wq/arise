@@ -1,6 +1,6 @@
 // NotesJournalSheet — search every session note, tag chip and machine setup
 // note in one place. Built on this device from history; nothing is uploaded.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDialogA11y } from "../lib/a11y.js";
 import { EXERCISE_BY_ID } from "../lib/data.js";
 import { buildNoteIndex, searchNotes, TAG_FILTERS } from "../lib/noteSearch.js";
@@ -10,6 +10,7 @@ const KINDS = [
   ["session", "Sessions"],
   ["setup", "Machine setups"],
 ];
+const PAGE = 50;
 
 export default function NotesJournalSheet({
   history = [],
@@ -20,6 +21,7 @@ export default function NotesJournalSheet({
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState("all");
   const [tag, setTag] = useState(null);
+  const [limit, setLimit] = useState(PAGE);
   const index = useMemo(
     () =>
       buildNoteIndex(
@@ -33,6 +35,8 @@ export default function NotesJournalSheet({
     () => searchNotes(index, { query, kind, tag }),
     [index, query, kind, tag],
   );
+  // A new search starts from the top of the list again.
+  useEffect(() => setLimit(PAGE), [query, kind, tag]);
   const chip = (on) =>
     `min-h-11 rounded-full border px-3 text-xs font-bold ${on ? "bg-ink text-bg border-ink" : "bg-surface border-line text-ink3"}`;
   return (
@@ -79,31 +83,37 @@ export default function NotesJournalSheet({
               key={id}
               type="button"
               aria-pressed={kind === id}
-              onClick={() => setKind(id)}
+              onClick={() => {
+                setKind(id);
+                // Setup notes carry no tags: a tag filter would hide them all.
+                if (id === "setup") setTag(null);
+              }}
               className={chip(kind === id)}
             >
               {label}
             </button>
           ))}
         </div>
-        <div role="group" aria-label="Tag" className="flex flex-wrap gap-1.5">
-          {TAG_FILTERS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              aria-pressed={tag === t.id}
-              onClick={() => setTag(tag === t.id ? null : t.id)}
-              className={chip(tag === t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        {kind !== "setup" && (
+          <div role="group" aria-label="Tag" className="flex flex-wrap gap-1.5">
+            {TAG_FILTERS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                aria-pressed={tag === t.id}
+                onClick={() => setTag(tag === t.id ? null : t.id)}
+                className={chip(tag === t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
         <p className="text-[11px] text-ink3" aria-live="polite">
           {rows.length} of {index.length} notes
         </p>
         <ul className="space-y-2">
-          {rows.map((e) => (
+          {rows.slice(0, limit).map((e) => (
             <li
               key={e.id}
               data-testid="note-row"
@@ -124,6 +134,15 @@ export default function NotesJournalSheet({
             </li>
           ))}
         </ul>
+        {rows.length > limit && (
+          <button
+            type="button"
+            onClick={() => setLimit(limit + PAGE)}
+            className="w-full min-h-11 rounded-xl border border-line text-xs font-bold"
+          >
+            Show more ({rows.length - limit} left)
+          </button>
+        )}
         {rows.length === 0 && (
           <p className="text-xs text-ink3">
             {index.length

@@ -342,12 +342,11 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   };
 
   const commitFinish = ()=>{
-    const labels=noteTags.map(id=> NOTE_PROMPTS.find(t=> t.id===id)?.label).filter(Boolean);
-    const finalNote=[labels.join(', '), note.trim()].filter(Boolean).join(' · ');
+    // buildGuidedPayload prefixes the tag labels itself; pass the raw note.
     const payload = buildGuidedPayload({
       session,
       blocks,
-      note: finalNote,
+      note,
       noteTags,
       startedAtISO: startedAtRef.current,
       availableEquipment,
