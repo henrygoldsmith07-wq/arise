@@ -67,7 +67,8 @@ export function upsertBodyweight(
   const rest = (Array.isArray(log) ? log : []).filter(
     (r) => String(r?.dateISO || "").slice(0, 10) !== day,
   );
-  return [...rest, { dateISO: day, kg: value, updatedAt: nowISO }].sort(
+  const m = measuresOn(log, day);
+  return [...rest, { dateISO: day, kg: value, ...(m ? { m } : {}), updatedAt: nowISO }].sort(
     (a, b) => a.dateISO.localeCompare(b.dateISO),
   );
 }
@@ -83,9 +84,11 @@ export function removeBodyweight(
     (r) => String(r?.dateISO || "").slice(0, 10) !== day,
   );
   if (!validDate(day)) return rest;
+  // Removing the weight keeps that day's measurements (kg null, not deleted).
+  const m = measuresOn(log, day);
   return [
     ...rest,
-    { dateISO: day, kg: null, deleted: true, updatedAt: nowISO },
+    m ? { dateISO: day, kg: null, m, updatedAt: nowISO } : { dateISO: day, kg: null, deleted: true, updatedAt: nowISO },
   ].sort((a, b) => a.dateISO.localeCompare(b.dateISO));
 }
 
@@ -329,4 +332,65 @@ export function relativeStrength(
                 : "flat",
       };
     });
+}
+
+// ── Body measurements (Hevy/Strong-style) ─────────────────────────────────
+// Stored on the same per-day row as the weigh-in (`m: { waist: 82, … }`), so
+// backup, export and sync merge carry them with no new plumbing. Canonical cm
+// and % ; a measurements-only day has kg null, which weight readers skip.
+export const MEASURES = [
+  { key: "waist", label: "Waist" },
+  { key: "chest", label: "Chest" },
+  { key: "arm", label: "Arm" },
+  { key: "thigh", label: "Thigh" },
+  { key: "bf", label: "Body fat", pct: true },
+];
+
+/** A measurement in cm (10–250) or body-fat % (2–70), one decimal; else null. */
+export function parseMeasure(key, value) {
+  const n = Number(String(value ?? "").trim().replace(",", "."));
+  if (String(value ?? "").trim() === "" || !Number.isFinite(n)) return null;
+  const [lo, hi] = key === "bf" ? [2, 70] : [10, 250];
+  return n >= lo && n <= hi ? round1(n) : null;
+}
+
+function measuresOn(log, day) {
+  const row = (Array.isArray(log) ? log : []).find(
+    (r) => String(r?.dateISO || "").slice(0, 10) === day && !r.deleted,
+  );
+  return row?.m && Object.keys(row.m).length ? row.m : null;
+}
+
+/** Set a day's measurements (blank clears one). Keeps that day's weigh-in. */
+export function upsertMeasures(log, { dateISO, values, nowISO = new Date().toISOString() }) {
+  const day = String(dateISO || "").slice(0, 10);
+  if (!validDate(day)) return Array.isArray(log) ? log : [];
+  const m = {};
+  for (const { key } of MEASURES) {
+    const v = parseMeasure(key, values?.[key]);
+    if (v != null) m[key] = v;
+  }
+  const kg = bodyweightOn(log, day)?.kg ?? null;
+  const rest = (Array.isArray(log) ? log : []).filter(
+    (r) => String(r?.dateISO || "").slice(0, 10) !== day,
+  );
+  const row = Object.keys(m).length
+    ? { dateISO: day, kg, m, updatedAt: nowISO }
+    : kg != null
+      ? { dateISO: day, kg, updatedAt: nowISO }
+      : { dateISO: day, kg: null, deleted: true, updatedAt: nowISO };
+  return [...rest, row].sort((a, b) => a.dateISO.localeCompare(b.dateISO));
+}
+
+/** Per measure: latest value and change since the first entry, oldest-first rows. */
+export function measureSummary(log) {
+  const rows = (Array.isArray(log) ? log : [])
+    .filter((r) => r && !r.deleted && r.m && validDate(r.dateISO))
+    .sort((a, b) => String(a.dateISO).localeCompare(String(b.dateISO)));
+  return MEASURES.map((def) => {
+    const pts = rows.filter((r) => Number.isFinite(r.m[def.key])).map((r) => ({ dateISO: String(r.dateISO).slice(0, 10), v: r.m[def.key] }));
+    if (!pts.length) return null;
+    const last = pts[pts.length - 1];
+    return { ...def, latest: last.v, dateISO: last.dateISO, change: pts.length > 1 ? round1(last.v - pts[0].v) : null, since: pts[0].dateISO };
+  }).filter(Boolean);
 }

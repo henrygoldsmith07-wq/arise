@@ -55,7 +55,7 @@ export function buildNoteIndex(
 ) {
   const out = [];
   for (const h of Array.isArray(history) ? history : []) {
-    if (!h || typeof h !== "object" || h.deleted) continue;
+    if (!h || typeof h !== "object" || h.deletedAt) continue;
     const tags = (Array.isArray(h.noteTags) ? h.noteTags : []).filter(
       (t) => TAG_LABEL[t],
     );

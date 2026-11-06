@@ -550,29 +550,25 @@ export default function ProgressView({ store, setStore = null, onStart = null })
         )}
       </section>
 
-      {/* ── Consistency: weeks-with-training, never a guilt score ── */}
-      <section className="rounded-xl border border-line bg-surface p-3">
-        <h3 className="text-sm font-bold">Consistency</h3>
+      {/* ── Consistency: weeks-with-training, never a guilt score; programme
+          adherence on the same card rather than its own. ── */}
+      <section className="rounded-xl border border-line bg-surface p-3 space-y-1.5">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-bold">Consistency</h3>
+          {store.activeSchedule && <span className="text-xs font-black tabular-nums" title="Programme adherence">{programmeAdherence.toDateRate == null ? '—' : `${Math.round(programmeAdherence.toDateRate * 100)}% adherence`}</span>}
+        </div>
         {consistency.rate == null ? (
-          <p className="text-xs text-ink3 mt-2">Log your first session and this fills in — weeks with any training, counted kindly.</p>
+          <p className="text-xs text-ink3">Log your first session and this fills in — weeks with any training, counted kindly.</p>
         ) : (
-          <p className="text-xs text-ink3 mt-2">
+          <p className="text-xs text-ink3">
             Trained in <strong className="text-ink">{consistency.weeksActive} of the last {consistency.weeksElapsed}</strong> week{consistency.weeksElapsed === 1 ? '' : 's'}
             {hs.lapsed ? ' — and any week is a fine week to begin again.' : '.'}
+            {perf.consistency.returnedAfterMiss ? ' You came back within a week of a miss — that matters more than never missing.' : ''}
           </p>
         )}
+        {store.activeSchedule && <p className="text-[11px] text-ink3">Programme: {programmeAdherence.completed} completed • {programmeAdherence.missed} missed • {programmeAdherence.upcoming} upcoming. Future sessions do not lower the rate yet.</p>}
+        {store.activeSchedule && programmeAdherence.missed > 0 && <p className="text-xs text-ink2 bg-reviewsoft rounded-lg px-3 py-2">Missed sessions are recoverable in order. Open Today to re-plan the schedule rather than doubling the next workout.</p>}
       </section>
-
-      {store.activeSchedule && (
-        <section className="rounded-xl border border-line bg-surface p-3 space-y-2">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-bold">Programme adherence</h3>
-            <span className="text-xs font-black tabular-nums">{programmeAdherence.toDateRate == null ? '—' : `${Math.round(programmeAdherence.toDateRate * 100)}%`}</span>
-          </div>
-          <p className="text-xs text-ink3">{programmeAdherence.completed} completed • {programmeAdherence.missed} missed • {programmeAdherence.upcoming} upcoming. Future sessions do not lower the rate yet.</p>
-          {programmeAdherence.missed > 0 && <p className="text-xs text-ink2 bg-reviewsoft border border-review/30 rounded-lg px-3 py-2">Missed sessions are recoverable in order. Open Today to re-plan the schedule rather than doubling the next workout.</p>}
-        </section>
-      )}
 
       {/* ── Monthly digest: last month, facts only ── */}
       {digest && digest.sessions > 0 && (
@@ -627,47 +623,21 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       )}
 
       {/* ── Performance: evidence-based, with human-readable confidence ── */}
-      <section className="rounded-xl border border-line bg-surface p-3 space-y-3" aria-label="Performance">
-        <div>
-          <h3 className="text-sm font-bold">Performance</h3>
-          <p className="text-xs text-ink3">Evidence-based trends — improvement is only claimed when comparable sessions support it.</p>
-        </div>
-        {!!perf.pbs.length && (
-          <div className="rounded-lg bg-surface2 px-3 py-2">
-            <p className="text-xs font-bold">Personal bests</p>
-            <ul className="mt-1 space-y-1">
-              {perf.pbs.map((pr, i)=> (
-                <li key={i} className="text-[11px] text-ink3">
-                  <span className="font-bold text-ink">{EXERCISE_BY_ID[pr.exerciseId]?.name || pr.exerciseId}</span> — {pr.kind} · {pr.dateISO}
-                  <span className="block"><JargonHelp term="PR"/>{pr.why} (est. 1RM {pr.priorE1rmKg} → {pr.e1rmKg} kg)</span>
-                </li>
-              ))}
-            </ul>
-            <p className="text-[11px] text-ink3 mt-1">Only counts when the gain beats noise (2%+) and the set was like-for-like — a changed technique or ROM is never a PR.</p>
-          </div>
-        )}
-        {perf.strength.filter(t=> t.status !== 'insufficient').map(t=> (
+      <section className="rounded-xl border border-line bg-surface p-3 space-y-2" aria-label="Performance">
+        <h3 className="text-sm font-bold">Performance</h3>
+        {/* PRs live on Records and improving lifts under "What improved";
+            this card only adds what those don't: lifts slipping, and capacity. */}
+        {perf.strength.filter(t=> t.status === 'declining').map(t=> (
           <div key={t.exerciseId} className="rounded-lg bg-surface2 px-3 py-2">
-            <p className="text-xs font-bold">{EXERCISE_BY_ID[t.exerciseId]?.name || t.exerciseId} <span className={`ml-1 text-[11px] font-bold ${t.status === 'improving' ? 'text-success' : t.status === 'declining' ? 'text-review' : 'text-ink3'}`}>{t.status === 'improving' ? '↑ improving' : t.status === 'declining' ? '↓ slipping' : '→ steady'}</span></p>
-            <p className="text-[11px] text-ink3 mt-0.5">{t.explanation}</p>
-            <p className="text-[11px] text-ink3">{confidenceLanguage(t.confidence)}</p>
+            <p className="text-xs font-bold">{EXERCISE_BY_ID[t.exerciseId]?.name || t.exerciseId} <span className="ml-1 text-[11px] font-bold text-review">↓ slipping</span></p>
+            <p className="text-[11px] text-ink3 mt-0.5">{t.explanation} {confidenceLanguage(t.confidence)}</p>
           </div>
         ))}
-        {!perf.strength.some(t=> t.status !== 'insufficient') && (
-          <p className="text-xs text-ink3">Arise needs at least 3 comparable sessions per exercise before calling a trend. Keep logging — the evidence builds fast.</p>
-        )}
         <div className="rounded-lg bg-surface2 px-3 py-2">
           <p className="text-xs font-bold">Work capacity</p>
           <p className="text-[11px] text-ink3 mt-0.5">{perf.capacity.explanation}</p>
         </div>
-        <div className="rounded-lg bg-surface2 px-3 py-2">
-          <p className="text-xs font-bold">Consistency</p>
-          <p className="text-[11px] text-ink3 mt-0.5">{perf.consistency.explanation}{perf.consistency.returnedAfterMiss ? ' You came back within a week of a miss — that matters more than never missing.' : ''}</p>
-        </div>
-      </section>
-
-      {/* Bars live in the Weekly volume card above; this is only the verdict. */}
-      <section className="rounded-xl border border-line bg-surface p-3" aria-label="Volume trend">
+        {/* Bars live in the Weekly volume card above; this is only the verdict. */}
         <p className="text-xs text-ink3"><span className="font-bold text-ink">Volume trend: </span>{!wv.length ? 'Log a couple sessions — then trends appear.' : wv[wv.length-1]?.vol> (wv[wv.length-2]?.vol||0)*1.2 ? `Volume up ${Math.round((wv[wv.length-1].vol/(wv[wv.length-2]?.vol||1)-1)*100)}% vs last week — hold steady or deload if RPE was high.` : wv[wv.length-1]?.vol < (wv[wv.length-2]?.vol||0)*0.8 ? 'Volume dipped — good if planned deload, otherwise add a session.' : 'Trends look steady — keep progressing where RIR ≥2.'} <JargonHelp term="RPE" /><JargonHelp term="RIR" /></p>
       </section>
 

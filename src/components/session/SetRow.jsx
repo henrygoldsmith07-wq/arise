@@ -5,7 +5,7 @@
 // same gestures, same aria labels, same value-free field-commit telemetry.
 import { Fragment } from 'react';
 import { isSetPerformed } from '../../lib/progression.js';
-import { rirFromRpe, rpeFromRir, stepRir } from '../../lib/sessionRunnerModel.js';
+import { rirFromRpe, rpeFromRir, stepRir, nextSetType, SET_TYPE_LABEL } from '../../lib/sessionRunnerModel.js';
 import { recordEvent } from '../../lib/telemetry.js';
 import { swipeRowHandlers, WeightInput } from '../GymModePanel.jsx';
 import StepperButton from '../StepperButton.jsx';
@@ -47,7 +47,11 @@ export default function SetRow({
     <Fragment>
     <div {...(gestures ? { onPointerDown:gestures.onPointerDown, onPointerMove:gestures.onPointerMove, onPointerUp:gestures.onPointerUp, onPointerLeave:gestures.onPointerLeave, onPointerCancel:gestures.onPointerCancel } : {})} style={gestures?.style}
       className={`grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)] gap-1 sm:grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)_64px_42px_auto_26px] sm:gap-1.5 items-center rounded-lg ${s.failed ? 'bg-reviewsoft border border-review/30' : ''}`}>
-      <span className={`w-7 h-7 grid place-items-center rounded-full border text-xs font-bold tabular-nums ${s.completed?'bg-success text-bg border-success':s.failed?'bg-review text-bg border-review':'bg-surface2 border-line'}`}>{si+1}</span>
+      {/* Set number doubles as the set-type toggle: tap cycles
+          normal → W(arm-up) → D(rop) → F(ailure); the pseudo-element
+          widens the 28px badge to a 44px hit area. */}
+      <button type="button" onClick={()=> updateSet(bi,si,{ setType: nextSetType(s.setType) })} aria-label={`Set ${si+1}: ${SET_TYPE_LABEL[s.setType||'']}. Change set type`} title={SET_TYPE_LABEL[s.setType||'']}
+        className={`relative w-7 h-7 grid place-items-center rounded-full border text-xs font-bold tabular-nums before:absolute before:-inset-2 before:content-[''] ${s.completed?'bg-success text-bg border-success':s.failed?'bg-review text-bg border-review':s.setType?'bg-speaksoft text-speak border-speak/40':'bg-surface2 border-line'}`}>{s.setType ? s.setType[0].toUpperCase() : si+1}</button>
       <div className="min-w-0 flex items-center gap-1">
         <WeightInput type="text" inputMode="decimal" value={s.weightKg} unit={unit} onChange={v=> updateSet(bi,si,{weightKg:v})} {...commitProps('load-field-commit', b.exerciseId, si)} placeholder={supportsWeighted?unit:'bw'} aria-label={`Load set ${si+1} in ${unit === 'lb' ? 'pounds' : 'kilograms'}`} className={`min-w-0 w-full rounded-lg border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center ${s.completed?'opacity-60':''}`} />
         {supportsWeighted && !s.completed && (

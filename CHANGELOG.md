@@ -12,6 +12,15 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Competitor parity: custom exercises, set types, recovery map, measurements
+- **Custom exercises** (Hevy/Strong): Exercises → Your exercises adds your own lift (name, main muscle, kit). It joins the catalogue at runtime, so pickers, progression, records and volume treat it like a built-in. Stored in `gymPrefs.customExercises`, merged per lift (newest wins, tombstones on delete) in sync and backup import; a removed lift keeps its name for old history.
+- **Set types** (Hevy): tap the set number to cycle warm-up / drop / failure. Warm-ups are saved as `block.warmupSets`, outside the work sets; failure sets with no RPE save as RPE 10; Hevy export writes `warmup` / `dropset` / `failure`.
+- **Muscle recovery map** (Fitbod): Today card with per-muscle freshness from the last 72 h of hard sets (linear fade; a rough guide, low confidence). Hidden when nothing was trained recently.
+- **Body measurements** (Hevy/Strong): waist, chest, arm, thigh, body-fat % on the body-weight card, stored on the per-day weigh-in row so backup and sync carry them; inches for pound users.
+- Progress: personal bests, improving lifts and consistency were shown two to four times; each now appears once (Performance keeps slipping lifts, capacity and the volume verdict; adherence joins Consistency).
+- Fix: the session runner crushed each lift's prescription to one word per line on phones; the action buttons now wrap below the name.
+- Bundle total cap 405 → 408 kB (measured 407.4); boot unchanged at 57.4 / 120 kB.
+
 ### Density pass: less chunky everywhere
 - One step down the radius scale app-wide; section cards pad 12px, not 16px; page stacks gap 12px; boxes nested inside cards lose their border (tint only); eyebrow labels track tighter.
 - Buttons default to 14px instead of the inherited 16px (any `text-*` utility still wins). Touch targets stay at 44px — only the visual weight changed.

@@ -410,7 +410,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   const volume = useMemo(()=>{
     let total=0;
     for(const b of blocks) for(const s of b.sets){
-      if(!s.completed) continue;
+      if(!s.completed || s.setType === 'warmup') continue;
       total += parseRunnerNumber(s.reps) * Math.max(0, parseRunnerNumber(s.weightKg) - parseRunnerNumber(s.assistedKg));
     }
     return Math.round(total);
@@ -856,9 +856,11 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           }).filter(o=> o.id && o.id!==swapOrigin).slice(0,4) : [];
           return (
             <div key={`${b.exerciseId}-${bi}`} id={`block-${bi}`} className={`rounded-xl border bg-surface p-3 space-y-3 ${gymMode && skipQuery && skipTarget?.blockIndex === bi ? 'border-ink ring-2 ring-ink/30' : 'border-line'}`}>
-              <div className="flex items-start justify-between gap-3">
+              {/* Phone: actions wrap to their own row so the prescription text
+                  keeps the width (it was crushed to one word per line). */}
+              <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-3">
                 <ExerciseIllustration exerciseId={b.exerciseId} size="md" />
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold">{ex?.name || b.exerciseId} {b.unilateral ? <span className="text-xs font-semibold text-ink3">(per side — L/R)</span> : null}</p>
                   {(()=>{ const pi = supersetPartner(blocks, bi); if(pi == null) return null;
                     const letter = bi < pi ? 'A' : 'B';
@@ -956,7 +958,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                     </div>
                   </details>
                 </div>
-                <div className="flex gap-1.5 shrink-0 flex-wrap justify-end max-w-[190px]">
+                <div className="flex gap-1.5 flex-wrap w-full sm:w-auto sm:shrink-0 sm:justify-end sm:max-w-[190px]">
                   {b.restSec ? <button onClick={()=> startRest(restForBlock(gymPrefs, b), ex?.name || b.exerciseId, b.exerciseId)} className="relative min-h-11 text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">Start rest</button> : null}
                   {voiceSupportedInput && (
                     <button onClick={()=> toggleDictation(bi)} aria-pressed={dictating===bi} title="Dictate a set — say the load, then the reps"
