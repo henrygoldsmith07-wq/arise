@@ -289,7 +289,11 @@ const CHUNK_BUDGET_KB = 34;
 // warm-up/drop/failure set types, muscle recovery map, body measurements):
 // +3.3 kB, part paid by cutting duplicated Progress rows (−0.6 kB). All of it
 // is lazy or in route chunks; boot is UNCHANGED (57.4 / 120). Measured 407.4.
-const TOTAL_BUDGET_KB = 408;
+// total 408 → 410 kB with the Hevy Oct-2026 round (programme-day notes, gym
+// tag, yearly records, RPE colour scale): +0.9 kB, −0.2 kB by dropping the
+// duplicate "What improved" list on Progress. Boot UNCHANGED (57.4 / 120).
+// Measured 408.5.
+const TOTAL_BUDGET_KB = 410;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

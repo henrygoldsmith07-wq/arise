@@ -629,6 +629,20 @@ export const SET_TYPES = ["", "warmup", "drop", "failure"];
 export const SET_TYPE_LABEL = { "": "Normal", warmup: "Warm-up", drop: "Drop set", failure: "To failure" };
 export const nextSetType = (t) => SET_TYPES[(SET_TYPES.indexOf(t || "") + 1) % SET_TYPES.length];
 
+/** Gym name as stored: one line, at most 40 characters. */
+export const cleanGym = (v) => String(v ?? "").replace(/[\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 40);
+
+/** Gyms you have tagged, most recently used first (case-blind de-dupe). */
+export function knownGyms(history) {
+  const seen = new Map();
+  const list = Array.isArray(history) ? history : [];
+  for (let i = list.length - 1; i >= 0; i--) {
+    const g = cleanGym(list[i]?.gym);
+    if (g && !seen.has(g.toLowerCase())) seen.set(g.toLowerCase(), g);
+  }
+  return [...seen.values()];
+}
+
 function warmupField(block) {
   const warmupSets = (block?.sets || [])
     .filter((set) => set.setType === "warmup" && set.completed)
@@ -642,6 +656,7 @@ export function buildSessionHistoryPayload({
   availableEquipment = [],
   note = "",
   noteTags = [],
+  gym = "",
   quality = null,
   startedAt,
   nowISO,
@@ -770,6 +785,7 @@ export function buildSessionHistoryPayload({
     ),
     note: finalNote || undefined,
     noteTags: noteTags.length ? noteTags : undefined,
+    gym: cleanGym(gym) || undefined,
     sessionDuration: durationMinutes,
     quality: quality || undefined,
   };

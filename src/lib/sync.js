@@ -38,6 +38,7 @@ import { mergeTombstones, applyTombstones, canonicalJson } from "./domain.js";
 import { mergeBodyweightLogs } from "./bodyweightLog.js";
 import { mergeSetupNotes } from "./setupNotes.js";
 import { mergeCustomExercises } from "./customExercises.js";
+import { mergeDayNotes } from "./dayNotes.js";
 import { mergeLiftGoals } from "./liftGoals.js";
 
 
@@ -176,7 +177,7 @@ export function mergeGymPrefs(current, imported){
   }
   const out = {};
   const aT = Date.parse(a.updatedAt || '') || 0, bT = Date.parse(b.updatedAt || '') || 0;
-  for(const k of new Set([...Object.keys(a), ...Object.keys(b)].filter((k) => k !== 'restPresets' && k !== 'restPresetUpdatedAt' && k !== 'setupNotes' && k !== 'liftGoals' && k !== 'customExercises'))){
+  for(const k of new Set([...Object.keys(a), ...Object.keys(b)].filter((k) => k !== 'restPresets' && k !== 'restPresetUpdatedAt' && k !== 'setupNotes' && k !== 'liftGoals' && k !== 'customExercises' && k !== 'dayNotes'))){
     const hasA = k in a, hasB = k in b;
     if(hasA !== hasB){ out[k] = hasA ? a[k] : b[k]; continue; }
     if(canonicalJson(a[k]) === canonicalJson(b[k])){ out[k] = a[k]; continue; }
@@ -186,6 +187,7 @@ export function mergeGymPrefs(current, imported){
   if(a.setupNotes || b.setupNotes) merged.setupNotes = mergeSetupNotes(a.setupNotes, b.setupNotes);
   if(a.liftGoals || b.liftGoals) merged.liftGoals = mergeLiftGoals(a.liftGoals, b.liftGoals);
   if(a.customExercises || b.customExercises) merged.customExercises = mergeCustomExercises(a.customExercises, b.customExercises);
+  if(a.dayNotes || b.dayNotes) merged.dayNotes = mergeDayNotes(a.dayNotes, b.dayNotes);
   if(Object.keys(mergedPresetTs).length) merged.restPresetUpdatedAt = mergedPresetTs;
   // Preserve the winner's timestamp verbatim: re-serialising through Date
   // would normalise equivalent instants and break idempotence.

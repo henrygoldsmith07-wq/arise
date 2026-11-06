@@ -219,7 +219,6 @@ export default function ProgressView({ store, setStore = null, onStart = null })
   // ── Question-first interpretation (P2.9): which lifts are actually
   //    improving — the same evidence-gated trends Performance shows below,
   //    surfaced as an answer instead of a chart. ──
-  const improvingTrends = perf.strength.filter(t=> t.status === 'improving');
   const stallKindLabel = kind=> kind === 'genuine' ? 'likely stalled' : kind === 'mixed' ? 'mixed signals' : 'fatigue-driven';
   // The five cross-exercise checks for the top genuine stall — the same engine
   // Exercise history uses, surfaced where the stall is named ("We checked…")
@@ -391,24 +390,9 @@ export default function ProgressView({ store, setStore = null, onStart = null })
           and Exercise history use below. This block interprets; detail charts
           stay underneath. ── */}
       {history.length > 0 && (
-        <section className="rounded-xl border border-line bg-surface p-3 space-y-3" aria-label="What improved, what stalled">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">What improved?</p>
-            {improvingTrends.length ? (
-              <ul className="mt-1.5 space-y-1.5">
-                {improvingTrends.slice(0, 3).map(t=> (
-                  <li key={t.exerciseId} className="text-xs">
-                    <span className="font-bold text-ink">{EXERCISE_BY_ID[t.exerciseId]?.name || t.exerciseId}</span>{' '}
-                    <span className="font-bold text-success">↑ improving</span>
-                    <span className="block text-[11px] text-ink3">{t.explanation} · {confidenceLanguage(t.confidence)}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-xs text-ink3 mt-1">No clear trend yet — Arise needs at least 3 comparable sessions per exercise before calling one. Personal bests still count when they beat noise (see PRs below).</p>
-            )}
-          </div>
-
+        <section className="rounded-xl border border-line bg-surface p-3 space-y-3" aria-label="What stalled">
+          {/* "What improved" lived here too; the same lifts and numbers are
+              the Strength trend lines under "Am I improving?" above. */}
           <div>
             <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">What stalled?</p>
             {plateauRows.length ? (
@@ -625,7 +609,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       {/* ── Performance: evidence-based, with human-readable confidence ── */}
       <section className="rounded-xl border border-line bg-surface p-3 space-y-2" aria-label="Performance">
         <h3 className="text-sm font-bold">Performance</h3>
-        {/* PRs live on Records and improving lifts under "What improved";
+        {/* PRs live on Records and improving lifts under "Am I improving?";
             this card only adds what those don't: lifts slipping, and capacity. */}
         {perf.strength.filter(t=> t.status === 'declining').map(t=> (
           <div key={t.exerciseId} className="rounded-lg bg-surface2 px-3 py-2">
@@ -1102,7 +1086,7 @@ function SessionHistoryList({ history, unitsPref = 'kg' }){
       <ul className="mt-2 space-y-2 max-h-80 overflow-auto pr-1">
         {visible.map(h=> (
           <li key={h.id} className="rounded-lg bg-surface2 px-3 py-2">
-            <p className="text-sm font-bold">{h.title} <span className="text-xs text-ink3">• {h.dateISO} • W{h.week} D{h.day}</span></p>
+            <p className="text-sm font-bold">{h.title} <span className="text-xs text-ink3">• {h.dateISO} • W{h.week} D{h.day}{h.gym ? ` • ${h.gym}` : ''}</span></p>
             <p className="text-xs text-ink3">{h.blocks.map(b=> `${EXERCISE_BY_ID[b.exerciseId]?.name || b.exerciseId}: ${b.sets.map(s=> `${s.reps}${s.weightKg?`@${fmtWeight(s.weightKg, unitsPref)}`:''}${s.side?` ${s.side}`:''}${s.rom?` ${s.rom}`:''}`).join(', ')}`).join(' • ')}</p>
           </li>
         ))}

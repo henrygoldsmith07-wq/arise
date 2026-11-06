@@ -14,6 +14,7 @@ import { mergeBodyweightLogs } from './bodyweightLog.js';
 import { readCanonicalLedger } from './evaluationLedgerBridge.js';
 import { mergeSetupNotes } from './setupNotes.js';
 import { mergeCustomExercises } from './customExercises.js';
+import { mergeDayNotes } from './dayNotes.js';
 import { mergeLiftGoals } from './liftGoals.js';
 
 export { EXPORT_VERSION };
@@ -315,6 +316,9 @@ export function mergeStores(current, imported, strategy='merge'){
       },
       ...((currentStore.gymPrefs?.setupNotes || importedStore.gymPrefs?.setupNotes)
         ? { setupNotes: mergeSetupNotes(currentStore.gymPrefs?.setupNotes, importedStore.gymPrefs?.setupNotes) }
+        : {}),
+      ...((currentStore.gymPrefs?.dayNotes || importedStore.gymPrefs?.dayNotes)
+        ? { dayNotes: mergeDayNotes(currentStore.gymPrefs?.dayNotes, importedStore.gymPrefs?.dayNotes) }
         : {}),
       ...((currentStore.gymPrefs?.customExercises || importedStore.gymPrefs?.customExercises)
         ? { customExercises: mergeCustomExercises(currentStore.gymPrefs?.customExercises, importedStore.gymPrefs?.customExercises) }

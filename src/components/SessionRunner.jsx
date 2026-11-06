@@ -21,6 +21,7 @@ import { speak, cancelSpeech } from '../lib/voiceCoach.js';
 import { LoadNumpad, WeightInput } from './GymModePanel.jsx';
 import SetRow from './session/SetRow.jsx';
 import SessionSummary from './session/SessionSummary.jsx';
+import { getDayNote } from '../lib/dayNotes.js';
 import { RestDock } from './session/RestDock.jsx';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
 import WorkoutDiscardDialog from './WorkoutDiscardDialog.jsx';
@@ -40,6 +41,7 @@ import {
   applyRecommendationToBlock,
   buildRunnerSwapTransition,
   buildSessionHistoryPayload,
+  knownGyms,
   captureVisiblePrescriptions,
   carryForwardPlan,
   clearTargetParts,
@@ -79,6 +81,9 @@ export default function SessionRunner({ session, history = [], availableEquipmen
   const [applyAllNote,setApplyAllNote]=useState(null);
   const [note,setNote]=useState(()=> draft?.note || '');
   const [noteTags,setNoteTags]=useState(()=> draft?.noteTags || []);
+  // Gym tag (Hevy-style): defaults to where you last trained.
+  const gyms = useMemo(()=> knownGyms(history), [history]);
+  const [gym,setGym]=useState(()=> draft?.gym ?? gyms[0] ?? '');
   const [clock,setClock]=useWorkoutClock(true);
   const [swapOpen,setSwapOpen]=useState(null);
   // RIR suggestion (never a silent observation): { bi, si, value, exerciseId }
@@ -247,6 +252,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       blocks,
       note,
       noteTags,
+      gym,
       gymMode,
       restEndsAt,
       restLabel,
@@ -255,7 +261,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       lastSetAt:lastSetAtRef.current,
       userEdited: userEditedRef.current,
       quality: qualityRating || undefined,
-  }), [blocks, note, noteTags, gymMode, restEndsAt, restLabel, restExerciseId, qualityRating, session]);
+  }), [blocks, note, noteTags, gym, gymMode, restEndsAt, restLabel, restExerciseId, qualityRating, session]);
   useWorkoutDraftPersistence(draftSnapshot, onDraftChange);
 
   // The comparative study runs once per history — it feeds the evidence
@@ -734,6 +740,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       availableEquipment,
       note,
       noteTags,
+      gym,
       quality:qualityRating,
       startedAt,
       nowISO,
@@ -782,6 +789,12 @@ export default function SessionRunner({ session, history = [], availableEquipmen
             <span className="text-base" aria-hidden>🎯</span>
             <span className="text-xs"><strong>Focus mode:</strong> one exercise at a time. Swipe a row right to complete it, left to mark it failed, or long-press it to open the load keypad.</span>
           </div>
+        )}
+
+        {getDayNote(gymPrefs, session) && (
+          <p className="rounded-xl border border-line bg-surface px-3 py-2.5 text-xs flex items-start gap-2" data-testid="runner-day-note">
+            <span aria-hidden>📝</span><span><strong>Day note:</strong> {getDayNote(gymPrefs, session)}</span>
+          </p>
         )}
 
         {!gymMode && (
@@ -1101,6 +1114,9 @@ export default function SessionRunner({ session, history = [], availableEquipmen
           note={note}
           noteTags={noteTags}
           qualityRating={qualityRating}
+          gym={gym}
+          gyms={gyms}
+          onGymChange={(value)=>{ markUserEdited(); setGym(value); }}
           onNoteChange={(value)=>{ markUserEdited(); setNote(value); }}
           onToggleNoteTag={toggleNoteTag}
           onQualityToggle={(id)=>{ markUserEdited(); setQualityRating(q=> q===id ? null : id); }}
