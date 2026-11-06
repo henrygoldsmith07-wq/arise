@@ -1,3 +1,4 @@
+import { registerCustomExercises } from './lib/customExercises.js';
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import AppShell from './components/AppShell.jsx';
 import LiveAnnouncer from './components/LiveAnnouncer.jsx';
@@ -70,6 +71,8 @@ function TabFallback({ label }){
 
 export default function App(){
   const [store,setStoreState]=useState(()=> loadStore());
+  // Custom lifts join the catalogue before any child reads EXERCISE_BY_ID.
+  registerCustomExercises(store.gymPrefs);
   const [tab,setTab]=useState(()=> getInitialTab());
   const [activeSession,setActiveSession]=useState(null);
   const [recoveryOpen,setRecoveryOpen]=useState(()=> Boolean(loadStore().activeWorkout));
@@ -801,7 +804,7 @@ export default function App(){
         /></Suspense>
       )}
       {tab==='exercises' && (
-        <Suspense fallback={<TabFallback label="Exercises" />}><ExerciseBrowser store={store} availableEquipment={store.onboarding?.equipment || []} onboarding={store.onboarding} /></Suspense>
+        <Suspense fallback={<TabFallback label="Exercises" />}><ExerciseBrowser store={store} setStore={setStore} availableEquipment={store.onboarding?.equipment || []} onboarding={store.onboarding} /></Suspense>
       )}
 
       {tab==='progress' && <Suspense fallback={<TabFallback label="Progress" />}><ProgressView store={store} setStore={setStore} onStart={startFromProgress} /></Suspense>}

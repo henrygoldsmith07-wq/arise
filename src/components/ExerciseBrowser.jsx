@@ -6,6 +6,7 @@ import { useExerciseText } from '../lib/exerciseTextLoader.js';
 import { classifyExercise, isDeprecated } from '../lib/exerciseTaxonomy.js';
 import { substitutionOptions } from '../lib/substitutions.js';
 import { loadStore } from '../lib/store.js';
+import { liveCustomExercises, addCustomExercise, removeCustomExercise } from '../lib/customExercises.js';
 import { programmeExerciseIds, programmeUsageFor, recentExerciseSessions } from '../lib/trainSurface.js';
 import ExerciseIllustration from './ExerciseIllustration.jsx';
 
@@ -113,7 +114,7 @@ function SubstitutionList({ exercise, availableEquipment, history, onClearFilter
   );
 }
 
-export default function ExerciseBrowser({ availableEquipment, onboarding = null, store = null }){
+export default function ExerciseBrowser({ availableEquipment, onboarding = null, store = null, setStore = null }){
   const [q,setQ]=useState('');
   const [muscle,setMuscle]=useState('');
   const [level,setLevel]=useState('');
@@ -145,7 +146,7 @@ export default function ExerciseBrowser({ availableEquipment, onboarding = null,
     q, muscle, level, tag: tags, equipment: equip || undefined,
     availableEquipment: onlyAvailable ? availableEquipment : null
   }).filter(e => !isDeprecated(e))
-    .filter(e => !usedOnly || programmeIds.has(e.id)), [q,muscle,level,tags,equip,onlyAvailable,availableEquipment,usedOnly,programmeIds]);
+    .filter(e => !usedOnly || programmeIds.has(e.id)), [q,muscle,level,tags,equip,onlyAvailable,availableEquipment,usedOnly,programmeIds,store?.gymPrefs?.customExercises]);
   const recs = useMemo(()=> onboarding ? recommendExercises({
     goal:onboarding.goal,
     availableEquipment:onboarding.equipment,
@@ -158,6 +159,8 @@ export default function ExerciseBrowser({ availableEquipment, onboarding = null,
         <h2 className="text-lg font-extrabold tracking-tight">Exercises</h2>
         <p className="text-xs text-ink3">Search and filter the library. Toggle “Only my kit” to gate by onboarding equipment.</p>
       </div>
+
+      {store && setStore && <CustomExercises store={store} setStore={setStore} />}
 
       <div className="rounded-xl border border-line bg-surface p-3 space-y-3">
         <label className="block">
@@ -321,5 +324,54 @@ export default function ExerciseBrowser({ availableEquipment, onboarding = null,
         )}
       </ul>
     </div>
+  );
+}
+
+// Your own lifts (Hevy/Strong-style): name, main muscle, kit. Once added they
+// are in this list, Quick workout and the programme editor like any built-in.
+function CustomExercises({ store, setStore }){
+  const [name, setName] = useState('');
+  const [muscle, setMuscle] = useState('Chest');
+  const [kit, setKit] = useState('dumbbells');
+  const [msg, setMsg] = useState('');
+  const gymPrefs = store.gymPrefs || {};
+  const mine = liveCustomExercises(gymPrefs);
+  const patch = (p)=> setStore({ ...store, gymPrefs: { ...gymPrefs, ...p } });
+  const add = ()=>{
+    const r = addCustomExercise(gymPrefs, { name, muscle, equipment: kit });
+    if(r.error){ setMsg(r.error); return; }
+    patch(r.patch); setName(''); setMsg(`Added “${name.trim()}”.`);
+  };
+  const field = 'mt-1 w-full min-h-11 rounded-lg border border-line bg-surface2 px-2 text-sm';
+  return (
+    <details className="rounded-xl border border-line bg-surface px-3" data-testid="custom-exercises">
+      <summary className="min-h-11 flex items-center text-sm font-bold cursor-pointer">Your exercises{mine.length ? ` (${mine.length})` : ''}</summary>
+      <div className="pb-3 space-y-2">
+        {mine.length > 0 && (
+          <ul className="divide-y divide-line">
+            {mine.map(e=> (
+              <li key={e.id} className="flex items-center gap-2 text-xs min-h-11">
+                <span className="min-w-0 flex-1 truncate"><span className="font-semibold">{e.name}</span> <span className="text-ink3">· {e.muscle} · {EQUIPMENT.find(x=> x.id === e.equipment)?.label}</span></span>
+                <button type="button" onClick={()=> patch(removeCustomExercise(gymPrefs, e.id))} aria-label={`Remove ${e.name}`} className="min-h-11 min-w-11 text-ink3 font-bold">Remove</button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <label className="block text-[11px] font-semibold text-ink3">Name
+          <input value={name} onChange={e=> { setName(e.target.value); setMsg(''); }} maxLength={48} placeholder="e.g. Spoto press" className={`${field} text-base`} data-testid="custom-exercise-name" />
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block text-[11px] font-semibold text-ink3">Main muscle
+            <select value={muscle} onChange={e=> setMuscle(e.target.value)} className={field}>{MUSCLES.filter(m=> m !== 'Cardio').map(m=> <option key={m}>{m}</option>)}</select>
+          </label>
+          <label className="block text-[11px] font-semibold text-ink3">Equipment
+            <select value={kit} onChange={e=> setKit(e.target.value)} className={field}>{EQUIPMENT.map(x=> <option key={x.id} value={x.id}>{x.label}</option>)}</select>
+          </label>
+        </div>
+        <button type="button" onClick={add} className="btn btn-primary w-full min-h-11 rounded-lg" data-testid="custom-exercise-add">Add exercise</button>
+        {msg && <p role="status" className="text-xs text-ink2">{msg}</p>}
+        <p className="text-[11px] text-ink3">Removing one keeps every set you logged with it.</p>
+      </div>
+    </details>
   );
 }
