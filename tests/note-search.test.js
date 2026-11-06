@@ -37,7 +37,7 @@ const history = [
     dateISO: "2026-10-26",
     title: "Gone",
     note: "shoulder",
-    deleted: true,
+    deletedAt: "2026-10-27T10:00:00Z",
   },
 ];
 const setup = {

@@ -20,7 +20,7 @@ describe('muscleFreshness', () => {
   it('feel-out sets, skipped sets, deleted and future sessions do not count', () => {
     const rows = muscleFreshness([
       session(1, [{ exerciseId: 'bench-press-dumbbell', sets: [...hard(4, { rpe: '4' }), ...hard(4, { skipped: true })] }]),
-      session(1, [{ exerciseId: 'bench-press-dumbbell', sets: hard(10) }], { deleted: true }),
+      session(1, [{ exerciseId: 'bench-press-dumbbell', sets: hard(10) }], { deletedAt: '2026-11-05T17:00:00Z' }),
       session(-5, [{ exerciseId: 'bench-press-dumbbell', sets: hard(10) }]),
     ], NOW);
     assert.equal(pct(rows, 'Chest'), 100);

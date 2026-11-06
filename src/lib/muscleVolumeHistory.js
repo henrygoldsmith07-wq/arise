@@ -167,7 +167,7 @@ const FATIGUE_FULL = 10;
 export function muscleFreshness(history, nowMs = Date.now()) {
   const load = Object.fromEntries(GUIDED_MUSCLES.map((m) => [m, 0]));
   for (const h of Array.isArray(history) ? history : []) {
-    if (!h || h.deleted) continue;
+    if (!h || h.deletedAt) continue;
     const t = Date.parse(h.finishedAt || h.savedAt || `${h.dateISO}T18:00:00`);
     const hours = (nowMs - t) / 3600000;
     if (!(hours >= 0 && hours < RECOVERY_HOURS)) continue;
