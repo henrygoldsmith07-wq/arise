@@ -195,7 +195,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
               setLevel('Beginner'); setDays(3); setMinutes(30);
               setStep(1);
             }}
-            className="text-left rounded-2xl border border-line bg-surface2 p-4 hover:border-ink3"
+            className="text-left rounded-xl border border-line bg-surface2 p-3 hover:border-ink3"
           >
             <span className="block font-bold">🌱 New to training? Start here</span>
             <span className="block text-xs text-ink3 mt-0.5">Pre-fills a gentle starter: bodyweight at home, 3×30 min. Every answer stays editable on the following screens.</span>
@@ -203,29 +203,29 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
           {/* Medical/safety disclaimer: shown before any training decision so
               the app's nature is clear from the first screen. Full text lives
               in docs/DISCLAIMERS.md; the Legal section in More links to it. */}
-          <p role="note" className="rounded-xl border border-line bg-surface2 px-3 py-2 text-[11px] text-ink3 leading-snug">
+          <p role="note" className="rounded-lg bg-surface2 px-3 py-2 text-[11px] text-ink3 leading-snug">
             <span aria-hidden>⚕️</span> Arise is a training log and coach — <span className="font-bold text-ink">not a medical device</span>.
             It does not diagnose, treat, or prevent injury or illness. Check with a qualified professional
             before starting a new program, and stop and seek care if exercise causes pain.
           </p>
-          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3 pt-1">Or choose a goal</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-ink3 pt-1">Or choose a goal</p>
           {GOALS.map(g=> (
-            <button key={g.id} onClick={()=> setGoal(g.id)} className={`text-left rounded-2xl border p-4 ${goal===g.id ? 'bg-ink text-bg border-ink' : 'bg-surface border-line hover:border-ink3'}`}>
+            <button key={g.id} onClick={()=> setGoal(g.id)} className={`text-left rounded-xl border p-3 ${goal===g.id ? 'bg-ink text-bg border-ink' : 'bg-surface border-line hover:border-ink3'}`}>
               <span className="block font-bold">{g.label}</span><span className={`block text-xs ${goal===g.id ? 'text-bg/80' : 'text-ink3'}`}>{g.hint}</span>
             </button>
           ))}
-          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3 pt-1">Do you also ride, run or race?</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-ink3 pt-1">Do you also ride, run or race?</p>
           <div className="flex flex-wrap gap-2" role="group" aria-label="Endurance sport">
             {SPORTS.map(o=> (
-              <button key={o.id} type="button" aria-pressed={sport===o.id} onClick={()=> setSport(o.id)} className={`min-h-11 rounded-xl border px-3 text-sm font-semibold ${sport===o.id ? 'bg-ink text-bg border-ink' : 'bg-surface border-line hover:border-ink3'}`}>{o.label}</button>
+              <button key={o.id} type="button" aria-pressed={sport===o.id} onClick={()=> setSport(o.id)} className={`min-h-11 rounded-lg border px-3 text-sm font-semibold ${sport===o.id ? 'bg-ink text-bg border-ink' : 'bg-surface border-line hover:border-ink3'}`}>{o.label}</button>
             ))}
           </div>
           {sport !== 'none' && (
             <div className="flex flex-col gap-2" data-testid="ride-days-question">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-ink3 pt-1">How many days a week do you ride or train?</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-ink3 pt-1">How many days a week do you ride or train?</p>
               <div className="flex flex-wrap gap-2" role="group" aria-label="Ride days per week">
                 {[1,2,3,4,5,6,7].map(n=> (
-                  <button key={n} type="button" aria-pressed={rideDaysPerWeek===n} onClick={()=> setRideDaysPerWeek(n)} className={`min-h-11 min-w-11 rounded-xl border px-3 text-sm font-semibold ${rideDaysPerWeek===n ? 'bg-ink text-bg border-ink' : 'bg-surface border-line hover:border-ink3'}`}>{n}</button>
+                  <button key={n} type="button" aria-pressed={rideDaysPerWeek===n} onClick={()=> setRideDaysPerWeek(n)} className={`min-h-11 min-w-11 rounded-lg border px-3 text-sm font-semibold ${rideDaysPerWeek===n ? 'bg-ink text-bg border-ink' : 'bg-surface border-line hover:border-ink3'}`}>{n}</button>
                 ))}
               </div>
               {rideDaysPerWeek >= 4 && <p className="text-xs text-ink3">4+ ride days: we’ll pick the 2-day heavy-week plan so lifting doesn’t crowd your key rides.</p>}
@@ -240,7 +240,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
       body: (
         <div className="grid gap-2">
           {LOCATIONS.map(l=> (
-            <button key={l.id} onClick={()=> setLocation(l.id)} className={`text-left rounded-2xl border p-4 ${location===l.id ? 'bg-ink text-bg border-ink' : 'bg-surface border-line hover:border-ink3'}`}>
+            <button key={l.id} onClick={()=> setLocation(l.id)} className={`text-left rounded-xl border p-3 ${location===l.id ? 'bg-ink text-bg border-ink' : 'bg-surface border-line hover:border-ink3'}`}>
               <span className="block font-bold">{l.label}</span><span className={`block text-xs ${location===l.id ? 'text-bg/80' : 'text-ink3'}`}>{l.hint}</span>
             </button>
           ))}
@@ -254,7 +254,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
           {/* A gym-goer who taps Next here with only Bodyweight ticked gets
               a bodyweight plan — say so where the choice is made. */}
           {location === 'gym' && equipment.length === 1 && equipment[0] === 'bodyweight' && (
-            <div className="flex items-center gap-2 text-xs text-ink2 bg-surface2 border border-line rounded-xl px-3 py-2">
+            <div className="flex items-center gap-2 text-xs text-ink2 bg-surface2 rounded-lg px-3 py-2">
               <span className="flex-1">Training at a gym? Only <strong>Bodyweight</strong> is ticked, so your plan would be bodyweight-only.</span>
               <button type="button" onClick={()=> setEquipment(defaultKitForLocation('gym'))} className="shrink-0 min-h-11 rounded-lg border border-ink bg-ink text-bg px-3 font-bold">Tick everything</button>
             </div>
@@ -277,14 +277,14 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
               // Previously the input was a bare 13x13 box, so a user (and any
               // automation) tapping the checkbox itself had a target an order
               // of magnitude below the app's own 44px standard.
-              <label key={eq.id} className={`check-control relative flex items-center gap-2 rounded-2xl border p-3 cursor-pointer ${equipment.includes(eq.id) ? 'bg-ink text-bg border-ink' : 'bg-surface border-line'}`}>
+              <label key={eq.id} className={`check-control relative flex items-center gap-2 rounded-xl border p-3 cursor-pointer ${equipment.includes(eq.id) ? 'bg-ink text-bg border-ink' : 'bg-surface border-line'}`}>
                 <input type="checkbox" checked={equipment.includes(eq.id)} onChange={()=> toggleEq(eq.id)} />
                 <span aria-hidden className="check-mark" />
                 <span className="text-sm font-semibold"><span aria-hidden>{eq.icon}</span> {eq.label}</span>
               </label>
             ))}
           </div>
-          {!equipment.length && <p className="text-xs text-review bg-reviewsoft border border-review/30 rounded-xl px-3 py-2">Pick at least one — bodyweight is always an option.</p>}
+          {!equipment.length && <p className="text-xs text-review bg-reviewsoft border border-review/30 rounded-lg px-3 py-2">Pick at least one — bodyweight is always an option.</p>}
           {/* Load rounding lives behind Fine-tune (P2.6): the first-run path
               stays goal → place → kit → level → plan; barbell plates and
               machine increments refine targets but never decide them, and the
@@ -297,32 +297,32 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
       body: (
         <div className="space-y-3">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-ink3">Your level</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-ink3">Your level</p>
             <div className="mt-2 flex gap-2">
               {LEVELS.map(l=> (
-                <button key={l} onClick={()=> setLevel(l)} className={`flex-1 min-h-10 rounded-xl border text-sm font-bold ${level===l ? 'bg-ink text-bg border-ink' : 'bg-surface border-line'}`}>{l}</button>
+                <button key={l} onClick={()=> setLevel(l)} className={`flex-1 min-h-10 rounded-lg border text-sm font-bold ${level===l ? 'bg-ink text-bg border-ink' : 'bg-surface border-line'}`}>{l}</button>
               ))}
             </div>
           </div>
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-ink3">Days per week</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-ink3">Days per week</p>
             <div className="mt-2 flex gap-2">
               {[2,3,4,5].map(n=> (
-                <button key={n} onClick={()=> setDays(n)} className={`flex-1 min-h-10 rounded-xl border text-sm font-bold ${days===n ? 'bg-ink text-bg border-ink' : 'bg-surface border-line'}`}>{n}×</button>
+                <button key={n} onClick={()=> setDays(n)} className={`flex-1 min-h-10 rounded-lg border text-sm font-bold ${days===n ? 'bg-ink text-bg border-ink' : 'bg-surface border-line'}`}>{n}×</button>
               ))}
             </div>
             <p className="text-xs text-ink3 mt-2">Used to rank programs. Your schedule still follows the program you pick in Train.</p>
           </div>
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-ink3">Time per session</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-ink3">Time per session</p>
             <div className="mt-2 grid grid-cols-4 gap-2">
               {[20,30,45,60].map(n=> (
-                <button key={n} onClick={()=> setMinutes(n)} className={`min-h-10 rounded-xl border text-sm font-bold ${minutes===n ? 'bg-ink text-bg border-ink' : 'bg-surface border-line'}`}>{n} min</button>
+                <button key={n} onClick={()=> setMinutes(n)} className={`min-h-10 rounded-lg border text-sm font-bold ${minutes===n ? 'bg-ink text-bg border-ink' : 'bg-surface border-line'}`}>{n} min</button>
               ))}
             </div>
             <p className="text-xs text-ink3 mt-2">Shorter caps preserve the highest-value blocks and reduce sets when needed.</p>
           </div>
-          <div className="rounded-xl border border-line bg-surface2 p-3 text-xs">
+          <div className="rounded-lg bg-surface2 p-3 text-xs">
             <p className="font-bold">How this affects recommendations</p>
             <ul className="list-disc pl-5 mt-1 text-ink3 space-y-1">
               <li>Exercises needing kit you don’t have are hidden when “Only my kit” is on.</li>
@@ -342,17 +342,17 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
               first plan immediately — Today opens on a real workout with its
               provenance line, not an empty state. Only on first run. */}
           {!initial && (
-            <p className="text-[11px] text-ink2 bg-surface2 border border-line rounded-xl px-3 py-2">
+            <p className="text-[11px] text-ink2 bg-surface2 rounded-lg px-3 py-2">
               <span className="font-bold">What happens next:</span> save and Arise builds your first programme from these answers — Today opens on today’s workout with why it was generated.
             </p>
           )}
           {/* Load rounding (moved from the kit step, P2.6): refinement, not a
               first-run decision — shown only for kit that can actually round. */}
           {(equipment.includes('barbell') || equipment.includes('dumbbells') || equipment.includes('machine') || equipment.includes('cable')) && (
-            <p className="text-xs font-bold uppercase tracking-widest text-ink3 pt-1">Load rounding</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-ink3 pt-1">Load rounding</p>
           )}
           {equipment.includes('barbell') && (
-            <div className="rounded-xl border border-line bg-surface2 p-3 space-y-2">
+            <div className="rounded-lg bg-surface2 p-3 space-y-2">
               <div>
                 <p className="text-xs font-bold">Barbell load setup</p>
                 <p className="text-[11px] text-ink3">Used to round barbell recommendations to loads you can actually build.</p>
@@ -370,12 +370,12 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
             </div>
           )}
           {(equipment.includes('dumbbells') || equipment.includes('machine') || equipment.includes('cable')) && (
-            <details className="rounded-xl border border-line bg-surface2 p-3">
+            <details className="rounded-lg bg-surface2 p-3">
               <summary className="text-xs font-bold cursor-pointer">Tune load rounding (optional)</summary>
               <p className="text-[11px] text-ink3 mt-1">Only needed if your weights are unusual — targets round to loads you can actually build.</p>
               <div className="space-y-2 mt-2">
           {equipment.includes('dumbbells') && (
-            <div className="rounded-xl border border-line bg-surface2 p-3 space-y-1.5">
+            <div className="rounded-lg bg-surface2 p-3 space-y-1.5">
               <label htmlFor="onboarding-dumbbells" className="text-xs font-bold">Your dumbbell weights ({unit})</label>
               <input id="onboarding-dumbbells" value={dumbbellsInput} onChange={e=> setDumbbellsInput(e.target.value)} inputMode="decimal" placeholder={unit === 'lb' ? 'e.g. 10, 20, 30' : 'e.g. 5, 10, 15'}
                 className="w-full min-h-10 rounded-lg border border-line bg-surface px-3 text-sm" />
@@ -383,7 +383,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
             </div>
           )}
           {(equipment.includes('machine') || equipment.includes('cable')) && (
-            <div className="rounded-xl border border-line bg-surface2 p-3 space-y-1.5">
+            <div className="rounded-lg bg-surface2 p-3 space-y-1.5">
               <label htmlFor="onboarding-machine-increment" className="text-xs font-bold">Machine / cable increment ({unit})</label>
               <input id="onboarding-machine-increment" type="number" min="0.25" step="0.5" inputMode="decimal" value={machineIncrementInput} onChange={e=> setMachineIncrementInput(e.target.value)} placeholder={unit === 'lb' ? '5' : '2.5'}
                 className="w-full min-h-10 rounded-lg border border-line bg-surface px-3 text-sm" />
@@ -428,7 +428,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
 
   return (
     <div ref={rootRef} onKeyDown={trapTab} className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm grid place-items-center p-4" role="dialog" aria-modal="true" aria-label="Onboarding" onClick={(e)=>{ if(e.target===e.currentTarget) onClose(); }}>
-      <div ref={dialogRef} className="w-full max-w-lg rounded-3xl bg-surface border border-line overflow-hidden max-h-[90dvh] flex flex-col">
+      <div ref={dialogRef} className="w-full max-w-lg rounded-2xl bg-surface border border-line overflow-hidden max-h-[90dvh] flex flex-col">
         <div className="px-6 pt-6 pb-3 border-b border-line">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-lg font-extrabold tracking-tight">{cur.title}</h2>
@@ -454,11 +454,11 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
         </div>
         <div className="flex-1 overflow-auto p-6">{cur.body}</div>
         <div className="p-4 border-t border-line flex gap-2 bg-surface2">
-          <button disabled={step===0} onClick={()=> setStep(s=> Math.max(0,s-1))} className="btn btn-secondary flex-1 min-h-11 rounded-xl disabled:opacity-40">Back</button>
+          <button disabled={step===0} onClick={()=> setStep(s=> Math.max(0,s-1))} className="btn btn-secondary flex-1 min-h-11 rounded-lg disabled:opacity-40">Back</button>
           {step < steps.length-1 ? (
-            <button onClick={()=> setStep(s=> Math.min(steps.length-1,s+1))} className="btn btn-primary flex-1 min-h-11 rounded-xl">Next</button>
+            <button onClick={()=> setStep(s=> Math.min(steps.length-1,s+1))} className="btn btn-primary flex-1 min-h-11 rounded-lg">Next</button>
           ) : (
-            <button onClick={complete} disabled={saving} aria-busy={saving} className="btn btn-primary flex-1 min-h-11 rounded-xl">Save & continue</button>
+            <button onClick={complete} disabled={saving} aria-busy={saving} className="btn btn-primary flex-1 min-h-11 rounded-lg">Save & continue</button>
           )}
         </div>
       </div>

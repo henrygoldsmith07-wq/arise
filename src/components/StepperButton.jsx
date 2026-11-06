@@ -54,7 +54,7 @@ export default function StepperButton({ label, ariaLabel, onStep, disabled, clas
       onPointerLeave={stop}
       onPointerCancel={stop}
       onContextMenu={(e)=> e.preventDefault()}
-      className={`min-h-11 shrink-0 rounded-xl border border-line bg-surface2 text-xl font-black text-ink select-none touch-manipulation active:bg-line disabled:opacity-40 ${className}`}
+      className={`min-h-11 shrink-0 rounded-lg border border-line bg-surface2 text-xl font-black text-ink select-none touch-manipulation active:bg-line disabled:opacity-40 ${className}`}
     >{label}</button>
   );
 }

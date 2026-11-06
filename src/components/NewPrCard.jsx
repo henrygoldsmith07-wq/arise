@@ -20,7 +20,7 @@ export default function NewPrCard({ store }) {
   if (!res || seen === res.sessionId) return null;
   return (
     <div
-      className="rounded-2xl border border-success/40 bg-success/10 p-4 space-y-2"
+      className="rounded-xl border border-success/40 bg-success/10 p-3 space-y-2"
       role="status"
       data-testid="new-pr-card"
     >
@@ -38,7 +38,7 @@ export default function NewPrCard({ store }) {
       </ul>
       <button
         type="button"
-        className="btn btn-ghost min-h-11 rounded-xl px-3 text-xs font-bold"
+        className="btn btn-ghost min-h-11 rounded-lg px-3 text-xs font-bold"
         data-testid="new-pr-dismiss"
         onClick={() => {
           markPrSeen(res.sessionId);

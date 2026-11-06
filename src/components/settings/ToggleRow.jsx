@@ -1,6 +1,6 @@
 export default function ToggleRow({ label, hint, checked, onChange, bare = false }){
   return (
-    <label className={`check-control flex items-start gap-3 cursor-pointer ${bare ? 'min-h-11' : 'rounded-xl border border-line bg-surface2 px-3 py-2.5'}`}>
+    <label className={`check-control flex items-start gap-3 cursor-pointer ${bare ? 'min-h-11' : 'rounded-lg border border-line bg-surface2 px-3 py-2.5'}`}>
       <input type="checkbox" checked={checked} onChange={e=> onChange(e.target.checked)} />
       <span aria-hidden className="check-mark mt-0.5" />
       <span className="min-w-0">

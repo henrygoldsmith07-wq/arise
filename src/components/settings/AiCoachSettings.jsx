@@ -68,10 +68,10 @@ export default function AiCoachSettings({ store }){
   const endpointValid = baseUrl.trim() ? isValidEndpointUrl(baseUrl) : true;
 
   return (
-    <section id="sec-ai" className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+    <section id="sec-ai" className="rounded-xl border border-line bg-surface p-3 space-y-2">
       <h3 className="text-sm font-bold">AI coach (optional)</h3>
       {!INTEGRATIONS_COMPILED_IN && (
-        <p role="note" className="text-xs text-ink2 bg-surface2 border border-line rounded-xl px-3 py-2">
+        <p role="note" className="text-xs text-ink2 bg-surface2 rounded-lg px-3 py-2">
           <strong>Not available in this build.</strong> This copy of Arise was built
           without the optional integrations, so it cannot contact any cloud
           endpoint at all — pasting a key below will not change that. The
@@ -87,7 +87,7 @@ export default function AiCoachSettings({ store }){
         hint="Off by default. Routing is deterministic and local first. When switched on, only an ambiguous redacted coach question may reach classifier.dev; it selects a lane only and never creates training prescriptions."
       />
       <p className="text-xs text-ink3">Ask the coach routes your request invisibly: deterministic intent rules choose the local engine, the explanation path, or the local feedback queue. Training prescriptions always come from the deterministic engine — the cloud coach only explains.</p>
-      <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
+      <div className="rounded-lg bg-surface2 px-3 py-2.5 space-y-2">
         <label className="block">
           <span className="text-[11px] font-bold">Endpoint URL</span>
           <input value={baseUrl} onChange={e=> setBaseUrl(e.target.value)} placeholder="http://127.0.0.1:11434/v1/chat/completions" autoComplete="off" className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-xs font-mono" />
@@ -108,11 +108,11 @@ export default function AiCoachSettings({ store }){
             className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm resize-none" rows={3} maxLength={500} />
         </label>
         <div className="flex flex-wrap gap-2">
-          <button onClick={ask} disabled={busy || !prompt.trim() || !endpointValid} className="btn btn-primary min-h-9 rounded-xl px-3 text-xs disabled:opacity-40">{busy ? 'Routing…' : 'Ask'}</button>
-          {current.apiKey && <button onClick={clearKey} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Clear key</button>}
+          <button onClick={ask} disabled={busy || !prompt.trim() || !endpointValid} className="btn btn-primary min-h-9 rounded-lg px-3 text-xs disabled:opacity-40">{busy ? 'Routing…' : 'Ask'}</button>
+          {current.apiKey && <button onClick={clearKey} className="btn btn-secondary min-h-9 rounded-lg px-3 text-xs">Clear key</button>}
         </div>
         {result && (
-          <div role="status" aria-live="polite" className={`rounded-xl border px-3 py-2 text-xs whitespace-pre-wrap ${result.ok ? 'border-line bg-surface' : 'border-review/40 bg-reviewsoft text-ink'}`}>
+          <div role="status" aria-live="polite" className={`rounded-lg border px-3 py-2 text-xs whitespace-pre-wrap ${result.ok ? 'border-line bg-surface' : 'border-review/40 bg-reviewsoft text-ink'}`}>
             {result.ok && result.followUp?.more && (
               <p className="text-[10px] font-semibold text-ink2">Continuing your last question — the engine's other decisions:</p>
             )}

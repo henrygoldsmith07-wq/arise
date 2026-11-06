@@ -28,7 +28,7 @@ export default function VolumeNudge({ store }) {
     .join(", ");
   return (
     <div
-      className="rounded-2xl border border-line bg-surface p-4 space-y-2"
+      className="rounded-xl border border-line bg-surface p-3 space-y-2"
       role="status"
       data-testid="volume-nudge"
     >
@@ -40,7 +40,7 @@ export default function VolumeNudge({ store }) {
       </p>
       <button
         type="button"
-        className="btn btn-ghost min-h-11 rounded-xl px-3 text-xs font-bold"
+        className="btn btn-ghost min-h-11 rounded-lg px-3 text-xs font-bold"
         data-testid="volume-nudge-dismiss"
         onClick={() => {
           markNudgeSeen(week);

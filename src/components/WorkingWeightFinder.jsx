@@ -19,7 +19,7 @@ export default function WorkingWeightFinder({ exerciseId, targetReps, unit = 'kg
     <button type="button" onClick={()=> setOpen(true)} className="min-h-11 text-xs font-bold px-3 py-1.5 rounded-full border border-line bg-surface2 self-start">Not sure what weight? Find it</button>
   );
   return (
-    <div role="group" aria-label="Find your starting weight" className="rounded-xl border border-line bg-surface2 p-2.5 space-y-2 text-[11px] text-ink3">
+    <div role="group" aria-label="Find your starting weight" className="rounded-lg bg-surface2 p-2.5 space-y-2 text-[11px] text-ink3">
       <p className="text-xs font-bold text-ink">Find your starting weight</p>
       <p>Do one easy set at a weight you could lift for 10+ reps, then tell me how it went. This is an estimate, not a test.</p>
       <div className="grid grid-cols-3 gap-2">

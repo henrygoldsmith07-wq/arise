@@ -56,7 +56,7 @@ export default function EvidenceDashboard({ records = [], archivedCount = null }
   const flash = (text)=> { setMsg(text); setTimeout(()=> setMsg(null), 2500); };
 
   return (
-    <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2.5">
+    <div className="rounded-lg bg-surface2 px-3 py-2.5 space-y-2.5">
       <div className="flex items-center gap-2 flex-wrap">
         <p className="text-xs font-bold">Your decision record</p>
         <span className={`ml-auto px-2 py-0.5 rounded-full border text-[10px] font-bold ${BAND_STYLE[band.band]}`}>{band.label}</span>
@@ -101,10 +101,10 @@ export default function EvidenceDashboard({ records = [], archivedCount = null }
 
       <div className="flex flex-wrap gap-2">
         <button onClick={()=> { downloadEvidenceReport(dash); flash('Report downloaded.'); }}
-          className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Export report (.md)</button>
+          className="btn btn-secondary min-h-9 rounded-lg px-3 text-xs">Export report (.md)</button>
         <button onClick={()=> { const w = window.open('', '_blank', 'width=800,height=1000'); if(!w){ flash('Allow pop-ups to print.'); return; } w.document.title = 'Arise evidence report'; const pre = w.document.createElement('pre'); pre.style.cssText = "font: 12px/1.5 ui-monospace,monospace; white-space: pre-wrap; margin: 24px"; pre.textContent = renderEvidenceReportMarkdown(dash); w.document.body.appendChild(pre); w.print(); }}
-          className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Print / save as PDF</button>
-        <button onClick={()=> setShowRaw(v=> !v)} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">{showRaw ? 'Hide' : 'Show'} raw records</button>
+          className="btn btn-secondary min-h-9 rounded-lg px-3 text-xs">Print / save as PDF</button>
+        <button onClick={()=> setShowRaw(v=> !v)} className="btn btn-secondary min-h-9 rounded-lg px-3 text-xs">{showRaw ? 'Hide' : 'Show'} raw records</button>
       </div>
       {msg && <p className="text-[11px] text-success font-bold" role="status">{msg}</p>}
       {showRaw && (

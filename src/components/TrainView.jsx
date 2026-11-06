@@ -270,7 +270,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
   };
 
   return (
-    <div className="px-4 py-5 space-y-4">
+    <div className="px-4 py-5 space-y-3">
       {dialogs.node}
       <div>
         <h2 className="text-lg font-extrabold tracking-tight">Train</h2>
@@ -279,10 +279,10 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
 
       {/* ── Active programme first: never encourage replacing it ── */}
       {active && (
-        <section className="rounded-3xl border border-success/30 bg-surface p-4 sm:p-5 space-y-3" aria-label="Current programme">
+        <section className="rounded-2xl border border-success/30 bg-surface p-3 sm:p-4 space-y-3" aria-label="Current programme">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Current programme</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">Current programme</p>
               <h3 className="text-xl font-black tracking-tight truncate">{programMeta(active.programId)?.name || active.programId}</h3>
               <p className="text-xs text-ink3">
                 Week {adherence?.sessions ? currentWeek(adherence) : '?'} of {programMeta(active.programId)?.mesocycle?.weeks || '?'} · {adherence?.completed || 0}/{active.sessions.length} sessions
@@ -291,10 +291,10 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
             {customisedDays > 0 && <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full border border-success/30 text-success" data-testid="programme-customised-badge">Customised</span>}
             <span className="shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-full bg-successsoft text-success border border-success/30 tabular-nums">{adherence?.rate != null ? `${Math.round(adherence.rate * 100)}%` : 'active'}</span>
           </div>
-          <button onClick={()=> setEditorOpen(true)} className="btn btn-primary w-full min-h-11 rounded-xl text-sm" aria-haspopup="dialog">
+          <button onClick={()=> setEditorOpen(true)} className="btn btn-primary w-full min-h-11 rounded-lg text-sm" aria-haspopup="dialog">
             Edit programme{customisedDays ? ` · ${customisedDays} day${customisedDays === 1 ? '' : 's'} customised` : ''}
           </button>
-          <button onClick={()=> setPlanOpen(true)} className="btn btn-secondary w-full min-h-11 rounded-xl text-sm" aria-haspopup="dialog">Block plan</button>
+          <button onClick={()=> setPlanOpen(true)} className="btn btn-secondary w-full min-h-11 rounded-lg text-sm" aria-haspopup="dialog">Block plan</button>
           {planOpen && (
             <Suspense fallback={<p className="text-xs text-ink3" role="status">Opening…</p>}>
               <BlockPlan store={store} setStore={setStore} onClose={()=> setPlanOpen(false)} />
@@ -305,12 +305,12 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
               <ProgrammeEditor store={store} setStore={setStore} availableEquipment={availableEquipment} onClose={()=> setEditorOpen(false)} />
             </Suspense>
           )}
-          <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <details className="rounded-lg bg-surface2 px-3 py-2">
             <summary className="text-xs font-bold cursor-pointer">View programme</summary>
             <p className="text-[11px] text-ink3 mt-1.5">Start: {active.startDateISO} • {active.sessions.length} sessions • {adherence?.missed || 0} missed</p>
             <ul className="mt-2 space-y-1.5 max-h-60 overflow-auto pr-1">
               {pvc.map(({ session, completed, delta, actual })=> (
-                <li key={session.id} className="flex items-center gap-2 text-sm border border-line rounded-xl px-3 py-2 bg-surface2">
+                <li key={session.id} className="flex items-center gap-2 text-sm rounded-lg px-3 py-2 bg-surface2">
                   <span className="text-xs font-mono tabular-nums text-ink3 w-24 shrink-0">{session.dateISO}</span>
                   <span className="font-medium truncate">{session.title}</span>
                   <span className={`ml-auto text-[11px] font-bold px-2 py-1 rounded-full border ${completed ? 'bg-success text-bg border-success' : 'bg-surface border-line text-ink3'}`}>{completed?'done':'planned'}</span>
@@ -329,14 +329,14 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
             plateConfig={store.onboarding?.plateConfig || null}
             unit={unit}
           />
-          <button onClick={clearSchedule} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs">Clear schedule</button>
+          <button onClick={clearSchedule} className="btn btn-secondary w-full min-h-11 rounded-lg text-xs">Clear schedule</button>
         </section>
       )}
 
       {/* ── The recommendation: the primary experience ── */}
       {recommendation && !active && (
-        <section className="rounded-3xl border border-line bg-surface p-4 sm:p-5 space-y-3" aria-label="Recommended for you">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Recommended for you</p>
+        <section className="rounded-2xl border border-line bg-surface p-3 sm:p-4 space-y-3" aria-label="Recommended for you">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">Recommended for you</p>
           <div>
             <h3 className="text-2xl font-black tracking-tight">{recommendation.name}</h3>
             <p className="text-xs font-semibold text-ink2 tabular-nums">
@@ -359,7 +359,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
             </ul>
           </div>
           <div className="space-y-1.5">
-            <button onClick={startRecommendation} className="btn btn-primary w-full min-h-14 rounded-xl text-base font-extrabold uppercase tracking-wide">Start programme</button>
+            <button onClick={startRecommendation} className="btn btn-primary w-full min-h-14 rounded-lg text-base font-extrabold uppercase tracking-wide">Start programme</button>
             <Suspense fallback={null}>
               <CoachPanel
                 store={store}
@@ -368,7 +368,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
                   : null}
               />
             </Suspense>
-            <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+            <details className="rounded-lg bg-surface2 px-3 py-2">
               <summary className="text-xs font-bold cursor-pointer">Why this programme?</summary>
               <p className="text-[11px] font-bold text-ink mt-2">Used to choose this programme</p>
               <ul className="mt-1 space-y-1">
@@ -403,9 +403,9 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
       {/* ── The rest of the shelf: ≤5 offers total, swaps visible first ── */}
       {!active && shelfAlternates.length > 0 && (
         <section className="space-y-2" aria-label="More programmes that fit">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Other good fits</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">Other good fits</p>
           {shelfAlternates.map(item=> (
-            <div key={item.templateId} className="rounded-2xl border border-line bg-surface p-3 space-y-2">
+            <div key={item.templateId} className="rounded-xl border border-line bg-surface p-3 space-y-2">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-bold">
@@ -416,13 +416,13 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
                     {item.level} • {item.daysPerWeek ? `${item.daysPerWeek}×/week` : 'flexible days'}{item.estimatedMinutes != null ? ` • ≈${item.estimatedMinutes} min` : ''}{item.weeks ? ` • ${item.weeks}-week cycle` : ''}
                   </p>
                 </div>
-                <button onClick={()=> startShelfItem(item.programId)} className="btn btn-primary shrink-0 min-h-11 rounded-xl px-3 text-xs font-bold">Start</button>
+                <button onClick={()=> startShelfItem(item.programId)} className="btn btn-primary shrink-0 min-h-11 rounded-lg px-3 text-xs font-bold">Start</button>
               </div>
               {item.reasons[0] && <p className="text-[11px] text-ink3">{item.reasons[0]}</p>}
               {/* Swaps are visible BEFORE start — the same list scheduling will
                   apply, from the same engine. Nothing is decided invisibly. */}
               {item.swapCount > 0 && (
-                <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+                <details className="rounded-lg bg-surface2 px-3 py-2">
                   <summary className="text-[11px] font-bold cursor-pointer">{item.swapCount} swap{item.swapCount === 1 ? '' : 's'} for your kit — see them before you start</summary>
                   <ul className="mt-1.5 space-y-1">
                     {item.swaps.slice(0, 6).map((swap, i)=> (
@@ -443,12 +443,12 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
       {/* ── Secondary management, collapsed by default ── */}
       <nav aria-label="Programme management" className="space-y-2">
         {!browseOpen ? (
-          <button onClick={()=> setBrowseOpen(true)} aria-expanded={browseOpen} className="btn btn-secondary w-full min-h-11 rounded-xl text-sm font-bold">Browse programmes</button>
+          <button onClick={()=> setBrowseOpen(true)} aria-expanded={browseOpen} className="btn btn-secondary w-full min-h-11 rounded-lg text-sm">Browse programmes</button>
         ) : (
-          <div className="rounded-2xl border border-line bg-surface p-3 space-y-3">
+          <div className="rounded-xl border border-line bg-surface p-3 space-y-3">
             <div className="flex items-center gap-2">
               <p className="text-xs font-bold">Browse programmes</p>
-              <button onClick={()=> setBrowseOpen(false)} aria-label="Collapse browse programmes" className="ml-auto w-11 h-11 grid place-items-center rounded-xl border border-line text-ink3" aria-expanded="true">▴</button>
+              <button onClick={()=> setBrowseOpen(false)} aria-label="Collapse browse programmes" className="ml-auto w-11 h-11 grid place-items-center rounded-lg border border-line text-ink3" aria-expanded="true">▴</button>
             </div>
             <div className="grid gap-2">
               {allPrograms.map(p=>{
@@ -456,7 +456,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
                 const isActive = active?.programId===p.id;
                 return (
                   <button key={p.id} onClick={()=> { setProgramId(p.id); setTemplatesOpen(false); }}
-                    className={`text-left rounded-2xl border p-4 transition-colors ${programId===p.id ? 'bg-surface2 border-ink ring-1 ring-ink' : 'bg-surface border-line hover:border-ink3'} ${!ok ? 'opacity-90' : ''}`}>
+                    className={`text-left rounded-xl border p-3 transition-colors ${programId===p.id ? 'bg-surface2 border-ink ring-1 ring-ink' : 'bg-surface border-line hover:border-ink3'} ${!ok ? 'opacity-90' : ''}`}>
                     <span className="flex flex-wrap items-center gap-2">
                       <span className="text-xs font-bold px-2 py-1 rounded-full border bg-surface border-line text-ink3">{p.level} • {p.daysPerWeek}×/week</span>
                       {programId===p.id && <span className="text-xs font-bold px-2 py-1 rounded-full bg-ink text-bg">✓ Selected</span>}
@@ -471,11 +471,11 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
               })}
             </div>
             {!availIds.has(programId) && (
-              <p className="text-xs bg-reviewsoft border border-review/30 text-ink2 rounded-xl px-3 py-2">This program needs kit you didn’t select in onboarding. You can still start it — exercises show substitutions — but recommendations in Today will bias toward what you actually have. Update kit in More → Onboarding.</p>
+              <p className="text-xs bg-reviewsoft border border-review/30 text-ink2 rounded-lg px-3 py-2">This program needs kit you didn’t select in onboarding. You can still start it — exercises show substitutions — but recommendations in Today will bias toward what you actually have. Update kit in More → Onboarding.</p>
             )}
             <div className="flex gap-2">
-              {store.onboarding && <button onClick={generateFromProfile} className="btn btn-secondary flex-1 min-h-11 rounded-xl">Generate from profile</button>}
-              <button onClick={start} className="btn btn-primary flex-1 min-h-11 rounded-xl">{active?.programId===programId ? 'Restart schedule from today' : 'Schedule this program'}</button>
+              {store.onboarding && <button onClick={generateFromProfile} className="btn btn-secondary flex-1 min-h-11 rounded-lg">Generate from profile</button>}
+              <button onClick={start} className="btn btn-primary flex-1 min-h-11 rounded-lg">{active?.programId===programId ? 'Restart schedule from today' : 'Schedule this program'}</button>
             </div>
             {program && program.mesocycle && (
               <p className="text-xs text-ink3">Mesocycle: {program.mesocycle.weeks} weeks • progression {program.mesocycle.progression} {program.mesocycle.deloadWeek?`• deload week ${program.mesocycle.deloadWeek}`:''}</p>
@@ -483,14 +483,14 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
             {program && (
               <div className="space-y-3">
                 <h3 className="text-sm font-bold">Preview — {program.name} <span className="text-xs text-ink3">v{program.version||1}</span></h3>
-                <details className="text-xs rounded-xl border border-line bg-surface2 px-3 py-2">
+                <details className="text-xs rounded-lg bg-surface2 px-3 py-2">
                   <summary className="font-semibold cursor-pointer">Version history</summary>
                   <ul className="mt-2 space-y-1">
                     {programVersionHistory(program.id).map(h=> <li key={h.version}><span className="font-bold">v{h.version}</span> {h.date} — {h.changes}</li>)}
                   </ul>
                 </details>
                 {program.weeks.map(wk=> (
-                  <div key={wk.week} className="rounded-2xl border border-line bg-surface overflow-hidden">
+                  <div key={wk.week} className="rounded-xl border border-line bg-surface overflow-hidden">
                     <div className="px-4 py-2 bg-surface2 border-b border-line flex items-center justify-between">
                       <span className="text-xs font-bold">Week {wk.week}</span>
                       <span className="text-[11px] text-ink3">{wk.workouts.length} sessions</span>
@@ -516,13 +516,13 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
         )}
 
         {!templatesOpen ? (
-          <button onClick={()=> setTemplatesOpen(true)} aria-expanded={templatesOpen} className="btn btn-secondary w-full min-h-11 rounded-xl text-sm font-bold">Build my own &amp; my templates</button>
+          <button onClick={()=> setTemplatesOpen(true)} aria-expanded={templatesOpen} className="btn btn-secondary w-full min-h-11 rounded-lg text-sm">Build my own &amp; my templates</button>
         ) : (
-          <div className="rounded-xl border border-line bg-surface2 px-3 py-2 space-y-2">
+          <div className="rounded-lg bg-surface2 px-3 py-2 space-y-2">
             <div className="flex items-center gap-2">
               <p className="text-xs font-bold">My templates</p>
               <button onClick={()=> openBuilder()} className="ml-auto text-[11px] font-bold px-2.5 py-1.5 rounded-full bg-ink text-bg min-h-8">+ New template</button>
-              <button onClick={()=> setTemplatesOpen(false)} aria-label="Collapse my templates" className="w-11 h-11 grid place-items-center rounded-xl border border-line text-ink3">▴</button>
+              <button onClick={()=> setTemplatesOpen(false)} aria-label="Collapse my templates" className="w-11 h-11 grid place-items-center rounded-lg border border-line text-ink3">▴</button>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {PROGRAM_TEMPLATES.map(t=> (
@@ -563,18 +563,18 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
       </nav>
 
       {active && adaptation?.changed && (
-        <div className="rounded-xl border border-review/30 bg-reviewsoft px-3 py-3 space-y-2">
+        <div className="rounded-lg border border-review/30 bg-reviewsoft px-3 py-3 space-y-2">
           <p className="text-xs font-bold text-review">Equipment change detected</p>
           <p className="text-xs text-ink2">{adaptation.reason} Your completed history stays attached to the original exercise IDs.</p>
           <ul className="text-[11px] text-ink2 space-y-1">
-            {adaptation.substitutions.slice(0, 4).map((swap, i)=> <li key={`${swap.sessionId}-${i}`}>{swap.from} → {swap.to}</li>)}
+            {[...new Set(adaptation.substitutions.map(swap=> `${EXERCISE_BY_ID[swap.from]?.name || swap.from} → ${EXERCISE_BY_ID[swap.to]?.name || swap.to}`))].slice(0, 4).map(line=> <li key={line}>{line}</li>)}
           </ul>
-          <button onClick={applyEquipmentChanges} className="btn btn-primary min-h-10 rounded-xl px-3 text-xs">Apply kit changes to schedule</button>
+          <button onClick={applyEquipmentChanges} className="btn btn-primary min-h-10 rounded-lg px-3 text-xs">Apply kit changes to schedule</button>
         </div>
       )}
 
       {active?.generationReasons?.length > 0 && (
-        <details className="rounded-xl border border-line bg-surface2 px-3 py-3">
+        <details className="rounded-lg bg-surface2 px-3 py-3">
           <summary className="cursor-pointer text-xs font-bold">Why this programme was generated</summary>
           <ul className="mt-2 list-disc pl-5 text-[11px] text-ink3 space-y-1">
             {active.generationReasons.map((reason, index)=> <li key={`reason-${index}`}>{reason}</li>)}
@@ -601,35 +601,35 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
 
       {builderOpen && (
         <div ref={builderA11y.rootRef} onKeyDown={builderA11y.trapTab} className="fixed inset-0 z-40 bg-black/40 p-4 overflow-auto" role="dialog" aria-modal="true" aria-label="Template builder">
-          <div className="max-w-xl mx-auto my-6 rounded-3xl bg-surface border border-line p-4 space-y-4">
+          <div className="max-w-xl mx-auto my-6 rounded-2xl bg-surface border border-line p-3 space-y-3">
             <div className="flex items-center gap-2">
               <p className="text-base font-bold">{editingId ? 'Edit template' : 'New template'}</p>
               <button ref={builderA11y.closeRef} onClick={()=> setBuilderOpen(false)} aria-label="Close builder" className="ml-auto w-9 h-9 grid place-items-center rounded-full border border-line">✕</button>
             </div>
             <label className="block">
-              <span className="text-[11px] font-bold uppercase tracking-widest text-ink3">Name</span>
-              <input value={form.name} onChange={e=> setForm(f=> ({...f, name:e.target.value}))} className="mt-1 w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm" placeholder="My push-pull split" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-ink3">Name</span>
+              <input value={form.name} onChange={e=> setForm(f=> ({...f, name:e.target.value}))} className="mt-1 w-full rounded-lg border border-line bg-surface2 px-3 py-2.5 text-sm" placeholder="My push-pull split" />
             </label>
             <label className="block">
-              <span className="text-[11px] font-bold uppercase tracking-widest text-ink3">Description (optional)</span>
-              <input value={form.description} onChange={e=> setForm(f=> ({...f, description:e.target.value}))} className="mt-1 w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm" placeholder="What is this plan for?" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-ink3">Description (optional)</span>
+              <input value={form.description} onChange={e=> setForm(f=> ({...f, description:e.target.value}))} className="mt-1 w-full rounded-lg border border-line bg-surface2 px-3 py-2.5 text-sm" placeholder="What is this plan for?" />
             </label>
             <div className="grid grid-cols-2 gap-2">
               <label className="block">
                 <span className="text-[11px] font-semibold text-ink3">Level</span>
-                <select value={form.level} onChange={e=> setForm(f=> ({...f, level:e.target.value}))} className="mt-1 w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm">
+                <select value={form.level} onChange={e=> setForm(f=> ({...f, level:e.target.value}))} className="mt-1 w-full rounded-lg border border-line bg-surface2 px-3 py-2.5 text-sm">
                   {LEVELS.map(l=> <option key={l}>{l}</option>)}
                 </select>
               </label>
               <label className="block">
                 <span className="text-[11px] font-semibold text-ink3">Goal</span>
-                <select value={form.goal} onChange={e=> setForm(f=> ({...f, goal:e.target.value}))} className="mt-1 w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm">
+                <select value={form.goal} onChange={e=> setForm(f=> ({...f, goal:e.target.value}))} className="mt-1 w-full rounded-lg border border-line bg-surface2 px-3 py-2.5 text-sm">
                   {GOALS.map(g=> <option key={g.id} value={g.id}>{g.label}</option>)}
                 </select>
               </label>
             </div>
             {form.days.map((day, di)=> (
-              <div key={di} className="rounded-2xl border border-line bg-surface2 p-3 space-y-2">
+              <div key={di} className="rounded-xl bg-surface2 p-3 space-y-2">
                 <div className="flex items-center gap-2">
                   <input value={day.title} onChange={e=> setDay(di, { title: e.target.value })} placeholder={`Day ${di+1} title`} aria-label={`Day ${di+1} title`} className="flex-1 min-w-0 rounded-lg border border-line bg-surface px-2.5 py-2 text-xs font-bold" />
                   <button onClick={()=> moveDay(di, -1)} disabled={di===0} aria-label={`Move day ${di+1} up`} className="w-8 h-8 grid place-items-center rounded-full border border-line text-ink3 disabled:opacity-30">↑</button>
@@ -637,7 +637,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
                   {form.days.length > 1 && <button onClick={()=> removeDay(di)} aria-label={`Remove day ${di+1}`} className="w-9 h-9 grid place-items-center rounded-full border border-line text-ink3">×</button>}
                 </div>
                 {day.exercises.map((exRow, ei)=> (
-                  <div key={ei} className="rounded-xl border border-line bg-surface p-2 space-y-1.5">
+                  <div key={ei} className="rounded-lg border border-line bg-surface p-2 space-y-1.5">
                     <div className="flex items-center gap-1.5">
                       <select value={exRow.exerciseId} onChange={e=> setExercise(di, ei, { exerciseId: e.target.value })} aria-label={`Day ${di+1} exercise ${ei+1}`} className="flex-1 min-w-0 rounded-lg border border-line bg-surface2 px-2 py-2 text-xs">
                         <option value="">Pick an exercise…</option>
@@ -673,7 +673,7 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
                 <p className="text-[11px] text-success font-semibold">✓ Every exercise fits your kit — no swaps at schedule time.</p>
               );
               return (
-                <div className="rounded-xl border border-line bg-surface2 px-3 py-2 space-y-1" aria-label="Equipment substitution preview">
+                <div className="rounded-lg bg-surface2 px-3 py-2 space-y-1" aria-label="Equipment substitution preview">
                   <p className="text-[11px] font-bold">Without some kit, this becomes:</p>
                   {preview.swaps.slice(0, 6).map((s, i)=> (
                     <p key={`${s.from}-${i}`} className="text-[11px] text-ink2">{s.fromName} → {s.to ? `${s.to.name}${s.to.equipment?.length ? ` (${s.to.equipment.join(', ')})` : ''}` : 'no honest match yet'}</p>
@@ -683,8 +683,8 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
               );
             })()}
             <div className="flex gap-2">
-              <button onClick={addDay} disabled={form.days.length >= 6} className="btn btn-secondary flex-1 min-h-10 rounded-xl disabled:opacity-40">+ Add day</button>
-              <button onClick={saveBuilder} className="btn btn-primary flex-1 min-h-10 rounded-xl">{editingId ? `Save as v${(customTemplates.find(t=> t.id===editingId)?.version || 1) + 1}` : 'Create template'}</button>
+              <button onClick={addDay} disabled={form.days.length >= 6} className="btn btn-secondary flex-1 min-h-10 rounded-lg disabled:opacity-40">+ Add day</button>
+              <button onClick={saveBuilder} className="btn btn-primary flex-1 min-h-10 rounded-lg">{editingId ? `Save as v${(customTemplates.find(t=> t.id===editingId)?.version || 1) + 1}` : 'Create template'}</button>
             </div>
             <p className="text-[11px] text-ink3">One-week blueprint — scheduling repeats it weekly with a 4-week mesocycle and honest kit swaps. Saving changes bumps the template version; started schedules keep their own copy. Templates live on this device and ride along in backups.</p>
           </div>
@@ -692,12 +692,12 @@ export default function TrainView({ store, setStore, onStartSession, availableEq
       )}
 
       {!!userHistory.length && (
-        <details className="rounded-2xl border border-line bg-surface p-4">
+        <details className="rounded-xl border border-line bg-surface p-3">
           <summary className="text-sm font-bold cursor-pointer">Programme history</summary>
           <p className="text-xs text-ink3 mt-2">Starts and completions are kept separately from the built-in programme version changelog.</p>
           <ul className="space-y-1.5 mt-2">
             {userHistory.slice(0, 8).map((entry, index)=> (
-              <li key={`${entry.programId}-${entry.startDateISO}-${index}`} className="flex items-center gap-2 text-xs border border-line rounded-xl px-3 py-2 bg-surface2">
+              <li key={`${entry.programId}-${entry.startDateISO}-${index}`} className="flex items-center gap-2 text-xs rounded-lg px-3 py-2 bg-surface2">
                 <span className="font-bold">{PROGRAM_BY_ID[entry.programId]?.name || entry.programId}</span>
                 <span className="text-ink3">v{entry.version} • {entry.startDateISO}</span>
                 <span className={`ml-auto font-bold ${entry.active ? 'text-success' : 'text-ink3'}`}>{entry.active ? 'active' : entry.status} • {entry.completedSessions} logged</span>

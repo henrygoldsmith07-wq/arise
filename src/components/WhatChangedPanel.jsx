@@ -24,8 +24,8 @@ export default function WhatChangedPanel({ schedule, history = [], compact = fal
   })) : changes.flatMap((c)=> c.lines.map((line)=> ({ exercise: null, detail: line, confidence: null, when: c.when })));
 
   return (
-    <div className={`rounded-2xl border border-line bg-surface ${compact ? 'px-3 py-2' : 'p-4 space-y-2'}`} role="region" aria-label="What changed">
-      <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">What changed <span className="normal-case font-semibold">· {rows.length} change{rows.length === 1 ? '' : 's'} since last session</span></p>
+    <div className={`rounded-xl border border-line bg-surface ${compact ? 'px-3 py-2' : 'p-3 space-y-2'}`} role="region" aria-label="What changed">
+      <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">What changed <span className="normal-case font-semibold">· {rows.length} change{rows.length === 1 ? '' : 's'} since last session</span></p>
       <ul className={`mt-1 space-y-2 ${compact ? 'max-h-48 overflow-auto' : ''}`} aria-live="polite">
         {rows.map((row, i)=> (
           <li key={i} className="text-[11px]">

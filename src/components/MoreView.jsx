@@ -354,7 +354,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
   const exerciseName = (id)=> EXERCISE_BY_ID[id]?.name || id;
 
   return (
-    <div className="px-4 pt-5 pb-2 space-y-4 max-w-3xl mx-auto">
+    <div className="px-4 pt-5 pb-2 space-y-3 max-w-3xl mx-auto">
       {dialogs.node}
       <div>
         <h2 className="text-lg font-extrabold tracking-tight">More</h2>
@@ -368,11 +368,11 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
           onChange={e=> setSearchQuery(e.target.value)}
           placeholder="Search settings… (e.g. voice, wake, policy)"
           aria-label="Search settings"
-          className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm"
+          className="w-full rounded-lg border border-line bg-surface2 px-3 py-2.5 text-sm"
         />
         {searchQuery && (
           searchMatches.length ? (
-            <div className="absolute inset-x-0 top-full mt-1 z-20 rounded-xl border border-line bg-surface shadow-lg overflow-hidden">
+            <div className="absolute inset-x-0 top-full mt-1 z-20 rounded-lg border border-line bg-surface shadow-lg overflow-hidden">
               {searchMatches.map(m=> (
                 <button key={m.id} onClick={()=>{ jumpToSetting(m.id); setSearchQuery(''); }}
                   className="w-full text-left px-3 py-2.5 text-xs font-semibold hover:bg-surface2 border-b border-line last:border-b-0">
@@ -381,22 +381,22 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
               ))}
             </div>
           ) : (
-            <p className="absolute inset-x-0 top-full mt-1 z-20 rounded-xl border border-line bg-surface px-3 py-2.5 text-xs text-ink3 shadow-lg">No settings match “{searchQuery}”.</p>
+            <p className="absolute inset-x-0 top-full mt-1 z-20 rounded-lg border border-line bg-surface px-3 py-2.5 text-xs text-ink3 shadow-lg">No settings match “{searchQuery}”.</p>
           )
         )}
       </div>
 
       {/* ── PROFILE & TRAINING: who you are, what you have, how the engine prescribes ── */}
-      <div id={SETTINGS_GROUPS[0].id} className="pt-2 space-y-4" aria-label="Profile & training">
+      <div id={SETTINGS_GROUPS[0].id} className="pt-2 space-y-3" aria-label="Profile & training">
         <div className="flex items-center gap-2">
           <h3 className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink3">{SETTINGS_GROUPS[0].title}</h3>
           <span className="flex-1 h-px bg-line" />
         </div>
 
-        <section id="sec-personalise" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+        <section id="sec-personalise" className="rounded-xl border border-line bg-surface p-3 space-y-3">
           <h4 className="text-sm font-bold">Goals, equipment & schedule</h4>
           <p className="text-xs text-ink3">Your goal, kit, level, weekly schedule and units. These shape generated programmes and every recommendation. Workout entry follows your unit choice; storage, engine math and backups stay in kilograms.</p>
-          <div className="rounded-xl border border-line bg-surface2 px-3 py-2 text-sm">
+          <div className="rounded-lg bg-surface2 px-3 py-2 text-sm">
             <p className="font-semibold">Current profile</p>
             {!store.onboarding ? <p className="text-xs text-ink3 mt-1">Not completed — open onboarding to set goal, kit and location.</p> : (
               <ul className="text-xs text-ink3 mt-1 space-y-0.5">
@@ -409,14 +409,14 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
               </ul>
             )}
           </div>
-          <button onClick={()=> setOnboardingOpen(true)} className="btn btn-secondary w-full min-h-11 rounded-xl">{store.onboarding ? 'Edit onboarding' : 'Start onboarding'}</button>
-          <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
+          <button onClick={()=> setOnboardingOpen(true)} className="btn btn-secondary w-full min-h-11 rounded-lg">{store.onboarding ? 'Edit onboarding' : 'Start onboarding'}</button>
+          <div className="rounded-lg bg-surface2 px-3 py-2.5 space-y-2">
             <p className="text-xs font-bold">Weight units</p>
             <p className="text-[11px] text-ink3">Workout entry and display use this unit. Storage, engine math and backups stay in kilograms.</p>
             <div className="flex gap-1.5" role="group" aria-label="Weight units">
               {[['kg','Kilograms'],['lb','Pounds']].map(([value, label]) => (
                 <button key={value} onClick={()=> setPreference({ units:value })} aria-pressed={(prefs.units || 'kg') === value}
-                  className={`flex-1 min-h-10 rounded-xl border px-2 py-1.5 text-xs font-bold ${(prefs.units || 'kg') === value ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink3'}`}>
+                  className={`flex-1 min-h-10 rounded-lg border px-2 py-1.5 text-xs font-bold ${(prefs.units || 'kg') === value ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink3'}`}>
                   {label}
                 </button>
               ))}
@@ -431,13 +431,13 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
       </div>
 
       {/* ── WORKOUT EXPERIENCE: sessions in the gym, rest behaviour, guided coaching ── */}
-      <div id={SETTINGS_GROUPS[1].id} className="pt-2 space-y-4" aria-label="Workout experience">
+      <div id={SETTINGS_GROUPS[1].id} className="pt-2 space-y-3" aria-label="Workout experience">
         <div className="flex items-center gap-2">
           <h3 className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink3">{SETTINGS_GROUPS[1].title}</h3>
           <span className="flex-1 h-px bg-line" />
         </div>
 
-        <section id="sec-gym" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+        <section id="sec-gym" className="rounded-xl border border-line bg-surface p-3 space-y-3">
           <h4 className="text-sm font-bold">Gym mode</h4>
           <p className="text-xs text-ink3">Built for one-thumb logging between sets: focus mode, swipe gestures and a load keypad live inside every standard session (the 🏋️ button in the session header).</p>
 
@@ -476,7 +476,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
             onChange={value=> setPreference({ haptics: value })}
           />
 
-          <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5">
+          <div className="rounded-lg bg-surface2 px-3 py-2.5">
             <p className="text-xs font-bold">Rest presets by exercise</p>
             {restPresetEntries.length ? (
               <ul className="mt-2 space-y-1">
@@ -500,7 +500,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
       </div>
 
       {/* ── APPEARANCE & ACCESSIBILITY ── */}
-      <div id={SETTINGS_GROUPS[2].id} className="pt-2 space-y-4" aria-label="Appearance & accessibility">
+      <div id={SETTINGS_GROUPS[2].id} className="pt-2 space-y-3" aria-label="Appearance & accessibility">
         <div className="flex items-center gap-2">
           <h3 className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink3">{SETTINGS_GROUPS[2].title}</h3>
           <span className="flex-1 h-px bg-line" />
@@ -511,16 +511,16 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
       </div>
 
       {/* ── DATA: keeping a copy, moving it between devices, recovering it ── */}
-      <div id={SETTINGS_GROUPS[3].id} className="pt-2 space-y-4" aria-label="Data">
+      <div id={SETTINGS_GROUPS[3].id} className="pt-2 space-y-3" aria-label="Data">
         <div className="flex items-center gap-2">
           <h3 className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink3">{SETTINGS_GROUPS[3].title}</h3>
           <span className="flex-1 h-px bg-line" />
         </div>
 
-        <section id="sec-backup" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+        <section id="sec-backup" className="rounded-xl border border-line bg-surface p-3 space-y-3">
           <h4 className="text-sm font-bold">Backup & portability</h4>
           {backupDue && (
-            <div role="status" className="rounded-xl border border-review/40 bg-reviewsoft px-3 py-2 text-xs space-y-1">
+            <div role="status" className="rounded-lg border border-review/40 bg-reviewsoft px-3 py-2 text-xs space-y-1">
               <p className="font-bold">Time for a backup</p>
               <p className="text-ink3">It's been over a week since your last full backup. A recoverable local file is your safety copy.</p>
               <div className="flex gap-2">
@@ -530,7 +530,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
             </div>
           )}
           {integrity && (
-            <div role="alert" className="rounded-xl border border-danger/40 bg-dangersoft px-3 py-2 text-xs space-y-1">
+            <div role="alert" className="rounded-lg border border-danger/40 bg-dangersoft px-3 py-2 text-xs space-y-1">
               <p className="font-bold">Stored data needed repair on startup.</p>
               <p className="text-ink3">A broken copy was kept in quarantine and the readable parts were restored. Nothing was lost silently. Details: {integrity.errors.join(' ')}</p>
               <div className="flex flex-wrap gap-x-4 gap-y-1">
@@ -541,25 +541,25 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
           )}
           <p className="text-xs text-ink3">Local-first — your history lives on this device. Export JSON (full versioned backup: live + archived training history), an encrypted backup (same complete history, sealed), or CSV (live history only) and restore/merge on another device. No account required.</p>
           {store.demo && (
-            <p className="text-xs text-ink2 bg-reviewsoft border border-review/30 rounded-xl px-3 py-2" role="note">
+            <p className="text-xs text-ink2 bg-reviewsoft border border-review/30 rounded-lg px-3 py-2" role="note">
               <strong>Demo mode:</strong> export is disabled — this is sample data, not yours. Exit demo to start your real log.
             </p>
           )}
           <div className="flex flex-wrap gap-2">
-            <button onClick={exportNow} disabled={store.demo === true} className="btn btn-primary min-h-10 rounded-xl px-4 disabled:opacity-40">Export JSON</button>
-            <button onClick={exportEncrypted} disabled={store.demo === true} className="btn btn-primary min-h-10 rounded-xl px-4 disabled:opacity-40">Export encrypted</button>
-            <button onClick={exportCsv} className="btn btn-secondary min-h-10 rounded-xl px-4">Export CSV</button>
-            <button onClick={()=> setNotesOpen(true)} data-testid="notes-open" className="btn btn-secondary min-h-10 rounded-xl px-4" title="Search session notes and machine setups">Training notes</button>
-            <button onClick={()=> setHevyOpen(true)} disabled={store.demo === true} data-testid="hevy-export-open" className="btn btn-secondary min-h-10 rounded-xl px-4 disabled:opacity-40" title="Your workouts in Hevy's own CSV layout">Export for Hevy</button>
-            <label className="btn btn-secondary min-h-10 rounded-xl px-4 cursor-pointer">
+            <button onClick={exportNow} disabled={store.demo === true} className="btn btn-primary min-h-10 rounded-lg px-4 disabled:opacity-40">Export JSON</button>
+            <button onClick={exportEncrypted} disabled={store.demo === true} className="btn btn-primary min-h-10 rounded-lg px-4 disabled:opacity-40">Export encrypted</button>
+            <button onClick={exportCsv} className="btn btn-secondary min-h-10 rounded-lg px-4">Export CSV</button>
+            <button onClick={()=> setNotesOpen(true)} data-testid="notes-open" className="btn btn-secondary min-h-10 rounded-lg px-4" title="Search session notes and machine setups">Training notes</button>
+            <button onClick={()=> setHevyOpen(true)} disabled={store.demo === true} data-testid="hevy-export-open" className="btn btn-secondary min-h-10 rounded-lg px-4 disabled:opacity-40" title="Your workouts in Hevy's own CSV layout">Export for Hevy</button>
+            <label className="btn btn-secondary min-h-10 rounded-lg px-4 cursor-pointer">
               Import backup
               <input ref={fileRef} type="file" accept=".arise,.json,application/json" className="hidden" onChange={onPickFile} />
             </label>
-            <label className="btn btn-secondary min-h-10 rounded-xl px-4 cursor-pointer">
+            <label className="btn btn-secondary min-h-10 rounded-lg px-4 cursor-pointer">
               Import encrypted
               <input type="file" accept=".arisebak,application/octet-stream" className="hidden" onChange={onPickEncrypted} />
             </label>
-            <label className="btn btn-secondary min-h-10 rounded-xl px-4 cursor-pointer" title="Import a CSV exported from another gym app">
+            <label className="btn btn-secondary min-h-10 rounded-lg px-4 cursor-pointer" title="Import a CSV exported from another gym app">
               Import from other apps (CSV)
               <input type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={onPickAppCsv} />
             </label>
@@ -570,7 +570,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
             <span className="text-ink3">Merge de-dupes by session id; Replace overwrites.</span>
           </div>
           {importPreview && (
-            <div role="dialog" aria-label="Import preview" className="rounded-xl border border-line bg-surface2 p-3 text-xs space-y-2">
+            <div role="dialog" aria-label="Import preview" className="rounded-lg bg-surface2 p-3 text-xs space-y-2">
               <p className="font-bold">Review this backup before applying</p>
               <p className="text-ink3">
                 Exported {importPreview.meta.exportedAt && importPreview.meta.exportedAt !== '1970-01-01T00:00:00.000Z' ? new Date(importPreview.meta.exportedAt).toLocaleString() : 'at an unknown time'}
@@ -609,14 +609,14 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
                 <p className="text-ink3">Ignored for your safety (device-local settings): {importPreview.deniedFields.join(', ')}</p>
               )}
               <div className="flex gap-2">
-                <button onClick={async ()=> { if(importStrategy==='replace'){ const ok = await dialogs.confirm({ title:'Replace this device with the backup?', description:'Replace overwrites ALL data on this device with the backup — your current history, programs and settings are gone. Export a backup first if in doubt.', confirmLabel:'Replace everything', cancelLabel:'Go back', destructive:true }); if(!ok) return; } applyImportPreview(); }} className="btn btn-primary min-h-9 rounded-xl px-4">Apply {importStrategy}</button>
-                <button onClick={()=> setImportPreview(null)} className="btn btn-secondary min-h-9 rounded-xl px-4">Cancel</button>
+                <button onClick={async ()=> { if(importStrategy==='replace'){ const ok = await dialogs.confirm({ title:'Replace this device with the backup?', description:'Replace overwrites ALL data on this device with the backup — your current history, programs and settings are gone. Export a backup first if in doubt.', confirmLabel:'Replace everything', cancelLabel:'Go back', destructive:true }); if(!ok) return; } applyImportPreview(); }} className="btn btn-primary min-h-9 rounded-lg px-4">Apply {importStrategy}</button>
+                <button onClick={()=> setImportPreview(null)} className="btn btn-secondary min-h-9 rounded-lg px-4">Cancel</button>
               </div>
             </div>
           )}
           <details className="text-xs">
             <summary className="font-semibold cursor-pointer">What’s in the backup?</summary>
-            <div className="mt-2 rounded-xl border border-line bg-surface2 px-3 py-2">
+            <div className="mt-2 rounded-lg bg-surface2 px-3 py-2">
               <p className="font-semibold">This export would contain (live + archived history):</p>
               <p className="text-ink3 mt-0.5">
                 {(store.history||[]).length} live session(s){(store.archivedHistory||[]).length ? ` + ${(store.archivedHistory||[]).length} archived` : ''} ·
@@ -629,9 +629,9 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
               </p>
               <p className="text-[11px] text-ink3 mt-1">Excluded by design: crash logs, telemetry granular options, sync credentials, consent toggles.</p>
             </div>
-            <pre className="mt-2 overflow-auto rounded-xl bg-surface2 border border-line p-3 text-[11px] leading-relaxed">{JSON.stringify({ app:'arise', version:3, schemaVersion:4, exportedAt:'…', data:{ onboarding:'{goal,equipment,location,level,daysPerWeek,availableMinutes,preferredExerciseIds,dislikedExerciseIds,plateConfig}', activeSchedule:'{programId,sessions}', activeWorkout:'recoverable draft or null', history:'[{id,date,blocks:[{exerciseId,sets:[{reps,weightKg,rpe,side,rom}]}]}]', preferences:'{units,theme,telemetryEnabled,pulseEnabled,healthSummaryEnabled}', eventHistory:'[{id,type,at,payload}]', healthSummary:'optional summary or null' }}, null, 2)}</pre>
+            <pre className="mt-2 overflow-auto rounded-lg bg-surface2 border border-line p-3 text-[11px] leading-relaxed">{JSON.stringify({ app:'arise', version:3, schemaVersion:4, exportedAt:'…', data:{ onboarding:'{goal,equipment,location,level,daysPerWeek,availableMinutes,preferredExerciseIds,dislikedExerciseIds,plateConfig}', activeSchedule:'{programId,sessions}', activeWorkout:'recoverable draft or null', history:'[{id,date,blocks:[{exerciseId,sets:[{reps,weightKg,rpe,side,rom}]}]}]', preferences:'{units,theme,telemetryEnabled,pulseEnabled,healthSummaryEnabled}', eventHistory:'[{id,type,at,payload}]', healthSummary:'optional summary or null' }}, null, 2)}</pre>
           </details>
-          <details className="rounded-xl border border-line bg-surface2 px-3 py-2 text-xs">
+          <details className="rounded-lg bg-surface2 px-3 py-2 text-xs">
             <summary className="font-semibold cursor-pointer">Share more — coach summary, slices of data, printing</summary>
             <p className="text-ink3 mt-1.5">Coach export aggregates only by default: best sets and weekly volume. Tick extra sections; nothing identity-bearing is included, and a coach export never contains your backups, events or credentials.</p>
             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
@@ -653,7 +653,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
           </details>
         </section>
 
-        <section id="sec-sync" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+        <section id="sec-sync" className="rounded-xl border border-line bg-surface p-3 space-y-3">
           {notesOpen && (
             <Suspense fallback={null}>
               <NotesJournalSheet history={store.history||[]} setupNotes={store.gymPrefs?.setupNotes||{}} onClose={()=> setNotesOpen(false)} />
@@ -668,14 +668,14 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
           <Suspense fallback={<p className="text-xs text-ink3">Loading sync settings…</p>}>
             <SyncPanel store={store} setStore={setStore} setMsg={setMsg} />
           </Suspense>
-          {msg && <p role="status" className="text-xs bg-surface2 border border-line rounded-xl px-3 py-2">{msg}</p>}
+          {msg && <p role="status" className="text-xs bg-surface2 rounded-lg px-3 py-2">{msg}</p>}
         </section>
 
-        <section id="sec-storage" className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+        <section id="sec-storage" className="rounded-xl border border-line bg-surface p-3 space-y-3">
           <h4 className="text-sm font-bold">Storage & recovery</h4>
           <p className="text-xs text-ink3">How much space your data uses, whether the browser may evict it, and the recovery tools if anything ever needs repair.</p>
           {storageInfo && (
-            <div className="rounded-xl border border-line bg-surface2 px-3 py-2 text-xs space-y-1">
+            <div className="rounded-lg bg-surface2 px-3 py-2 text-xs space-y-1">
               {storageInfo.estimate
                 ? <p>Storage: {storageInfo.estimate.usageMb} MB of about {storageInfo.estimate.quotaMb} MB used{storageInfo.level !== 'ok' ? <span className="font-bold"> — {storageInfo.level === 'critical' ? 'nearly full, export a backup now' : 'getting full'}</span> : null}.</p>
                 : <p>Storage usage cannot be estimated in this browser.</p>}
@@ -694,18 +694,18 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
       </div>
 
       {/* ── PRIVACY & INTEGRATIONS: what is measured, what can leave, and where ── */}
-      <div id={SETTINGS_GROUPS[4].id} className="pt-2 space-y-4" aria-label="Privacy & integrations">
+      <div id={SETTINGS_GROUPS[4].id} className="pt-2 space-y-3" aria-label="Privacy & integrations">
         <div className="flex items-center gap-2">
           <h3 className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink3">{SETTINGS_GROUPS[4].title}</h3>
           <span className="flex-1 h-px bg-line" />
         </div>
 
-        <section id="sec-privacy" className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+        <section id="sec-privacy" className="rounded-xl border border-line bg-surface p-3 space-y-2">
           <h4 className="text-sm font-bold">Privacy & data controls</h4>
           <p className="text-xs text-ink3">Local-first. Event measurements stay on this device. Nothing is sent to Pulse or a health platform unless you explicitly enable that separate integration.</p>
 
           {/* ── Demo mode: clearly labeled sample data, one-tap honest exit ── */}
-          <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
+          <div className="rounded-lg bg-surface2 px-3 py-2.5 space-y-2">
             <div className="flex items-center gap-2">
               <p className="text-xs font-bold">Demo mode</p>
               <span className="ml-auto text-[11px] text-ink3">{store.demo ? 'active — sample data' : 'off'}</span>
@@ -721,7 +721,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
                   onClick={async ()=> {
                     await onLoadDemo?.();
                   }}
-                  className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs"
+                  className="btn btn-secondary min-h-9 rounded-lg px-3 text-xs"
                 >
                   Load demo data
                 </button>
@@ -729,12 +729,12 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
             )}
           </div>
 
-          <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
+          <div className="rounded-lg bg-surface2 px-3 py-2.5 space-y-2">
             <div className="flex items-center gap-2"><p className="text-xs font-bold">Local measurements</p><span className="ml-auto text-[11px] text-ink3">{store.preferences?.telemetryEnabled===true?'enabled':store.preferences?.telemetryEnabled===false?'disabled':'choice needed'}</span></div>
             <p className="text-[11px] text-ink3">Measures set logging time, session abandonment and recommendation acceptance. It never leaves this device.</p>
             <div className="flex gap-2">
-              <button onClick={()=> setTelemetryConsent(true)} className="btn btn-primary min-h-9 rounded-xl px-3 text-xs">Allow local measurements</button>
-              <button onClick={()=> setTelemetryConsent(false)} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Keep private</button>
+              <button onClick={()=> setTelemetryConsent(true)} className="btn btn-primary min-h-9 rounded-lg px-3 text-xs">Allow local measurements</button>
+              <button onClick={()=> setTelemetryConsent(false)} className="btn btn-secondary min-h-9 rounded-lg px-3 text-xs">Keep private</button>
             </div>
             {store.preferences?.telemetryEnabled === true && (
               <div className="space-y-1.5 pt-1">
@@ -757,7 +757,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
               </div>
             )}
           </div>
-          <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <details className="rounded-lg bg-surface2 px-3 py-2">
             <summary className="text-sm font-semibold cursor-pointer">What is shared?</summary>
             <div className="text-xs text-ink3 mt-2 space-y-1.5">
               <p><span className="font-semibold text-ink">By default: nothing.</span> No account, no analytics service, no trackers (enforced by this app's Content-Security-Policy, not just a promise). Arise is local-first: no training data leaves the device automatically.</p>
@@ -766,7 +766,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
               <p>Exercise illustrations load from one static host (bryllim.github.io). That request carries no identity beyond your IP — the browser sends nothing else.</p>
             </div>
           </details>
-          <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <details className="rounded-lg bg-surface2 px-3 py-2">
             <summary className="text-sm font-semibold cursor-pointer">What is stored on this device?</summary>
             <div className="text-xs text-ink3 mt-2 space-y-1.5">
               <p><span className="font-semibold text-ink">Always:</span> your training history, programs, templates, readiness log, preferences and the event ledger — all local, all in your backups, all deleted by "Erase all Arise data from this device".</p>
@@ -784,27 +784,27 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
           <FeedbackSettings />
         </Suspense>
 
-        <section id="sec-integrations" className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+        <section id="sec-integrations" className="rounded-xl border border-line bg-surface p-3 space-y-2">
           <h4 className="text-sm font-bold">Sharing & integrations</h4>
           <p className="text-xs text-ink3">Each sharing integration is off until you switch it on, and each sends only what its own card states.</p>
-          <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <details className="rounded-lg bg-surface2 px-3 py-2">
             <summary className="text-sm font-semibold cursor-pointer">Pulse connector</summary>
             <p className="text-xs text-ink3 mt-2">When enabled, completed sessions and weekly volume can be pushed to Pulse. Requires a Pulse adapter — configure via <code>window.__PULSE_ADAPTER__</code> (see <code>src/lib/pulse.js</code>). Data is only sent when you allow it.</p>
             <p className="text-xs text-ink3 mt-1">Current: {store.preferences?.pulseEnabled ? 'enabled' : 'disabled'}.</p>
-            <button onClick={()=> setPulseConsent(!store.preferences?.pulseEnabled)} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs mt-2">{store.preferences?.pulseEnabled?'Disable Pulse sharing':'Enable Pulse sharing'}</button>
+            <button onClick={()=> setPulseConsent(!store.preferences?.pulseEnabled)} className="btn btn-secondary min-h-9 rounded-lg px-3 text-xs mt-2">{store.preferences?.pulseEnabled?'Disable Pulse sharing':'Enable Pulse sharing'}</button>
           </details>
-          <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
+          <div className="rounded-lg bg-surface2 px-3 py-2.5 space-y-2">
             <div className="flex items-center gap-2"><p className="text-xs font-bold">Optional health-platform summary</p><span className="ml-auto text-[11px] text-ink3">{store.preferences?.healthSummaryEnabled?'enabled':'disabled'}</span></div>
             <p className="text-[11px] text-ink3">Import only a small summary such as steps, sleep, weight or resting heart rate. No raw health history is required.</p>
             <div className="flex flex-wrap gap-2">
-              <button onClick={()=> setHealthConsent(!store.preferences?.healthSummaryEnabled)} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">{store.preferences?.healthSummaryEnabled?'Disable health summary':'Enable health summary'}</button>
-              <button onClick={importHealthSummary} disabled={!healthAdapter || !store.preferences?.healthSummaryEnabled} className="btn btn-primary min-h-9 rounded-xl px-3 text-xs disabled:opacity-40">Import summary</button>
+              <button onClick={()=> setHealthConsent(!store.preferences?.healthSummaryEnabled)} className="btn btn-secondary min-h-9 rounded-lg px-3 text-xs">{store.preferences?.healthSummaryEnabled?'Disable health summary':'Enable health summary'}</button>
+              <button onClick={importHealthSummary} disabled={!healthAdapter || !store.preferences?.healthSummaryEnabled} className="btn btn-primary min-h-9 rounded-lg px-3 text-xs disabled:opacity-40">Import summary</button>
             </div>
             <p className="text-[11px] text-ink3">{healthAdapter?'Adapter detected — ready to import.':'No health adapter detected — this remains optional.'}</p>
             {store.healthSummary && <p className="text-[11px]">Latest: {Object.entries(store.healthSummary).filter(([k])=> !['version','source','asOf','importedAt'].includes(k)).map(([k,v])=> `${k} ${v}`).join(' · ')} <span className="text-ink3">({store.healthSummary.source})</span></p>}
-            {healthMsg && <p role="status" className="text-xs border border-line rounded-xl px-3 py-2">{healthMsg}</p>}
+            {healthMsg && <p role="status" className="text-xs border border-line rounded-lg px-3 py-2">{healthMsg}</p>}
           </div>
-          <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <details className="rounded-lg bg-surface2 px-3 py-2">
             <summary className="text-sm font-semibold cursor-pointer">Privacy, ownership & disclaimers</summary>
             <div className="text-xs text-ink3 mt-2 space-y-2">
               <p><span className="font-semibold text-ink">Data ownership.</span> Everything Arise stores is yours: it lives on your device, exports are plain files, and deleting the data removes it from this device. There is no server copy and no account — but files you already shared (backups, study exports) are copies outside the app that deleting here cannot reach.</p>
@@ -817,15 +817,15 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
       </div>
 
       {/* ── ABOUT / ADVANCED: guidance, research, diagnostics, expert settings ── */}
-      <div id={SETTINGS_GROUPS[5].id} className="pt-2 space-y-4" aria-label="About / advanced">
+      <div id={SETTINGS_GROUPS[5].id} className="pt-2 space-y-3" aria-label="About / advanced">
         <div className="flex items-center gap-2">
           <h3 className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink3">{SETTINGS_GROUPS[5].title}</h3>
           <span className="flex-1 h-px bg-line" />
         </div>
 
-        <section id="sec-help" className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+        <section id="sec-help" className="rounded-xl border border-line bg-surface p-3 space-y-2">
           <h4 className="text-sm font-bold">Help, about & legal</h4>
-          <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <details className="rounded-lg bg-surface2 px-3 py-2">
             <summary className="text-sm font-semibold cursor-pointer">Accessibility statement</summary>
             <div className="text-xs text-ink2 mt-2 space-y-2">
               <p>Arise aims to conform to <strong>WCAG 2.1 AA</strong>. What that means in the app today:</p>
@@ -839,7 +839,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
               <p>Known gaps: VoiceOver/TalkBack behaviour is verified by manual testing only (the checklist below), not automated; some third-party illustration labels are decorative. Report anything you hit via the feedback link — fixes land fast.</p>
             </div>
           </details>
-          <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <details className="rounded-lg bg-surface2 px-3 py-2">
             <summary className="text-sm font-semibold cursor-pointer">Test on a real phone (30-second checklist)</summary>
             <ol className="list-decimal pl-5 text-xs text-ink2 mt-2 space-y-1">
               <li>Open this app on your phone (same Wi-Fi → use the dev URL, or deploy preview).</li>
@@ -851,11 +851,11 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
               <li>VoiceOver/TalkBack: headers, session rows, and form fields read with labels and live regions.</li>
             </ol>
           </details>
-          <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <details className="rounded-lg bg-surface2 px-3 py-2">
             <summary className="text-sm font-semibold cursor-pointer">What this app is (and isn’t)</summary>
             <p className="text-xs text-ink3 mt-2">A training log and coach: scheduled programs, honest load tracking, and progress derived from what you actually log — with the reasoning shown. <span className="font-semibold text-ink">No nutrition system</span> — that would recreate Forq and dilute the training proposition.</p>
           </details>
-          <details className="rounded-xl border border-line bg-surface2 px-3 py-2">
+          <details className="rounded-lg bg-surface2 px-3 py-2">
             <summary className="text-sm font-semibold cursor-pointer">Legal & disclaimers</summary>
             <div className="text-xs text-ink2 mt-2 space-y-2">
               <p><span className="font-semibold text-ink">Not medical advice.</span> Arise is not a medical device and does not diagnose, treat, or predict anything about your health. Suggestions are arithmetic over your own logs. Consult a qualified health professional before starting or changing an exercise program.</p>
@@ -870,28 +870,28 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
           <EvidenceSettings store={store} setStore={setStore} />
         </Suspense>
 
-        <details id="sec-advanced" className="rounded-2xl border border-line bg-surface">
+        <details id="sec-advanced" className="rounded-xl border border-line bg-surface">
           <summary className="cursor-pointer px-4 py-3 text-sm font-bold">Advanced — diagnostics & expert settings</summary>
-          <div className="px-4 pb-4 space-y-4">
+          <div className="px-4 pb-4 space-y-3">
             <p className="text-xs text-ink3">Diagnostics and expert tools live here so everyday training stays simple. Nothing is hidden from you — open a card to see exactly what it does.</p>
-            <div className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+            <div className="rounded-xl border border-line bg-surface p-3 space-y-2">
               <h4 className="text-sm font-bold">Diagnostics</h4>
               <p className="text-xs text-ink3">Inspect what is recorded on this device and share a support bundle when reporting a problem. Both stay local until you send them yourself.</p>
               <div className="flex flex-wrap gap-2">
-                <button onClick={()=> { setShowTelemetry(v=>!v); }} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">{showTelemetry?'Hide':'Show'} local telemetry</button>
-                <button onClick={()=> { clearTelemetry(); clearErrorEvents(); setStore(clearEventHistoryStore(store), { collectionMode:'replace' }); flashMsg('Local telemetry and crash logs cleared.', 2000); }} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Clear telemetry</button>
-                <button onClick={()=> { setShowErrors(v=>!v); }} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">{showErrors?'Hide':'Show'} crash logs</button>
-                <button onClick={()=> { clearErrorEvents(); flashMsg('Crash logs cleared.', 2000); }} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Clear crash logs</button>
-                <button onClick={exportSupportBundle} className="btn btn-secondary min-h-9 rounded-xl px-3 text-xs">Support diagnostics</button>
+                <button onClick={()=> { setShowTelemetry(v=>!v); }} className="btn btn-secondary min-h-9 rounded-lg px-3 text-xs">{showTelemetry?'Hide':'Show'} local telemetry</button>
+                <button onClick={()=> { clearTelemetry(); clearErrorEvents(); setStore(clearEventHistoryStore(store), { collectionMode:'replace' }); flashMsg('Local telemetry and crash logs cleared.', 2000); }} className="btn btn-secondary min-h-9 rounded-lg px-3 text-xs">Clear telemetry</button>
+                <button onClick={()=> { setShowErrors(v=>!v); }} className="btn btn-secondary min-h-9 rounded-lg px-3 text-xs">{showErrors?'Hide':'Show'} crash logs</button>
+                <button onClick={()=> { clearErrorEvents(); flashMsg('Crash logs cleared.', 2000); }} className="btn btn-secondary min-h-9 rounded-lg px-3 text-xs">Clear crash logs</button>
+                <button onClick={exportSupportBundle} className="btn btn-secondary min-h-9 rounded-lg px-3 text-xs">Support diagnostics</button>
               </div>
               {showTelemetry && (
-                <pre className="text-[11px] overflow-auto rounded-xl bg-surface2 border border-line p-3">{JSON.stringify(telemetrySummary(), null, 2)}</pre>
+                <pre className="text-[11px] overflow-auto rounded-lg bg-surface2 border border-line p-3">{JSON.stringify(telemetrySummary(), null, 2)}</pre>
               )}
               {showErrors && (
-                <pre className="text-[11px] overflow-auto rounded-xl bg-surface2 border border-line p-3">{getErrorEvents().length ? JSON.stringify(getErrorEvents(), null, 2) : 'No crash logs recorded.'}</pre>
+                <pre className="text-[11px] overflow-auto rounded-lg bg-surface2 border border-line p-3">{getErrorEvents().length ? JSON.stringify(getErrorEvents(), null, 2) : 'No crash logs recorded.'}</pre>
               )}
             </div>
-            <div className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+            <div className="rounded-xl border border-line bg-surface p-3 space-y-2">
               <h4 className="text-sm font-bold">Expert settings</h4>
               <p className="text-xs text-ink3">The one destructive operation on this device, kept well away from everyday buttons. Ordinary backup, export and sync stay in Data above.</p>
               <div className="mt-2">

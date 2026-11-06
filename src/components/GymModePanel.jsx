@@ -127,16 +127,16 @@ export function LoadNumpad({ value, onChange, onClose, equipment = 'barbell', pl
   };
 
   return (
-    <div className="rounded-2xl border border-line bg-surface2 p-3 space-y-2" role="group" aria-label={`Load keypad${exerciseName ? ` for ${exerciseName}` : ''}`}>
+    <div className="rounded-xl bg-surface2 p-3 space-y-2" role="group" aria-label={`Load keypad${exerciseName ? ` for ${exerciseName}` : ''}`}>
       <div className="flex items-center gap-2">
-        <span className="text-[11px] font-bold uppercase tracking-widest text-ink3">Load {unit}</span>
+        <span className="text-[11px] font-bold uppercase tracking-wider text-ink3">Load {unit}</span>
         <span className="ml-auto text-2xl font-black tabular-nums">{displayValue || '—'}</span>
         <button onClick={onClose} className="min-h-11 px-3 rounded-full border border-line bg-surface text-xs font-bold">Done</button>
       </div>
       <div className="grid grid-cols-4 gap-1.5">
         {inc.map(j=> (
           <button key={j.id} onClick={()=> emitCanonical(applyQuickJump(value, j, { equipment, config: plateConfig }))}
-            className="min-h-11 rounded-xl border border-line bg-surface text-sm font-black tabular-nums active:bg-surface2">
+            className="min-h-11 rounded-lg border border-line bg-surface text-sm font-black tabular-nums active:bg-surface2">
             {formatDelta(j.delta)}
           </button>
         ))}
@@ -150,9 +150,9 @@ export function LoadNumpad({ value, onChange, onClose, equipment = 'barbell', pl
         <NumpadKey label="⌫" onPress={press} ariaLabel="Delete last digit" />
       </div>
       <div className="grid grid-cols-3 gap-1.5">
-        <button onClick={()=> step(-1)} className="min-h-12 rounded-xl border border-line bg-surface text-sm font-black active:bg-surface2">− step</button>
-        <button onClick={()=> press('clear')} className="min-h-12 rounded-xl border border-line bg-surface text-sm font-black active:bg-surface2">Clear</button>
-        <button onClick={()=> step(1)} className="min-h-12 rounded-xl border border-line bg-surface text-sm font-black active:bg-surface2">+ step</button>
+        <button onClick={()=> step(-1)} className="min-h-12 rounded-lg border border-line bg-surface text-sm font-black active:bg-surface2">− step</button>
+        <button onClick={()=> press('clear')} className="min-h-12 rounded-lg border border-line bg-surface text-sm font-black active:bg-surface2">Clear</button>
+        <button onClick={()=> step(1)} className="min-h-12 rounded-lg border border-line bg-surface text-sm font-black active:bg-surface2">+ step</button>
       </div>
     </div>
   );
@@ -161,7 +161,7 @@ export function LoadNumpad({ value, onChange, onClose, equipment = 'barbell', pl
 function NumpadKey({ label, onPress, ariaLabel }){
   return (
     <button onClick={()=> onPress(label)} aria-label={ariaLabel || label}
-      className="min-h-12 rounded-xl border border-line bg-surface text-xl font-black tabular-nums active:bg-surface2">
+      className="min-h-12 rounded-lg border border-line bg-surface text-xl font-black tabular-nums active:bg-surface2">
       {label}
     </button>
   );

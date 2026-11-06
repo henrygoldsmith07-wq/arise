@@ -19,7 +19,7 @@ export default function JargonHelp({ term }){
   return (
     <span ref={ref} className="relative inline-block">
       <button type="button" aria-expanded={open} aria-controls={id} aria-label={`What is ${entry.title}?`} onClick={()=> setOpen(o=>!o)} className="min-h-11 min-w-11 inline-grid place-items-center text-xs font-black text-ink3">?</button>
-      {open && <span id={id} role="note" className="absolute z-20 left-0 top-full w-64 rounded-xl border border-line bg-surface p-3 text-xs text-ink shadow-lg"><b>{entry.title}</b><br/>{entry.body}</span>}
+      {open && <span id={id} role="note" className="absolute z-20 left-0 top-full w-64 rounded-lg border border-line bg-surface p-3 text-xs text-ink shadow-lg"><b>{entry.title}</b><br/>{entry.body}</span>}
     </span>
   );
 }

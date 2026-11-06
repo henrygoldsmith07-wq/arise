@@ -182,7 +182,7 @@ export default function SyncPanel({ store, setStore, setMsg }){
         never included in exports or backups.
       </p>
 
-      <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 space-y-2">
+      <div className="rounded-lg bg-surface2 px-3 py-2.5 space-y-2">
         <p className="text-[11px] text-ink3">Four settings, one minute: paste your storage address, sign in with an app password, optionally set the encryption passphrase — then Test connection and Save &amp; sync.</p>
         <label className="block">
           <span className="text-[11px] font-bold">1 · Your storage address (WebDAV, https)</span>
@@ -237,7 +237,7 @@ export default function SyncPanel({ store, setStore, setMsg }){
       </div>
 
       {sync && (
-        <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5 text-xs space-y-1">
+        <div className="rounded-lg bg-surface2 px-3 py-2.5 text-xs space-y-1">
           <p className="font-bold">Status</p>
           <p className="text-ink3">
             {sync.lastPushAt ? `Last push ${new Date(sync.lastPushAt).toLocaleString()}` : 'Never pushed'}

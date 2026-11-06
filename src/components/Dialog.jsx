@@ -70,7 +70,7 @@ function DialogShell({ role = 'dialog', title, description, titleId, description
       aria-labelledby={titleId}
       aria-describedby={descriptionId}
     >
-      <div className="w-full max-w-sm rounded-3xl bg-surface border border-line p-4 space-y-3">
+      <div className="w-full max-w-sm rounded-2xl bg-surface border border-line p-3 space-y-3">
         <p id={titleId} className="text-base font-bold">{title}</p>
         {description ? <p id={descriptionId} className="text-xs text-ink3">{description}</p> : null}
         {children}
@@ -121,8 +121,8 @@ export function ConfirmDialog({
       restoreFocus={restoreFocus}
     >
       <div className="flex gap-2">
-        <button ref={cancelRef} onClick={onCancel} className="btn btn-primary flex-1 min-h-11 rounded-xl">{cancelLabel}</button>
-        <button onClick={onConfirm} className={`btn btn-secondary flex-1 min-h-11 rounded-xl ${destructive ? 'text-danger' : ''}`}>{confirmLabel}</button>
+        <button ref={cancelRef} onClick={onCancel} className="btn btn-primary flex-1 min-h-11 rounded-lg">{cancelLabel}</button>
+        <button onClick={onConfirm} className={`btn btn-secondary flex-1 min-h-11 rounded-lg ${destructive ? 'text-danger' : ''}`}>{confirmLabel}</button>
       </div>
     </DialogShell>
   );
@@ -191,8 +191,8 @@ export function PromptDialog({
       </label>
       {error && <p id={`${ids.descriptionId}-error`} role="alert" className="text-xs text-danger">{error}</p>}
       <div className="flex gap-2">
-        <button onClick={onCancel} className="btn btn-secondary flex-1 min-h-11 rounded-xl">{cancelLabel}</button>
-        <button onClick={submit} className={`btn btn-primary flex-1 min-h-11 rounded-xl ${destructive ? 'text-danger' : ''}`}>{confirmLabel}</button>
+        <button onClick={onCancel} className="btn btn-secondary flex-1 min-h-11 rounded-lg">{cancelLabel}</button>
+        <button onClick={submit} className={`btn btn-primary flex-1 min-h-11 rounded-lg ${destructive ? 'text-danger' : ''}`}>{confirmLabel}</button>
       </div>
     </DialogShell>
   );

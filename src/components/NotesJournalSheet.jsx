@@ -52,7 +52,7 @@ export default function NotesJournalSheet({
         aria-label="Training notes"
         data-testid="notes-journal"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md max-h-[88vh] overflow-y-auto rounded-t-2xl border border-line bg-surface p-4 space-y-3"
+        className="w-full max-w-md max-h-[88vh] overflow-y-auto rounded-t-xl border border-line bg-surface p-4 space-y-3"
       >
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-bold text-ink">Training notes</h2>
@@ -71,7 +71,7 @@ export default function NotesJournalSheet({
           placeholder="Search e.g. shoulder, seat 4"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="w-full min-h-11 rounded-xl border border-line bg-surface2 px-3 text-sm"
+          className="w-full min-h-11 rounded-lg border border-line bg-surface2 px-3 text-sm"
         />
         <div
           role="group"
@@ -117,7 +117,7 @@ export default function NotesJournalSheet({
             <li
               key={e.id}
               data-testid="note-row"
-              className="rounded-xl border border-line p-3"
+              className="rounded-lg border border-line p-3"
             >
               <div className="flex justify-between gap-2 text-[11px] text-ink3">
                 <span className="font-bold text-ink2">{e.title}</span>
@@ -138,7 +138,7 @@ export default function NotesJournalSheet({
           <button
             type="button"
             onClick={() => setLimit(limit + PAGE)}
-            className="w-full min-h-11 rounded-xl border border-line text-xs font-bold"
+            className="w-full min-h-11 rounded-lg border border-line text-xs font-bold"
           >
             Show more ({rows.length - limit} left)
           </button>

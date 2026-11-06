@@ -128,7 +128,7 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
     body = (
       <section aria-label="Swap exercise" className="space-y-3">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Swap in {day?.title}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">Swap in {day?.title}</p>
           <h4 className="text-base font-black">Replace {block?.name}</h4>
           <p className="text-[11px] text-ink3">Closest matches that fit your kit. Avoided lifts are hidden; history stays with each lift.</p>
         </div>
@@ -139,7 +139,7 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
               <button
                 type="button"
                 onClick={()=> { if(run(swapExercise(schedule, view.key, view.index, opt.id))) back(); }}
-                className="w-full min-h-11 text-left rounded-xl border border-line bg-surface2 px-3 py-2"
+                className="w-full min-h-11 text-left rounded-lg border border-line bg-surface2 px-3 py-2"
                 aria-label={`Swap to ${opt.name}`}
               >
                 <span className="flex items-center gap-2">
@@ -152,7 +152,7 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
             </li>
           ))}
         </ul>
-        <button type="button" onClick={back} className="btn btn-secondary w-full min-h-11 rounded-xl">Back to programme</button>
+        <button type="button" onClick={back} className="btn btn-secondary w-full min-h-11 rounded-lg">Back to programme</button>
       </section>
     );
   } else if(view.kind === 'add'){
@@ -161,28 +161,28 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
     body = (
       <section aria-label="Add exercise" className="space-y-3">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">Add to {day?.title}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">Add to {day?.title}</p>
           <h4 className="text-base font-black">Add an exercise</h4>
 
         </div>
         <label htmlFor="programme-add-search" className="sr-only">Search exercises</label>
         <input id="programme-add-search" type="search" value={query} onChange={(e)=> setQuery(e.target.value)}
           placeholder="Search exercises" autoComplete="off"
-          className="min-h-11 w-full rounded-xl border border-line bg-surface px-3 text-sm" />
+          className="min-h-11 w-full rounded-lg border border-line bg-surface px-3 text-sm" />
         <ul className="space-y-2" aria-live="polite">
           {results.length === 0 && <li className="text-sm text-ink3">No match. Try another word or muscle.</li>}
           {results.map(opt=> (
             <li key={opt.id}>
               <button type="button" aria-label={`Add ${opt.name}`}
                 onClick={()=> { if(run(addExercise(schedule, view.key, opt.id))) back(); }}
-                className="w-full min-h-11 text-left rounded-xl border border-line bg-surface2 px-3 py-2">
+                className="w-full min-h-11 text-left rounded-lg border border-line bg-surface2 px-3 py-2">
                 <span className="flex items-center gap-2"><span className="font-bold text-sm">{opt.name}</span>{opt.liked && <span className={`${PILL} border-line text-ink3`}>Liked</span>}</span>
                 <span className="block text-[11px] text-ink3">{opt.muscle} · {opt.equipment.join(', ')}</span>
               </button>
             </li>
           ))}
         </ul>
-        <button type="button" onClick={back} className="btn btn-secondary w-full min-h-11 rounded-xl">Back to programme</button>
+        <button type="button" onClick={back} className="btn btn-secondary w-full min-h-11 rounded-lg">Back to programme</button>
       </section>
     );
   } else {
@@ -191,13 +191,13 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
         <div className="flex flex-wrap gap-2" role="tablist" aria-label="Programme days">
           {days.map(day=> (
             <button key={day.key} type="button" role="tab" aria-selected={day.key === activeKey} onClick={()=> setOpenKey(day.key)}
-              className={`min-h-11 rounded-xl border px-3 text-xs font-bold ${day.key === activeKey ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink3'}`}>
+              className={`min-h-11 rounded-lg border px-3 text-xs font-bold ${day.key === activeKey ? 'bg-ink text-bg border-ink' : 'bg-surface border-line text-ink3'}`}>
               {day.title}{day.edited ? ' •' : ''}
             </button>
           ))}
         </div>
         {days.filter(d=> d.key === activeKey).map(day=> (
-          <section key={day.key} role="tabpanel" aria-label={day.title} data-testid={`programme-day-${day.key}`} className="rounded-2xl border border-line bg-surface2 p-3 space-y-2">
+          <section key={day.key} role="tabpanel" aria-label={day.title} data-testid={`programme-day-${day.key}`} className="rounded-xl bg-surface2 p-3 space-y-2">
             <div className="flex items-center gap-2">
               <div className="min-w-0">
                 <h4 className="text-base font-black truncate">{day.title}</h4>
@@ -214,7 +214,7 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
                 const nextFree = i < day.blocks.length - 1 && supersetPartner(day.blocks, i + 1) == null;
                 const rest = Number(block.restSec) || 0;
                 return (
-                  <li key={block.exerciseId} className={`rounded-xl border bg-surface p-2.5 space-y-2 ${partner != null ? 'border-ink border-l-4' : 'border-line'}`} data-testid="programme-exercise">
+                  <li key={block.exerciseId} className={`rounded-lg border bg-surface p-2.5 space-y-2 ${partner != null ? 'border-ink border-l-4' : 'border-line'}`} data-testid="programme-exercise">
                     <div className="flex items-start gap-2">
                       <div className="min-w-0 flex-1">
                         <p className="font-bold text-sm">{block.name}</p>
@@ -247,9 +247,9 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {partner != null
-                        ? <button type="button" onClick={()=> run(unpairExercise(schedule, day.key, i))} aria-label={`Unpair ${block.name}`} className="btn btn-secondary min-h-11 rounded-xl px-3 text-xs">Unpair</button>
-                        : nextFree && <button type="button" onClick={()=> run(pairWithNext(schedule, day.key, i))} aria-label={`Pair ${block.name} with next`} className="btn btn-secondary min-h-11 rounded-xl px-3 text-xs">Pair with next</button>}
-                      <button type="button" onClick={()=> setView({ kind: 'swap', key: day.key, index: i })} aria-label={`Swap ${block.name}`} className="btn btn-secondary min-h-11 rounded-xl px-3 text-xs">Swap</button>
+                        ? <button type="button" onClick={()=> run(unpairExercise(schedule, day.key, i))} aria-label={`Unpair ${block.name}`} className="btn btn-secondary min-h-11 rounded-lg px-3 text-xs">Unpair</button>
+                        : nextFree && <button type="button" onClick={()=> run(pairWithNext(schedule, day.key, i))} aria-label={`Pair ${block.name} with next`} className="btn btn-secondary min-h-11 rounded-lg px-3 text-xs">Pair with next</button>}
+                      <button type="button" onClick={()=> setView({ kind: 'swap', key: day.key, index: i })} aria-label={`Swap ${block.name}`} className="btn btn-secondary min-h-11 rounded-lg px-3 text-xs">Swap</button>
                       <button type="button" onClick={()=> run(moveExercise(schedule, day.key, i, -1))} disabled={i === 0} aria-label={`Move ${block.name} up`} className={ICON}>↑</button>
                       <button type="button" onClick={()=> run(moveExercise(schedule, day.key, i, 1))} disabled={i === day.blocks.length - 1} aria-label={`Move ${block.name} down`} className={ICON}>↓</button>
                       <button type="button" onClick={()=> run(removeExercise(schedule, day.key, i))} disabled={day.blocks.length <= 1} aria-label={`Remove ${block.name}`} className={`${ICON} text-danger`}>✕</button>
@@ -259,20 +259,20 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
               })}
             </ol>
             <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={()=> setView({ kind: 'add', key: day.key })} className="btn btn-primary min-h-11 rounded-xl text-xs">+ Add exercise</button>
-              <button type="button" onClick={()=> rename(day)} className="btn btn-secondary min-h-11 rounded-xl text-xs">Rename day</button>
+              <button type="button" onClick={()=> setView({ kind: 'add', key: day.key })} className="btn btn-primary min-h-11 rounded-lg text-xs">+ Add exercise</button>
+              <button type="button" onClick={()=> rename(day)} className="btn btn-secondary min-h-11 rounded-lg text-xs">Rename day</button>
             </div>
-            {day.edited && <button type="button" onClick={()=> confirmResetDay(day)} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs">Reset this day</button>}
+            {day.edited && <button type="button" onClick={()=> confirmResetDay(day)} className="btn btn-secondary w-full min-h-11 rounded-lg text-xs">Reset this day</button>}
           </section>
         ))}
         {days.length > 0 && (
           <div className="grid grid-cols-1 gap-2">
-            <button type="button" onClick={saveAsTemplate} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs">Save as my template</button>
-            {saved && <button type="button" onClick={copyShareCode} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs">Copy share code</button>}
+            <button type="button" onClick={saveAsTemplate} className="btn btn-secondary w-full min-h-11 rounded-lg text-xs">Save as my template</button>
+            {saved && <button type="button" onClick={copyShareCode} className="btn btn-secondary w-full min-h-11 rounded-lg text-xs">Copy share code</button>}
           </div>
         )}
         {summary.days > 0 && (
-          <button type="button" onClick={confirmResetAll} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs text-danger">Reset all to template</button>
+          <button type="button" onClick={confirmResetAll} className="btn btn-secondary w-full min-h-11 rounded-lg text-xs text-danger">Reset all to template</button>
         )}
       </>
     );
@@ -281,7 +281,7 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
   return (
     <div ref={a11y.rootRef} onKeyDown={a11y.trapTab} className="fixed inset-0 z-40 bg-black/40 p-3 sm:p-4 overflow-auto" role="dialog" aria-modal="true" aria-label="My programme">
       {dialogs.node}
-      <div className="max-w-xl mx-auto my-4 rounded-3xl bg-surface border border-line p-4 space-y-3">
+      <div className="max-w-xl mx-auto my-4 rounded-2xl bg-surface border border-line p-3 space-y-3">
         <div className="flex items-center gap-2">
           <div className="min-w-0">
             <h3 className="text-lg font-black tracking-tight">My programme</h3>
@@ -292,7 +292,7 @@ export default function ProgrammeEditor({ store, setStore, availableEquipment = 
           <button ref={a11y.closeRef} type="button" onClick={view.kind === 'days' ? onClose : back} aria-label={view.kind === 'days' ? 'Close programme editor' : 'Back to programme'} className="ml-auto min-h-11 min-w-11 grid place-items-center rounded-full border border-line">✕</button>
         </div>
         {summary.canUndo && view.kind === 'days' && (
-          <button type="button" onClick={()=> run(undoLastEdit(schedule), 'Undone.')} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs" aria-label={`Undo ${summary.undoLabel}`}>
+          <button type="button" onClick={()=> run(undoLastEdit(schedule), 'Undone.')} className="btn btn-secondary w-full min-h-11 rounded-lg text-xs" aria-label={`Undo ${summary.undoLabel}`}>
             ↶ Undo: {summary.undoLabel}
           </button>
         )}

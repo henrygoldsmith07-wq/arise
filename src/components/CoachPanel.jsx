@@ -74,21 +74,21 @@ export default function CoachPanel({ store, programmeWhy = null }){
 
   if(!open){
     return (
-      <section className="rounded-2xl border border-line bg-surface p-4 flex flex-wrap items-center gap-2" aria-label="Ask the coach" data-testid="coach-panel-trigger">
+      <section className="rounded-xl border border-line bg-surface p-3 flex flex-wrap items-center gap-2" aria-label="Ask the coach" data-testid="coach-panel-trigger">
         <span aria-hidden className="text-base">💬</span>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">On-device coach</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">On-device coach</p>
           <p className="text-xs text-ink2">Ask about your week, a stalled lift, progression or improving — answered entirely on this device.</p>
         </div>
-        <button onClick={()=> setOpen(true)} className="btn btn-primary min-h-10 rounded-xl px-3 text-xs">Ask the coach</button>
+        <button onClick={()=> setOpen(true)} className="btn btn-primary min-h-10 rounded-lg px-3 text-xs">Ask the coach</button>
       </section>
     );
   }
 
   return (
-    <section className="rounded-2xl border border-line bg-surface p-4 space-y-2" aria-label="Ask the coach" data-testid="coach-panel">
+    <section className="rounded-xl border border-line bg-surface p-3 space-y-2" aria-label="Ask the coach" data-testid="coach-panel">
       <div className="flex items-baseline gap-2">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-ink3">On-device coach</p>
+        <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">On-device coach</p>
         <button onClick={()=> setOpen(false)} className="ml-auto text-[11px] font-bold text-ink3 underline underline-offset-2">Collapse</button>
       </div>
       <p className="text-[11px] text-ink3">
@@ -96,7 +96,7 @@ export default function CoachPanel({ store, programmeWhy = null }){
       </p>
 
       {turns.map(turn=> (
-        <div key={turn.id} className="rounded-xl border border-line bg-surface2 px-3 py-2 space-y-1">
+        <div key={turn.id} className="rounded-lg bg-surface2 px-3 py-2 space-y-1">
           <p className="text-xs text-ink3"><span className="font-bold">You:</span> {turn.question}</p>
           <div aria-live="polite" className="text-xs text-ink whitespace-pre-wrap leading-snug">
             <span className="font-bold">Coach:</span> {turn.text}
@@ -130,7 +130,7 @@ export default function CoachPanel({ store, programmeWhy = null }){
           maxLength={500}
           aria-label="Ask the coach a question"
           className="flex-1 min-h-10 rounded-lg border border-line bg-surface px-3 text-sm" />
-        <button onClick={()=> ask()} disabled={busy || !question.trim()} className="btn btn-primary min-h-10 rounded-xl px-3 text-xs disabled:opacity-40">{busy ? 'Thinking…' : 'Ask'}</button>
+        <button onClick={()=> ask()} disabled={busy || !question.trim()} className="btn btn-primary min-h-10 rounded-lg px-3 text-xs disabled:opacity-40">{busy ? 'Thinking…' : 'Ask'}</button>
       </div>
     </section>
   );

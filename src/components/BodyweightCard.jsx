@@ -62,7 +62,7 @@ export default function BodyweightCard({ store, setStore }) {
 
   return (
     <section
-      className="rounded-2xl border border-line bg-surface p-4 space-y-3"
+      className="rounded-xl border border-line bg-surface p-3 space-y-3"
       aria-label="Body weight"
       data-testid="bodyweight-card"
     >
@@ -87,14 +87,14 @@ export default function BodyweightCard({ store, setStore }) {
             inputMode="decimal"
             data-testid="bodyweight-input"
             placeholder={unit === "lb" ? "150" : "68"}
-            className="mt-1 min-h-11 w-full rounded-xl border border-line bg-surface2 px-3 text-base font-bold tabular-nums"
+            className="mt-1 min-h-11 w-full rounded-lg border border-line bg-surface2 px-3 text-base font-bold tabular-nums"
           />
         </label>
         <button
           type="button"
           onClick={save}
           data-testid="bodyweight-save"
-          className="btn btn-primary min-h-11 rounded-xl px-4"
+          className="btn btn-primary min-h-11 rounded-lg px-4"
         >
           {todayRow ? "Update" : "Log"}
         </button>
@@ -183,7 +183,7 @@ export default function BodyweightCard({ store, setStore }) {
               return (
                 <li
                   key={r.exerciseId}
-                  className="rounded-xl bg-surface2 px-3 py-2"
+                  className="rounded-lg bg-surface2 px-3 py-2"
                   data-testid="relative-strength-row"
                 >
                   <div className="flex items-baseline justify-between gap-2">

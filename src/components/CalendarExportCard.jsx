@@ -36,7 +36,7 @@ export default function CalendarExportCard({ store, setStore }) {
   }
 
   return (
-    <section className="rounded-2xl border border-line bg-surface2 p-3 space-y-2" aria-label="Add to calendar" data-testid="calendar-export">
+    <section className="rounded-xl bg-surface2 p-3 space-y-2" aria-label="Add to calendar" data-testid="calendar-export">
       <p className="text-xs font-bold">Add to calendar</p>
       <p className="text-[11px] text-ink3">Your next {count} planned sessions as a calendar file. Moved a session? Export again and your calendar updates the same events.</p>
       <div className="flex flex-wrap gap-2">
@@ -51,7 +51,7 @@ export default function CalendarExportCard({ store, setStore }) {
           </select>
         </label>
       </div>
-      <button type="button" onClick={exportIcs} className="btn btn-secondary w-full min-h-11 rounded-xl text-xs" data-testid="calendar-export-btn">Add to calendar (.ics)</button>
+      <button type="button" onClick={exportIcs} className="btn btn-secondary w-full min-h-11 rounded-lg text-xs" data-testid="calendar-export-btn">Add to calendar (.ics)</button>
       {msg && <p role="status" className="text-[11px] text-ink2" data-testid="calendar-msg">{msg}</p>}
     </section>
   );

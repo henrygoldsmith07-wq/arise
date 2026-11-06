@@ -50,7 +50,7 @@ export function RestDock({ endsAt, clock, label, onChange, exerciseId, exerciseN
     return (
       <button onClick={()=> setMini(false)} aria-label={`Rest timer mini: ${fmtRest(left)} remaining. Expand`}
         className="w-full max-w-3xl mx-auto rounded-full bg-ink text-bg px-4 py-2 flex items-center gap-2">
-        <span className="text-[10px] font-bold uppercase tracking-widest opacity-70">Rest</span>
+        <span className="text-[10px] font-bold uppercase tracking-wider opacity-70">Rest</span>
         <span className="text-lg font-black tabular-nums leading-none" aria-live="off">{fmtRest(left)}</span>
         <span className="text-[11px] truncate opacity-80">{label}</span>
         <span className="ml-auto text-[10px] font-bold opacity-70">expand ▲</span>
@@ -59,10 +59,10 @@ export function RestDock({ endsAt, clock, label, onChange, exerciseId, exerciseN
   }
 
   return (
-    <div className="rounded-2xl bg-ink text-bg px-4 py-3 space-y-2">
+    <div className="rounded-xl bg-ink text-bg px-4 py-3 space-y-2">
       <div className="flex items-center gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-widest opacity-70 leading-none">Rest</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider opacity-70 leading-none">Rest</p>
           <p className="text-xs font-bold truncate opacity-80">{label}</p>
         </div>
         <span className="ml-auto text-4xl font-black tabular-nums leading-none" aria-live="off">{fmtRest(left)}</span>
