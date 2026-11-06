@@ -12,6 +12,14 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Hevy parity, autumn 2026: routine notes, gym tag, yearly records, effort colours
+- **Programme-day notes** (Hevy's routine notes): a note on a day of your programme ("use the far cable stack") follows that day every week. Edit it on Today's session card; it shows at the top of the workout. Stored in `gymPrefs.dayNotes`, merged per day in sync and backup import.
+- **Gym tag**: the finish screen asks where you trained (defaults to the last gym, suggests the ones you have used). Saved on the session as `gym`, shown in Progress history and searchable in Training notes.
+- **Yearly records**: the records wall gets All time / per-year chips once your history spans more than one year; each year is that year's own bests.
+- **Effort colours**: the RIR box tints by effort — 0 (failure) red, 1–2 amber, 3–4 green, 5+ and blank neutral.
+- Progress: the "What improved" list is gone; the same lifts and numbers are the Strength trend lines under "Am I improving?".
+- Bundle total cap 408 → 410 kB (measured 408.5); boot unchanged at 57.4 / 120 kB.
+
 ### Competitor parity: custom exercises, set types, recovery map, measurements
 - **Custom exercises** (Hevy/Strong): Exercises → Your exercises adds your own lift (name, main muscle, kit). It joins the catalogue at runtime, so pickers, progression, records and volume treat it like a built-in. Stored in `gymPrefs.customExercises`, merged per lift (newest wins, tombstones on delete) in sync and backup import; a removed lift keeps its name for old history.
 - **Set types** (Hevy): tap the set number to cycle warm-up / drop / failure. Warm-ups are saved as `block.warmupSets`, outside the work sets; failure sets with no RPE save as RPE 10; Hevy export writes `warmup` / `dropset` / `failure`.

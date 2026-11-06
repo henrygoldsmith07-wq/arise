@@ -146,6 +146,14 @@ Progress → **Body weight** is optional. Log a weigh-in (or type it in the Toda
 
 In a workout, tap a set's number to cycle **Normal → W (warm-up) → D (drop set) → F (to failure)**. Warm-ups are saved but never count as work: not in volume, PRs, fatigue or the next prescription. A drop set counts as a work set. A failure set with no effort logged is saved as RPE 10. **Export for Hevy** keeps the types.
 
+## Notes on a programme day
+
+On **Today**, tap **Add a note for this day** under the session name to leave a note on that day of your programme, such as "use the far cable stack". It comes back every week that day is scheduled and shows at the top of the workout. Save it empty to remove it.
+
+## Gym tag and effort colours
+
+When you finish a workout you can say which gym you trained at; it fills in the last one and suggests the others you have used. Machine stacks differ between gyms, so the tag shows in Progress history and you can search it in Training notes. While logging, the reps-in-reserve box tints by effort: red at 0 (to failure), amber at 1–2, green at 3–4.
+
 ## Your own exercises
 
 **Exercises → Your exercises** adds a lift the library does not have: a name, its main muscle and the kit it needs. It then shows in the library, Quick workout and My Programme, and progression, records and volume treat it like any other lift. Names must be new (a built-in with the same name is offered instead). **Remove** takes it out of the pickers but keeps every set you logged with it. Stays on your device; backup and sync carry it.
@@ -156,7 +164,7 @@ When you trained in the last 72 hours, **Today** shows a **Muscle recovery** car
 
 ## Records wall
 
-**Progress → Records** shows your three most recent lifts and opens the **records wall**: for every lift you have logged with a load, the heaviest weight you have lifted for 1, 3, 5, 8 and 12+ reps (a heavier set for more reps also fills the lighter columns), plus your best estimated max and your PR count. Search by name or filter by muscle. A PR has to beat an earlier like-for-like set by about 1 kg for that rep count, so the first time you log a lift is a baseline, and ties are not PRs. Assisted sets, skipped or failed sets, deleted sessions and sessions you noted as a ROM, paused, tempo, partial, band or technique change are left out. Today shows a **New PR** card for three days after the session; tap Nice to dismiss it. The wall is worked out from your history each time, so correcting a set in Edit workouts corrects your records.
+**Progress → Records** shows your three most recent lifts and opens the **records wall**: for every lift you have logged with a load, the heaviest weight you have lifted for 1, 3, 5, 8 and 12+ reps (a heavier set for more reps also fills the lighter columns), plus your best estimated max and your PR count. Search by name or filter by muscle. A PR has to beat an earlier like-for-like set by about 1 kg for that rep count, so the first time you log a lift is a baseline, and ties are not PRs. Assisted sets, skipped or failed sets, deleted sessions and sessions you noted as a ROM, paused, tempo, partial, band or technique change are left out. Today shows a **New PR** card for three days after the session; tap Nice to dismiss it. Once your log spans more than one year, chips at the top switch between All time and each year's own bests. The wall is worked out from your history each time, so correcting a set in Edit workouts corrects your records.
 
 ## Weekly volume: what you actually did
 

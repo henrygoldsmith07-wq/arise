@@ -11,6 +11,14 @@ import { swipeRowHandlers, WeightInput } from '../GymModePanel.jsx';
 import StepperButton from '../StepperButton.jsx';
 import JargonHelp from '../JargonHelp.jsx';
 
+// Effort colour scale (Hevy-style RPE colours): 0 RIR = to failure, 1–2 hard,
+// 3–4 working, 5+ easy; blank stays neutral. Tint only — the number is the data.
+function rirTone(rir){
+  if(String(rir).trim() === '') return 'border-line bg-surface2';
+  const n = Number(rir);
+  return n <= 0 ? 'border-danger/60 bg-dangersoft' : n <= 2 ? 'border-review/60 bg-reviewsoft' : n <= 4 ? 'border-success/60 bg-successsoft' : 'border-line bg-surface2';
+}
+
 export default function SetRow({
   block,
   blockIndex,
@@ -72,7 +80,7 @@ export default function SetRow({
           children join the single 7-column desktop grid in DOM
           order — desktop layout is pixel-identical. */}
       <div className="col-span-3 row-start-2 grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-1 items-center sm:contents sm:col-auto sm:row-auto">
-      <input type="number" min="0" max="10" step="1" inputMode="numeric" value={rirFromRpe(s.rpe)} onChange={e=> updateSet(bi,si,{rpe:rpeFromRir(e.target.value)})} {...commitProps('rir-field-commit', b.exerciseId, si)} placeholder="—" aria-label={`Reps in reserve set ${si+1}`} className={`min-w-0 rounded-lg border border-line bg-surface2 px-1 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
+      <input type="number" min="0" max="10" step="1" inputMode="numeric" value={rirFromRpe(s.rpe)} onChange={e=> updateSet(bi,si,{rpe:rpeFromRir(e.target.value)})} {...commitProps('rir-field-commit', b.exerciseId, si)} placeholder="—" aria-label={`Reps in reserve set ${si+1}`} className={`min-w-0 rounded-lg border ${rirTone(rirFromRpe(s.rpe))} px-1 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
       {b.unilateral ? (
         <select value={s.side||'L'} onChange={e=> updateSet(bi,si,{side:e.target.value})} aria-label={`Side set ${si+1}`} className="min-w-0 rounded-lg border border-line bg-surface2 px-1 py-3 text-xs font-bold"><option value="L">L</option><option value="R">R</option></select>
       ) : <span />}

@@ -57,7 +57,7 @@ export default function RecordsWall({ store }) {
         Open the records wall ({rows.length} lift{rows.length > 1 ? "s" : ""})
       </button>
       {open && (
-        <Wall rows={rows} unit={unit} onClose={() => setOpen(false)} />
+        <Wall rows={rows} history={store.history || []} today={today} unit={unit} onClose={() => setOpen(false)} />
       )}
     </section>
   );
@@ -80,10 +80,21 @@ function Headline({ r, unit }) {
   );
 }
 
-function Wall({ rows, unit, onClose }) {
+function Wall({ rows: allTime, history, today, unit, onClose }) {
   const a11y = useDialogA11y({ active: true, onClose });
   const [query, setQuery] = useState("");
   const [muscle, setMuscle] = useState("");
+  // Annual records: the same wall worked out from one calendar year's
+  // sessions, so "best of 2026" sits beside the all-time bests.
+  const [year, setYear] = useState("");
+  const years = useMemo(
+    () => [...new Set(history.map((h) => String(h?.dateISO || "").slice(0, 4)).filter((y) => /^\d{4}$/.test(y)))].sort().reverse(),
+    [history],
+  );
+  const rows = useMemo(
+    () => (year ? recordsWall(history.filter((h) => String(h?.dateISO || "").startsWith(year)), { todayISO: today }) : allTime),
+    [year, history, today, allTime],
+  );
   const muscles = useMemo(
     () => [...new Set(rows.map((r) => r.muscle))].sort(),
     [rows],
@@ -126,6 +137,21 @@ function Wall({ rows, unit, onClose }) {
           aria-label="Search a lift"
           className="min-h-11 w-full rounded-lg border border-line bg-surface2 px-3 text-sm"
         />
+        {years.length > 1 && (
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Year" data-testid="records-years">
+            {["", ...years].map((y) => (
+              <button
+                key={y || "all"}
+                type="button"
+                aria-pressed={year === y}
+                onClick={() => setYear(y)}
+                className={`min-h-11 rounded-full border px-3 text-xs font-semibold ${year === y ? "border-ink bg-ink text-bg" : "border-line bg-surface2"}`}
+              >
+                {y || "All time"}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Muscle">
           {["", ...muscles].map((m) => (
             <button

@@ -1,4 +1,5 @@
 import WeeklyReviewCard from './WeeklyReviewCard.jsx';
+import { dayNoteKey, getDayNote, setDayNote } from '../lib/dayNotes.js';
 import ReadinessCheckIn from './ReadinessCheckIn.jsx';
 import ProgrammeLifecycle, { NextBlockFromEdits } from './ProgrammeLifecycle.jsx';
 import WhyExplainer from './WhyExplainer.jsx';
@@ -204,6 +205,7 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
               <h2 className="text-2xl font-black tracking-tight truncate">{heroSession.title}</h2>
               <p className="text-xs text-ink3">{heroSession.dateISO}{sched ? ` · Week ${sched.sessions.find(s=> s.status!=='done')?.week || '?'}` : ''}</p>
               <p className="text-[11px] text-ink2 mt-0.5">{coach.nextSession.objective}</p>
+              <DayNote store={store} setStore={setStore} session={heroSession} />
               {rideWarning && <p role="status" data-testid="leg-ride-warning" className="text-[11px] text-ink2 mt-1.5 rounded-lg bg-surface2 px-2 py-1.5">{rideWarning.message}</p>}
             </div>
             <span className="shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-full bg-surface2 border border-line tabular-nums">≈{timePlan?.changed ? timePlan.estimatedDurationMin : coach.nextSession.estimatedDurationMin} min</span>
@@ -631,6 +633,36 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
       )}
     </div>
     </>
+  );
+}
+
+/** Hevy-style routine note on this programme day: shown here and in the
+ *  workout, edited in place. Blank + Save clears it. */
+function DayNote({ store, setStore, session }){
+  const gymPrefs = store.gymPrefs || {};
+  const note = getDayNote(gymPrefs, session);
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState('');
+  if(!dayNoteKey(session)) return null;
+  const save = ()=>{
+    const patch = setDayNote(gymPrefs, session, text);
+    if(patch) setStore({ ...store, gymPrefs: { ...gymPrefs, ...patch } });
+    setEditing(false);
+  };
+  if(editing) return (
+    <div className="mt-1.5 space-y-1.5" data-testid="day-note-edit">
+      <textarea value={text} onChange={e=> setText(e.target.value)} rows={2} maxLength={200} aria-label="Note for this programme day" placeholder="e.g. Use the far cable stack; superset the curls" className="w-full rounded-lg border border-line bg-surface2 px-3 py-2 text-base" autoFocus />
+      <div className="flex gap-1.5">
+        <button type="button" onClick={save} className="btn btn-primary min-h-11 rounded-lg px-3 text-xs">Save note</button>
+        <button type="button" onClick={()=> setEditing(false)} className="btn btn-ghost min-h-11 rounded-lg px-3 text-xs">Cancel</button>
+      </div>
+    </div>
+  );
+  return (
+    <button type="button" onClick={()=> { setText(note); setEditing(true); }} data-testid="day-note" className="mt-1 min-h-11 -mx-1 px-1 flex items-start gap-1.5 text-left text-[11px] text-ink2 rounded-lg">
+      <span aria-hidden>📝</span>
+      <span className={note ? '' : 'text-ink3 underline underline-offset-2'}>{note || 'Add a note for this day'}</span>
+    </button>
   );
 }
 

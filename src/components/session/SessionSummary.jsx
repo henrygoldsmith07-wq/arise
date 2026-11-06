@@ -9,6 +9,9 @@ export default function SessionSummary({
   note,
   noteTags = [],
   qualityRating = null,
+  gym = '',
+  gyms = [],
+  onGymChange = null,
   onNoteChange,
   onToggleNoteTag,
   onQualityToggle,
@@ -36,6 +39,13 @@ export default function SessionSummary({
           second (sr-only) copy would duplicate the text node and break
           text-based locators — aria-label is the one-node way to name a control
           whose sibling heading is not a <label>. */}
+      {onGymChange && (
+        <label className="flex items-center gap-2 text-[11px] text-ink3">
+          <span className="shrink-0">Gym</span>
+          <input value={gym} onChange={e=> onGymChange(e.target.value)} list="known-gyms" maxLength={40} placeholder="Where did you train? (optional)" data-testid="session-gym" className="min-h-11 min-w-0 flex-1 rounded-lg border border-line bg-surface2 px-3 text-base text-ink" />
+          <datalist id="known-gyms">{gyms.map(g=> <option key={g} value={g} />)}</datalist>
+        </label>
+      )}
       <textarea value={note} onChange={e=> onNoteChange(e.target.value)} rows={2} aria-label="Session notes" placeholder="What should change next time? Mention sleep, pain, technique, ROM, time or load." className="w-full rounded-lg border border-line bg-surface2 px-3 py-2.5 text-sm" />
     </section>
   );

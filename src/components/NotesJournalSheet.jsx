@@ -121,7 +121,7 @@ export default function NotesJournalSheet({
             >
               <div className="flex justify-between gap-2 text-[11px] text-ink3">
                 <span className="font-bold text-ink2">{e.title}</span>
-                <span>{e.date}</span>
+                <span>{e.date}{e.gym ? ` · ${e.gym}` : ""}</span>
               </div>
               {e.tags.length > 0 && (
                 <p className="mt-1 text-[11px] text-ink3">

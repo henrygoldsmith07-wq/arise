@@ -79,7 +79,8 @@ export function buildNoteIndex(
       title,
       text,
       tags,
-      hay: norm(`${text} ${chipText} ${title}`),
+      gym: String(h.gym || ""),
+      hay: norm(`${text} ${chipText} ${title} ${h.gym || ""}`),
     });
   }
   for (const [exId, e] of Object.entries(
