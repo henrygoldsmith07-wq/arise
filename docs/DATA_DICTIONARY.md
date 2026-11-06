@@ -50,7 +50,8 @@ provenance metadata:
 | `equipmentSnapshot[]` | kit at training time — old sessions stay interpretable after onboarding changes |
 | `substitutions[]` | `{ from, to, reason }` audit trail |
 | `exerciseOrder[]` | actual order performed |
-| `blocks[].sets[]` | `{ reps, weightKg, rpe, side, rom, assistedKg, tempo, completed, skipped, failed, pain }` — all optional beyond reps; blanks are legitimate (bodyweight) |
+| `blocks[].sets[]` | `{ reps, weightKg, rpe, side, rom, assistedKg, tempo, completed, skipped, failed, pain, setType? }` — all optional beyond reps; blanks are legitimate (bodyweight). `setType` is `drop` or `failure` (a failure set with no RPE is saved as RPE 10) |
+| `blocks[].warmupSets[]?` | `{ reps, weightKg }` — sets the lifter tagged as warm-ups; kept apart from `sets[]` so volume, fatigue, PR and follow-through math never count them |
 | `note` / `noteTags[]` | free-text note plus structured quick tags (pain, soreness, quality) |
 | `painDiscomfort?`, `skippedSetsCount?` | session-level signals feeding quality weighting and guardrails |
 

@@ -285,7 +285,11 @@ const CHUNK_BUDGET_KB = 34;
 // steps, common mistakes and every cue after the first — moved out of the
 // catalogue chunk into data/exercise-text.json, a hashed non-JS asset the SW
 // precaches and the teaching surfaces fetch on first open. 404.8 → 397.4 kB.
-const TOTAL_BUDGET_KB = 405;
+// total 405 → 408 kB with the competitor-parity round (custom exercises,
+// warm-up/drop/failure set types, muscle recovery map, body measurements):
+// +3.3 kB, part paid by cutting duplicated Progress rows (−0.6 kB). All of it
+// is lazy or in route chunks; boot is UNCHANGED (57.4 / 120). Measured 407.4.
+const TOTAL_BUDGET_KB = 408;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;
