@@ -88,6 +88,16 @@ export function focusTrapDecision(focusables, activeElement, shiftKey){
   return null;
 }
 
+// A <button> activated from the keyboard (Enter/Space) or by assistive
+// technology dispatches a click with no click count (`detail === 0`); a real
+// pointer click carries one (`detail >= 1`). Controls that step immediately on
+// pointerdown use this so keyboard/AT users get the same single step without a
+// pointer user being stepped twice (pointerdown + click).
+export function isKeyboardActivation(event){
+  const detail = Number(event?.detail ?? 0);
+  return !Number.isFinite(detail) || detail <= 0;
+}
+
 export function useDialogA11y({ active = true, onClose = null } = {}){
   const rootRef = useRef(null);
   const closeRef = useRef(null);
