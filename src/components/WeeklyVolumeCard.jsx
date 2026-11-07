@@ -5,7 +5,11 @@ import {
   weeklyMuscleVolume,
   volumeStatus,
   musclesInWindow,
+  guideFor,
+  PRIORITIES,
+  PRIORITY_LABEL,
 } from "../lib/muscleVolumeHistory.js";
+import { GUIDED_MUSCLES } from "../lib/blockPlan.js";
 
 const COLOR = {
   Chest: "bg-accent",
@@ -32,7 +36,17 @@ const label = (iso) =>
 
 // Progress: hard sets actually done per muscle, last 8 weeks. Tap a week for
 // the muscle-by-muscle list and the sessions behind it. Local data only.
-export default function WeeklyVolumeCard({ store }) {
+export default function WeeklyVolumeCard({ store, setStore = null }) {
+  const priorities = store.gymPrefs?.musclePriority || {};
+  const setPriority = (m, p) =>
+    setStore?.({
+      ...store,
+      gymPrefs: {
+        ...(store.gymPrefs || {}),
+        musclePriority: { ...priorities, [m]: p },
+        updatedAt: new Date().toISOString(),
+      },
+    });
   const today = localDateISO();
   const rows = useMemo(
     () =>
@@ -122,7 +136,7 @@ export default function WeeklyVolumeCard({ store }) {
             {Object.entries(sel.byMuscle)
               .sort((a, b) => b[1] - a[1])
               .map(([m, n]) => {
-                const [text, tone] = STATUS[volumeStatus(m, n)];
+                const [text, tone] = STATUS[volumeStatus(m, n, priorities[m])];
                 return (
                   <li key={m} className="flex items-baseline gap-2 text-xs">
                     <span className="w-20 shrink-0">{m}</span>
@@ -149,6 +163,34 @@ export default function WeeklyVolumeCard({ store }) {
           </ul>
         )}
       </div>
+      {setStore && (
+        <details className="text-xs" data-testid="muscle-priority">
+          <summary className="min-h-11 flex items-center font-bold cursor-pointer">
+            Muscle priority
+          </summary>
+          <p className="text-[11px] text-ink3 mb-2">
+            Emphasize aims for {guideFor("emphasize").low}–{guideFor("emphasize").high} sets a week, Grow {VOLUME_GUIDE.low}–{VOLUME_GUIDE.high}, Maintain {guideFor("maintain").low}–{guideFor("maintain").high}. The guide and the Today nudge follow it.
+          </p>
+          <ul className="space-y-1">
+            {GUIDED_MUSCLES.map((m) => (
+              <li key={m} className="flex items-center gap-2">
+                <span className="w-20 shrink-0">{m}</span>
+                <div role="group" aria-label={`${m} priority`} className="grid flex-1 grid-cols-3 gap-1">
+                  {PRIORITIES.map((p) => {
+                    const on = (priorities[m] || "grow") === p;
+                    return (
+                      <button key={p} type="button" aria-pressed={on} onClick={() => setPriority(m, p)}
+                        className={`min-h-11 rounded-lg border text-[11px] font-semibold ${on ? "border-ink bg-ink text-bg" : "border-line bg-surface2"}`}>
+                        {PRIORITY_LABEL[p]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       <p className="text-[11px] text-ink3 leading-snug">
         Main muscle of each lift only; warm-up sets and anything logged under
         RPE 5 are left out. {VOLUME_GUIDE.low}–{VOLUME_GUIDE.high} sets a week

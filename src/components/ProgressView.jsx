@@ -365,7 +365,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       )}
 
       {/* Lift goals with an honest projected date (lazy). */}
-      {history.length > 0 && <Suspense fallback={null}><WeeklyVolumeCard store={store} /></Suspense>}
+      {history.length > 0 && <Suspense fallback={null}><WeeklyVolumeCard store={store} setStore={setStore} /></Suspense>}
       {setStore && history.length > 0 && <Suspense fallback={null}><LiftGoalsCard store={store} setStore={setStore} /></Suspense>}
 
       {/* Optional body-weight log + strength for your size (lazy). */}

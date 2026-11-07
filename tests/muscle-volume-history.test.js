@@ -8,6 +8,7 @@ import {
   musclesInWindow,
   underTrainedLastWeek,
   VOLUME_WEEKS,
+  guideFor,
 } from "../src/lib/muscleVolumeHistory.js";
 
 const CHEST = "chest-press-machine";
@@ -207,6 +208,59 @@ describe("underTrainedLastWeek", () => {
     assert.deepEqual(
       underTrainedLastWeek(history, { todayISO: TODAY, schedule }),
       [],
+    );
+  });
+});
+
+describe("muscle priority (Emphasize / Grow / Maintain)", () => {
+  it("each priority has its own weekly band; unset is Grow", () => {
+    assert.equal(volumeStatus("Chest", 8), "ok");
+    assert.equal(volumeStatus("Chest", 8, "grow"), "ok");
+    assert.equal(volumeStatus("Chest", 8, "emphasize"), "under");
+    assert.equal(volumeStatus("Chest", 12, "emphasize"), "ok");
+    assert.equal(volumeStatus("Chest", 8, "maintain"), "ok");
+    assert.equal(volumeStatus("Chest", 12, "maintain"), "high");
+    assert.equal(volumeStatus("Chest", 3, "maintain"), "under");
+    assert.deepEqual(guideFor("unknown"), guideFor("grow"));
+  });
+
+  const base = [
+    entry("2026-10-05", [block(CHEST, 12), block(ROW, 8)]),
+    entry("2026-10-12", [block(CHEST, 12), block(ROW, 8)]),
+  ];
+  it("Maintain silences the nudge; Emphasize raises its bar", () => {
+    const history = [
+      ...base,
+      entry("2026-10-19", [block(CHEST, 4), block(ROW, 8)]),
+      entry("2026-10-21", [block(CHEST, 4)]),
+    ];
+    // 8 chest sets: fine for Grow, short for Emphasize, fine for Maintain.
+    assert.deepEqual(underTrainedLastWeek(history, { todayISO: TODAY }), []);
+    assert.deepEqual(
+      underTrainedLastWeek(history, { todayISO: TODAY, priorities: { Chest: "emphasize" } }),
+      [{ muscle: "Chest", sets: 8 }],
+    );
+    const low = [
+      ...base,
+      entry("2026-10-19", [block(CHEST, 1), block(ROW, 8)]),
+      entry("2026-10-21", [block(ROW, 3)]),
+    ];
+    assert.deepEqual(
+      underTrainedLastWeek(low, { todayISO: TODAY, priorities: { Chest: "maintain" } }),
+      [],
+    );
+  });
+  it("legs nudge only when you chose to Emphasize them", () => {
+    const legs = [
+      entry("2026-10-05", [block("leg-press", 14)]),
+      entry("2026-10-12", [block("leg-press", 14)]),
+      entry("2026-10-19", [block("leg-press", 3)]),
+      entry("2026-10-21", [block("leg-press", 3)]),
+    ];
+    assert.deepEqual(underTrainedLastWeek(legs, { todayISO: TODAY }), []);
+    assert.deepEqual(
+      underTrainedLastWeek(legs, { todayISO: TODAY, priorities: { Legs: "emphasize" } }),
+      [{ muscle: "Legs", sets: 6 }],
     );
   });
 });

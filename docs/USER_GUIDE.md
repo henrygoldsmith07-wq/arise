@@ -162,6 +162,10 @@ When you finish a workout you can say which gym you trained at; it fills in the 
 
 When you trained in the last 72 hours, **Today** shows a **Muscle recovery** card: each muscle's freshness from the hard sets it got, fading back to 100% over three days. It is a rough guide (sleep, food and the lift all matter), useful for picking what to train in a Quick workout.
 
+## Estimated rep maxes
+
+In a workout, a lift's **History** sheet shows estimated rep maxes: the load you could likely lift for 1, 3, 5, 8, 10 and 12 reps, worked out from your best recent sets, with each as a percentage of the 1-rep load. Handy for picking a working weight for a new rep range. It is an estimate, not a test.
+
 ## Records wall
 
 **Progress → Records** shows your three most recent lifts and opens the **records wall**: for every lift you have logged with a load, the heaviest weight you have lifted for 1, 3, 5, 8 and 12+ reps (a heavier set for more reps also fills the lighter columns), plus your best estimated max and your PR count. Search by name or filter by muscle. A PR has to beat an earlier like-for-like set by about 1 kg for that rep count, so the first time you log a lift is a baseline, and ties are not PRs. Assisted sets, skipped or failed sets, deleted sessions and sessions you noted as a ROM, paused, tempo, partial, band or technique change are left out. Today shows a **New PR** card for three days after the session; tap Nice to dismiss it. Once your log spans more than one year, chips at the top switch between All time and each year's own bests. The wall is worked out from your history each time, so correcting a set in Edit workouts corrects your records.
@@ -169,6 +173,8 @@ When you trained in the last 72 hours, **Today** shows a **Muscle recovery** car
 ## Weekly volume: what you actually did
 
 Progress → **Weekly volume** shows the last eight weeks as bars of hard sets, split by muscle. Tap a week to see each muscle's sets and the sessions behind it. On finished weeks each muscle is marked Below guide, In range or Above guide against the same rough 6–20 sets range as the Block plan. It is a guide, not a target: fewer leg sets around cycling is fine.
+
+**Muscle priority**, under the card, lets you mark each muscle Emphasize (12–20 sets a week), Grow (6–20, the default) or Maintain (4–10). The Below guide / In range / Above guide labels and the Today note use that band; Maintain muscles never get the note, and legs only do if you chose Emphasize.
 
 What counts: finished sets with reps or a load, nothing you skipped, and nothing logged under RPE 5 (warm-ups). Each lift counts toward its main muscle. If chest, back, shoulders or arms were trained recently but got under 6 sets last week (after a normal training week), Today shows a note once a week; "Got it" hides it. Everything is worked out on your device from your log.
 
