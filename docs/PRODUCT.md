@@ -107,7 +107,10 @@ user-initiated integrations may send a deliberately minimised payload to a
 named third party — each one is opt-in, separately consented, and disclosed
 in full in [`docs/PRIVACY.md`](docs/PRIVACY.md):
 
-- **NVIDIA AI coach** (bring-your-own-key) — sends aggregated training
+- **AI coach** (bring-your-own-key, optional) — by default the coach talks
+  only to a localhost loopback endpoint (Ollama, llama.cpp server, etc.), so
+  it needs no cloud and no third party. Users who prefer a hosted model can
+  point it at any OpenAI-compatible endpoint. It sends aggregated training
   numbers plus the deterministic engine's own findings so the model can
   explain them. It never receives raw set-by-set history, notes or the
   health summary, and it **only explains — the deterministic progression

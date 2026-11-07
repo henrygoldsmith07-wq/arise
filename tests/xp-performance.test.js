@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { deriveXp, xpAwards, xpForLevel, levelForXp, XP_SOURCES } from '../src/lib/xp.js';
-import { strengthTrends, workCapacity, consistencyReport, confidenceLanguage } from '../src/lib/performance.js';
+import { strengthTrends, workCapacity, consistencyReport, confidenceLanguage, personalBests } from '../src/lib/performance.js';
 
 function session(id, dateISO, sets, title = id){
   return { id, dateISO, title, blocks:[{ exerciseId:'bench-press-dumbbell', sets }] };
@@ -151,6 +151,63 @@ describe('performance metrics: evidence or honest silence', ()=>{
     assert.equal(report.completed, 2);
     assert.equal(report.returnedAfterMiss, true);
     assert.match(report.explanation, /completed 2 of 3 planned sessions/i);
+  });
+
+  it('a single make-up log satisfies at most one planned session (regression: one log claimed 100%)', ()=>{
+    // Two same-title planned sessions; ONE logged make-up. The old
+    // `logged.some(...)` scan matched the log against BOTH planned rows, so
+    // one workout reported 100% adherence and zero misses.
+    const sched = {
+      programId:'p1',
+      sessions:[
+        { id:'s1', week:1, dateISO:'2026-09-01', status:'planned', title:'Push' },
+        { id:'s2', week:1, dateISO:'2026-09-09', status:'planned', title:'Push' },
+      ],
+    };
+    const oneMakeUp = [session('h1', '2026-09-11', [set(8, 20)], 'Push')];
+    const single = consistencyReport({ history:oneMakeUp, schedule:sched, today:'2026-09-13' });
+    assert.equal(single.planned, 2);
+    assert.equal(single.completed, 1, 'one log satisfies one planned session');
+    assert.equal(single.missed, 1);
+    assert.equal(single.adherencePct, 50);
+    assert.match(single.explanation, /completed 1 of 2 planned sessions/i);
+
+    // Two make-ups (one per missed date) still count both — the fix must not
+    // under-count real work. Logs must land AFTER their own planned date and
+    // within 7 days of it: 09-03 and 09-06 each satisfy one plan.
+    const twoMakeUps = [
+      session('h1', '2026-09-03', [set(8, 20)], 'Push'),
+      session('h2', '2026-09-06', [set(8, 20)], 'Push'),
+    ];
+    const spreadPlan = {
+      programId:'p1',
+      sessions:[
+        { id:'s1', week:1, dateISO:'2026-09-01', status:'planned', title:'Push' },
+        { id:'s2', week:1, dateISO:'2026-09-05', status:'planned', title:'Push' },
+      ],
+    };
+    const both = consistencyReport({ history:twoMakeUps, schedule:spreadPlan, today:'2026-09-13' });
+    assert.equal(both.planned, 2);
+    assert.equal(both.completed, 2, 'one make-up per missed session still completes both');
+    assert.equal(both.missed, 0);
+    assert.equal(both.adherencePct, 100);
+    assert.equal(both.onTime, 0);
+  });
+
+  it('personalBests names which dimension moved: rep PR at same load beats the generic label', ()=>{
+    // compareSets reads the PRIOR set, which bestByExercise never stored, so
+    // every PR degraded to 'Estimated 1RM PR' regardless of what improved.
+    const history = [
+      { dateISO:'2026-01-01', blocks:[{ exerciseId:'bench-press-dumbbell', sets:[{ reps:'8', weightKg:'100' }] }] },
+      { dateISO:'2026-01-08', blocks:[{ exerciseId:'bench-press-dumbbell', sets:[{ reps:'9', weightKg:'100' }] }] },
+      { dateISO:'2026-01-15', blocks:[{ exerciseId:'bench-press-dumbbell', sets:[{ reps:'9', weightKg:'105' }] }] },
+    ];
+    const prs = personalBests({ history });
+    const byDate = new Map(prs.map(p=> [p.dateISO, p]));
+    assert.equal(byDate.get('2026-01-08').kind, 'Rep PR at same load',
+      'same load, more reps must be named as a rep PR');
+    assert.equal(byDate.get('2026-01-15').kind, 'Load PR at comparable reps',
+      'more load at equal reps must be named as a load PR');
   });
 
   it('translates confidence into human language at every level', ()=>{

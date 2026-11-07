@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import { recommendNext, snapLoad } from '../src/lib/progression.js';
 import { rankedSubstitutions, substitutionOptions } from '../src/lib/substitutions.js';
 import { EXERCISES } from '../src/lib/data.js';
-import { markSessionDone } from '../src/lib/schedule.js';
+import { markSessionDone, progress } from '../src/lib/schedule.js';
 import { upsertHistory, normaliseHistory } from '../src/lib/store.js';
 import { parseImportFile, validateStoreData } from '../src/lib/export.js';
 import { totalVolumeKg, streakDays, prsHitBySession } from '../src/lib/store.js';
@@ -181,6 +181,17 @@ describe('properties: schedule & history invariants', () => {
       const ids = new Set(merged.map((h) => h.id));
       assert.equal(merged.length, ids.size, 'one row per unique id');
     }
+  });
+
+  it('progress() degrades to 0% for a schedule without a sessions array', () => {
+    // Store validation only requires activeSchedule to be an object; a
+    // restored schedule can arrive mid-shape. The Today/Progress cards call
+    // this on every render — it must never throw.
+    assert.deepEqual(progress({ id: 'x' }, []), { done: 0, total: 0, pct: 0 });
+    assert.deepEqual(progress({ id: 'x', sessions: null }, []), { done: 0, total: 0, pct: 0 });
+    assert.deepEqual(progress(null, null), { done: 0, total: 0, pct: 0 });
+    // The real shape still counts.
+    assert.deepEqual(progress({ sessions: [{ id: 'a', status: 'done' }, { id: 'b' }] }, []), { done: 1, total: 2, pct: 50 });
   });
 
   it('volume and streaks tolerate any malformed row without going negative', () => {

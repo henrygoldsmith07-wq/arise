@@ -105,6 +105,13 @@ describe('guidedMode — timers', () => {
     assert.equal(fmtRest(90), '1:30');
     assert.equal(fmtRest(45), '45s');
     assert.equal(fmtRest(0), '0s');
+    // The countdown is wall-clock derived; a non-finite or negative input must
+    // never print "NaNs", "-1:-5" or "Infinity:NaN" in the dock.
+    assert.equal(fmtRest(NaN), '0s');
+    assert.equal(fmtRest(Infinity), '0s');
+    assert.equal(fmtRest(undefined), '0s');
+    assert.equal(fmtRest(-5), '0s');
+    assert.equal(fmtRest(125.9), '2:05', 'fractional seconds floor, not float tails');
   });
 
   it('formats elapsed milliseconds as m:ss', () => {

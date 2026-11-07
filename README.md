@@ -83,7 +83,7 @@ npm run dev        # http://localhost:5173
 npm run build      # → dist/
 npm run lint:content
 npm run type-check # tsc --noEmit (jsconfig.json, src + scripts)
-npm test           # node:test — 1500+ unit/integration/property/fuzz tests
+npm test           # node:test — 1800+ unit/integration/property/fuzz tests
 npm run benchmark  # seeded engine gates + determinism artifacts (also in CI)
 npm run verify     # lint:content && lint:encoding && type-check && screenshots:check && exercise-images:check && test && integrations && bundle:budget && build  (also in CI)
 npm run e2e        # Playwright browser E2E (dev server)

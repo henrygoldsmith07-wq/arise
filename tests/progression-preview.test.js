@@ -4,6 +4,8 @@
 // pure (input history is never mutated), deterministic.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { plannedExercises, previewProgramProgression, simulateExerciseWeeks } from '../src/lib/progressionPreview.js';
 
@@ -150,5 +152,18 @@ describe('progression preview — programme shape', () => {
 
   it('returns null for a program without weeks', () => {
     assert.equal(previewProgramProgression({ program:{ id:'empty' }, history:[], todayISO:'2026-10-05' }), null);
+  });
+});
+
+// The card is a modal-less disclosure on the programme card: an empty preview
+// (a programme whose first week lists no exercises) must say why it is empty
+// instead of drawing four empty week boxes. Source-contract style, matching
+// coach-panel.test.js.
+describe('ProgressionPreview card: honest empty state', () => {
+  const src = readFileSync(join(process.cwd(), 'src', 'components', 'ProgressionPreview.jsx'), 'utf8');
+
+  it('renders the week table only when the preview has exercises', () => {
+    assert.match(src, /preview\.exerciseCount > 0/, 'the table is gated on a non-empty preview');
+    assert.match(src, /no exercises to preview yet/, 'an empty preview says why instead of drawing empty boxes');
   });
 });

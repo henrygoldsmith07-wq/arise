@@ -7,7 +7,7 @@ data away from the current browser profile and what each pathway actually sends.
 
 ## The default build has no third-party destination
 
-The NVIDIA coach, classifier.dev and the Pulse connector are **compiled out of
+The AI coach, classifier.dev and the Pulse connector are **compiled out of
 the hosted build**. This is a build-time decision (`VITE_ARISE_INTEGRATIONS`,
 default `off`), not a settings toggle:
 
@@ -68,7 +68,7 @@ are kept because that build exists, is tested, and may be shipped separately.
 |---|---|---|---|
 | Export/share | The file or summary you explicitly choose to save/share; credentials are stripped | Wherever you save/share it; persistence is controlled by that destination | Manual, per action |
 | WebDAV sync | One versioned backup payload. With E2E encryption enabled, the host receives ciphertext | Your configured WebDAV host; the remote backup persists there until you remove/replace it | Explicit opt-in; HTTPS required; disable any time |
-| NVIDIA AI coach | Aggregated training numbers + deterministic engine findings; the API key is sent as the request credential. No raw set-by-set history, notes or health summary. The coach only explains — the deterministic engine remains authoritative and the AI never creates training prescriptions | `integrate.api.nvidia.com`; Arise does not control the provider's server-side retention | Off by default; requires a pasted API key and an explicit coach request |
+| AI coach | Aggregated training numbers + deterministic engine findings; the API key is sent as the request credential. No raw set-by-set history, notes or health summary. The coach only explains — the deterministic engine remains authoritative and the AI never creates training prescriptions | By default a **localhost loopback endpoint** (Ollama, llama.cpp server, etc.) — never leaves the device. Any *user-configured* remote OpenAI-compatible endpoint is allowed; Arise ships no built-in hosted provider | Off by default; requires a pasted API key and an explicit coach request |
 | classifier.dev feedback categorisation | Redacted feedback text | `classifier.dev`; Arise does not control the service's server-side retention | Separate opt-in; off by default |
 | classifier.dev coach routing | Only an ambiguous coach question after local redaction; returns a route/lane, never a prescription | `classifier.dev`; Arise does not control the service's server-side retention | Separate opt-in; local rules run first; off by default |
 | Pulse connector | Completed-workout metadata plus aggregate volume/trends as defined in `src/lib/pulse.js` | The user/integrator-provided Pulse adapter; persistence depends on that adapter | Separate opt-in and an injected adapter |
