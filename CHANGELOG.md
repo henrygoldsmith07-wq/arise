@@ -12,6 +12,11 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Competitor parity: training calendar, repeat a past workout
+- **Training calendar** (Hevy's profile calendar / Strong's history calendar): the Consistency card on Progress shows a month grid with the days you trained filled in; arrows step through months. Read-only, worked out from your history.
+- **Repeat** (Hevy's "repeat workout" / Strong's "perform again"): every row in Progress history has a Repeat button that starts that session's lifts as a Quick workout, with the usual load targets from your history. Your programme is left as it is.
+- Removed dead code: Progress still computed personal bests on every render after #145 moved them to Records (−0.6 kB). Total 409.5 / 410 kB; no cap change.
+
 ### Competitor parity: RP-style muscle priority, Strong-style rep maxes
 - **Muscle priority** (RP Hypertrophy's Emphasize / Grow / Maintain): set it per muscle under Progress → Weekly volume → Muscle priority. Emphasize aims for 12–20 hard sets a week, Grow 6–20 (the old single guide), Maintain 4–10. The weekly guide labels and the Today "light week" nudge follow it: Maintain never nudges, and a muscle you Emphasize can nudge even when it is legs. Stored in `gymPrefs.musclePriority`.
 - **Estimated rep maxes** (Strong's 1RM/percentage table): a lift's history sheet shows the load for 1, 3, 5, 8, 10 and 12 reps from your best recent estimated max, with each as a percentage of the 1-rep load. Same Epley maths as the rest of Arise.
