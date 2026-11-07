@@ -98,11 +98,20 @@ export function weeklyMuscleVolume(
   return rows;
 }
 
+// Muscle priority (RP-style): the lifter says which muscles to emphasise,
+// grow or just maintain, and each gets its own weekly set band. Grow is the
+// default guide. Still a guide, not a target (confidence: low).
+export const PRIORITIES = ["emphasize", "grow", "maintain"];
+export const PRIORITY_LABEL = { emphasize: "Emphasize", grow: "Grow", maintain: "Maintain" };
+const BANDS = { emphasize: { low: 12, high: 20 }, maintain: { low: 4, high: 10 } };
+export const guideFor = (priority) => BANDS[priority] || VOLUME_GUIDE;
+
 /** 'under' | 'ok' | 'high' | 'none' for a muscle's weekly hard sets. */
-export function volumeStatus(muscle, sets) {
+export function volumeStatus(muscle, sets, priority) {
   if (!GUIDED_MUSCLES.includes(muscle)) return "none";
-  if (sets > VOLUME_GUIDE.high) return "high";
-  return sets < VOLUME_GUIDE.low ? "under" : "ok";
+  const g = guideFor(priority);
+  if (sets > g.high) return "high";
+  return sets < g.low ? "under" : "ok";
 }
 
 /** Muscles present in the window, biggest total first (legend + colours). */
@@ -123,18 +132,21 @@ export function musclesInWindow(rows) {
  */
 export function underTrainedLastWeek(
   history,
-  { todayISO, schedule = null } = {},
+  { todayISO, schedule = null, priorities = {} } = {},
 ) {
   const rows = weeklyMuscleVolume(history, { todayISO, weeks: 6, schedule });
   if (rows.length < 6) return [];
   const last = rows[rows.length - 2];
   if (last.deload || last.sessions.length < 2) return [];
   const before = rows.slice(0, rows.length - 2).slice(-4);
-  return NUDGE_MUSCLES.filter(
-    (m) =>
-      before.some((r) => (r.byMuscle[m] || 0) >= VOLUME_GUIDE.low) &&
-      (last.byMuscle[m] || 0) < VOLUME_GUIDE.low,
-  ).map((m) => ({ muscle: m, sets: last.byMuscle[m] || 0 }));
+  // Maintain muscles never nag; one you chose to Emphasize can, legs included.
+  const candidates = GUIDED_MUSCLES.filter(
+    (m) => priorities[m] !== "maintain" && (NUDGE_MUSCLES.includes(m) || priorities[m] === "emphasize"),
+  );
+  return candidates.filter((m) => {
+    const low = guideFor(priorities[m]).low;
+    return before.some((r) => (r.byMuscle[m] || 0) >= Math.min(low, VOLUME_GUIDE.low)) && (last.byMuscle[m] || 0) < low;
+  }).map((m) => ({ muscle: m, sets: last.byMuscle[m] || 0 }));
 }
 
 const SEEN_KEY = "arise.volumeNudgeSeen";

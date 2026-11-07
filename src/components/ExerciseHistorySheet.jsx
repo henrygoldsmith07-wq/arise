@@ -3,12 +3,18 @@ import JargonHelp from './JargonHelp.jsx';
 import { exerciseSessionHistory, sparklinePoints } from '../lib/exerciseHistory.js';
 import { useDialogA11y } from '../lib/a11y.js';
 import { fmtWeight } from '../lib/units.ts';
+import { epleyToLoad } from '../lib/trainingMath.js';
+
+const REP_MAXES = [1, 3, 5, 8, 10, 12];
 
 // Last five exposures of the current lift, with a best-e1RM sparkline.
 export default function ExerciseHistorySheet({ exerciseId, name, history, unit = 'kg', onClose }){
   const a11y = useDialogA11y({ active: true, onClose });
   const sessions = useMemo(()=> exerciseSessionHistory(history, exerciseId, 5), [history, exerciseId]);
   const points = sparklinePoints(sessions);
+  // Strong-style rep maxes: the best estimated max turned back into a load for
+  // each rep count (same Epley maths as everywhere else in Arise).
+  const best = Math.max(0, ...sessions.map(s=> Number(s.bestE1rm) || 0));
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
       <div ref={a11y.rootRef} onKeyDown={a11y.trapTab} role="dialog" aria-modal="true" aria-label={`${name} history`}
@@ -24,6 +30,20 @@ export default function ExerciseHistorySheet({ exerciseId, name, history, unit =
               <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
             </svg>
             <p className="text-[11px] text-ink3">Best estimated 1RM per session, oldest to newest. An estimate from your sets, not a test.</p>
+          </div>
+        )}
+        {best > 0 && (
+          <div data-testid="rep-maxes">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-ink3">Estimated rep maxes</p>
+            <dl className="mt-1 grid grid-cols-6 gap-1 text-center">
+              {REP_MAXES.map(r=> (
+                <div key={r} className="rounded-lg bg-surface2 px-1 py-1.5">
+                  <dt className="text-[10px] text-ink3">{r} rep{r > 1 ? 's' : ''}</dt>
+                  <dd className="text-xs font-black tabular-nums">{fmtWeight(Math.round(epleyToLoad(best, r) * 2) / 2, unit)}</dd>
+                  <dd className="text-[10px] text-ink3">{Math.round(100 * epleyToLoad(best, r) / epleyToLoad(best, 1))}%</dd>
+                </div>
+              ))}
+            </dl>
           </div>
         )}
         <ul className="space-y-2">

@@ -12,6 +12,11 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Competitor parity: RP-style muscle priority, Strong-style rep maxes
+- **Muscle priority** (RP Hypertrophy's Emphasize / Grow / Maintain): set it per muscle under Progress → Weekly volume → Muscle priority. Emphasize aims for 12–20 hard sets a week, Grow 6–20 (the old single guide), Maintain 4–10. The weekly guide labels and the Today "light week" nudge follow it: Maintain never nudges, and a muscle you Emphasize can nudge even when it is legs. Stored in `gymPrefs.musclePriority`.
+- **Estimated rep maxes** (Strong's 1RM/percentage table): a lift's history sheet shows the load for 1, 3, 5, 8, 10 and 12 reps from your best recent estimated max, with each as a percentage of the 1-rep load. Same Epley maths as the rest of Arise.
+- Fits inside the 410 kB cap (measured 409.2); boot unchanged.
+
 ### Hevy parity, autumn 2026: routine notes, gym tag, yearly records, effort colours
 - **Programme-day notes** (Hevy's routine notes): a note on a day of your programme ("use the far cable stack") follows that day every week. Edit it on Today's session card; it shows at the top of the workout. Stored in `gymPrefs.dayNotes`, merged per day in sync and backup import.
 - **Gym tag**: the finish screen asks where you trained (defaults to the last gym, suggests the ones you have used). Saved on the session as `gym`, shown in Progress history and searchable in Training notes.

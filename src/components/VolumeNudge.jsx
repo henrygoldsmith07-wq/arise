@@ -6,7 +6,6 @@ import {
   readNudgeSeen,
   markNudgeSeen,
 } from "../lib/muscleVolumeHistory.js";
-import { VOLUME_GUIDE } from "../lib/blockPlan.js";
 
 // Today: one quiet line when an upper-body muscle you have been training got
 // less than the guide's low end last week. Dismissed once per week, per device.
@@ -19,8 +18,9 @@ export default function VolumeNudge({ store }) {
       underTrainedLastWeek(store.history || [], {
         todayISO: today,
         schedule: store.activeSchedule,
+        priorities: store.gymPrefs?.musclePriority || {},
       }),
-    [store.history, store.activeSchedule, today],
+    [store.history, store.activeSchedule, store.gymPrefs?.musclePriority, today],
   );
   if (!gaps.length || seen === week) return null;
   const names = gaps
@@ -34,8 +34,8 @@ export default function VolumeNudge({ store }) {
     >
       <p className="text-sm font-bold">Light week for {names}</p>
       <p className="text-xs text-ink2">
-        Last week gave {gaps.length > 1 ? "them" : "it"} under{" "}
-        {VOLUME_GUIDE.low} hard sets. Fine if that was on purpose; the Weekly
+        Last week gave {gaps.length > 1 ? "them" : "it"} fewer hard sets than
+        {gaps.length > 1 ? " their" : " its"} guide. Fine if that was on purpose; the Weekly
         volume card in Progress shows the trend.
       </p>
       <button
