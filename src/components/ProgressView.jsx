@@ -1,5 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import JargonHelp from './JargonHelp.jsx';
+import { trainedDays, monthGrid, shiftMonth } from '../lib/trainingCalendar.js';
+import { buildQuickSession } from '../lib/quickWorkout.js';
 import { deriveXp } from '../lib/xp.js';
 const CoachPanel = lazy(() => import('./CoachPanel.jsx'));
 const HistoryEditSheet = lazy(() => import('./HistoryEditSheet.jsx'));
@@ -21,7 +23,7 @@ function readinessTrendLine(read){
   return null;
 }
 import WhatChangedPanel from './WhatChangedPanel.jsx';
-import { strengthTrends, workCapacity, consistencyReport, confidenceLanguage, personalBests } from '../lib/performance.js';
+import { strengthTrends, workCapacity, consistencyReport, confidenceLanguage } from '../lib/performance.js';
 import { totalVolumeKg } from '../lib/store.js';
 import { fmtWeight } from '../lib/units.ts';
 import { EXERCISE_BY_ID } from '../lib/data.js';
@@ -45,7 +47,7 @@ import { readinessTrend } from '../lib/readinessLog.js';
 import { todayISO, sessionForToday, nextSession } from '../lib/schedule.js';
 import { missedWorkoutRecovery } from '../lib/programming.js';
 
-export default function ProgressView({ store, setStore = null, onStart = null }){
+export default function ProgressView({ store, setStore = null, onStart = null, onRepeat = null }){
   // Gamified motivation (XP from observable behaviours) and honest
   // performance metrics are strictly separate: XP is habits, performance is
   // evidence. Nothing here claims fitness from logging volume.
@@ -59,7 +61,6 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       strength: strengthTrends({ history, exerciseIds: recentExercises }),
       capacity: workCapacity({ history }),
       consistency: consistencyReport({ history, schedule: store.activeSchedule, today }),
-      pbs: personalBests({ history }),
     };
   }, [store.history, store.activeSchedule, today]);
   const history = store.history || [];
@@ -552,6 +553,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
         )}
         {store.activeSchedule && <p className="text-[11px] text-ink3">Programme: {programmeAdherence.completed} completed • {programmeAdherence.missed} missed • {programmeAdherence.upcoming} upcoming. Future sessions do not lower the rate yet.</p>}
         {store.activeSchedule && programmeAdherence.missed > 0 && <p className="text-xs text-ink2 bg-reviewsoft rounded-lg px-3 py-2">Missed sessions are recoverable in order. Open Today to re-plan the schedule rather than doubling the next workout.</p>}
+        {history.length > 0 && <TrainingCalendar history={history} today={today} />}
       </section>
 
       {/* ── Monthly digest: last month, facts only ── */}
@@ -1063,7 +1065,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
       <section className="rounded-xl border border-line bg-surface p-3">
         <h3 className="text-sm font-bold">History</h3>
         {!history.length ? <p className="text-sm text-ink3 mt-2">Your logged sessions land here — newest first, with sets, notes and the prescriptions you were given. Schedule a program in Train and run it from Today to fill this in.</p> : (
-          <SessionHistoryList history={history} unitsPref={unitsPref} />
+          <SessionHistoryList history={history} unitsPref={unitsPref} onRepeat={onRepeat} />
         )}
       </section>
     </div>
@@ -1076,7 +1078,7 @@ export default function ProgressView({ store, setStore = null, onStart = null })
 // exactly when it already runs its evaluation. (max-h-80 scroll kept.)
 const HISTORY_PAGE = 15;
 
-function SessionHistoryList({ history, unitsPref = 'kg' }){
+function SessionHistoryList({ history, unitsPref = 'kg', onRepeat = null }){
   const [visibleCount, setVisibleCount] = useState(HISTORY_PAGE);
   const visible = useMemo(()=> [...history].slice(-visibleCount).reverse(), [history, visibleCount]);
   const remaining = Math.max(0, history.length - visibleCount);
@@ -1085,7 +1087,11 @@ function SessionHistoryList({ history, unitsPref = 'kg' }){
       <p className="text-[11px] text-ink3 mt-1" role="status">Showing {visible.length} of {history.length} sessions</p>
       <ul className="mt-2 space-y-2 max-h-80 overflow-auto pr-1">
         {visible.map(h=> (
-          <li key={h.id} className="rounded-lg bg-surface2 px-3 py-2">
+          <li key={h.id} className="relative rounded-lg bg-surface2 px-3 py-2">
+            {onRepeat && (h.blocks || []).length > 0 && (
+              <button type="button" onClick={()=> { const session = buildQuickSession({ exerciseIds: [...new Set(h.blocks.map(b=> b.exerciseId))], history, ...(h.title ? { title: h.title } : {}) }); if(session) onRepeat(session); }}
+                aria-label={`Repeat ${h.title || 'workout'} from ${h.dateISO}`} className="float-right ml-2 min-h-11 rounded-full border border-line bg-surface px-3 text-xs font-bold">Repeat</button>
+            )}
             <p className="text-sm font-bold">{h.title} <span className="text-xs text-ink3">• {h.dateISO} • W{h.week} D{h.day}{h.gym ? ` • ${h.gym}` : ''}</span></p>
             <p className="text-xs text-ink3">{h.blocks.map(b=> `${EXERCISE_BY_ID[b.exerciseId]?.name || b.exerciseId}: ${b.sets.map(s=> `${s.reps}${s.weightKg?`@${fmtWeight(s.weightKg, unitsPref)}`:''}${s.side?` ${s.side}`:''}${s.rom?` ${s.rom}`:''}`).join(', ')}`).join(' • ')}</p>
           </li>
@@ -1096,6 +1102,29 @@ function SessionHistoryList({ history, unitsPref = 'kg' }){
           Load {Math.min(HISTORY_PAGE, remaining)} older sessions ({remaining} hidden)
         </button>
       )}
+    </div>
+  );
+}
+
+// Training calendar (Hevy/Strong-style): the days you trained, a month at a
+// time. Read-only; history stays the source of truth.
+function TrainingCalendar({ history, today }){
+  const days = useMemo(()=> trainedDays(history), [history]);
+  const [ym, setYm] = useState(()=> ({ year: Number(String(today).slice(0, 4)), month: Number(String(today).slice(5, 7)) }));
+  const title = new Date(Date.UTC(ym.year, ym.month - 1, 1)).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  return (
+    <div className="pt-1" data-testid="training-calendar">
+      <div className="flex items-center gap-1">
+        <button type="button" onClick={()=> setYm(shiftMonth(ym, -1))} aria-label="Previous month" className="min-h-11 min-w-11 rounded-full text-sm font-bold">‹</button>
+        <p className="flex-1 text-center text-xs font-bold">{title}</p>
+        <button type="button" onClick={()=> setYm(shiftMonth(ym, 1))} aria-label="Next month" className="min-h-11 min-w-11 rounded-full text-sm font-bold">›</button>
+      </div>
+      <div className="mt-1 grid grid-cols-7 gap-1" role="list" aria-label={`Training days in ${title}`}>
+        {monthGrid(ym.year, ym.month).flat().map((d, i)=> d ? (
+          <span key={d} role="listitem" aria-label={`${d}${days.has(d) ? ', trained' : ''}`}
+            className={`aspect-square grid place-items-center rounded-md text-[11px] tabular-nums ${days.has(d) ? 'bg-ink text-bg font-bold' : 'bg-surface2 text-ink3'} ${d === today ? 'ring-2 ring-ink/40' : ''}`}>{Number(d.slice(8))}</span>
+        ) : <span key={`x${i}`} aria-hidden />)}
+      </div>
     </div>
   );
 }

@@ -178,6 +178,10 @@ Progress → **Weekly volume** shows the last eight weeks as bars of hard sets, 
 
 What counts: finished sets with reps or a load, nothing you skipped, and nothing logged under RPE 5 (warm-ups). Each lift counts toward its main muscle. If chest, back, shoulders or arms were trained recently but got under 6 sets last week (after a normal training week), Today shows a note once a week; "Got it" hides it. Everything is worked out on your device from your log.
 
+## Training calendar and Repeat
+
+Progress → **Consistency** shows a calendar of the days you trained; the arrows step back and forward a month. In **History** at the bottom of Progress, **Repeat** on any session starts the same lifts as a Quick workout (with load targets from your history), without touching your programme.
+
 ## Quick workout
 
 On **Today**, **Quick workout** is for the day you train something the programme did not plan: a machine session while travelling, an extra upper-body day. Tap a shortcut (**Same as last time**, **Rested muscles** or **Upper body only**, which never adds leg work) or search and add up to 10 lifts, then **Start**. It runs in the normal workout screen with the usual load targets from your history, counts toward Progress and your progression, and leaves your programme exactly as it was: no scheduled session is ticked off, skipped or moved.
