@@ -169,6 +169,27 @@ describe('app CSV importers', () => {
     assert.equal(rows[0].sets.length, 1);
   });
 
+  it('never emits an impossible calendar date from an ambiguous d/m or m/d cell', () => {
+    // US-style month-first: a first component above 12 can only be a day, so
+    // "10/23/2026" must land on 23 October — the old split produced month 23
+    // ("2026-23-10"), which every date-only gate downstream treats as missing.
+    const us = parseAppCsv('date,exercise,weight,reps\n10/23/2026,Squat,80,8');
+    assert.equal(us.rows.length, 1, 'a real date must import');
+    assert.equal(us.rows[0].dateISO, '2026-10-23');
+    // Day-first stays day-first when both components are plausible months.
+    assert.equal(parseAppCsv('date,exercise,weight,reps\n31/12/2026,Squat,80,8').rows[0].dateISO, '2026-12-31');
+    // An impossible calendar day is skipped, not imported as a fake date.
+    const feb31 = parseAppCsv('date,exercise,weight,reps\n31/02/2026,Squat,80,8');
+    assert.equal(feb31.rows.length, 0);
+    assert.equal(feb31.skipped, 1);
+    // Leap day exists in a leap year.
+    assert.equal(parseAppCsv('date,exercise,weight,reps\n29/02/2024,Squat,80,8').rows[0].dateISO, '2024-02-29');
+    // …but not in a common year.
+    const feb29 = parseAppCsv('date,exercise,weight,reps\n29/02/2026,Squat,80,8');
+    assert.equal(feb29.rows.length, 0);
+    assert.equal(feb29.skipped, 1);
+  });
+
   it('expands a set-count column when headers name it', () => {
     const { rows } = parseAppCsv('date,exercise,weight,sets,reps\n2026-08-01,Bench Press,80,3,6');
     assert.equal(rows.length, 1);

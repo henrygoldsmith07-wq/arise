@@ -101,9 +101,31 @@ function normaliseDate(v){
   const s = String(v || '').trim();
   if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
   const m = s.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/); // dd/mm/yyyy or mm/dd — ambiguous, prefer day-first
-  if(m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  if(m){
+    // Ambiguous D/M vs M/D can only be resolved by the calendar: a first
+    // component above 12 must be a day, and the assembled date must exist.
+    // Trusting the raw split used to emit impossible dates ("10/23/2026" →
+    // month 23; "31/02/2026" → 31 February) that every downstream date-only
+    // gate then rejects, silently dropping real sessions at import.
+    const a = Number(m[1]), b = Number(m[2]), year = m[3];
+    const day = a > 12 ? a : b > 12 ? b : a;
+    const month = day === a ? b : a;
+    const iso = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return isCalendarDate(iso) ? iso : null;
+  }
   const t = Date.parse(s);
   return Number.isFinite(t) ? new Date(t).toISOString().slice(0, 10) : null;
+}
+
+// The canonical YYYY-MM-DD shape AND a real calendar day — the same contract
+// the store's date-only fields uphold (parseDateOnlyUTC), so an imported row
+// can never carry a date the rest of the engine treats as missing.
+function isCalendarDate(iso){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+  const [y, mo, d] = iso.split('-').map(Number);
+  if(mo < 1 || mo > 12 || d < 1) return false;
+  const daysInMonth = [31, (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mo - 1];
+  return d <= daysInMonth;
 }
 
 /**

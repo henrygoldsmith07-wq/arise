@@ -10,6 +10,7 @@ import {
   captureVisiblePrescriptions,
   carryForwardPlan,
   duplicateUnilateralSetInBlock,
+  formatRest,
   isManualLoadOverride,
   nextActionableBlockIndex,
   patchRunnerSet,
@@ -48,6 +49,22 @@ describe('SessionRunner model — effort conversion', ()=>{
     assert.equal(rirFromRpe(''), '');
     assert.equal(stepRir('9.5', 1), '10');
     assert.equal(stepRir('0.5', -1), '0');
+  });
+});
+
+describe('SessionRunner model — rest display fails closed', ()=>{
+  // The standard runner's twin of guidedMode.fmtRest (fixed fail-closed in an
+  // earlier round — this copy was left behind). A bad restSec must never
+  // print "NaNs", "-1:-30" or float tails in the Details row or the spoken
+  // rest-start announcement.
+  it('renders unusable rest values as 0s, never NaN or negative clocks', ()=>{
+    assert.equal(formatRest(90), '1:30');
+    assert.equal(formatRest(45), '45s');
+    assert.equal(formatRest(NaN), '0s');
+    assert.equal(formatRest(Infinity), '0s');
+    assert.equal(formatRest(undefined), '0s');
+    assert.equal(formatRest(-30), '0s');
+    assert.equal(formatRest(90.75), '1:30', 'fractional seconds floor, no float tails');
   });
 });
 

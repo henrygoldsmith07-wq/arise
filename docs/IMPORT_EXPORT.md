@@ -26,7 +26,7 @@ versioned; imports are previewed before anything is applied.
 - `device` is an anonymous per-device id (generated locally) — it marks
   provenance in merges, it is not an identity.
 - **Credentials never travel:** WebDAV config/sync passphrase are stripped
-  from every export and denied on import. The NVIDIA AI-coach key is stored
+  from every export and denied on import. The AI-coach API key is stored
   outside the exportable app store entirely (session-only by default), so it
   is not present in backups, partial exports, sync payloads or coach exports.
 

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { dateISOAtOffset, daysBetweenDateOnly, isDateOnly, localDateISO, parseDateOnlyUTC } from '../src/lib/dateOnly.js';
+import { dateISOAtOffset, daysBetweenDateOnly, isDateOnly, localDateISO, mondayKeyISO, parseDateOnlyUTC } from '../src/lib/dateOnly.js';
 import { linearRegressionIntervals } from '../src/lib/statistics.js';
 import { strengthSeries } from '../src/lib/analytics.js';
 
@@ -37,6 +37,30 @@ describe('date-only utilities', ()=>{
     assert.equal(localDateISO('not-a-date'), '');
     assert.equal(dateISOAtOffset('not-a-date', 60), '');
     assert.equal(dateISOAtOffset('2026-01-01T00:00:00Z', Number.NaN), '');
+  });
+
+  it('groups every date of an ISO week under the same Monday key', ()=>{
+    // Mon 2026-10-26 .. Sun 2026-11-01 all share one Monday-start key.
+    for(const day of ['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01']){
+      assert.equal(mondayKeyISO(day), '2026-10-26', day);
+    }
+    // A Sunday belongs to the Monday that started its week, not to tomorrow.
+    assert.equal(mondayKeyISO('2026-10-25'), '2026-10-19');
+  });
+
+  it('keeps the Monday key stable across year boundaries', ()=>{
+    // Friday 2027-01-01 and Sunday 2027-01-03 close the week begun Monday
+    // 2026-12-28; the next Monday opens a new key.
+    assert.equal(mondayKeyISO('2027-01-01'), '2026-12-28');
+    assert.equal(mondayKeyISO('2027-01-03'), '2026-12-28');
+    assert.equal(mondayKeyISO('2027-01-04'), '2027-01-04');
+  });
+
+  it('fails closed for malformed week keys instead of inventing a week', ()=>{
+    assert.equal(mondayKeyISO('not-a-date'), null);
+    assert.equal(mondayKeyISO(''), null);
+    assert.equal(mondayKeyISO('2026-13-01'), null);
+    assert.equal(mondayKeyISO(null), null);
   });
 
   it('requires the complete YYYY-MM-DD shape, not a matching substring', ()=>{

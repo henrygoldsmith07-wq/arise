@@ -17,7 +17,15 @@ export function RestDock({ endsAt, clock, label, onChange, exerciseId, exerciseN
   const spokenMinuteRef = useRef(null);
 
   const left = endsAt ? Math.max(0, Math.ceil((endsAt - clock) / 1000)) : 0;
-  const adjust = (delta)=> onChange(Math.max(Date.now() + 5000, (endsAt || Date.now()) + delta * 1000));
+  // Adjustments act on the RUNNING timer: extend/shrink its existing end.
+  // With no timer active (fresh dock, or one that just expired) the old
+  // `(endsAt || Date.now())` fallback anchored to now, so tapping −15s or
+  // −60s on a settled dock started a surprise 5-second rest — the floor
+  // overrode the subtraction. Nothing to adjust means nothing to change.
+  const adjust = (delta)=> {
+    if(!endsAt) return;
+    onChange(Math.max(Date.now() + 5000, endsAt + delta * 1000));
+  };
 
   const say = ()=>{
     if(!voiceSupported() || !left) return;
