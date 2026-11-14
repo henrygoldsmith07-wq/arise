@@ -138,7 +138,7 @@ export default function WeeklyReviewCard({ store, setStore }){
 
       return {
         review, ackKey,
-        weekNumber: review.targetWeekNumber ? review.targetWeekNumber-1 : null,
+        weekNumber: review.targetWeekNumber > 1 ? review.targetWeekNumber-1 : null,
         completion: { done: review.completedSessionCount ?? wkSessions.length, total: review.reviewedSessionCount ?? wkSessions.length },
         volumeKg: volW,
         volumeDelta,

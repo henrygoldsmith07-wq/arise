@@ -1092,7 +1092,7 @@ function SessionHistoryList({ history, unitsPref = 'kg', onRepeat = null }){
               <button type="button" onClick={()=> { const session = buildQuickSession({ exerciseIds: [...new Set(h.blocks.map(b=> b.exerciseId))], history, ...(h.title ? { title: h.title } : {}) }); if(session) onRepeat(session); }}
                 aria-label={`Repeat ${h.title || 'workout'} from ${h.dateISO}`} className="float-right ml-2 min-h-11 rounded-full border border-line bg-surface px-3 text-xs font-bold">Repeat</button>
             )}
-            <p className="text-sm font-bold">{h.title} <span className="text-xs text-ink3">• {h.dateISO} • W{h.week} D{h.day}{h.gym ? ` • ${h.gym}` : ''}</span></p>
+            <p className="text-sm font-bold">{h.title} <span className="text-xs text-ink3">• {h.dateISO}{h.week != null && h.day != null ? ` • W${h.week} D${h.day}` : ''}{h.gym ? ` • ${h.gym}` : ''}</span></p>
             <p className="text-xs text-ink3">{h.blocks.map(b=> `${EXERCISE_BY_ID[b.exerciseId]?.name || b.exerciseId}: ${b.sets.map(s=> `${s.reps}${s.weightKg?`@${fmtWeight(s.weightKg, unitsPref)}`:''}${s.side?` ${s.side}`:''}${s.rom?` ${s.rom}`:''}`).join(', ')}`).join(' • ')}</p>
           </li>
         ))}
@@ -1122,7 +1122,7 @@ function TrainingCalendar({ history, today }){
       <div className="mt-1 grid grid-cols-7 gap-1" role="list" aria-label={`Training days in ${title}`}>
         {monthGrid(ym.year, ym.month).flat().map((d, i)=> d ? (
           <span key={d} role="listitem" aria-label={`${d}${days.has(d) ? ', trained' : ''}`}
-            className={`aspect-square grid place-items-center rounded-md text-[11px] tabular-nums ${days.has(d) ? 'bg-ink text-bg font-bold' : 'bg-surface2 text-ink3'} ${d === today ? 'ring-2 ring-ink/40' : ''}`}>{Number(d.slice(8))}</span>
+            className={`h-7 grid place-items-center rounded-md text-[11px] tabular-nums ${days.has(d) ? 'bg-success/25 text-ink font-bold' : 'text-ink3'} ${d === today ? 'ring-1 ring-ink' : ''}`}>{Number(d.slice(8))}</span>
         ) : <span key={`x${i}`} aria-hidden />)}
       </div>
     </div>

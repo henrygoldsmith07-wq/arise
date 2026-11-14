@@ -12,6 +12,15 @@ the history is the changelog; this file is its human-readable index.
 
 ## Unreleased
 
+### Review fixes after the competitor-parity rounds
+- Performance said "Estimated 1RM slipped 0 kg" for light loads (a 2 kg push-up plate moves the estimate by fractions of a kilo); under half a kilo it now states the percentage that triggered the call, e.g. "slipped 3%".
+- Safety titles named lifts by id ("Recurring pain with bench press dumbbell"); they now use the lift's name.
+- The weekly review no longer heads itself "Your week — week 0" in the first programme week.
+- Progress history rows no longer print an empty "W D" for sessions with no programme week/day (Quick workouts, imports, demo).
+- Training calendar: compact rows and a quiet tint for trained days instead of full-height white squares (~100 px shorter Progress).
+- Today: the "Add a note for this day" link is centred in its tap row instead of leaving a gap under it.
+- Checked end to end: a custom lift can be created, logged in a Quick workout, saved and seen by name in Progress after a reload; a lift tagged all warm-up leaves progression, records and history unchanged.
+
 ### Competitor parity: training calendar, repeat a past workout
 - **Training calendar** (Hevy's profile calendar / Strong's history calendar): the Consistency card on Progress shows a month grid with the days you trained filled in; arrows step through months. Read-only, worked out from your history.
 - **Repeat** (Hevy's "repeat workout" / Strong's "perform again"): every row in Progress history has a Repeat button that starts that session's lifts as a Quick workout, with the usual load targets from your history. Your programme is left as it is.
