@@ -7,6 +7,7 @@ import {
   createAnnouncerState,
   planAnnouncement,
   focusTrapDecision,
+  isKeyboardActivation,
 } from '../src/lib/a11y.js';
 
 describe('a11y — live announcer scheduling', () => {
@@ -76,5 +77,20 @@ describe('a11y — focus trap wrap decision', () => {
   it('does nothing with no focusable elements', () => {
     assert.equal(focusTrapDecision([], 'a', false), null);
     assert.equal(focusTrapDecision(null, 'a', false), null);
+  });
+});
+
+describe('a11y — keyboard activation detection', ()=>{
+  it('treats Enter/Space and assistive-technology clicks as keyboard activation', ()=>{
+    assert.equal(isKeyboardActivation({ detail: 0 }), true);
+    // A programmatic element.click() and some AT-synthesised clicks carry no
+    // click count at all; they must still operate the control.
+    assert.equal(isKeyboardActivation({}), true);
+    assert.equal(isKeyboardActivation(undefined), true);
+  });
+
+  it('rejects real pointer clicks so they do not double-step', ()=>{
+    assert.equal(isKeyboardActivation({ detail: 1 }), false);
+    assert.equal(isKeyboardActivation({ detail: 2 }), false);
   });
 });
