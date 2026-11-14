@@ -659,7 +659,7 @@ function DayNote({ store, setStore, session }){
     </div>
   );
   return (
-    <button type="button" onClick={()=> { setText(note); setEditing(true); }} data-testid="day-note" className="mt-1 min-h-11 -mx-1 px-1 flex items-start gap-1.5 text-left text-[11px] text-ink2 rounded-lg">
+    <button type="button" onClick={()=> { setText(note); setEditing(true); }} data-testid="day-note" className="-mx-1 px-1 min-h-11 flex items-center gap-1.5 text-left text-[11px] text-ink2 rounded-lg">
       <span aria-hidden>📝</span>
       <span className={note ? '' : 'text-ink3 underline underline-offset-2'}>{note || 'Add a note for this day'}</span>
     </button>

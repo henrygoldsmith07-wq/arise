@@ -85,10 +85,13 @@ export function strengthTrends({ history = [], exerciseIds = [], minSessions = E
       trend.status = 'stable';
     }
     trend.confidence = rows.length >= 6 ? 'high' : rows.length >= 4 ? 'medium' : 'low';
+    // Light loads (a 2 kg push-up plate) move by fractions of a kilo: say the
+    // percentage that triggered the call rather than "0 kg".
+    const change = Math.abs(deltaKg) < 0.5 ? `${Math.abs(Math.round(deltaPct))}%` : `${Math.abs(Math.round(deltaKg * 10) / 10)} kg`;
     trend.explanation = {
-      improving: `Estimated 1RM rose ${Math.round(deltaKg * 10) / 10} kg across ${rows.length} comparable sessions (best ${Math.round(best.e1rm)} kg on ${best.dateISO}).`,
+      improving: `Estimated 1RM rose ${change} across ${rows.length} comparable sessions (best ${Math.round(best.e1rm)} kg on ${best.dateISO}).`,
       stable: `Estimated 1RM has been level across ${rows.length} sessions (within ~1%).`,
-      declining: `Estimated 1RM slipped ${Math.abs(Math.round(deltaKg * 10) / 10)} kg over ${rows.length} sessions — fatigue or a change in style can explain this before strength does.`,
+      declining: `Estimated 1RM slipped ${change} over ${rows.length} sessions — fatigue or a change in style can explain this before strength does.`,
       insufficient: '',
     }[trend.status];
     return trend;

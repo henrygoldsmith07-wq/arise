@@ -14,6 +14,7 @@
 
 import { localDateISO } from './dateOnly.js';
 import { e1rm } from './trainingMath.js';
+import { EXERCISE_BY_ID } from './data.js';
 
 // ── Tunables ──────────────────────────────────────────────────────────────
 export const SAFETY_CONFIG = {
@@ -148,7 +149,7 @@ export function painTrendWarnings(history, { today = null, config = SAFETY_CONFI
       id: `pain-pattern:${exerciseId}`,
       severity: 'caution',
       exerciseId,
-      title: `Recurring pain with ${exerciseId.replace(/-/g, ' ')}`,
+      title: `Recurring pain with ${EXERCISE_BY_ID[exerciseId]?.name || exerciseId.replace(/-/g, ' ')}`,
       detail: `${dates.length} painful sessions within ${cfg.painPatternDays} days, most recently ${latest}. Repeated pain on the same movement is a load, range, or technique signal — not soreness.`,
       action: 'Swap to a joint-friendly alternative or drop the load until both are comfortable.',
     });
