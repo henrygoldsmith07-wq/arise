@@ -88,6 +88,16 @@ export function focusTrapDecision(focusables, activeElement, shiftKey){
   return null;
 }
 
+// A native button fires `click` on Enter/Space and when assistive technology
+// activates it. Those clicks carry no click count (`detail <= 0`); a real
+// pointer click carries one. Controls that step immediately on pointerdown use
+// this to give keyboard/AT users the same single step without double-stepping
+// pointer users (pointerdown already stepped them).
+export function isKeyboardActivation(event){
+  const detail = Number(event?.detail ?? 0);
+  return !Number.isFinite(detail) || detail <= 0;
+}
+
 export function useDialogA11y({ active = true, onClose = null } = {}){
   const rootRef = useRef(null);
   const closeRef = useRef(null);

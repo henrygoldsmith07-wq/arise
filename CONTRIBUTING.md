@@ -26,7 +26,7 @@ it that way.
 npm run verify        # lint:content + type-check + unit tests + build
 npm run format:check  # LF, no tabs, no trailing whitespace, final newline
 npm run license:check # production deps stay on the allowlist
-npm run bundle:budget # boot 190 kB / lazy 45 kB / total 300 kB gz
+npm run bundle:budget # boot 120 kB / lazy 34 kB / total 410 kB gz (see scripts/bundle-budget.cjs)
 npm run benchmark     # engine gates + artifact comparator (re-baseline consciously)
 npm run e2e           # Playwright, dev server
 npm run e2e:pwa       # Playwright, production build (service worker paths)
