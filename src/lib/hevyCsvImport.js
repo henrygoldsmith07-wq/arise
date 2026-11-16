@@ -12,6 +12,8 @@
 // are reported, never guessed), and keeps per-set weight/reps/RPE.
 // Local-only: it parses text the user picked; it never touches the store.
 
+import { parseDateOnlyUTC } from './dateOnly.js';
+
 /** RFC-4180-ish parser: quoted cells may contain commas, quotes and newlines. */
 export function parseCsvRecords(text){
   const src = String(text || '').replace(/^\uFEFF/, '');
@@ -140,12 +142,18 @@ const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8,
 export function hevyDate(v){
   const s = String(v || '').trim();
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if(m) return `${m[1]}-${m[2]}-${m[3]}`;
-  m = s.match(/^(\d{1,2})\s+([A-Za-z]{3})[a-z]*\.?,?\s+(\d{4})/);
-  if(m && MONTHS[m[2].toLowerCase()]) return `${m[3]}-${String(MONTHS[m[2].toLowerCase()]).padStart(2, '0')}-${m[1].padStart(2, '0')}`;
-  m = s.match(/^([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})/);
-  if(m && MONTHS[m[1].toLowerCase()]) return `${m[3]}-${String(MONTHS[m[1].toLowerCase()]).padStart(2, '0')}-${m[2].padStart(2, '0')}`;
-  return null;
+  let iso = m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+  if(!iso){
+    m = s.match(/^(\d{1,2})\s+([A-Za-z]{3})[a-z]*\.?,?\s+(\d{4})/);
+    if(m && MONTHS[m[2].toLowerCase()]) iso = `${m[3]}-${String(MONTHS[m[2].toLowerCase()]).padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  }
+  if(!iso){
+    m = s.match(/^([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})/);
+    if(m && MONTHS[m[1].toLowerCase()]) iso = `${m[3]}-${String(MONTHS[m[1].toLowerCase()]).padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+  }
+  // A malformed export can carry an impossible day (31 Feb, 2026-02-31).
+  // Reject it here rather than emitting a date the store's date gate drops.
+  return iso && Number.isFinite(parseDateOnlyUTC(iso)) ? iso : null;
 }
 
 const num = (v) => { const n = Number(String(v ?? '').replace(',', '.').trim()); return String(v ?? '').trim() !== '' && Number.isFinite(n) ? n : null; };

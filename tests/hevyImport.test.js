@@ -33,6 +33,12 @@ describe('Hevy CSV import', () => {
     assert.equal(hevyDate('Oct 23, 2026, 6:30 PM'), '2026-10-23');
     assert.equal(hevyDate('nonsense'), null);
   });
+  it('rejects an impossible calendar date instead of emitting it', () => {
+    // The store's date-only gate would drop such a session later, silently.
+    assert.equal(hevyDate('2026-02-31 10:00'), null);
+    assert.equal(hevyDate('31 Feb 2026, 18:30'), null);
+    assert.equal(hevyDate('Feb 31, 2026, 6:30 PM'), null);
+  });
   it('groups sets into one workout, drops warm-ups, reports unknown lifts', () => {
     const r = parseHevyCsv(CSV, { byId: EXERCISE_BY_ID });
     assert.equal(r.warmupsDropped, 1);
