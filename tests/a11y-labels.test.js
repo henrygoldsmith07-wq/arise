@@ -19,7 +19,6 @@ describe('a11y — accessible names include visible text', () => {
 
   it('the TeachingPanel trigger includes its visible How-to text in the label', () => {
     const source = src('TeachingPanel.jsx');
-    assert.match(source, /aria-label=\{`\$\{open \? 'How-to ✓' : 'How-to'\}/);
-    assert.doesNotMatch(source, /aria-label=\{`\$\{open \? 'Hide how to do it' : 'Show how to do it'\}/);
+    assert.match(source, /aria-label=\{`\$\{open \? 'How-to ✓' : 'How-to'\} — \$\{open \? 'Hide how to do it' : 'Show how to do it'\} for \$\{t\.name\}`\}/);
   });
 });
