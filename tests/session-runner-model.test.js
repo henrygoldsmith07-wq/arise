@@ -10,6 +10,7 @@ import {
   captureVisiblePrescriptions,
   carryForwardPlan,
   duplicateUnilateralSetInBlock,
+  formatRest,
   isManualLoadOverride,
   nextActionableBlockIndex,
   patchRunnerSet,
@@ -40,6 +41,21 @@ function block(overrides = {}){
     ...overrides,
   };
 }
+
+describe('SessionRunner model — rest labels', ()=>{
+  it('formats rest as m:ss or Ns', ()=>{
+    assert.equal(formatRest(90), '1:30');
+    assert.equal(formatRest(45), '45s');
+    assert.equal(formatRest(0), '0s');
+  });
+
+  it('never prints NaN, Infinity or a negative countdown', ()=>{
+    assert.equal(formatRest(NaN), '0s');
+    assert.equal(formatRest(Infinity), '0s');
+    assert.equal(formatRest(undefined), '0s');
+    assert.equal(formatRest(-5), '0s');
+  });
+});
 
 describe('SessionRunner model — effort conversion', ()=>{
   it('round-trips RPE/RIR and clamps deliberate suggestion steps', ()=>{

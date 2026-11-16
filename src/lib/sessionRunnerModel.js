@@ -62,8 +62,13 @@ export function stepRir(rir, delta) {
 }
 
 export function formatRest(seconds) {
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
+  // Rest labels are read aloud and shown in the runner; a malformed preset or
+  // imported plan must not produce "NaNs" or "-1:-5".
+  const n = Number(seconds);
+  if (!Number.isFinite(n) || n <= 0) return "0s";
+  const total = Math.ceil(n);
+  const minutes = Math.floor(total / 60);
+  const remainder = total % 60;
   return minutes
     ? `${minutes}:${String(remainder).padStart(2, "0")}`
     : `${remainder}s`;
