@@ -16,7 +16,12 @@ function parseNum(v){ const n=Number(v); return Number.isFinite(n)? n : 0; }
 function firstInt(reps){ const m=String(reps).match(/\d+/); return m? m[0] : ''; }
 
 export function fmtRest(s){
-  const m=Math.floor(s/60); const r=s%60;
+  // A rest display must never render "NaNs", "Infinity:NaN" or "-1:-5" when
+  // a malformed/expired countdown reaches it; invalid means no time left.
+  const n = Number(s);
+  if(!Number.isFinite(n) || n <= 0) return '0s';
+  const total = Math.ceil(n);
+  const m = Math.floor(total / 60), r = total % 60;
   return m? `${m}:${String(r).padStart(2,'0')}` : `${r}s`;
 }
 

@@ -107,6 +107,14 @@ describe('guidedMode — timers', () => {
     assert.equal(fmtRest(0), '0s');
   });
 
+  it('never prints NaN, Infinity or a negative countdown', () => {
+    assert.equal(fmtRest(NaN), '0s');
+    assert.equal(fmtRest(Infinity), '0s');
+    assert.equal(fmtRest(undefined), '0s');
+    assert.equal(fmtRest(-5), '0s');
+    assert.equal(fmtRest('45'), '45s');
+  });
+
   it('formats elapsed milliseconds as m:ss', () => {
     assert.equal(formatElapsed(0), '0:00');
     assert.equal(formatElapsed(65000), '1:05');
