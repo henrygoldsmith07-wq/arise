@@ -43,6 +43,14 @@ describe("bodyweight log", () => {
     assert.equal(parseBodyweightKg("abc"), null);
   });
 
+  it("rejects impossible calendar days instead of storing a shifted weigh-in", () => {
+    // Date.parse turns 2026-02-31 into 2 March; the canonical date-only gate
+    // must refuse it so a weigh-in never lands on a nonexistent day.
+    assert.equal(upsertBodyweight([], { dateISO: "2026-02-31", kg: 80 }).length, 0);
+    assert.equal(upsertBodyweight([], { dateISO: "2026-02-30", kg: 80 }).length, 0);
+    assert.equal(upsertBodyweight([], { dateISO: "2026-11-16", kg: 80 }).length, 1);
+  });
+
   it("keeps one row per day and ignores unusable input", () => {
     let l = upsertBodyweight([], {
       dateISO: "2026-10-01",

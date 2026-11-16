@@ -16,6 +16,7 @@
 
 import { parseReps, e1rm } from "./trainingMath.js";
 import { sparklinePoints } from "./exerciseHistory.js";
+import { isDateOnly } from "./dateOnly.js";
 
 export const BODYWEIGHT_MIN_KG = 20;
 export const BODYWEIGHT_MAX_KG = 300;
@@ -24,9 +25,11 @@ const STEADY_BAND_KG = 0.5;
 
 const dayNumber = (iso) =>
   Date.parse(`${String(iso).slice(0, 10)}T00:00:00Z`) / DAY_MS;
-const validDate = (iso) =>
-  /^\d{4}-\d{2}-\d{2}/.test(String(iso || "")) &&
-  Number.isFinite(dayNumber(iso));
+// Date.parse normalises impossible calendar days (2026-02-31 becomes 2 March),
+// which would store a weigh-in under a day the rest of the app rejects. Use
+// the canonical date-only round-trip; keep the old "YYYY-MM-DD prefix" input
+// tolerance by validating the sliced day.
+const validDate = (iso) => isDateOnly(String(iso || "").slice(0, 10));
 const round1 = (n) => Math.round(n * 10) / 10;
 
 /** Canonical kg (one decimal) from user text/number, or null when out of range. */
