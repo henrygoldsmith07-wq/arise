@@ -12,6 +12,7 @@
 // the same preview/confirm import flow as any other import.
 
 import { isHevyCsv, parseHevyCsv, hevyRowsToHistory, stableImportId } from './hevyCsvImport.js';
+import { parseDateOnlyUTC } from './dateOnly.js';
 
 // Column aliases per logical field. Match is case-insensitive, first hit wins.
 const ALIASES = {
@@ -99,9 +100,22 @@ function parseWeight(rawCell, unitCell, name){
 
 function normaliseDate(v){
   const s = String(v || '').trim();
-  if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  if(/^\d{4}-\d{2}-\d{2}/.test(s)){
+    const iso = s.slice(0, 10);
+    return Number.isFinite(parseDateOnlyUTC(iso)) ? iso : null;
+  }
   const m = s.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/); // dd/mm/yyyy or mm/dd — ambiguous, prefer day-first
-  if(m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  if(m){
+    // A component above 12 can only be the day, so 10/23/2026 is 23 October
+    // even though we otherwise prefer day-first. Validate the assembled date
+    // with the canonical date-only round-trip: emitting an impossible date
+    // (2026-23-10, 2026-02-31) silently loses the row at the store's date gate.
+    const a = Number(m[1]), b = Number(m[2]);
+    const day = b > 12 ? b : a; // day-first unless the second component can only be a day
+    const month = day === a ? b : a;
+    const iso = `${m[3]}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return Number.isFinite(parseDateOnlyUTC(iso)) ? iso : null;
+  }
   const t = Date.parse(s);
   return Number.isFinite(t) ? new Date(t).toISOString().slice(0, 10) : null;
 }
