@@ -1,5 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   NOTE_PROMPTS,
   fmtRest,
@@ -226,5 +228,93 @@ describe('guidedMode — first-lift finder', () => {
     const b = { exerciseId: 'chest-press-machine', sets: [{ weightKg: '' }] };
     assert.equal(needsWorkingWeight({ block: b, history: [], takesLoad: true }), true);
     assert.equal(needsWorkingWeight({ block: { ...b, sets: [{ weightKg: '30' }] }, history: [], takesLoad: true }), false);
+  });
+});
+
+// The unit suite has no DOM, so these pin the accessibility wiring as source
+// contracts (the same pattern as stepper-keyboard.test.js).
+const src = (...parts)=> readFileSync(join(process.cwd(), 'src', ...parts), 'utf8');
+
+describe('a11y pass — GuidedRunner announcements and hit targets', () => {
+  const source = src('components', 'GuidedRunner.jsx');
+
+  it('the in-dialog status region carries only rest-completion notices', () => {
+    const region = source.slice(source.indexOf('role="status" aria-live="polite"'), source.indexOf('</span>', source.indexOf('role="status" aria-live="polite"')));
+    assert.match(region, /\{announcement\}/);
+    // No step text and no "Rest started" fallback — those were the stale,
+    // double-announced copy. Steps are spoken once via the global announcer.
+    assert.doesNotMatch(region, /Rest started, \$\{restLabel/);
+    assert.doesNotMatch(region, /Step \$\{progress\.completed/);
+  });
+
+  it('clears a stale completion notice whenever a new step begins', () => {
+    const effect = source.slice(source.indexOf('const stepKey ='), source.indexOf('const guidedMeta ='));
+    assert.match(effect, /setAnnouncement\(''\)/);
+    assert.match(effect, /speakCurrentStep\(step, blocks, voiceOn\)/);
+  });
+
+  it('keeps the visible "Load kg"/"Load lb" string inside the input accessible name', () => {
+    assert.ok(source.includes('aria-label={`Load ${unit} — in '));
+    assert.ok(!source.includes('aria-label={`Load in '));
+  });
+
+  it('gives the unilateral L/R buttons and completion note chips a 44px hit area', () => {
+    assert.match(source, /min-h-11 min-w-11 px-4 rounded-full border text-xs font-bold/);
+    assert.ok(!source.includes('min-h-9'));
+    assert.match(source, /min-h-11 text-xs font-semibold px-2\.5 py-1\.5 rounded-full border/);
+  });
+});
+
+describe('a11y pass — SessionRunner rest announcement and scrolling', () => {
+  const source = src('components', 'SessionRunner.jsx');
+  const startRest = source.slice(source.indexOf('const startRest='), source.indexOf('// ── Preferences'));
+  const voiceOn = startRest.slice(startRest.indexOf('if(appPrefs?.voiceCoach === true)'), startRest.indexOf('} else {'));
+
+  it('routes voice-coach rest text through the global announcer as spoken, without the SR region', () => {
+    assert.match(voiceOn, /speak\(restText, Number\(appPrefs\?\.voiceRate\) \|\| 1\)/);
+    assert.match(voiceOn, /announce\(restText, \{ key: 'rest-start', spoken: true \}\)/);
+    assert.doesNotMatch(voiceOn, /setRestAnnouncement/);
+  });
+
+  it('keeps the single in-runner announcement when the voice coach is off', () => {
+    assert.match(startRest, /setRestAnnouncement\(`Rest started for \$\{label\}: \$\{formatRest\(sec\)\}\.`\)/);
+  });
+
+  it('routes all three smooth scrolls through the reduced-motion helper', () => {
+    assert.match(source, /import \{ announce, useDialogA11y, scrollIntoViewWithReducedMotion \} from '\.\.\/lib\/a11y\.js';/);
+    assert.equal((source.match(/scrollIntoViewWithReducedMotion\(/g) || []).length, 3);
+    assert.ok(!source.includes('scrollIntoView({ behavior:\'smooth\''));
+    assert.ok(!source.includes("scrollIntoView({ behavior: 'smooth'"));
+  });
+
+  it('gives the "Details & rationale" summary a 44px hit area', () => {
+    assert.match(source, /<summary className="min-h-11 text-\[11px\] text-ink3 cursor-pointer select-none">Details & rationale<\/summary>/);
+  });
+});
+
+describe('a11y pass — shared control touch targets and labels', () => {
+  it('gives the TeachingPanel How-to trigger a 44px hit area without changing its name', () => {
+    const source = src('components', 'TeachingPanel.jsx');
+    assert.match(source, /min-h-11 text-\[11px\] font-bold px-2\.5 py-1 rounded-full border/);
+    assert.ok(source.includes("'How-to'} — ${open ? 'Hide how to do it' : 'Show how to do it'} for ${t.name}`"));
+  });
+
+  it('names the SetRow Done button by set and state even when it shows only a tick', () => {
+    const source = src('components', 'session', 'SetRow.jsx');
+    assert.ok(source.includes("aria-label={`Set ${si+1}: ${s.completed ? 'completed, undo' : 'mark done'}`}"));
+  });
+
+  it('gives the AppShell theme toggle a 44px hit area', () => {
+    const source = src('components', 'AppShell.jsx');
+    assert.match(source, /min-h-11 min-w-11 px-2 grid place-items-center rounded-full/);
+    assert.ok(!source.includes('min-h-9'));
+  });
+
+  it('announces ProgrammeEditor stepper values with the field label, not a bare number', () => {
+    const stepper = src('components', 'ProgrammeEditor.jsx');
+    const fn = stepper.slice(stepper.indexOf('function Stepper('), stepper.indexOf('export default function ProgrammeEditor'));
+    assert.match(fn, /min-w-10 text-center text-sm font-black tabular-nums" aria-hidden="true">\{value\}<\/span>/);
+    assert.ok(fn.includes('aria-live="polite">{`${label}: ${value}`}</span>'));
+    assert.doesNotMatch(fn, /aria-live="polite"[^>]*>\{value\}/);
   });
 });

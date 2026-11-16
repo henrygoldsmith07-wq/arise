@@ -389,7 +389,7 @@ export default function Onboarding({ open, onClose, onComplete, initial, units =
                 className="w-full min-h-10 rounded-lg border border-line bg-surface px-3 text-sm" />
               <p className="text-[11px] text-ink3">Enter the smallest stack jump on your machine — targets snap to real pin positions.</p>
               {(()=>{ const w = coarseStackWarning(toKg(machineIncrementInput)); return w ? (
-                <p role="status" data-testid="coarse-stack-warning" className="text-[11px] text-warn font-semibold">A {weightInputValue(w.incrementKg, unit)} {unit} step is about {w.pct}% of a typical {weightInputValue(w.typicalLoadKg, unit)} {unit} upper-body load, so each progression would be a big jump. Arise will add reps first; add-on micro-plates ({weightInputValue(w.suggestedKg, unit)} {unit} or less) make smoother progress.</p>
+                <p role="status" data-testid="coarse-stack-warning" className="text-[11px] text-review font-semibold">A {weightInputValue(w.incrementKg, unit)} {unit} step is about {w.pct}% of a typical {weightInputValue(w.typicalLoadKg, unit)} {unit} upper-body load, so each progression would be a big jump. Arise will add reps first; add-on micro-plates ({weightInputValue(w.suggestedKg, unit)} {unit} or less) make smoother progress.</p>
               ) : null; })()}
             </div>
           )}

@@ -128,15 +128,28 @@ export function recordWorkoutEvents(events){
   }
 }
 
+/**
+ * Pure decision: post-save integrations (auto-sync + Pulse) never run for a
+ * demo store. Kept local so this module stays independent of the sync bundle.
+ */
+export function integrationsAllowed(store){
+  return store?.demo !== true;
+}
+
 export function runPostSaveIntegrations({ store, payload, history, setStore }){
-  void import('../lib/autoSync.js')
-    .then(({ autoSyncAfterSave })=> autoSyncAfterSave({ store, setStore }))
-    .catch(()=>{});
+  // Defense in depth: a demo save must not reach a real remote even if a
+  // preference guard elsewhere is bypassed.
+  if(integrationsAllowed(store)){
+    void import('../lib/autoSync.js')
+      .then(({ autoSyncAfterSave })=> autoSyncAfterSave({ store, setStore }))
+      .catch(()=>{});
+  }
   try{
     const adapter = typeof window !== 'undefined' ? window.__PULSE_ADAPTER__ : null;
-    // Three gates: the build contains the integration, the user consented,
-    // and an adapter is actually injected. Any one missing means no request.
-    if(integrationEnabledByBuild() && store?.preferences?.pulseEnabled && adapter){
+    // Four gates: not a demo store, the build contains the integration, the
+    // user consented, and an adapter is actually injected. Any one missing
+    // means no request.
+    if(integrationsAllowed(store) && integrationEnabledByBuild() && store?.preferences?.pulseEnabled && adapter){
       Promise.resolve(pushToPulse(payload, history, adapter)).then(result=>{
         const ok = result?.ok ?? Object.values(result || {}).every(value=> value?.ok !== false);
         recordEvent('pulse:sync', { sessionId:payload.id, ok, result }, { essential:false });

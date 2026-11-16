@@ -89,7 +89,7 @@ export async function restoreArchive(){
   for(const s of sessions){
     if(isCoveredByTombstone(s, tombstones, 'sessions')) continue;
     const existing = liveById.get(s.id);
-    if(existing && rowTimestamp(existing) > rowTimestamp(s)) continue;
+    if(existing && rowTimestamp(existing) >= rowTimestamp(s)) continue; // live wins timestamp ties
     restorable.push(s);
   }
   // Tombstoned rows are dropped from the archive even when unrestorable so a

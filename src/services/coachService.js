@@ -92,7 +92,7 @@ export async function runCoachRequest({ question, store, apiKey, baseUrl, model,
       schedule: store?.activeSchedule,
       readinessLog: store?.readinessLog || [],
       customTemplates: store?.customTemplates || [],
-      engineDecisions: local.evidence,
+      coachState: local.evidence,
     });
     const cloud = await requestCoachInsight({ context, apiKey:key, baseUrl:ep, model });
     if(cloud.ok) return { ...cloud, source: 'endpoint', localAnswer: local.text };

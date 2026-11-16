@@ -123,8 +123,12 @@ export default function ExerciseBrowser({ availableEquipment, onboarding = null,
   const [onlyAvailable,setOnlyAvailable]=useState(!!availableEquipment?.length);
   const [usedOnly,setUsedOnly]=useState(false);
   const [openId,setOpenId]=useState(null);
-  const [howToOpen,setHowToOpen]=useState(false);
-  const [subsOpen,setSubsOpen]=useState(false);
+  // Disclosure state is keyed by exercise id: expanding "How to perform it"
+  // or "Suitable substitutions" on one card must not open it on another.
+  const [howToOpenById,setHowToOpenById]=useState({});
+  const [subsOpenById,setSubsOpenById]=useState({});
+  const setHowToOpen = (id, open)=> setHowToOpenById(prev=> ({ ...prev, [id]: open }));
+  const setSubsOpen = (id, open)=> setSubsOpenById(prev=> ({ ...prev, [id]: open }));
   // Long-form setup/mistakes text is an on-demand asset: fetch it once an
   // exercise is opened (re-renders the how-to when it lands).
   useExerciseText(!!openId);
@@ -135,7 +139,7 @@ export default function ExerciseBrowser({ availableEquipment, onboarding = null,
   const storeSnapshot = store;
 
   const toggleTag = (id)=> setTags(prev=> prev.includes(id) ? prev.filter(t=> t!==id) : [...prev, id]);
-  const clearFilters = ()=>{ setQ(''); setMuscle(''); setLevel(''); setEquip(''); setTags([]); setUsedOnly(false); };
+  const clearFilters = ()=>{ setQ(''); setMuscle(''); setLevel(''); setEquip(''); setTags([]); setOnlyAvailable(false); setUsedOnly(false); };
 
   const programmeIds = useMemo(
     ()=> programmeExerciseIds({ activeSchedule: storeSnapshot.activeSchedule, customTemplates: storeSnapshot.customTemplates || [] }),
@@ -262,7 +266,7 @@ export default function ExerciseBrowser({ availableEquipment, onboarding = null,
                     <ClassificationChips exercise={ex} />
                   </div>
                 </div>
-                <details open={howToOpen} onToggle={e=> setHowToOpen(e.currentTarget.open)} className="rounded-lg border border-line bg-surface px-3 py-2">
+                <details open={!!howToOpenById[ex.id]} onToggle={e=> setHowToOpen(ex.id, e.currentTarget.open)} className="rounded-lg border border-line bg-surface px-3 py-2">
                   <summary className="text-xs font-bold cursor-pointer min-h-9 flex items-center">How to perform it</summary>
                   {(() => {
                     const t = teachingFor(ex.id);
@@ -295,13 +299,13 @@ export default function ExerciseBrowser({ availableEquipment, onboarding = null,
                 </details>
                 <ProgramUsage
                   rows={programmeUsageFor(ex.id, { activeSchedule: storeSnapshot.activeSchedule, customTemplates: storeSnapshot.customTemplates || [] })}
-                  onFindSubstitutes={()=> setSubsOpen(true)}
+                  onFindSubstitutes={()=> setSubsOpen(ex.id, true)}
                 />
                 <RecentPerformance
                   rows={recentExerciseSessions(storeSnapshot.history, ex.id, 3)}
-                  onLearnHow={()=> setHowToOpen(true)}
+                  onLearnHow={()=> setHowToOpen(ex.id, true)}
                 />
-                <details open={subsOpen} onToggle={e=> setSubsOpen(e.currentTarget.open)} className="rounded-lg border border-line bg-surface px-3 py-2">
+                <details open={!!subsOpenById[ex.id]} onToggle={e=> setSubsOpen(ex.id, e.currentTarget.open)} className="rounded-lg border border-line bg-surface px-3 py-2">
                   <summary className="text-xs font-bold cursor-pointer min-h-9 flex items-center">Suitable substitutions</summary>
                   <div className="mt-1.5">
                     <SubstitutionList

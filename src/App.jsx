@@ -52,7 +52,7 @@ import { setHapticsSource } from './lib/haptics.js';
 import OfflineBanner from './components/OfflineBanner.jsx';
 import DemoBanner from './components/DemoBanner.jsx';
 const InstallCard = lazy(() => import('./components/InstallCard.jsx'));
-import { setRestPreset, setWarmupSkip } from './lib/gymMode.js';
+import { setRestPreset, setWarmupSkip } from './lib/gymPrefsMemory.js';
 import { setSetupNote } from './lib/setupNotes.js';
 import { cancellationPlan } from './services/workoutCancellationService.js';
 import { setTelemetryConsent } from './services/settingsService.js';

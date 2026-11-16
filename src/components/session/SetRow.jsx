@@ -85,7 +85,7 @@ export default function SetRow({
         <select value={s.side||'L'} onChange={e=> updateSet(bi,si,{side:e.target.value})} aria-label={`Side set ${si+1}`} className="min-w-0 rounded-lg border border-line bg-surface2 px-1 py-3 text-xs font-bold"><option value="L">L</option><option value="R">R</option></select>
       ) : <span />}
       <span className="flex items-center gap-1">
-        <button onClick={()=> completeSet(bi,si)} aria-pressed={s.completed} className={`min-h-12 px-2.5 rounded-lg border text-[11px] font-bold whitespace-nowrap ${s.completed?'bg-success text-bg border-success':'bg-surface2 border-line'}`}>{s.completed?'✓':'Done'}</button>
+        <button onClick={()=> completeSet(bi,si)} aria-pressed={s.completed} aria-label={`Set ${si+1}: ${s.completed ? 'completed, undo' : 'mark done'}`} className={`min-h-12 px-2.5 rounded-lg border text-[11px] font-bold whitespace-nowrap ${s.completed?'bg-success text-bg border-success':'bg-surface2 border-line'}`}>{s.completed?'✓':'Done'}</button>
         {/* Gesture parity: the swipe-left "failed" action and the
             long-press keypad both exist as buttons, so touch-only
             gestures never gate an action (WCAG 2.5.6 / 2.1.1). */}

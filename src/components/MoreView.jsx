@@ -91,7 +91,15 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
 
   const healthAdapter = typeof window !== 'undefined' ? window.__ARISE_HEALTH_ADAPTER__ : null;
 
+  // Defense in depth: the export buttons are disabled in demo mode, but every
+  // handler guards too so sample data can never leave this device.
+  const demoGuard = ()=> {
+    if(store.demo === true){ flashMsg('Export is disabled in demo mode — this is sample data.', 4000); return false; }
+    return true;
+  };
+
   const exportNow = async ()=>{
+    if(!demoGuard()) return;
     try{
       await downloadFullBackup(store);
       flashMsg('Backup downloaded — keep it somewhere safe.', 3000);
@@ -101,6 +109,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
   };
 
   const exportEncrypted = async ()=>{
+    if(!demoGuard()) return;
     if(!encryptedBackupSupported()){ flashMsg('Encrypted backups need a newer browser — plain export still works.', 4000); return; }
     const pass = await dialogs.prompt({
       title:'Choose a passphrase for this backup',
@@ -162,11 +171,13 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
     }
   };
   const exportCsv = ()=>{
+    if(!demoGuard()) return;
     const csv = portableCsv(store.history||[]);
     saveBlob(new Blob([csv], { type: 'text/csv' }), `arise-history-${new Date().toISOString().slice(0,10)}.csv`);
   };
 
   const exportEvents = ()=>{
+    if(!demoGuard()) return;
     const date=new Date().toISOString().slice(0,10);
     downloadJson(`arise-event-history-${date}.json`, { app:'arise', version:3, exportedAt:new Date().toISOString(), eventHistory:getEventHistory() });
     flashMsg('Event history exported — it stays on your device unless you share the file.', 3000);
@@ -175,6 +186,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
   // Partial exports: one slice, same versioned envelope — a coach, a new
   // device or the study tooling each need only part of the store.
   const exportPartial = (kind)=>{
+    if(!demoGuard()) return;
     try{
       const payload = buildPartialExportPayload(store, kind);
       const date = new Date().toISOString().slice(0,10);
@@ -187,6 +199,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
   // health-bearing unless explicitly ticked; never credentials, never telemetry.
   const [coachSections, setCoachSections] = useState({ performance: true, weekly: true, readiness: false, detail: false });
   const shareCoach = async ()=>{
+    if(!demoGuard()) return;
     const data = buildCoachExport(store, { sections: coachSections, weeks: 8 });
     const md = renderCoachMarkdown(data);
     const outcome = await shareTextAsFile({ text: md, filename: `arise-coach-${new Date().toISOString().slice(0,10)}.md`, mimeType: 'text/markdown', title: 'Training summary' });
@@ -194,6 +207,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
   };
 
   const exportCoach = ()=>{
+    if(!demoGuard()) return;
     const data = buildCoachExport(store, { sections: coachSections, weeks: 8 });
     const md = renderCoachMarkdown(data);
     saveBlob(new Blob([md], { type: 'text/markdown' }), `arise-coach-${new Date().toISOString().slice(0,10)}.md`);
@@ -304,6 +318,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
 
   // Support bundle: environment + shape summary only, never training data.
   const exportSupportBundle = async ()=>{
+    if(!demoGuard()) return;
     try{
       const bundle = await buildSupportBundle({ store });
       downloadJson(`arise-support-${new Date().toISOString().slice(0, 10)}.json`, bundle);
@@ -313,6 +328,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
   // Recovery salvage: every intact history row from the current (possibly
   // repaired) store, before the user chooses rollback or a fresh start.
   const exportSalvage = ()=>{
+    if(!demoGuard()) return;
     const payload = buildSalvagePayload(store);
     if(!payload){
       flashMsg('Nothing salvageable was found — a snapshot rollback or backup import is the better path.', 5000);
@@ -524,7 +540,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
               <p className="font-bold">Time for a backup</p>
               <p className="text-ink3">It's been over a week since your last full backup. A recoverable local file is your safety copy.</p>
               <div className="flex gap-2">
-                <button onClick={exportNow} className="btn btn-primary min-h-8 rounded-lg px-2.5 text-[11px]">Export now</button>
+                <button onClick={exportNow} disabled={store.demo === true} className="btn btn-primary min-h-8 rounded-lg px-2.5 text-[11px] disabled:opacity-40">Export now</button>
                 <button onClick={dismissBackupReminder} className="underline font-semibold">Remind me next week</button>
               </div>
             </div>
@@ -534,7 +550,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
               <p className="font-bold">Stored data needed repair on startup.</p>
               <p className="text-ink3">A broken copy was kept in quarantine and the readable parts were restored. Nothing was lost silently. Details: {integrity.errors.join(' ')}</p>
               <div className="flex flex-wrap gap-x-4 gap-y-1">
-                <button onClick={exportSalvage} className="underline font-semibold">Export salvaged history</button>
+                <button onClick={exportSalvage} disabled={store.demo === true} className="underline font-semibold disabled:opacity-40">Export salvaged history</button>
                 <button onClick={()=> { dataLifecycleService.dismissIntegrityNotice(); setNoticeDismissed(true); }} className="underline font-semibold">Dismiss</button>
               </div>
             </div>
@@ -548,7 +564,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
           <div className="flex flex-wrap gap-2">
             <button onClick={exportNow} disabled={store.demo === true} className="btn btn-primary min-h-10 rounded-lg px-4 disabled:opacity-40">Export JSON</button>
             <button onClick={exportEncrypted} disabled={store.demo === true} className="btn btn-primary min-h-10 rounded-lg px-4 disabled:opacity-40">Export encrypted</button>
-            <button onClick={exportCsv} className="btn btn-secondary min-h-10 rounded-lg px-4">Export CSV</button>
+            <button onClick={exportCsv} disabled={store.demo === true} className="btn btn-secondary min-h-10 rounded-lg px-4 disabled:opacity-40">Export CSV</button>
             <button onClick={()=> setNotesOpen(true)} data-testid="notes-open" className="btn btn-secondary min-h-10 rounded-lg px-4" title="Search session notes and machine setups">Training notes</button>
             <button onClick={()=> setHevyOpen(true)} disabled={store.demo === true} data-testid="hevy-export-open" className="btn btn-secondary min-h-10 rounded-lg px-4 disabled:opacity-40" title="Your workouts in Hevy's own CSV layout">Export for Hevy</button>
             <label className="btn btn-secondary min-h-10 rounded-lg px-4 cursor-pointer">
@@ -640,16 +656,16 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
               <label className="flex items-center gap-1.5"><input type="checkbox" checked={coachSections.readiness} onChange={(e)=> setCoachSections({ ...coachSections, readiness: e.target.checked })} /> Readiness scores</label>
               <label className="flex items-center gap-1.5"><input type="checkbox" checked={coachSections.detail} onChange={(e)=> setCoachSections({ ...coachSections, detail: e.target.checked })} /> Full set detail</label>
             </div>
-            <button onClick={exportCoach} className="btn btn-primary min-h-8 rounded-lg px-2.5 text-[11px] mt-2">Download coach summary (.md)</button>
-            <button onClick={()=> { import('../lib/printReport.js').then(({ printProgressReport }) => printProgressReport(store, { units: store.preferences?.units === 'lb' ? 'lb' : 'kg' })); }} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px] mt-2">Print / save as PDF</button>
-            <button onClick={shareCoach} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px] mt-2">Share…</button>
+            <button onClick={exportCoach} disabled={store.demo === true} className="btn btn-primary min-h-8 rounded-lg px-2.5 text-[11px] mt-2 disabled:opacity-40">Download coach summary (.md)</button>
+            <button onClick={()=> { if(store.demo === true) return; import('../lib/printReport.js').then(({ printProgressReport }) => printProgressReport(store, { units: store.preferences?.units === 'lb' ? 'lb' : 'kg' })); }} disabled={store.demo === true} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px] mt-2 disabled:opacity-40">Print / save as PDF</button>
+            <button onClick={shareCoach} disabled={store.demo === true} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px] mt-2 disabled:opacity-40">Share…</button>
             <div className="flex flex-wrap gap-2 mt-2">
               <span className="self-center text-[11px] text-ink3">Partial export:</span>
-              <button onClick={()=> exportPartial('history')} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px]">History only</button>
-              <button onClick={()=> exportPartial('settings')} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px]">Settings only</button>
-              <button onClick={()=> exportPartial('events')} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px]">Events only</button>
+              <button onClick={()=> exportPartial('history')} disabled={store.demo === true} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px] disabled:opacity-40">History only</button>
+              <button onClick={()=> exportPartial('settings')} disabled={store.demo === true} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px] disabled:opacity-40">Settings only</button>
+              <button onClick={()=> exportPartial('events')} disabled={store.demo === true} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px] disabled:opacity-40">Events only</button>
             </div>
-            <button onClick={exportEvents} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px] mt-2">Export events</button>
+            <button onClick={exportEvents} disabled={store.demo === true} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px] mt-2 disabled:opacity-40">Export events</button>
           </details>
         </section>
 
@@ -664,11 +680,17 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
               <HevyExportSheet history={store.history||[]} units={prefs.units} onClose={()=> setHevyOpen(false)} />
             </Suspense>
           )}
-          <p className="text-xs text-ink3">Cross-device sync merges deterministically (newest session wins per id via savedAt; archived history travels too; deletions propagate via tombstones; active workout/schedule and Gym rest presets converge by recency). Either sync direction reaches the same result.</p>
-          <Suspense fallback={<p className="text-xs text-ink3">Loading sync settings…</p>}>
-            <SyncPanel store={store} setStore={setStore} setMsg={setMsg} />
-          </Suspense>
-          {msg && <p role="status" className="text-xs bg-surface2 rounded-lg px-3 py-2">{msg}</p>}
+          {store.demo === true ? (
+            <p className="text-xs text-ink3" role="note">Sync is disabled in demo mode — sample data never leaves this device.</p>
+          ) : (
+            <>
+              <p className="text-xs text-ink3">Cross-device sync merges deterministically (newest session wins per id via savedAt; archived history travels too; deletions propagate via tombstones; active workout/schedule and Gym rest presets converge by recency). Either sync direction reaches the same result.</p>
+              <Suspense fallback={<p className="text-xs text-ink3">Loading sync settings…</p>}>
+                <SyncPanel store={store} setStore={setStore} setMsg={setMsg} />
+              </Suspense>
+              {msg && <p role="status" className="text-xs bg-surface2 rounded-lg px-3 py-2">{msg}</p>}
+            </>
+          )}
         </section>
 
         <section id="sec-storage" className="rounded-xl border border-line bg-surface p-3 space-y-3">
@@ -750,7 +772,9 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
                 {store.preferences?.consentReview?.remind === true && consentReviewDue && (
                   <div className="rounded-lg border border-review/30 bg-reviewsoft px-2.5 py-2 text-[11px]">
                     <p className="font-bold">Consent review due</p>
-                    <p className="text-ink3 mt-0.5">You last reviewed these choices {Math.round((Date.now() - Date.parse(store.preferences.consentReview.lastReviewedAt)) / 86400000)} days ago.</p>
+                    <p className="text-ink3 mt-0.5">{store.preferences.consentReview.lastReviewedAt
+                      ? `You last reviewed these choices ${Math.round((Date.now() - Date.parse(store.preferences.consentReview.lastReviewedAt)) / 86400000)} days ago.`
+                      : "You haven't reviewed these choices yet."}</p>
                     <button onClick={()=> setStore(acknowledgeConsentReview(store))} className="btn btn-secondary min-h-8 rounded-lg px-2.5 text-[11px] mt-1">Mark reviewed</button>
                   </div>
                 )}
@@ -882,7 +906,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
                 <button onClick={()=> { clearTelemetry(); clearErrorEvents(); setStore(clearEventHistoryStore(store), { collectionMode:'replace' }); flashMsg('Local telemetry and crash logs cleared.', 2000); }} className="btn btn-secondary min-h-9 rounded-lg px-3 text-xs">Clear telemetry</button>
                 <button onClick={()=> { setShowErrors(v=>!v); }} className="btn btn-secondary min-h-9 rounded-lg px-3 text-xs">{showErrors?'Hide':'Show'} crash logs</button>
                 <button onClick={()=> { clearErrorEvents(); flashMsg('Crash logs cleared.', 2000); }} className="btn btn-secondary min-h-9 rounded-lg px-3 text-xs">Clear crash logs</button>
-                <button onClick={exportSupportBundle} className="btn btn-secondary min-h-9 rounded-lg px-3 text-xs">Support diagnostics</button>
+                <button onClick={exportSupportBundle} disabled={store.demo === true} className="btn btn-secondary min-h-9 rounded-lg px-3 text-xs disabled:opacity-40">Support diagnostics</button>
               </div>
               {showTelemetry && (
                 <pre className="text-[11px] overflow-auto rounded-lg bg-surface2 border border-line p-3">{JSON.stringify(telemetrySummary(), null, 2)}</pre>

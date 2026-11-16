@@ -190,9 +190,13 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   // identity — blocks re-created on every edit would re-speak).
   const stepKey = step ? `${step.blockIndex}:${step.setIndex}` : null;
   useEffect(()=>{
-    if(!stepKey){ spokenStepRef.current = null; return; }
+    if(!stepKey){ spokenStepRef.current = null; setAnnouncement(''); return; }
     if(spokenStepRef.current === stepKey) return;
     spokenStepRef.current = stepKey;
+    // The in-dialog live region now carries only rest-completion notices. A
+    // fresh step supersedes any stale "Rest complete" text; step changes are
+    // announced globally by speakCurrentStep below (never by both paths).
+    setAnnouncement('');
     speakCurrentStep(step, blocks, voiceOn);
   }, [stepKey, voiceOn]);
   // Per-exercise arm + treatment, computed once per change exactly like the
@@ -368,11 +372,13 @@ export default function GuidedRunner({ session, history = [], availableEquipment
   return (
     <div ref={rootRef} onKeyDown={trapTab} className="fixed inset-0 z-40 bg-bg flex flex-col pt-[env(safe-area-inset-top)]" role="dialog" aria-modal="true" aria-label={`Guided session — ${session.title}`}>
       <span className="sr-only" role="status" aria-live="polite">
-        {/* Never interpolate the running countdown here — a per-second value in
-            a live region queues every tick on screen readers. Rest progress is
-            conveyed by the minute-mark announcer instead; this region carries
-            step changes and completion. */}
-        {announcement || (restLeft!==null ? `Rest started, ${restLabel || 'next exercise'} is next.` : step ? `Step ${progress.completed + progress.skipped + 1} of ${progress.total}: ${currentExercise?.name || currentBlock?.exerciseId}, set ${step.setIndex + 1}.` : 'All sets resolved. Ready to save.')}
+        {/* Carries ONLY the rest-completion notice ("Rest complete — next
+            set."). Step changes are announced once through the global
+            announcer in speakCurrentStep — repeating them here double-spoke
+            every step and then went stale. The running countdown is likewise
+            never interpolated here (a per-second value would queue every tick);
+            rest progress is conveyed by the minute-mark announcer instead. */}
+        {announcement}
       </span>
 
       {/* Header: session identity + live elapsed timer + overall progress bar */}
@@ -410,7 +416,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
               <p className="text-xs font-semibold">Session notes</p>
               <div className="flex flex-wrap gap-1.5">
                 {NOTE_PROMPTS.map(prompt=> (
-                  <button key={prompt.id} onClick={()=> toggleNoteTag(prompt.id)} aria-pressed={noteTags.includes(prompt.id)} className={`text-xs font-semibold px-2.5 py-1.5 rounded-full border ${noteTags.includes(prompt.id)?'bg-ink text-bg border-ink':'bg-surface2 border-line'}`}>{prompt.label}</button>
+                  <button key={prompt.id} onClick={()=> toggleNoteTag(prompt.id)} aria-pressed={noteTags.includes(prompt.id)} className={`min-h-11 text-xs font-semibold px-2.5 py-1.5 rounded-full border ${noteTags.includes(prompt.id)?'bg-ink text-bg border-ink':'bg-surface2 border-line'}`}>{prompt.label}</button>
                 ))}
               </div>
               <textarea value={note} onChange={e=>{ markUserEdited(); setNote(e.target.value); }} rows={2} aria-label="Session notes" placeholder="How did it go? Sleep, pain, technique, ROM, load…" className="w-full rounded-lg border border-line bg-surface2 px-3 py-2.5 text-sm" />
@@ -463,7 +469,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
 
               <div className="grid grid-cols-2 gap-2">
                 <label className="text-[11px]">Load {unit}
-                  <WeightInput type="text" inputMode="decimal" value={currentSet?.weightKg || ''} unit={unit} onChange={v=> updateSet(step.blockIndex, step.setIndex, { weightKg: v })} onFocus={trackFieldFocus} onBlur={(e)=> { if(fieldCommitted(e)){ try{ recordEvent('load-field-commit', { sessionId: session.id, exerciseId: currentBlock.exerciseId, setIndex: step.setIndex, mode: 'guided' }); }catch{} } }} placeholder={takesExternalLoad(currentExercise) ? unit : 'bw'} aria-label={`Load in ${unit === 'lb' ? 'pounds' : 'kilograms'}`} className="mt-1 w-full rounded-lg border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center" />
+                  <WeightInput type="text" inputMode="decimal" value={currentSet?.weightKg || ''} unit={unit} onChange={v=> updateSet(step.blockIndex, step.setIndex, { weightKg: v })} onFocus={trackFieldFocus} onBlur={(e)=> { if(fieldCommitted(e)){ try{ recordEvent('load-field-commit', { sessionId: session.id, exerciseId: currentBlock.exerciseId, setIndex: step.setIndex, mode: 'guided' }); }catch{} } }} placeholder={takesExternalLoad(currentExercise) ? unit : 'bw'} aria-label={`Load ${unit} — in ${unit === 'lb' ? 'pounds' : 'kilograms'}`} className="mt-1 w-full rounded-lg border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center" />
                 </label>
                 <label className="text-[11px]">Reps
                   <input type="number" min="0" step="1" inputMode="numeric" value={currentSet?.reps || ''} onChange={e=> updateSet(step.blockIndex, step.setIndex, { reps: e.target.value })} onFocus={trackFieldFocus} onBlur={(e)=> { if(fieldCommitted(e)){ try{ recordEvent('reps-field-commit', { sessionId: session.id, exerciseId: currentBlock.exerciseId, setIndex: step.setIndex, mode: 'guided' }); }catch{} } }} placeholder="9" aria-label="Reps" className="mt-1 w-full rounded-lg border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
@@ -472,7 +478,7 @@ export default function GuidedRunner({ session, history = [], availableEquipment
               {currentBlock.unilateral && (
                 <div className="flex gap-1.5" role="group" aria-label="Side">
                   {['L','R'].map(side=> (
-                    <button key={side} onClick={()=> updateSet(step.blockIndex, step.setIndex, { side })} aria-pressed={(currentSet?.side||'L')===side} className={`min-h-9 px-4 rounded-full border text-xs font-bold ${(currentSet?.side||'L')===side ? 'bg-ink text-bg border-ink' : 'bg-surface2 border-line'}`}>{side}</button>
+                    <button key={side} onClick={()=> updateSet(step.blockIndex, step.setIndex, { side })} aria-pressed={(currentSet?.side||'L')===side} className={`min-h-11 min-w-11 px-4 rounded-full border text-xs font-bold ${(currentSet?.side||'L')===side ? 'bg-ink text-bg border-ink' : 'bg-surface2 border-line'}`}>{side}</button>
                   ))}
                 </div>
               )}

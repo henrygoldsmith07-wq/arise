@@ -26,7 +26,11 @@ function Stepper({ label, value, onDown, onUp, downDisabled, upDisabled }){
   return (
     <div className="flex items-center gap-1" role="group" aria-label={label}>
       <button type="button" onClick={onDown} disabled={downDisabled} aria-label={`Decrease ${label}`} className={ICON}>−</button>
-      <span className="min-w-10 text-center text-sm font-black tabular-nums" aria-live="polite">{value}</span>
+      {/* Visible read-out stays a bare number; the polite announcement pairs
+          it with the field label ("Sets: 4") so a bare digit is never uttered
+          on its own. One sr-only live region, one status string. */}
+      <span className="min-w-10 text-center text-sm font-black tabular-nums" aria-hidden="true">{value}</span>
+      <span className="sr-only" aria-live="polite">{`${label}: ${value}`}</span>
       <button type="button" onClick={onUp} disabled={upDisabled} aria-label={`Increase ${label}`} className={ICON}>+</button>
     </div>
   );

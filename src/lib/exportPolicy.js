@@ -22,6 +22,54 @@ const APP_NAME = 'arise';
 // closure (bundle budget: the study chunk must stay serializer-only).
 export const EXPORT_VERSION = 4;
 
+// ── Shared import structural guards ─────────────────────────────────────────
+// Imports are untrusted. These PURE guards neutralise three structural attacks
+// before any value is read, and are shared by the PREVIEW path (this module)
+// and the APPLY path (export.js) so neither can drift from the other:
+//   1. Prototype pollution — "__proto__"/"constructor"/"prototype" keys are
+//      dropped at every depth and objects rebuilt with a null prototype.
+//   2. Depth bombs — parser-stack exhaustion via deeply nested input. Capped.
+//   3. Size bombs — a huge string freezes the tab before validation runs.
+// Kept here (the lower-level leaf) so export.js can import them without a
+// circular dependency — this module never imports export.js.
+export const MAX_IMPORT_BYTES = 5 * 1024 * 1024; // 5 MB ≈ 15 years of daily sessions
+export const MAX_IMPORT_DEPTH = 64;
+
+export function enforceImportSize(text){
+  // Rough UTF-16 ceiling: 2 bytes per char. The byte cap on raw/decompressed
+  // output (export.js) catches multi-byte and gzip-bomb edge cases.
+  if(typeof text === 'string' && text.length > MAX_IMPORT_BYTES / 2){
+    throw new Error('Import file is too large (limit 5 MB of JSON).');
+  }
+}
+
+export function stripDangerousKeys(value, depth = 0){
+  if(depth > MAX_IMPORT_DEPTH) throw new Error('Import file nests more than ' + MAX_IMPORT_DEPTH + ' levels deep.');
+  if(Array.isArray(value)) return value.map((v) => stripDangerousKeys(v, depth + 1));
+  if(value && typeof value === 'object'){
+    // An ordinary object keeps imports assignment-compatible with the rest of
+    // the app (structuredClone, deep-equality round trips). Pollution is still
+    // impossible: the only prototype-mutating key, `__proto__`, is skipped,
+    // as are `constructor` and `prototype`.
+    const out = {};
+    for(const key of Object.keys(value)){
+      if(key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+      out[key] = stripDangerousKeys(value[key], depth + 1);
+    }
+    return out;
+  }
+  return value;
+}
+
+/** Parse untrusted JSON text: size cap, then parse, then structural scrub. */
+export function sanitiseImportText(text){
+  enforceImportSize(text);
+  let parsed;
+  try{ parsed = JSON.parse(text); }
+  catch { throw new Error('Not valid JSON.'); }
+  return stripDangerousKeys(parsed);
+}
+
 // ── Device id (export metadata + tombstone provenance) ──────────────────────
 let deviceId = null;
 export function getDeviceId(){
@@ -246,9 +294,15 @@ const tsOf = (s) => Date.parse(s?.savedAt || s?.dateISO || '1970-01-01') || 0;
  * @returns {{ ok, reason?, envelope?, adapter?, meta?, counts?, conflicts?, conflictsTotal?, deniedFields? }}
  */
 export function buildImportPreview(rawData, currentStore){
+  // The preview is the gate the user trusts BEFORE confirming an import. It
+  // must apply the same structural guards as the apply path: a size/depth bomb
+  // or a pollution payload must never freeze the tab or reach the UI here.
   let parsed;
-  try{ parsed = typeof rawData === 'string' ? JSON.parse(rawData) : rawData; }
-  catch{ return { ok: false, reason: 'Not valid JSON.' }; }
+  try{
+    parsed = typeof rawData === 'string' ? sanitiseImportText(rawData) : stripDangerousKeys(rawData);
+  }catch(err){
+    return { ok: false, reason: err?.message || 'Not valid JSON.' };
+  }
   const { envelope, adapter, foreignApp } = adaptImportEnvelope(parsed);
   if(!envelope) return { ok: false, reason: foreignApp ? `This backup belongs to "${foreignApp}", not Arise.` : 'Not a recogniseable arise backup.' };
   const gate = validateEnvelope({ ...envelope, schemaVersion: envelope.schemaVersion || 1 });

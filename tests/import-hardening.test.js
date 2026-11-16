@@ -3,8 +3,9 @@
 // impossible numeric values that would poison e1RM/volume/priors.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { gzipSync } from 'node:zlib';
 
-import { parseImportFile, validateStoreData } from '../src/lib/export.js';
+import { parseImportFile, parseBackupFile, validateStoreData } from '../src/lib/export.js';
 import { buildImportPreview } from '../src/lib/exportPolicy.js';
 
 function session(i = 1, extra = {}){
@@ -117,5 +118,50 @@ describe('import hardening', () => {
     });
     assert.equal(result.ok, true);
     assert.deepEqual(result.errors, []);
+  });
+
+  it('rejects an oversized JSON string at the PREVIEW gate, before apply', () => {
+    const big = JSON.stringify({ app: 'arise', data: { history: [session()], filler: 'x'.repeat(6 * 1024 * 1024) } });
+    const preview = buildImportPreview(big, { history: [] });
+    assert.equal(preview.ok, false);
+    assert.match(preview.reason, /too large/);
+  });
+
+  it('rejects a depth bomb at the PREVIEW gate', () => {
+    let deep = 1;
+    for(let i = 0; i < 200; i++) deep = { deep };
+    const preview = buildImportPreview({ app: 'arise', data: { history: [session()], deep } }, { history: [] });
+    assert.equal(preview.ok, false);
+    assert.match(preview.reason, /levels deep/);
+  });
+
+  it('strips pollution keys at the PREVIEW gate, not only at apply', () => {
+    const hostile = JSON.parse('{"app":"arise","data":{"history":[{"id":"s-1","dateISO":"2026-01-01","blocks":[{"exerciseId":"bench-press","sets":[{"reps":5,"weightKg":80}],"__proto__":{"polluted":"yes"}}]}],"__proto__":{"polluted":"yes"}}}');
+    const preview = buildImportPreview(hostile, { history: [] });
+    assert.equal(preview.ok, true);
+    assert.equal(({}).polluted, undefined);
+    const block = preview.envelope.data.history[0].blocks[0];
+    assert.equal(Object.prototype.hasOwnProperty.call(block, '__proto__'), false);
+  });
+
+  it('refuses a gzip bomb at the PREVIEW gate (decompressed output is capped)', async () => {
+    const bomb = JSON.stringify({ app: 'arise', data: { history: [session()], filler: 'x'.repeat(6 * 1024 * 1024) } });
+    const envelope = {
+      app: 'arise', format: 'arise+gzip', v: 1, encoding: 'base64',
+      data: Buffer.from(gzipSync(Buffer.from(bomb))).toString('base64'),
+    };
+    // Tiny on the wire — the cap must be applied to the INFLATED bytes.
+    assert.ok(JSON.stringify(envelope).length < 100 * 1024);
+    await assert.rejects(() => parseBackupFile(JSON.stringify(envelope)), /expands beyond/);
+  });
+
+  it('still parses an honest compressed backup at the PREVIEW gate', async () => {
+    const ok = JSON.stringify({ app: 'arise', data: { history: [session(), session(2)] } });
+    const envelope = {
+      app: 'arise', format: 'arise+gzip', v: 1, encoding: 'base64',
+      data: Buffer.from(gzipSync(Buffer.from(ok))).toString('base64'),
+    };
+    const inner = await parseBackupFile(JSON.stringify(envelope));
+    assert.equal(inner.data.history.length, 2);
   });
 });

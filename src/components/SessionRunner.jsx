@@ -14,7 +14,7 @@ import { predictSessionDuration, sessionPace } from '../lib/warmup.js';
 import { supersetStep, pairRestSec, supersetPartner } from '../lib/superset.js';
 import { needsWorkingWeight, warmupsFromFoundLoad } from '../lib/workingWeight.js';
 import WorkingWeightFinder from './WorkingWeightFinder.jsx';
-import { announce, useDialogA11y } from '../lib/a11y.js';
+import { announce, useDialogA11y, scrollIntoViewWithReducedMotion } from '../lib/a11y.js';
 import { useWorkoutClock, useWorkoutDraftPersistence, useWorkoutWakeLock } from '../hooks/useWorkoutRuntime.js';
 import { restStartCue } from '../lib/audioCues.js';
 import { speak, cancelSpeech } from '../lib/voiceCoach.js';
@@ -275,10 +275,19 @@ export default function SessionRunner({ session, history = [], availableEquipmen
     setClock(Date.now());
     // Announce once, politely — the ticking countdown itself must not flood
     // screen readers (a11y baseline: live regions announce without flooding).
-    setRestAnnouncement(`Rest started for ${label}: ${formatRest(sec)}.`);
+    // With the voice coach on, TTS carries the text and the global announcer
+    // mirrors it marked spoken so the screen reader does not repeat it. Writing
+    // the in-runner live region too would double-announce; voice off keeps the
+    // single plain announcement there.
+    if(appPrefs?.voiceCoach === true){
+      const restText = `Rest ${formatRest(sec)} for ${label}.`;
+      speak(restText, Number(appPrefs?.voiceRate) || 1);
+      announce(restText, { key: 'rest-start', spoken: true });
+    } else {
+      setRestAnnouncement(`Rest started for ${label}: ${formatRest(sec)}.`);
+    }
     if(appPrefs?.soundCues !== false) restStartCue();
     haptic('setComplete');
-    if(appPrefs?.voiceCoach === true) speak(`Rest ${formatRest(sec)} for ${label}.`, Number(appPrefs?.voiceRate) || 1);
   };
 
   // ── Preferences. Two sources, two jobs: ──
@@ -568,7 +577,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       const step = supersetStep(afterDone, bi);
       if(step.focus != null){
         setFocusIdx(step.focus);
-        if(!gymMode) requestAnimationFrame(()=> rootRef.current?.querySelector(`#block-${step.focus}`)?.scrollIntoView?.({ behavior:'smooth', block:'start' }));
+        if(!gymMode) requestAnimationFrame(()=> scrollIntoViewWithReducedMotion(rootRef.current?.querySelector(`#block-${step.focus}`), { behavior:'smooth', block:'start' }));
       }
       const restOf = (b)=> restForBlock(gymPrefs, b);
       const partnerBlock = step.focus != null ? blocks[step.focus] : null;
@@ -677,7 +686,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
       swapResumeRef.current = null;
       const focusIdx = Number.isInteger(resumeIdx) ? resumeIdx : bi;
       const container = rootRef.current?.querySelector(`#block-${focusIdx}`);
-      container?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      scrollIntoViewWithReducedMotion(container, { behavior: 'smooth', block: 'nearest' });
       // React keeps input values on the property, not the attribute — read
       // .value so a prefilled-then-cleared field still counts as empty.
       const inputs = [...(container?.querySelectorAll('input[aria-label^="Reps set"]') || [])];
@@ -829,7 +838,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
             {skipQuery && (
               skipTarget ? (
                 <button
-                  onClick={()=>{ setSkipQuery(''); setFocusIdx(skipTarget.blockIndex); document.getElementById(`block-${skipTarget.blockIndex}`)?.scrollIntoView({ behavior:'smooth', block:'start' }); }}
+                  onClick={()=>{ setSkipQuery(''); setFocusIdx(skipTarget.blockIndex); scrollIntoViewWithReducedMotion(document.getElementById(`block-${skipTarget.blockIndex}`), { behavior:'smooth', block:'start' }); }}
                   className="mt-1.5 w-full rounded-lg border border-line bg-surface px-3 py-2 text-left text-xs hover:border-ink3"
                 >
                   Jump to <strong>{EXERCISE_BY_ID[blocks[skipTarget.blockIndex]?.exerciseId]?.name || blocks[skipTarget.blockIndex]?.exerciseId}</strong>
@@ -957,7 +966,7 @@ export default function SessionRunner({ session, history = [], availableEquipmen
                   )}
 
                   <details className="mt-1.5">
-                    <summary className="text-[11px] text-ink3 cursor-pointer select-none">Details & rationale</summary>
+                    <summary className="min-h-11 text-[11px] text-ink3 cursor-pointer select-none">Details & rationale</summary>
                     <div className="mt-1 space-y-0.5 text-[11px] text-ink3">
                       {ex?.cues?.[0] && <p>Cue: {ex.cues[0]}</p>}
                       {b.warmups?.length ? (warmupsSkipped(gymPrefs, b.exerciseId)

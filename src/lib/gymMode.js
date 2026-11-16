@@ -147,13 +147,7 @@ export function hasUserRestPreset(gymPrefs, exerciseId){
   return Number.isFinite(stored) && stored > 0;
 }
 
-export function setRestPreset(gymPrefs, exerciseId, seconds){
-  const sec = Math.max(0, Math.round(Number(seconds) || 0));
-  const next = { ...(gymPrefs?.restPresets || {}) };
-  if(sec <= 0) delete next[exerciseId];
-  else next[exerciseId] = sec;
-  return next;
-}
+export { setRestPreset, setWarmupSkip } from './gymPrefsMemory.js';
 
 // ── Warm-up skip memory ─────────────────────────────────────────────────────
 // Remembered per lift in gymPrefs.skipWarmups ({exerciseId:true}); the runner
@@ -161,13 +155,6 @@ export function setRestPreset(gymPrefs, exerciseId, seconds){
 
 export function warmupsSkipped(gymPrefs, exerciseId){
   return gymPrefs?.skipWarmups?.[exerciseId] === true;
-}
-
-export function setWarmupSkip(gymPrefs, exerciseId, skip){
-  const next = { ...(gymPrefs?.skipWarmups || {}) };
-  if(skip) next[exerciseId] = true;
-  else delete next[exerciseId];
-  return next;
 }
 
 export function effectiveWarmups(block, gymPrefs){

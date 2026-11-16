@@ -50,10 +50,7 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
   const simple = isSimpleView(store.preferences);
   // Backup recency — local-only nudge source. Read fresh each render so a
   // successful export in More clears it without needing a subscription.
-  const backupRecency = useMemo(
-    ()=> computeBackupRecency({ history:store.history || [], lastBackupAt:readBackupState().lastBackupAt }),
-    [store.history]
-  );
+  const backupRecency = computeBackupRecency({ history:store.history || [], lastBackupAt:readBackupState().lastBackupAt });
 
   const applyReplan = ()=>{
     const result = replanSchedule(sched, store.history || [], { today: isoToday() });
@@ -240,7 +237,7 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
           {/* ── Time budget (P2.5): state the time you have; the compression
               engine does the rest, with the reason shown before you start. ── */}
           {today && budgetChoices.length > 0 && (
-            <div className="flex items-center gap-1" role="group" aria-label="Time available today">
+            <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Time available today">
               <span className="text-[11px] text-ink3 mr-1 shrink-0">Time</span>
               <button
                 onClick={()=> setTimeBudget(null)}

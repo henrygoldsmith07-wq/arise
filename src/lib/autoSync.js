@@ -10,10 +10,19 @@ import { runSync } from './syncEngine.js';
 import { makeWebdavAdapter } from './webdav.js';
 
 /**
+ * Pure decision: demo stores never auto-sync, regardless of sync preferences.
+ * Sample sessions must never reach the user's real remote.
+ */
+export function canAutoSync(store){
+  return store?.demo !== true;
+}
+
+/**
  * @returns {Promise<void>} — fire-and-forget from the caller.
  */
 export async function autoSyncAfterSave({ store, setStore }){
   try{
+    if(!canAutoSync(store)) return;
     const prefs = store?.preferences || {};
     if(prefs.syncEnabled !== true) return;
     const sync = prefs.sync || {};

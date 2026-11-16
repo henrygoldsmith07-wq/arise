@@ -83,3 +83,4 @@ html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after 
    decorative at 10px but carries real numbers (CI bands, audit trails). */
 :root.large-text .text-\[10px\] { font-size: 0.75rem; }
 :root.large-text .text-\[11px\] { font-size: 0.78125rem; }
+:root.large-text .text-\[9px\] { font-size: 0.75rem; }
