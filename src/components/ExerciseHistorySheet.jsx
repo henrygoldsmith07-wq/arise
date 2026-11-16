@@ -20,7 +20,7 @@ export default function ExerciseHistorySheet({ exerciseId, name, history, unit =
       <div ref={a11y.rootRef} onKeyDown={a11y.trapTab} role="dialog" aria-modal="true" aria-label={`${name} history`}
         onClick={e=> e.stopPropagation()} className="w-full max-w-md max-h-[80vh] overflow-y-auto rounded-t-xl border border-line bg-surface p-4 space-y-3">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-bold text-ink">{name}: last {sessions.length || 5} sessions</h2>
+          <h2 className="text-sm font-bold text-ink">{sessions.length === 0 ? `${name}: no sessions yet` : sessions.length === 1 ? `${name}: last session` : `${name}: last ${sessions.length} sessions`}</h2>
           <button ref={a11y.closeRef} type="button" onClick={onClose} className="min-h-11 min-w-11 text-xs font-bold px-3 rounded-full border border-line">Close</button>
         </div>
         {sessions.length === 0 && <p className="text-xs text-ink3">Nothing logged for this lift yet. Your first session becomes the baseline.</p>}

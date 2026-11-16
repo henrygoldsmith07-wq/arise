@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { planRestTick, restActiveState } from '../src/hooks/useRestTimer.js';
+import { planRestTick, restActiveState, adjustRestEndsAt } from '../src/hooks/useRestTimer.js';
 
 // The shared rest-timer core, tested pure: both workout presentations run
 // this exact logic, so the contracts (3-2-1 ticks fire once per second,
@@ -44,5 +44,23 @@ describe('rest timer core', ()=>{
     assert.equal(restActiveState(10_000, 9_400).left, 1);
     assert.equal(restActiveState(10_000, 8_100).left, 2);
     assert.equal(restActiveState(10_000, 11_000).left, 0);
+  });
+
+  it('does not start a rest when adjusting a dock with no active timer', ()=>{
+    // The old fallback anchored to now, so -15s on a settled dock started a
+    // surprise five-second rest instead of doing nothing.
+    assert.equal(adjustRestEndsAt(null, -15, 1_000), null);
+    assert.equal(adjustRestEndsAt(0, -15, 1_000), null);
+    assert.equal(adjustRestEndsAt(900, -15, 1_000), null); // already expired
+    assert.equal(adjustRestEndsAt(NaN, 30, 1_000), null);
+  });
+
+  it('adjusts a running timer from its existing end, not from now', ()=>{
+    assert.equal(adjustRestEndsAt(91_000, -15, 1_000), 76_000);
+    assert.equal(adjustRestEndsAt(91_000, 30, 1_000), 121_000);
+  });
+
+  it('keeps the five-second floor when shrinking a running timer', ()=>{
+    assert.equal(adjustRestEndsAt(4_000, -60, 1_000), 6_000);
   });
 });

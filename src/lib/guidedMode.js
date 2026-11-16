@@ -16,7 +16,12 @@ function parseNum(v){ const n=Number(v); return Number.isFinite(n)? n : 0; }
 function firstInt(reps){ const m=String(reps).match(/\d+/); return m? m[0] : ''; }
 
 export function fmtRest(s){
-  const m=Math.floor(s/60); const r=s%60;
+  // A rest display must never render "NaNs", "Infinity:NaN" or "-1:-5" when
+  // a malformed/expired countdown reaches it; invalid means no time left.
+  const n = Number(s);
+  if(!Number.isFinite(n) || n <= 0) return '0s';
+  const total = Math.ceil(n);
+  const m = Math.floor(total / 60), r = total % 60;
   return m? `${m}:${String(r).padStart(2,'0')}` : `${r}s`;
 }
 
@@ -205,8 +210,12 @@ export function formatElapsed(ms){
 
 // Save payload — identical schema to SessionRunner's, with mode: 'guided'.
 export function buildGuidedPayload({ session, blocks, note = '', noteTags = [], startedAtISO, availableEquipment = [], nowISO = new Date().toISOString(), performedDateISO = null, gymPrefs = null }){
-  const started = Date.parse(startedAtISO);
-  const durationMinutes = Number.isFinite(started) ? Math.max(1, Math.round((Date.parse(nowISO) - started) / 60000)) : 1;
+  const started = Date.parse(startedAtISO), ended = Date.parse(nowISO);
+  // Both ends must be valid: a malformed recovered draft produced NaN minutes
+  // in the save toast and in duration-based engine flags.
+  const durationMinutes = Number.isFinite(started) && Number.isFinite(ended)
+    ? Math.max(1, Math.round((ended - started) / 60000))
+    : 1;
   const painDiscomfort = noteTags.includes('pain-discomfort');
   const labels = noteTags.map(id=> NOTE_PROMPTS.find(prompt=> prompt.id === id)?.label).filter(Boolean);
   const finalNote = [labels.join(', '), note.trim()].filter(Boolean).join(' · ');

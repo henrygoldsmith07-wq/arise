@@ -20,7 +20,7 @@ export default function TeachingPanel({ exerciseId, variant = 'dialog' }){
     <button
       onClick={()=> setOpen(v=> !v)}
       aria-expanded={open}
-      aria-label={`${open ? 'Hide how to do it' : 'Show how to do it'} for ${t.name}`}
+      aria-label={`${open ? 'How-to ✓' : 'How-to'} — ${open ? 'Hide how to do it' : 'Show how to do it'} for ${t.name}`}
       title={open ? 'Hide how-to guide' : 'Show how-to guide'}
       className={`relative text-[11px] font-bold px-2.5 py-1 rounded-full border ${open ? 'bg-ink text-bg border-ink' : 'border-line bg-surface2 text-ink2'}`}
     >

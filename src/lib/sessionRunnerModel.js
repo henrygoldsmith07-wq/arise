@@ -62,8 +62,13 @@ export function stepRir(rir, delta) {
 }
 
 export function formatRest(seconds) {
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
+  // Rest labels are read aloud and shown in the runner; a malformed preset or
+  // imported plan must not produce "NaNs" or "-1:-5".
+  const n = Number(seconds);
+  if (!Number.isFinite(n) || n <= 0) return "0s";
+  const total = Math.ceil(n);
+  const minutes = Math.floor(total / 60);
+  const remainder = total % 60;
   return minutes
     ? `${minutes}:${String(remainder).padStart(2, "0")}`
     : `${remainder}s`;
@@ -677,10 +682,13 @@ export function buildSessionHistoryPayload({
   const finalNote = [labels.join(", "), String(note).trim()]
     .filter(Boolean)
     .join(" · ");
-  const durationMinutes = Math.max(
-    1,
-    Math.round((Date.parse(nowISO) - Date.parse(startedAt)) / 60000),
-  );
+  // A recovered draft can carry a malformed timestamp. Without the finite
+  // guard the round yields NaN, which then leaks into the save toast, CSV and
+  // duration-based engine flags as "NaN min".
+  const startMs = Date.parse(startedAt), endMs = Date.parse(nowISO);
+  const durationMinutes = Number.isFinite(startMs) && Number.isFinite(endMs)
+    ? Math.max(1, Math.round((endMs - startMs) / 60000))
+    : 1;
   const painDiscomfort = noteTags.includes("pain-discomfort");
   const actualDateISO =
     performedDateISO ||

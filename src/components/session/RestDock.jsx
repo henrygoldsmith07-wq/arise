@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { REST_PRESET_CHOICES } from '../../lib/gymMode.js';
 import { speak, voiceSupported } from '../../lib/voiceCoach.js';
 import { fmtRest } from '../../lib/guidedMode.js';
+import { adjustRestEndsAt } from '../../hooks/useRestTimer.js';
 import { announce } from '../../lib/a11y.js';
 
 export function RestDock({ endsAt, clock, label, onChange, exerciseId, exerciseName = '', presetSeconds = null, gymPrefs = null, onSetRestPreset = null, voiceRate = 1 }){
@@ -17,7 +18,10 @@ export function RestDock({ endsAt, clock, label, onChange, exerciseId, exerciseN
   const spokenMinuteRef = useRef(null);
 
   const left = endsAt ? Math.max(0, Math.ceil((endsAt - clock) / 1000)) : 0;
-  const adjust = (delta)=> onChange(Math.max(Date.now() + 5000, (endsAt || Date.now()) + delta * 1000));
+  const adjust = (delta)=> {
+    const next = adjustRestEndsAt(endsAt, delta);
+    if(next != null) onChange(next);
+  };
 
   const say = ()=>{
     if(!voiceSupported() || !left) return;

@@ -107,6 +107,14 @@ describe('guidedMode — timers', () => {
     assert.equal(fmtRest(0), '0s');
   });
 
+  it('never prints NaN, Infinity or a negative countdown', () => {
+    assert.equal(fmtRest(NaN), '0s');
+    assert.equal(fmtRest(Infinity), '0s');
+    assert.equal(fmtRest(undefined), '0s');
+    assert.equal(fmtRest(-5), '0s');
+    assert.equal(fmtRest('45'), '45s');
+  });
+
   it('formats elapsed milliseconds as m:ss', () => {
     assert.equal(formatElapsed(0), '0:00');
     assert.equal(formatElapsed(65000), '1:05');
@@ -146,6 +154,12 @@ describe('guidedMode — save payload', () => {
     assert.equal(payload.note, 'Felt strong · felt good');
     assert.deepEqual(payload.noteTags, ['felt-strong']);
     assert.deepEqual(payload.equipmentSnapshot, ['dumbbells']);
+  });
+
+  it('never records a NaN duration from a malformed recovered draft', () => {
+    const base = { session, blocks: [], startedAtISO: '2026-09-26T10:00:00.000Z' };
+    assert.equal(buildGuidedPayload({ ...base, startedAtISO: 'bad' }).durationMinutes, 1);
+    assert.equal(buildGuidedPayload({ ...base, nowISO: 'bad' }).durationMinutes, 1);
   });
 
   it('records the performed date when a future guided session is started early', () => {

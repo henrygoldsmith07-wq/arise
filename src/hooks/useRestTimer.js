@@ -37,6 +37,15 @@ export function restActiveState(endsAt, nowMs){
   return { active: !expired, left: Math.max(0, Math.ceil((endsAt - nowMs) / 1000)), expired };
 }
 
+// Adjust an already-running countdown, keeping its remaining time honest.
+// `null` means "nothing to adjust": with no active timer the old fallback
+// anchored to now, so tapping -15s on a settled dock started a surprise 5s
+// rest. Adding time still cannot schedule less than the 5s floor.
+export function adjustRestEndsAt(endsAt, delta, nowMs = Date.now()){
+  if(!endsAt || !Number.isFinite(endsAt) || endsAt <= nowMs) return null;
+  return Math.max(nowMs + 5000, endsAt + Number(delta) * 1000);
+}
+
 export function useRestTimer({ clock, initial, onExpire = null, soundOn = true, spoken = false, expiryHaptic = 'restComplete', appAnnounce = true, tickCues = true } = {}){
   const [restEndsAt, setRestEndsAt] = useState(()=> initial?.restEndsAt || null);
   const [restLabel, setRestLabel] = useState(()=> initial?.restLabel || '');

@@ -10,6 +10,7 @@ import {
   captureVisiblePrescriptions,
   carryForwardPlan,
   duplicateUnilateralSetInBlock,
+  formatRest,
   isManualLoadOverride,
   nextActionableBlockIndex,
   patchRunnerSet,
@@ -40,6 +41,21 @@ function block(overrides = {}){
     ...overrides,
   };
 }
+
+describe('SessionRunner model — rest labels', ()=>{
+  it('formats rest as m:ss or Ns', ()=>{
+    assert.equal(formatRest(90), '1:30');
+    assert.equal(formatRest(45), '45s');
+    assert.equal(formatRest(0), '0s');
+  });
+
+  it('never prints NaN, Infinity or a negative countdown', ()=>{
+    assert.equal(formatRest(NaN), '0s');
+    assert.equal(formatRest(Infinity), '0s');
+    assert.equal(formatRest(undefined), '0s');
+    assert.equal(formatRest(-5), '0s');
+  });
+});
 
 describe('SessionRunner model — effort conversion', ()=>{
   it('round-trips RPE/RIR and clamps deliberate suggestion steps', ()=>{
@@ -276,6 +292,17 @@ describe('SessionRunner model — save boundary', ()=>{
     });
     assert.equal(payload.dateISO, '2026-09-27');
     assert.equal(payload.scheduledDateISO, '2026-09-29');
+  });
+
+  it('never records a NaN duration from a malformed recovered draft', ()=>{
+    const args = {
+      session:{ id:'recovered', dateISO:'2026-09-27', programId:'p1', title:'Upper B', blocks:[] },
+      blocks:[block({ sets:[set({ completed:true })] })],
+      startedAt:'not-a-timestamp',
+      nowISO:'2026-09-27T10:30:00.000Z',
+    };
+    assert.equal(buildSessionHistoryPayload(args).durationMinutes, 1);
+    assert.equal(buildSessionHistoryPayload({ ...args, startedAt:'2026-09-27T10:00:00.000Z', nowISO:'bad' }).durationMinutes, 1);
   });
 
   it('builds the immutable history payload with identity, notes and substitutions', ()=>{

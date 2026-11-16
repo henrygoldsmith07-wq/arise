@@ -625,7 +625,7 @@ export default function TodayView({ store, setStore, onStartSession, onOpenTrain
       {/* ── Secondary: level + performance one tap back — full breakdown in
           Progress. Hidden in simple mode (essentials-first display gate). */}
       {!simple && (
-      <button onClick={onOpenProgress} className="w-full min-h-11 rounded-xl border border-line bg-surface px-3 flex items-center gap-2 text-left text-xs" aria-label="View attributes and level in Progress">
+      <button onClick={onOpenProgress} className="w-full min-h-11 rounded-xl border border-line bg-surface px-3 flex items-center gap-2 text-left text-xs">
         <span aria-hidden>📊</span>
         <span className="min-w-0 flex-1 truncate"><span className="font-bold">Level & strength trends</span> <span className="text-ink3">— habits earn XP; strength only when sessions show it</span></span>
         <span aria-hidden className="text-ink3">›</span>
