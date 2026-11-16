@@ -210,8 +210,12 @@ export function formatElapsed(ms){
 
 // Save payload — identical schema to SessionRunner's, with mode: 'guided'.
 export function buildGuidedPayload({ session, blocks, note = '', noteTags = [], startedAtISO, availableEquipment = [], nowISO = new Date().toISOString(), performedDateISO = null, gymPrefs = null }){
-  const started = Date.parse(startedAtISO);
-  const durationMinutes = Number.isFinite(started) ? Math.max(1, Math.round((Date.parse(nowISO) - started) / 60000)) : 1;
+  const started = Date.parse(startedAtISO), ended = Date.parse(nowISO);
+  // Both ends must be valid: a malformed recovered draft produced NaN minutes
+  // in the save toast and in duration-based engine flags.
+  const durationMinutes = Number.isFinite(started) && Number.isFinite(ended)
+    ? Math.max(1, Math.round((ended - started) / 60000))
+    : 1;
   const painDiscomfort = noteTags.includes('pain-discomfort');
   const labels = noteTags.map(id=> NOTE_PROMPTS.find(prompt=> prompt.id === id)?.label).filter(Boolean);
   const finalNote = [labels.join(', '), note.trim()].filter(Boolean).join(' · ');

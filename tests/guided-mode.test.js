@@ -156,6 +156,12 @@ describe('guidedMode — save payload', () => {
     assert.deepEqual(payload.equipmentSnapshot, ['dumbbells']);
   });
 
+  it('never records a NaN duration from a malformed recovered draft', () => {
+    const base = { session, blocks: [], startedAtISO: '2026-09-26T10:00:00.000Z' };
+    assert.equal(buildGuidedPayload({ ...base, startedAtISO: 'bad' }).durationMinutes, 1);
+    assert.equal(buildGuidedPayload({ ...base, nowISO: 'bad' }).durationMinutes, 1);
+  });
+
   it('records the performed date when a future guided session is started early', () => {
     const futureSession = { ...session, id:'guided-future', dateISO:'2026-09-29' };
     const blocks = initGuidedBlocks(futureSession, []);

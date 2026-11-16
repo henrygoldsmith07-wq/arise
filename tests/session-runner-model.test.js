@@ -278,6 +278,17 @@ describe('SessionRunner model — save boundary', ()=>{
     assert.equal(payload.scheduledDateISO, '2026-09-29');
   });
 
+  it('never records a NaN duration from a malformed recovered draft', ()=>{
+    const args = {
+      session:{ id:'recovered', dateISO:'2026-09-27', programId:'p1', title:'Upper B', blocks:[] },
+      blocks:[block({ sets:[set({ completed:true })] })],
+      startedAt:'not-a-timestamp',
+      nowISO:'2026-09-27T10:30:00.000Z',
+    };
+    assert.equal(buildSessionHistoryPayload(args).durationMinutes, 1);
+    assert.equal(buildSessionHistoryPayload({ ...args, startedAt:'2026-09-27T10:00:00.000Z', nowISO:'bad' }).durationMinutes, 1);
+  });
+
   it('builds the immutable history payload with identity, notes and substitutions', ()=>{
     const startedAt = '2026-09-26T10:00:00.000Z';
     const nowISO = '2026-09-26T10:42:00.000Z';
