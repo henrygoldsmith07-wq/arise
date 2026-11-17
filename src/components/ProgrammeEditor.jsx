@@ -30,7 +30,7 @@ function Stepper({ label, value, onDown, onUp, downDisabled, upDisabled }){
           it with the field label ("Sets: 4") so a bare digit is never uttered
           on its own. One sr-only live region, one status string. */}
       <span className="min-w-10 text-center text-sm font-black tabular-nums" aria-hidden="true">{value}</span>
-      <span className="sr-only" aria-live="polite">{`${label}: ${value}`}</span>
+      <div className="sr-only" aria-live="polite">{`${label}: ${value}`}</div>
       <button type="button" onClick={onUp} disabled={upDisabled} aria-label={`Increase ${label}`} className={ICON}>+</button>
     </div>
   );

@@ -253,9 +253,8 @@ describe('a11y pass — GuidedRunner announcements and hit targets', () => {
     assert.match(effect, /speakCurrentStep\(step, blocks, voiceOn\)/);
   });
 
-  it('keeps the visible "Load kg"/"Load lb" string inside the input accessible name', () => {
-    assert.ok(source.includes('aria-label={`Load ${unit} — in '));
-    assert.ok(!source.includes('aria-label={`Load in '));
+  it('keeps the visible unit string inside the input accessible name and the legacy selector phrase', () => {
+    assert.ok(source.includes('aria-label={`Load in ${unit === \'lb\' ? \'pounds\' : \'kilograms\'} — Load ${unit}`}'));
   });
 
   it('gives the unilateral L/R buttons and completion note chips a 44px hit area', () => {
@@ -299,9 +298,10 @@ describe('a11y pass — shared control touch targets and labels', () => {
     assert.ok(source.includes("'How-to'} — ${open ? 'Hide how to do it' : 'Show how to do it'} for ${t.name}`"));
   });
 
-  it('names the SetRow Done button by set and state even when it shows only a tick', () => {
+  it('describes the SetRow Done button by set and state without changing its visible name', () => {
     const source = src('components', 'session', 'SetRow.jsx');
-    assert.ok(source.includes("aria-label={`Set ${si+1}: ${s.completed ? 'completed, undo' : 'mark done'}`}"));
+    assert.match(source, /aria-describedby=\{`done-desc-\$\{sessionId\}-\$\{bi\}-\$\{si\}`\}/);
+    assert.match(source, /Set \{si\+1\}: \{s\.completed \? 'completed, undo' : 'not done, complete'\}/);
   });
 
   it('gives the AppShell theme toggle a 44px hit area', () => {
@@ -314,7 +314,7 @@ describe('a11y pass — shared control touch targets and labels', () => {
     const stepper = src('components', 'ProgrammeEditor.jsx');
     const fn = stepper.slice(stepper.indexOf('function Stepper('), stepper.indexOf('export default function ProgrammeEditor'));
     assert.match(fn, /min-w-10 text-center text-sm font-black tabular-nums" aria-hidden="true">\{value\}<\/span>/);
-    assert.ok(fn.includes('aria-live="polite">{`${label}: ${value}`}</span>'));
+    assert.ok(fn.includes('aria-live="polite">{`${label}: ${value}`}</div>'));
     assert.doesNotMatch(fn, /aria-live="polite"[^>]*>\{value\}/);
   });
 });
