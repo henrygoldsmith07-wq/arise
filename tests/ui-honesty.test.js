@@ -43,6 +43,20 @@ describe('UI hardening — narrow viewport', () => {
   });
 });
 
+describe('UI hardening — 320px logger', () => {
+  it('gives the active reps stepper its own full-width row on narrow screens', () => {
+    const row = readFileSync(join(process.cwd(), 'src', 'components', 'session', 'SetRow.jsx'), 'utf8');
+    assert.match(row, /flex items-center gap-1 min-w-0 col-span-3 row-start-2 sm:col-span-1 sm:row-auto/);
+    assert.match(row, /className="min-w-0 flex items-center gap-1 col-span-2 sm:col-span-1"/);
+    assert.match(row, /col-span-3 row-start-3 grid grid-cols-/);
+  });
+
+  it('keeps the mobile column header in step with the two-column top row', () => {
+    const runner = read('SessionRunner.jsx');
+    assert.match(runner, /<span>#<\/span><span className="col-span-2">Load \{unit\}<\/span>/);
+  });
+});
+
 describe('UI hardening — source contracts', () => {
   it('the time-available row wraps instead of overflowing narrow screens', () => {
     const source = read('TodayView.jsx');
