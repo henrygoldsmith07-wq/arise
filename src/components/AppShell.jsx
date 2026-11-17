@@ -25,7 +25,7 @@ export default function AppShell({ children, tab, setTab, storeVersion, theme = 
             onClick={onCycleTheme}
             title={`Theme: ${themeName} — tap to change`}
             aria-label={`Theme: ${themeName}. Change theme`}
-            className="shrink-0 min-h-9 min-w-9 px-2 grid place-items-center rounded-full border border-line bg-surface2 text-ink3 hover:text-ink hover:border-ink3"
+            className="shrink-0 min-h-11 min-w-11 px-2 grid place-items-center rounded-full border border-line bg-surface2 text-ink3 hover:text-ink hover:border-ink3"
           >
             <span aria-hidden className="text-sm leading-none">{THEME_ICON[theme] || '🌗'}</span>
           </button>

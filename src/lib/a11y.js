@@ -73,6 +73,27 @@ export function _resetAnnouncerForTests(){
   announcerState.lastMessage = '';
 }
 
+// ── Reduced-motion-aware scrolling ──────────────────────────────────────────
+// `scrollIntoView({ behavior: 'smooth' })` ignores the user's OS reduced-motion
+// preference (and the app's own `reduce-motion` class). Route every programmatic
+// smooth scroll through here so that motion is suppressed when it was asked to
+// be. `matchMedia` may be absent (older browsers, tests); the document-class
+// check still works, and if neither is available the caller's requested
+// behaviour is preserved. Reads from globalThis so tests can stub the browser.
+export function scrollIntoViewWithReducedMotion(el, options = {}){
+  if(!el || typeof el.scrollIntoView !== 'function') return;
+  let reduce = false;
+  try{
+    const mm = globalThis.matchMedia;
+    if(typeof mm === 'function' && mm('(prefers-reduced-motion: reduce)').matches) reduce = true;
+  }catch{}
+  try{
+    const doc = globalThis.document;
+    if(!reduce && doc?.documentElement?.classList?.contains('reduce-motion')) reduce = true;
+  }catch{}
+  el.scrollIntoView({ ...options, behavior: reduce ? 'auto' : options.behavior });
+}
+
 // ── Dialog focus management ─────────────────────────────────────────────────
 // Trap Tab within the dialog root, focus the close control on open, and hand
 // focus back to whoever opened it on close.

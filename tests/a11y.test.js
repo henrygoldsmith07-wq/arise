@@ -8,6 +8,7 @@ import {
   planAnnouncement,
   focusTrapDecision,
   isKeyboardActivation,
+  scrollIntoViewWithReducedMotion,
 } from '../src/lib/a11y.js';
 
 describe('a11y — live announcer scheduling', () => {
@@ -94,5 +95,73 @@ describe('a11y — keyboard activation detection', () => {
     assert.equal(isKeyboardActivation({ detail: 1 }), false);
     assert.equal(isKeyboardActivation({ detail: 2 }), false);
     assert.equal(isKeyboardActivation({ detail: NaN }), true);
+  });
+});
+
+describe('a11y — reduced-motion-aware scrolling', () => {
+  const hadMm = Object.prototype.hasOwnProperty.call(globalThis, 'matchMedia');
+  const hadDoc = Object.prototype.hasOwnProperty.call(globalThis, 'document');
+  const realMm = globalThis.matchMedia;
+  const realDoc = globalThis.document;
+
+  // Install a fake browser environment for one assertion, then restore it.
+  const withEnv = ({ matchMedia, doc }, fn)=> {
+    if(matchMedia === undefined) delete globalThis.matchMedia;
+    else globalThis.matchMedia = matchMedia;
+    if(doc === undefined) delete globalThis.document;
+    else globalThis.document = doc;
+    try{ fn(); } finally {
+      if(hadMm) globalThis.matchMedia = realMm; else delete globalThis.matchMedia;
+      if(hadDoc) globalThis.document = realDoc; else delete globalThis.document;
+    }
+  };
+  const fakeEl = ()=> {
+    const calls = [];
+    return { calls, scrollIntoView: (opts)=> calls.push(opts) };
+  };
+  const classListWith = (present)=> ({ classList: { contains: (c)=> present && c === 'reduce-motion' } });
+
+  it('keeps the requested smooth behaviour when no preference is set', () => {
+    withEnv({ matchMedia: ()=> ({ matches: false }), doc: { documentElement: classListWith(false) } }, ()=> {
+      const el = fakeEl();
+      scrollIntoViewWithReducedMotion(el, { behavior: 'smooth', block: 'start' });
+      assert.deepEqual(el.calls, [{ behavior: 'smooth', block: 'start' }]);
+    });
+  });
+
+  it('substitutes behavior auto when the OS reduced-motion preference is set', () => {
+    withEnv({ matchMedia: (q)=> ({ matches: q === '(prefers-reduced-motion: reduce)' }), doc: undefined }, ()=> {
+      const el = fakeEl();
+      scrollIntoViewWithReducedMotion(el, { behavior: 'smooth', block: 'nearest' });
+      assert.deepEqual(el.calls, [{ behavior: 'auto', block: 'nearest' }]);
+    });
+  });
+
+  it('substitutes behavior auto when the app reduce-motion class is present', () => {
+    withEnv({ matchMedia: undefined, doc: { documentElement: classListWith(true) } }, ()=> {
+      const el = fakeEl();
+      scrollIntoViewWithReducedMotion(el, { behavior: 'smooth' });
+      assert.deepEqual(el.calls, [{ behavior: 'auto' }]);
+    });
+  });
+
+  it('keeps the class fallback when matchMedia is missing or throws', () => {
+    withEnv({ matchMedia: ()=> { throw new Error('no matchMedia'); }, doc: { documentElement: classListWith(true) } }, ()=> {
+      const el = fakeEl();
+      scrollIntoViewWithReducedMotion(el, { behavior: 'smooth' });
+      assert.deepEqual(el.calls, [{ behavior: 'auto' }]);
+    });
+    withEnv({ matchMedia: undefined, doc: undefined }, ()=> {
+      const el = fakeEl();
+      scrollIntoViewWithReducedMotion(el, { behavior: 'smooth' });
+      assert.deepEqual(el.calls, [{ behavior: 'smooth' }]);
+    });
+  });
+
+  it('is a safe no-op when the element is missing or has no scrollIntoView', () => {
+    withEnv({ matchMedia: undefined, doc: undefined }, ()=> {
+      scrollIntoViewWithReducedMotion(null, { behavior: 'smooth' });
+      scrollIntoViewWithReducedMotion({}, { behavior: 'smooth' });
+    });
   });
 });

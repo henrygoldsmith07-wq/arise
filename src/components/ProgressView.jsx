@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import JargonHelp from './JargonHelp.jsx';
+import { useDialogs } from './Dialog.jsx';
 import { trainedDays, monthGrid, shiftMonth } from '../lib/trainingCalendar.js';
 import { buildQuickSession } from '../lib/quickWorkout.js';
 import { deriveXp } from '../lib/xp.js';
@@ -188,10 +189,11 @@ export default function ProgressView({ store, setStore = null, onStart = null, o
   const deloadValidation = useMemo(()=> validateDeloadLogic({ history, readinessLog: store.readinessLog || [] }), [history, store.readinessLog]);
   const calibration = useMemo(()=> recommendationCalibration(history), [history]);
   const badAttribution = useMemo(()=> badSessionAttribution(history, { readinessLog: store.readinessLog || [] }), [history, store.readinessLog]);
-  // Longitudinal evaluation runs off the main thread (analyticsWorker): it is
-  // the heaviest computation on this screen and previously blocked the first
-  // paint of Progress on a long history. The async wrapper resolves to the
-  // same shape; until it lands we render '—' (one frame on inline fallback).
+  // Longitudinal evaluation runs synchronously, but only after a macrotask
+  // yield: analyticsWorker.js documents that the dedicated worker was removed
+  // (it bundled a second copy of the evaluation graph). Yielding first lets
+  // Progress paint, then the summary fills in. The wrapper resolves to the
+  // same shape; until it lands we render '—'.
   const [longitudinal, setLongitudinal] = useState(null);
   const prefsKey = store.preferences?.telemetryEnabled === true ? 'on' : 'off';
   useEffect(()=> {
@@ -273,6 +275,7 @@ export default function ProgressView({ store, setStore = null, onStart = null, o
   // ── Experiment lifecycle: start/conclude/cancel through the service layer.
   // The service is pure — it returns the next store and this view commits it.
   // Without a save path the section stays read-only.
+  const dialogs = useDialogs();
   const canManageExperiments = typeof setStore === 'function';
   const [experimentFormOpen, setExperimentFormOpen] = useState(false);
   const [experimentMsg, setExperimentMsg] = useState(null);
@@ -288,25 +291,44 @@ export default function ProgressView({ store, setStore = null, onStart = null, o
       setExperimentMsg(String(err?.message || err));
     }
   };
-  const doConclude = (id)=>{
-    if(!confirm('Conclude this experiment now? Arise will call the result from your logged history, and it cannot go back to active.')) return;
+  const doConclude = async (id)=>{
+    const ok = await dialogs.confirm({
+      title: 'Conclude this experiment now?',
+      description: 'Arise will call the result from your logged history, and it cannot go back to active.',
+      confirmLabel: 'Conclude now',
+      destructive: true,
+    });
+    if(!ok) return;
     const result = concludeExperimentById(store, id);
     setStore(result.store);
     if(result.concluded) setExperimentMsg(`Concluded: ${result.result}. ${(result.conclusion || '').slice(0, 140)}`);
   };
-  const doCancel = (id)=>{
-    if(!confirm('Cancel this experiment without a conclusion? Your logged history is not affected.')) return;
+  const doCancel = async (id)=>{
+    const ok = await dialogs.confirm({
+      title: 'Cancel this experiment?',
+      description: 'Cancel without a conclusion — your logged history is not affected.',
+      confirmLabel: 'Cancel experiment',
+      destructive: true,
+    });
+    if(!ok) return;
     const result = cancelExperimentById(store, id);
     setStore(result.store);
   };
-  const doDeleteExperiment = (id)=>{
-    if(!confirm('Remove this concluded experiment from Progress? It is recoverable via backup, or undo-free sync. The row is tombstoned.')) return;
+  const doDeleteExperiment = async (id)=>{
+    const ok = await dialogs.confirm({
+      title: 'Remove this concluded experiment?',
+      description: 'It is recoverable via backup, or undo-free sync. The row is tombstoned.',
+      confirmLabel: 'Remove',
+      destructive: true,
+    });
+    if(!ok) return;
     const result = deleteExperiment(store, id);
     setStore(result.store);
   };
 
   return (
     <div className="px-4 py-5 space-y-3">
+      {dialogs.node}
       {/* ── Empty state teaches and leads somewhere — never an empty dashboard ── */}
       {!history.length && (
         <section className="rounded-xl border border-line bg-surface p-4 space-y-2" aria-label="Getting started">

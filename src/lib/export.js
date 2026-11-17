@@ -7,7 +7,7 @@ import { getEventHistory } from './telemetry.js';
 import { saveBlob } from './nativeShare.js';
 import { loadEvaluationLedger, mergeEvaluationLedgers } from './longitudinal.js';
 import { ensureStudyParticipantId } from './studyIdentity.js';
-import { buildEnvelope, applyFieldPolicy, EXPORT_VERSION } from './exportPolicy.js';
+import { buildEnvelope, applyFieldPolicy, EXPORT_VERSION, MAX_IMPORT_BYTES, stripDangerousKeys, sanitiseImportText } from './exportPolicy.js';
 import { withProvenance, ensureSourceTags, importLedgerProvenance, mergeTombstones, applyTombstones, canonicalJson, rowTimestamp } from './domain.js';
 import { validateStoreData } from './storeValidation.js';
 import { mergeBodyweightLogs } from './bodyweightLog.js';
@@ -107,9 +107,33 @@ async function gzipBytes(text){
   const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
-async function gunzipBytes(bytes){
+// Decompress with a HARD cap on the OUTPUT, not just the base64 input: a tiny
+// gzip bomb expands to gigabytes and would freeze/OOM the tab before the user
+// ever confirms the preview. Read chunk-by-chunk and abort the moment the
+// decompressed total exceeds the import ceiling.
+async function gunzipText(bytes, maxBytes = MAX_IMPORT_BYTES){
   const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
-  return new TextDecoder().decode(await new Response(stream).arrayBuffer());
+  const reader = stream.getReader();
+  const chunks = [];
+  let total = 0;
+  try{
+    for(;;){
+      const { done, value } = await reader.read();
+      if(done) break;
+      total += value.byteLength;
+      if(total > maxBytes){
+        try{ await reader.cancel(); }catch{}
+        throw new Error('Backup expands beyond the ' + Math.floor(maxBytes / (1024 * 1024)) + ' MB import limit.');
+      }
+      chunks.push(value);
+    }
+  } finally {
+    try{ reader.releaseLock(); }catch{}
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for(const chunk of chunks){ out.set(chunk, offset); offset += chunk.byteLength; }
+  return new TextDecoder().decode(out);
 }
 function bytesToBase64(bytes){
   let bin = '';
@@ -150,8 +174,11 @@ export async function compressPayload(payload){
 export async function decompressPayload(envelope){
   if(envelope?.format === BACKUP_FORMAT){
     if(envelope.encoding !== 'base64') throw new Error('Unsupported backup encoding.');
-    const json = await gunzipBytes(base64ToBytes(String(envelope.data || '')));
-    return JSON.parse(json);
+    const json = await gunzipText(base64ToBytes(String(envelope.data || '')));
+    // gzip is only a transport: its contents are as untrusted as a plaintext
+    // file, so apply the same size/depth/pollution guards after inflating.
+    // The output byte cap above has already bounded memory use.
+    return sanitiseImportText(json);
   }
   return envelope;
 }
@@ -164,7 +191,12 @@ export async function downloadBackup(payload, filename = 'arise-backup.arise'){
 
 /** Accepts plain JSON text or a compressed envelope object. */
 export async function parseBackupFile(textOrEnvelope){
-  const envelope = typeof textOrEnvelope === 'string' ? JSON.parse(textOrEnvelope) : textOrEnvelope;
+  // Harden the envelope itself BEFORE inspecting `format`: the preview path
+  // reaches parseBackupFile at file-selection time, so a hostile envelope must
+  // not bypass the guards that parseImportFile applies only at apply time.
+  const envelope = typeof textOrEnvelope === 'string'
+    ? sanitiseImportText(textOrEnvelope)
+    : stripDangerousKeys(textOrEnvelope);
   return decompressPayload(envelope);
 }
 
@@ -175,44 +207,11 @@ export async function parseBackupFile(textOrEnvelope){
 const STORE_KEYS = ['version','onboarding','activeSchedule','activeWorkout','eventHistory','healthSummary','history','archivedHistory','preferences','gymPrefs','readinessLog','bodyweightLog','programHistory','evaluationLedger','customTemplates','experiments','studyParticipantId','studyEnrollment','studyStatus','studyStatusChangedAtISO','tombstones'];
 
 // ── Import hardening (malicious/hostile JSON) ───────────────────────────────
-// Imports are untrusted input. Beyond schema validation, three structural
-// attacks are neutralised before any value is read:
-//   1. Prototype pollution — a "__proto__": {...} key in parsed JSON hijacks
-//      Object.prototype for the whole session. Keys are stripped everywhere
-//      (own + nested) and rebuilt into null-prototype objects.
-//   2. Depth bombs — parser-stack exhaustion via 100k-deep nesting. Capped.
-//   3. Size bombs — a 500 MB string freezes the tab before validation runs.
-const MAX_IMPORT_BYTES = 5 * 1024 * 1024; // 5 MB is ~15 years of daily sessions
-const MAX_IMPORT_DEPTH = 64;
-
-function stripDangerousKeys(value, depth = 0){
-  if(depth > MAX_IMPORT_DEPTH) throw new Error('Import file nests more than ' + MAX_IMPORT_DEPTH + ' levels deep.');
-  if(Array.isArray(value)) return value.map((v)=> stripDangerousKeys(v, depth + 1));
-  if(value && typeof value === 'object'){
-    const out = Object.create(null);
-    for(const key of Object.keys(value)){
-      if(key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
-      out[key] = stripDangerousKeys(value[key], depth + 1);
-    }
-    return out;
-  }
-  return value;
-}
-
-function enforceImportSize(text){
-  // Rough UTF-16 ceiling: 2 bytes per char. The 5 MB file cap catches the rest.
-  if(typeof text === 'string' && text.length > MAX_IMPORT_BYTES / 2){
-    throw new Error('Import file is too large (limit 5 MB of JSON).');
-  }
-}
-
-function sanitiseImportText(text){
-  enforceImportSize(text);
-  let parsed;
-  try{ parsed = JSON.parse(text); }
-  catch { throw new Error('Not valid JSON.'); }
-  return stripDangerousKeys(parsed);
-}
+// The structural guards — prototype-pollution stripping, depth cap and size
+// cap — live in exportPolicy.js (sanitiseImportText / stripDangerousKeys) so
+// the PREVIEW path (parseBackupFile / buildImportPreview) and this APPLY path
+// share one implementation. Beyond those guards, the apply path additionally
+// enforces the store schema (validateStoreData) and the STORE_KEYS allow-list.
 
 export function parseImportFile(text, trusted = false){
   const parsed = sanitiseImportText(text);

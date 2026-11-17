@@ -8,8 +8,7 @@ import { parseReps, e1rm } from "./trainingMath.js";
 export function weeklyVolume(history){
   const byWeek = {};
   for(const h of history||[]){
-    const d = new Date(h.dateISO + "T00:00:00");
-    const key = weekKey(d);
+    const key = weekKey(h.dateISO);
     // Assistance subtracts from effective load (matching exerciseHistory and
     // backtesting) so assisted work cannot inflate deload/spike signals.
     let vol=0; for(const b of h.blocks||[]) for(const s of b.sets||[]) vol += (Number(s.reps)||0)*Math.max(0, (Number(s.weightKg)||0) - (Number(s.assistedKg)||0));
@@ -17,10 +16,21 @@ export function weeklyVolume(history){
   }
   return Object.entries(byWeek).sort(([a],[b])=> a.localeCompare(b)).map(([week, vol])=> ({ week, vol: Math.round(vol) }));
 }
-// Monday-start week keys (week 1 = the week containing Jan 1). The old ceil formula
-// split a Monday-start week across two keys (e.g. Mon 5 Jan → W01 but Wed 7 Jan → W02),
-// which diluted volume-based signals like deload detection. offset = days since Monday.
-function weekKey(d){ const jan1=new Date(d.getFullYear(),0,1); const days=Math.floor((d-jan1)/86400000); const offset=(d.getDay()+6)%7; const wk=Math.floor((days-offset+7)/7); return `${d.getFullYear()}-W${String(wk).padStart(2,"0")}`; }
+// Monday-start week keys (week 1 = the week containing Jan 1). All math is UTC
+// so a 23h/25h DST day can never shift the day index and mis-bucket a session
+// into the adjacent week. Local-time midnights made that depend on the device's
+// timezone; date-only values are calendar dates, so UTC is canonical here (the
+// same basis dateOnly.js uses). offset = days since Monday.
+function weekKey(dateISO){
+  const ms = Date.parse(`${dateISO}T00:00:00Z`);
+  if(!Number.isFinite(ms)) return null;
+  const d = new Date(ms);
+  const year = d.getUTCFullYear();
+  const days = Math.floor((ms - Date.UTC(year, 0, 1)) / 86400000);
+  const offset = (d.getUTCDay() + 6) % 7;
+  const wk = Math.floor((days - offset + 7) / 7);
+  return `${year}-W${String(wk).padStart(2, '0')}`;
+}
 
 export function frequencyByMuscleSync(history, byId){
   const counts={};
@@ -44,8 +54,7 @@ export function volumeLandmarks(history, byId, { weeks: windowWeeks = 4 } = {}){
   const byMuscleWeek = {};
   const weekSet = new Set();
   for(const h of history||[]){
-    const d = new Date(h.dateISO + "T00:00:00");
-    const key = weekKey(d);
+    const key = weekKey(h.dateISO);
     weekSet.add(key);
     for(const b of h.blocks||[]){
       const m = byId?.[b.exerciseId]?.muscle || 'Other';
@@ -116,7 +125,7 @@ export function volumeBalanceAdvice(history, byId, { goal = 'general', weeks = 4
   const byMuscleWeek = {};
   const weekSet = new Set();
   for(const h of history||[]){
-    const key = weekKey(new Date(h.dateISO + 'T00:00:00'));
+    const key = weekKey(h.dateISO);
     weekSet.add(key);
     for(const b of h.blocks||[]){
       const m = byId?.[b.exerciseId]?.muscle;
@@ -252,7 +261,7 @@ export function deloadOutcomes(history){
     const wk = new Set(weeks.filter(Boolean));
     const vals=[];
     for(const h of history||[]){
-      if(!wk.has(weekKey(new Date(h.dateISO+'T00:00:00')))) continue;
+      if(!wk.has(weekKey(h.dateISO))) continue;
       for(const b of h.blocks||[]) for(const s of b.sets||[]){
         const w=Number(s.weightKg)||0, r=Number(String(s.reps).match(/\d+/)?.[0]||s.reps)||0;
         if(w>0 && r>0) vals.push(w*(1+r/30));

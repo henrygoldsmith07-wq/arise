@@ -7,6 +7,7 @@ import { buildEditorTemplate, duplicateEditorTemplate } from '../lib/templateEdi
 import { localDateISO } from '../lib/dateOnly.js';
 import { decodeShareCode } from '../lib/shareCodes.js';
 import { editsAsTemplateInput } from '../lib/programmeEditor.js';
+import { validateStoreData } from '../lib/storeValidation.js';
 
 export function generateProgrammeFromProfile(store){
   if(!store?.onboarding) return { store, programId:null };
@@ -144,6 +145,10 @@ export function duplicateCustomTemplate(store, template){
 
 export function installSharedTemplate(store, shareCode){
   const template = decodeShareCode(shareCode);
+  // Defense in depth: decodeShareCode rebuilds the template from an allow-list,
+  // but never persist a decoded payload that fails the store validation gate.
+  const gate = validateStoreData({ version: store?.version, customTemplates: [template] });
+  if(!gate.ok) throw new Error(`Shared template failed validation: ${gate.errors.join(' ')}`);
   if((store.customTemplates || []).some(t=> t.name === template.name && !t.deletedAt)){
     throw new Error(`A template named “${template.name}” already exists — rename it first to install this one.`);
   }

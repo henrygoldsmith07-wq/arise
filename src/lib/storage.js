@@ -64,9 +64,31 @@ function legacyEvaluationRows(){
   }catch{ return []; }
 }
 
+// True when the full rebuild below would return this exact list unchanged:
+// every row is a valid, unique id, already in `at` order, and within the cap.
+function isSettledEventList(rows){
+  const seen = new Set();
+  let prev = null;
+  for(const row of rows){
+    if(!row || typeof row !== 'object' || !row.id) return false;
+    if(seen.has(row.id)) return false;
+    seen.add(row.id);
+    const at = String(row.at || '');
+    if(prev !== null && prev.localeCompare(at) > 0) return false;
+    prev = at;
+  }
+  return rows.length <= EVENT_LIMIT;
+}
+
 function mergeEventRows(current = [], incoming = []){
+  const cur = current || [];
+  const inc = incoming || [];
+  // Unchanged events are the common case: every keystroke during logging saves
+  // the whole store while `eventHistory` is untouched. Skip the Map rebuild +
+  // sort of up to EVENT_LIMIT rows when doing so cannot change the result.
+  if(inc.length === 0 && isSettledEventList(cur)) return cur;
   const byId = new Map();
-  for(const row of [...(current || []), ...(incoming || [])]){
+  for(const row of [...cur, ...inc]){
     if(!row || typeof row !== 'object' || !row.id) continue;
     if(!byId.has(row.id)) byId.set(row.id, row);
   }

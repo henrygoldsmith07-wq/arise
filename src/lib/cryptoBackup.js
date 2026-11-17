@@ -22,6 +22,11 @@
 const MAGIC = [0x41, 0x52, 0x43, 0x42]; // 'ARCB'
 const FORMAT = 1;
 const PBKDF2_ITERATIONS = 310_000;
+const HEADER_BYTES = 8; // magic(4) + format(1) + reserved(1) + saltLen(2)
+const IV_BYTES = 12;
+const TAG_BYTES = 16; // AES-GCM authentication tag (minimum ciphertext)
+const MIN_SALT_BYTES = 8;
+const MAX_SALT_BYTES = 64;
 
 function subtle(){
   try{
@@ -67,14 +72,20 @@ export async function encryptBackup(payload, passphrase){
 /** Decrypt an .arisebak blob produced by encryptBackup. Returns the payload object. */
 export async function decryptBackup(bytes, passphrase){
   if(!cryptoAvailable()) throw new Error('Encrypted backups need a browser with WebCrypto.');
-  if(!(bytes instanceof Uint8Array) || bytes.length < 8 + 16 + 12 + 16) throw new Error('This file is too short to be an Arise backup.');
+  if(!(bytes instanceof Uint8Array) || bytes.length < HEADER_BYTES + MIN_SALT_BYTES + IV_BYTES + TAG_BYTES) throw new Error('This file is too short to be an Arise backup.');
   for(let i = 0; i < 4; i++) if(bytes[i] !== MAGIC[i]) throw new Error('Not an Arise encrypted backup (bad signature).');
   const format = bytes[4];
   if(format !== FORMAT) throw new Error(`Unsupported backup format ${format}.`);
+  // The salt length is attacker-controlled. Validate it against the real byte
+  // length before slicing: an out-of-range value would otherwise feed PBKDF2
+  // and AES-GCM inconsistent salt/iv/ciphertext slices (or a huge salt).
   const saltLen = bytes[6];
-  const salt = bytes.slice(8, 8 + saltLen);
-  const iv = bytes.slice(8 + saltLen, 8 + saltLen + 12);
-  const ciphertext = bytes.slice(8 + saltLen + 12);
+  if(saltLen < MIN_SALT_BYTES || saltLen > MAX_SALT_BYTES) throw new Error('Invalid backup header — bad salt length.');
+  if(bytes.length < HEADER_BYTES + saltLen + IV_BYTES + TAG_BYTES) throw new Error('This file is too short to be an Arise backup.');
+  const salt = bytes.slice(HEADER_BYTES, HEADER_BYTES + saltLen);
+  const iv = bytes.slice(HEADER_BYTES + saltLen, HEADER_BYTES + saltLen + IV_BYTES);
+  const ciphertext = bytes.slice(HEADER_BYTES + saltLen + IV_BYTES);
+  if(iv.length !== IV_BYTES || ciphertext.length < TAG_BYTES) throw new Error('This file is too short to be an Arise backup.');
   const key = await deriveKey(passphrase, salt);
   const aad = new Uint8Array(MAGIC);
   let plainBuf;

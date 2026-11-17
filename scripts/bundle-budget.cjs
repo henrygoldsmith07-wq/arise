@@ -293,7 +293,14 @@ const CHUNK_BUDGET_KB = 34;
 // tag, yearly records, RPE colour scale): +0.9 kB, −0.2 kB by dropping the
 // duplicate "What improved" list on Progress. Boot UNCHANGED (57.4 / 120).
 // Measured 408.5.
-const TOTAL_BUDGET_KB = 410;
+// total 410 → 412 kB with the site-hardening round: import-boundary checks
+// (size/depth caps, gzip inflation cap, dangerous-key stripping, backup header
+// validation, share-code validation), demo-mode isolation, canonical repair of
+// impossible set values and logger accessibility fixes. All requested product
+// logic, not dependency growth. Boot preload FELL from 234.8 to 232.3 kB after
+// extracting the two gymPrefs helpers out of the App boot graph; largest lazy
+// chunk stays on its unchanged 34 kB budget (measured 33.96). Measured 411.1.
+const TOTAL_BUDGET_KB = 412;
 
 function gzipSize(file){
   return zlib.gzipSync(fs.readFileSync(file)).length;

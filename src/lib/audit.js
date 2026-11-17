@@ -120,18 +120,37 @@ export async function repairFindings(findings = []){
   }
 
   const clamp = (v, min, max) => Math.min(Math.max(Number(v) || 0, min), max);
+  const clampedValues = (row)=> ({
+    reps: entered(row.reps) ? String(clamp(row.reps, 0, IMPOSSIBLE.maxReps)) : row.reps,
+    weightKg: entered(row.weightKg) ? String(clamp(row.weightKg, IMPOSSIBLE.minWeightKg, IMPOSSIBLE.maxWeightKg)) : row.weightKg,
+  });
   await idbTransaction(['sessions', 'sets'], (ops)=> {
     for(const id of dropSessions) ops.delete('sessions', id);
     for(const id of dropSets) ops.delete('sets', id);
+    // The flattened `sets` rows are a mirror of canonical `sessions[].blocks[].sets`.
+    // Clamp BOTH in the same transaction: otherwise the next save/hydration
+    // re-splits the untouched canonical values straight back into the mirror and
+    // Repair looks like it worked while the session still shows 9999 kg.
+    // Accumulate per-session rewrites so multiple neutralised sets in one
+    // session are applied to a single copy (no stale-copy overwrite).
+    const sessionRewrites = new Map();
     for(const id of neutralise){
       const row = (sets || []).find((r) => r.id === id);
-      if(row) ops.put('sets', {
-        ...row,
-        reps: entered(row.reps) ? String(clamp(row.reps, 0, IMPOSSIBLE.maxReps)) : row.reps,
-        weightKg: entered(row.weightKg) ? String(clamp(row.weightKg, IMPOSSIBLE.minWeightKg, IMPOSSIBLE.maxWeightKg)) : row.weightKg,
-        audited: true,
-      });
+      if(!row) continue;
+      const values = clampedValues(row);
+      ops.put('sets', { ...row, ...values, audited: true });
+      if(!row.sessionId || dropSessions.has(row.sessionId)) continue;
+      let session = sessionRewrites.get(row.sessionId);
+      if(!session){
+        const source = (sessions || []).find((s) => s?.id === row.sessionId);
+        if(!source) continue;
+        session = { ...source, blocks: (source.blocks || []).map((b) => ({ ...b, sets: (b.sets || []).map((s) => ({ ...s })) })) };
+        sessionRewrites.set(row.sessionId, session);
+      }
+      const canonical = session.blocks[row.blockIndex]?.sets?.[row.setIndex];
+      if(canonical) Object.assign(canonical, values, { audited: true });
     }
+    for(const session of sessionRewrites.values()) ops.put('sessions', session);
   });
   return {
     deletedSessions: dropSessions.size,

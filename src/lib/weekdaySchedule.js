@@ -58,8 +58,11 @@ export function moveSession(schedule, sessionId, newISO, todayISO) {
   if (s.status === 'done') return { schedule, error: 'done' };
   if (todayISO && newISO < todayISO) return { schedule, error: 'past' };
   if (s.dateISO === newISO) return { schedule, error: 'same' };
-  const clash = sessions.find((x) => x.id !== sessionId && x.dateISO === newISO);
-  if (clash && clash.status === 'done') return { schedule, error: 'taken' };
+  // Consider EVERY occupant of the target date, not just the first. Swapping
+  // with one of two occupants would still leave a double-booking behind.
+  const occupants = sessions.filter((x) => x.id !== sessionId && x.dateISO === newISO);
+  if (occupants.some((x) => x.status === 'done') || occupants.length > 1) return { schedule, error: 'taken' };
+  const clash = occupants[0] || null;
   const next = sessions.map((x) => {
     if (x.id === sessionId) return { ...x, dateISO: newISO };
     if (clash && x.id === clash.id) return { ...x, dateISO: s.dateISO };

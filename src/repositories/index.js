@@ -401,7 +401,10 @@ export function createExperimentRepository(){
       const next = {
         ...store,
         experiments: (store.experiments || []).map((e) => e.id === id ? markSoftDeleted(e) : e),
-        tombstones: [...(store.tombstones || []), tombstone],
+        // Mirror the template soft-delete contract: replace any existing
+        // tombstone for this refId instead of appending a duplicate on every
+        // repeated deletion.
+        tombstones: [...(store.tombstones || []).filter((t) => !(t.entity === 'experiments' && t.refId === id)), tombstone],
       };
       setCachedStore(next);
       await whenPersisted();
