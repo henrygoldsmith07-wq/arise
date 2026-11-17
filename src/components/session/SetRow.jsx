@@ -60,14 +60,15 @@ export default function SetRow({
           widens the 28px badge to a 44px hit area. */}
       <button type="button" onClick={()=> updateSet(bi,si,{ setType: nextSetType(s.setType) })} aria-label={`Set ${si+1}: ${SET_TYPE_LABEL[s.setType||'']}. Change set type`} title={SET_TYPE_LABEL[s.setType||'']}
         className={`relative w-7 h-7 grid place-items-center rounded-full border text-xs font-bold tabular-nums before:absolute before:-inset-2 before:content-[''] ${s.completed?'bg-success text-bg border-success':s.failed?'bg-review text-bg border-review':s.setType?'bg-speaksoft text-speak border-speak/40':'bg-surface2 border-line'}`}>{s.setType ? s.setType[0].toUpperCase() : si+1}</button>
-      <div className="min-w-0 flex items-center gap-1">
+      <div className="min-w-0 flex items-center gap-1 col-span-2 sm:col-span-1">
         <WeightInput type="text" inputMode="decimal" value={s.weightKg} unit={unit} onChange={v=> updateSet(bi,si,{weightKg:v})} {...commitProps('load-field-commit', b.exerciseId, si)} placeholder={supportsWeighted?unit:'bw'} aria-label={`Load set ${si+1} in ${unit === 'lb' ? 'pounds' : 'kilograms'}`} className={`min-w-0 w-full rounded-lg border border-line bg-surface2 px-2 py-3 text-2xl font-black tabular-nums text-center ${s.completed?'opacity-60':''}`} />
         {supportsWeighted && !s.completed && (
           <button onClick={()=> openKeypad(bi,si)} aria-label={`Open load keypad for set ${si+1}`} title="Load keypad" className="shrink-0 w-11 h-11 grid place-items-center rounded-lg border border-line bg-surface2 text-sm font-black">✛</button>
         )}
       </div>
       {isActive ? (
-        <div className="flex items-center gap-1 min-w-0">
+        <div className="flex items-center gap-1 min-w-0 col-span-3 row-start-2 sm:col-span-1 sm:row-auto">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-ink3 sm:hidden">Reps</span>
           <StepperButton label="−" ariaLabel={`Decrease reps set ${si+1}`} onStep={()=> adjustReps(bi,si,-1)} className="min-w-11 px-0" />
           <input type="number" min="0" step="1" inputMode="numeric" value={s.reps} onChange={e=> updateSet(bi,si,{reps:e.target.value})} {...commitProps('reps-field-commit', b.exerciseId, si)} placeholder="9" aria-label={`Reps set ${si+1}`} className={`min-w-0 flex-1 rounded-lg border border-line bg-surface2 px-1 py-2 text-xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
           <StepperButton label="+" ariaLabel={`Increase reps set ${si+1}`} onStep={()=> adjustReps(bi,si,1)} className="min-w-11 px-0" />
@@ -79,7 +80,7 @@ export default function SetRow({
           sm+ this wrapper dissolves (display:contents) so the
           children join the single 7-column desktop grid in DOM
           order — desktop layout is pixel-identical. */}
-      <div className="col-span-3 row-start-2 grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-1 items-center sm:contents sm:col-auto sm:row-auto">
+      <div className="col-span-3 row-start-3 grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-1 items-center sm:contents sm:col-auto sm:row-auto">
       <input type="number" min="0" max="10" step="1" inputMode="numeric" value={rirFromRpe(s.rpe)} onChange={e=> updateSet(bi,si,{rpe:rpeFromRir(e.target.value)})} {...commitProps('rir-field-commit', b.exerciseId, si)} placeholder="—" aria-label={`Reps in reserve set ${si+1}`} className={`min-w-0 rounded-lg border ${rirTone(rirFromRpe(s.rpe))} px-1 py-3 text-2xl font-black tabular-nums text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${s.completed?'opacity-60':''}`} />
       {b.unilateral ? (
         <select value={s.side||'L'} onChange={e=> updateSet(bi,si,{side:e.target.value})} aria-label={`Side set ${si+1}`} className="min-w-0 rounded-lg border border-line bg-surface2 px-1 py-3 text-xs font-bold"><option value="L">L</option><option value="R">R</option></select>
