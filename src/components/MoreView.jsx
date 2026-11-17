@@ -370,7 +370,7 @@ export default function MoreView({ store, setStore, onboardingOpen, setOnboardin
   const exerciseName = (id)=> EXERCISE_BY_ID[id]?.name || id;
 
   return (
-    <div className="px-4 pt-5 pb-2 space-y-3 max-w-3xl mx-auto">
+    <div className="w-full min-w-0 px-4 pt-5 pb-2 space-y-3 max-w-3xl mx-auto">
       {dialogs.node}
       <div>
         <h2 className="text-lg font-extrabold tracking-tight">More</h2>
