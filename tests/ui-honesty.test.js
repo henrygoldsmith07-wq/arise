@@ -26,6 +26,23 @@ describe('UI honesty — counts and empty states', () => {
   });
 });
 
+describe('UI hardening — narrow viewport', () => {
+  it('the More page container is constrained to the viewport width', () => {
+    // At 320px the container previously resolved to 366px, clipping the
+    // subtitle and settings cards with a page-level horizontal scroll.
+    const source = read('MoreView.jsx');
+    const line = source.split('\n').find((l) => l.includes('px-4 pt-5 pb-2 space-y-3 max-w-3xl mx-auto'));
+    assert.ok(line, 'More page container not found');
+    assert.match(line, /w-full min-w-0/);
+  });
+
+  it('policy button rows wrap instead of forcing the page wider', () => {
+    const source = read('settings/TrainingPolicySettings.jsx');
+    assert.equal((source.match(/className="flex flex-wrap gap-1\.5"/g) || []).length, 2);
+    assert.doesNotMatch(source, /className="flex gap-1\.5" role="group"/);
+  });
+});
+
 describe('UI hardening — source contracts', () => {
   it('the time-available row wraps instead of overflowing narrow screens', () => {
     const source = read('TodayView.jsx');

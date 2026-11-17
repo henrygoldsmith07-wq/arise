@@ -16,7 +16,7 @@ export default function TrainingPolicySettings({ store, setStore }){
       <p className="text-xs text-ink3">Shapes how the engine reacts to your logged sessions — the standard policy is the engine as designed. Applies from the next session.</p>
       <div className="rounded-lg bg-surface2 px-3 py-2.5 space-y-2">
         <p className="text-xs font-bold">Progression policy</p>
-        <div className="flex gap-1.5" role="group" aria-label="Progression policy">
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Progression policy">
           {POLICY_ORDER.map(id=> {
             const meta = PROGRESSION_POLICIES[id];
             const active = (prefs.progressionPolicy || 'standard') === id;
@@ -28,7 +28,7 @@ export default function TrainingPolicySettings({ store, setStore }){
       </div>
       <div className="rounded-lg bg-surface2 px-3 py-2.5 space-y-2">
         <p className="text-xs font-bold">Explanation detail</p>
-        <div className="flex gap-1.5" role="group" aria-label="Explanation detail level">
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Explanation detail level">
           {EXPLANATION_OPTIONS.map(([id,label,hint])=> {
             const active = (prefs.explanationMode || 'standard') === id;
             return <button key={id} onClick={()=> setPreference({ explanationMode:id })} aria-pressed={active} title={hint}
